@@ -1,0 +1,14 @@
+const std = @import("std");
+const debug = @import("lib/util/debug.zig");
+
+const IsoParser = @import("modules/IsoParser.zig");
+
+pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
+
+    // try IsoParser.parseIso("/Users/cerberus/Documents/Projects/freetracer/alpine.iso");
+    try IsoParser.parseIso("/Users/cerberus/Documents/Projects/freetracer/tinycore.iso");
+
+    _ = allocator;
+}
