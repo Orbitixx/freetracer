@@ -11,6 +11,7 @@ const ISO_SYS_BYTES_OFFSET: u32 = ISO_SYS_SECTORS * ISO_SECTOR_SIZE;
 const VolumeDescriptorsInitialized = struct {
     bootRecord: bool = false,
     primaryVolumeDescriptor: bool = false,
+    volumeDescriptorSetTerminator: bool = false,
 };
 
 pub fn parseIso(isoPath: []const u8) anyerror!void {
@@ -20,17 +21,23 @@ pub fn parseIso(isoPath: []const u8) anyerror!void {
     var isoBuffer: [ISO_SYS_BYTES_OFFSET]u8 = undefined;
     var volumeDescriptorsInitialized: VolumeDescriptorsInitialized = .{};
     var bootRecord: iso9660.BootRecord = undefined;
+    // var bootCatalog: iso9660.BootCatalog = undefined;
     var primaryVolumeDescriptor: iso9660.PrimaryVolumeDescriptor = undefined;
+    var volumeDescriptorSetTerminator: iso9660.VolumeDescriptorSetTerminator = undefined;
 
     const fileStat: std.fs.Dir.Stat = try file.stat();
 
     var byteCursor: u32 = 0;
     const isoSectorCount: u64 = fileStat.size / ISO_SECTOR_SIZE;
 
-    debug.print("\n-------------------------- IsoParser ----------------------------");
-    debug.printf("\nISO: {s}", .{isoPath});
-    debug.printf("\nISO size: {d}", .{std.fmt.fmtIntSizeDec(fileStat.size)});
-    debug.printf("\nISO sectors: {d}\n", .{isoSectorCount});
+    const str =
+        \\-------------------------- IsoParser ----------------------------
+        \\ISO: {s}
+        \\nISO size: {d}
+        \\ISO sectors: {d}
+        \\
+    ;
+    debug.printf(str, .{ isoPath, std.fmt.fmtIntSizeDec(fileStat.size), isoSectorCount });
 
     const isoBytesRead = try file.read(&isoBuffer);
 
@@ -53,7 +60,7 @@ pub fn parseIso(isoPath: []const u8) anyerror!void {
         if (sectorBuffer[0] == 0) {
             bootRecord = .{
                 .typeCode = sectorBuffer[0],
-                .identifier = sectorBuffer[1..6].*,
+                .standardIdentifier = sectorBuffer[1..6].*,
                 .version = sectorBuffer[6],
                 .bootSystemIdentifier = sectorBuffer[7..39].*,
                 .bootIdentifier = sectorBuffer[39..71].*,
@@ -64,44 +71,76 @@ pub fn parseIso(isoPath: []const u8) anyerror!void {
         }
 
         if (sectorBuffer[0] == 1) {
-            primaryVolumeDescriptor = .{};
+            primaryVolumeDescriptor = .{
+                .typeCode = sectorBuffer[0],
+                .standardIdentifier = sectorBuffer[1..6].*,
+                .version = sectorBuffer[6],
+                .unused1 = sectorBuffer[7],
+                .systemIdentifier = sectorBuffer[8..40].*,
+                .volumeIdentifier = sectorBuffer[40..72].*,
+                .unused2 = sectorBuffer[72..80].*,
+                .volumeSpaceSize = sectorBuffer[80..88].*,
+                .unused3 = sectorBuffer[88..120].*,
+                .volumeSetSize = sectorBuffer[120..124].*,
+                .volumeSequenceNumber = sectorBuffer[124..128].*,
+                .logicalBlockSize = sectorBuffer[128..132].*,
+                .pathTableSize = sectorBuffer[132..140].*,
+                .locationOfTypeLPathTable = sectorBuffer[140..144].*,
+                .locationOfOptionalTypeLPathTable = sectorBuffer[144..148].*,
+                .locationOfTypeMPathTable = sectorBuffer[148..152].*,
+                .locationOfOptionalTypeMPathTable = sectorBuffer[152..156].*,
+                .rootDirectoryEntry = sectorBuffer[156..190].*,
+                .volumeSetIdentifier = sectorBuffer[190..318].*,
+                .publisherIdentifier = sectorBuffer[318..446].*,
+                .dataPreparerIdentifier = sectorBuffer[446..574].*,
+                .applicationIdentifier = sectorBuffer[574..702].*,
+                .copyrightFileIdentifier = sectorBuffer[702..739].*,
+                .abstractFileIdentifier = sectorBuffer[739..776].*,
+                .bibliographicFileIdentifier = sectorBuffer[776..813].*,
+                .volumeCreationDateTime = sectorBuffer[813..830].*,
+                .volumeModificationDateTime = sectorBuffer[830..847].*,
+                .volumeExpirationDateTime = sectorBuffer[847..864].*,
+                .volumeEffectiveDateTime = sectorBuffer[864..881].*,
+                .fileStructureVersion = sectorBuffer[881],
+                .unused4 = sectorBuffer[882],
+                .applicationUsed = sectorBuffer[883..1395].*,
+                .reserved = sectorBuffer[1395..2048].*,
+            };
             volumeDescriptorsInitialized.primaryVolumeDescriptor = true;
         }
 
-        if (volumeDescriptorsInitialized.bootRecord == true and volumeDescriptorsInitialized.primaryVolumeDescriptor == true) break;
+        if (sectorBuffer[0] == 255) {
+            volumeDescriptorSetTerminator = .{
+                .typeCode = sectorBuffer[0],
+                .standardIdentifier = sectorBuffer[1..6].*,
+                .version = sectorBuffer[7],
+            };
+            volumeDescriptorsInitialized.volumeDescriptorSetTerminator = true;
+        }
+
+        if (volumeDescriptorsInitialized.bootRecord == true and volumeDescriptorsInitialized.primaryVolumeDescriptor == true and volumeDescriptorsInitialized.volumeDescriptorSetTerminator == true) break;
     }
 
     bootRecord.print();
+    primaryVolumeDescriptor.print();
+    volumeDescriptorSetTerminator.print();
 
     byteCursor = 0;
-    try file.seekTo(ISO_SYS_BYTES_OFFSET + ISO_SECTOR_SIZE);
+    const catalogLbaOffset: u32 = @bitCast(std.mem.readInt(i32, &bootRecord.catalogLba, std.builtin.Endian.little));
+    try file.seekTo(ISO_SECTOR_SIZE * catalogLbaOffset);
     _ = try file.read(&sectorBuffer);
+    // _ = bootCatalog;
 
-    // debug.printf("\n::\tVolume Descriptor Type:\t\t{d}", .{bootRecord.typeCode});
-    // debug.printf("\n::\tCD001 Identifier:\t\t{s}", .{bootRecord.identifier});
-    // debug.printf("\n::\tVolume Descriptor Version:\t{x}", .{bootRecord.version});
-    // debug.printf("\n::\tBoot System Identifier:\t\t{s}", .{bootRecord.bootSystemIdentifier});
-    // debug.printf("\n::\tBoot Identifier:\t\t{s}", .{bootRecord.bootIdentifier});
-    // debug.printf("\n::\tBoot Catalog LBA:\t\t{d}\n", .{std.mem.readInt(i32, &bootRecord.catalogLba, std.builtin.Endian.little)});
+    debug.print("\n\n-------------------------- Boot Catalog (El Torito Record) ---------------------------");
 
-    // var endBuffer: [4]u8 = undefined;
-    // @memcpy(&endBuffer, readBytes(&byteCursor, &sectorBuffer, 4));
-    // const elTorRecord: u32 = @bitCast(std.mem.readInt(i32, &endBuffer, std.builtin.Endian.little));
-    //
-    // debug.printf("\n::\tEl Torito Record:\t\t{d}\n", .{elTorRecord});
-    //
-    // byteCursor = 0;
-    // try file.seekTo(ISO_SECTOR_SIZE * elTorRecord);
-    // _ = try file.read(&sectorBuffer);
-    //
-    // debug.printf("\n\n::\tHeader Id:\t\t\t{d}", .{readBytes(&byteCursor, &sectorBuffer, 1)[0]});
-    // debug.printf("\n::\tPlatform Id:\t\t\t{d}", .{readBytes(&byteCursor, &sectorBuffer, 1)[0]});
-    // debug.printf("\n::\tReserved (0x00):\t\t0x{x}", .{readBytes(&byteCursor, &sectorBuffer, 1)[0]});
-    // debug.printf("\n::\tReserved (0x00):\t\t0x{x}", .{readBytes(&byteCursor, &sectorBuffer, 1)[0]});
-    // debug.printf("\n::\tManufacturer Identifier:\t{any}", .{readBytes(&byteCursor, &sectorBuffer, 24)});
-    // debug.printf("\n::\tChecksum:\t\t\t{s}", .{readBytes(&byteCursor, &sectorBuffer, 2)});
-    // debug.printf("\n::\tReserved (0x55):\t\t0x{x}", .{readBytes(&byteCursor, &sectorBuffer, 1)[0]});
-    // debug.printf("\n::\tReserved (0xaa):\t\t0x{x}", .{readBytes(&byteCursor, &sectorBuffer, 1)[0]});
+    debug.printf("\n\n::\tHeader Id:\t\t\t{d}", .{sectorBuffer[0]});
+    debug.printf("\n::\tPlatform Id:\t\t\t{d}", .{sectorBuffer[1]});
+    debug.printf("\n::\tReserved (0x00):\t\t0x{x}", .{sectorBuffer[2]});
+    debug.printf("\n::\tReserved (0x00):\t\t0x{x}", .{sectorBuffer[3]});
+    debug.printf("\n::\tManufacturer Identifier:\t{s}", .{sectorBuffer[4..27]});
+    debug.printf("\n::\tChecksum:\t\t\t{s}", .{sectorBuffer[28..29]});
+    debug.printf("\n::\tReserved (0x55):\t\t0x{x}", .{sectorBuffer[30]});
+    debug.printf("\n::\tReserved (0xaa):\t\t0x{x}", .{sectorBuffer[31]});
     //
     debug.print("\n");
 
