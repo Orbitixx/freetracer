@@ -12,8 +12,8 @@ pub fn main() !void {
         _ = gpa.deinit();
     }
 
-    try IsoParser.parseIso("/Users/cerberus/Documents/Projects/freetracer/alpine.iso");
-    // try IsoParser.parseIso("/Users/cerberus/Documents/Projects/freetracer/tinycore.iso");
+    // try IsoParser.parseIso("/Users/cerberus/Documents/Projects/freetracer/alpine.iso");
+    try IsoParser.parseIso("/Users/cerberus/Documents/Projects/freetracer/tinycore.iso");
 
     _ = allocator;
 }

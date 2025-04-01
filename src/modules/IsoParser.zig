@@ -19,15 +19,14 @@ pub fn parseIso(isoPath: []const u8) anyerror!void {
     defer file.close();
 
     var isoBuffer: [ISO_SYS_BYTES_OFFSET]u8 = undefined;
-    var volumeDescriptorsInitialized: VolumeDescriptorsInitialized = .{};
     var bootRecord: iso9660.BootRecord = undefined;
-    // var bootCatalog: iso9660.BootCatalog = undefined;
+    var bootCatalog: iso9660.BootCatalog = undefined;
     var primaryVolumeDescriptor: iso9660.PrimaryVolumeDescriptor = undefined;
     var volumeDescriptorSetTerminator: iso9660.VolumeDescriptorSetTerminator = undefined;
+    var volumeDescriptorsInitialized: VolumeDescriptorsInitialized = .{};
 
     const fileStat: std.fs.Dir.Stat = try file.stat();
 
-    var byteCursor: u32 = 0;
     const isoSectorCount: u64 = fileStat.size / ISO_SECTOR_SIZE;
 
     const str =
@@ -118,64 +117,109 @@ pub fn parseIso(isoPath: []const u8) anyerror!void {
             volumeDescriptorsInitialized.volumeDescriptorSetTerminator = true;
         }
 
-        if (volumeDescriptorsInitialized.bootRecord == true and volumeDescriptorsInitialized.primaryVolumeDescriptor == true and volumeDescriptorsInitialized.volumeDescriptorSetTerminator == true) break;
+        if (volumeDescriptorsInitialized.bootRecord == true and
+            volumeDescriptorsInitialized.primaryVolumeDescriptor == true and
+            volumeDescriptorsInitialized.volumeDescriptorSetTerminator == true)
+        {
+            break;
+        }
     }
 
+    if (volumeDescriptorsInitialized.bootRecord == false or
+        volumeDescriptorsInitialized.primaryVolumeDescriptor == false or
+        volumeDescriptorsInitialized.volumeDescriptorSetTerminator == false)
+    {
+        return error.IsoParserUnableToParseIsoMimimumNecessaryDescriptors;
+    }
+
+    bootCatalog = try readBootCatalog(&file, bootRecord.catalogLba);
+
     bootRecord.print();
+    bootCatalog.print();
     primaryVolumeDescriptor.print();
     volumeDescriptorSetTerminator.print();
 
-    byteCursor = 0;
-    const catalogLbaOffset: u32 = @bitCast(std.mem.readInt(i32, &bootRecord.catalogLba, std.builtin.Endian.little));
-    try file.seekTo(ISO_SECTOR_SIZE * catalogLbaOffset);
+    const rootDirectoryEntry: iso9660.DirectoryRecord = .{
+        .lengthOfDirectoryRecord = primaryVolumeDescriptor.rootDirectoryEntry[0],
+        .lengthOfExtendedAttributeRecord = primaryVolumeDescriptor.rootDirectoryEntry[1],
+        .locationOfExtent = primaryVolumeDescriptor.rootDirectoryEntry[2..10].*,
+        .fileFlags = primaryVolumeDescriptor.rootDirectoryEntry[25],
+        .lengthOfFileIdentifier = primaryVolumeDescriptor.rootDirectoryEntry[32],
+        .fileIdentifier = primaryVolumeDescriptor.rootDirectoryEntry[33],
+    };
+
+    rootDirectoryEntry.print();
+
+    const rootDirExtentOffset: u32 = @bitCast(endian.readBoth(i32, &rootDirectoryEntry.locationOfExtent));
+    try file.seekTo(ISO_SECTOR_SIZE * rootDirExtentOffset);
     _ = try file.read(&sectorBuffer);
-    // _ = bootCatalog;
 
-    debug.print("\n\n-------------------------- Boot Catalog (El Torito Record) ---------------------------");
+    const rootDirExtent: iso9660.DirectoryRecord = .{
+        .lengthOfDirectoryRecord = sectorBuffer[0],
+        .lengthOfExtendedAttributeRecord = sectorBuffer[1],
+        .locationOfExtent = sectorBuffer[2..10].*,
+        .fileFlags = sectorBuffer[25],
+        .lengthOfFileIdentifier = sectorBuffer[32],
+        .fileIdentifier = sectorBuffer[33],
+    };
 
-    debug.printf("\n\n::\tHeader Id:\t\t\t{d}", .{sectorBuffer[0]});
-    debug.printf("\n::\tPlatform Id:\t\t\t{d}", .{sectorBuffer[1]});
-    debug.printf("\n::\tReserved (0x00):\t\t0x{x}", .{sectorBuffer[2]});
-    debug.printf("\n::\tReserved (0x00):\t\t0x{x}", .{sectorBuffer[3]});
-    debug.printf("\n::\tManufacturer Identifier:\t{s}", .{sectorBuffer[4..27]});
-    debug.printf("\n::\tChecksum:\t\t\t{s}", .{sectorBuffer[28..29]});
-    debug.printf("\n::\tReserved (0x55):\t\t0x{x}", .{sectorBuffer[30]});
-    debug.printf("\n::\tReserved (0xaa):\t\t0x{x}", .{sectorBuffer[31]});
-    //
+    rootDirExtent.print();
+
+    const loadRbaSectorOffset: u32 = @bitCast(endian.readLittle(i32, &bootCatalog.initialDefaultEntry.loadRba));
+    try file.seekTo(ISO_SECTOR_SIZE * loadRbaSectorOffset);
+    _ = try file.read(&sectorBuffer);
+
+    const loadRbaSector: iso9660.DirectoryRecord = .{
+        .lengthOfDirectoryRecord = sectorBuffer[0],
+        .lengthOfExtendedAttributeRecord = sectorBuffer[1],
+        .locationOfExtent = sectorBuffer[2..10].*,
+        .fileFlags = sectorBuffer[25],
+        .lengthOfFileIdentifier = sectorBuffer[32],
+        .fileIdentifier = sectorBuffer[33],
+    };
+
+    loadRbaSector.print();
+
     debug.print("\n");
-
-    // if (bootSignature != 0x5553) { // "SS" in ASCII
-    //     return error.InvalidIsoFile;
-    // }
-    //
-    // var bootType: BootType =32 .Unknown;
-    // if (bootMethod == 0x00) {
-    //     bootType = .Bios;
-    // } else if (bootMethod == 0x02) {
-    //     bootType = .Uefi;
-    // }
-    //
-    // std.log.info("ISO Boot Type: {D}", .{bootType});
-    //
-    // return file; // Return the file object for further processing
 }
-
-// Enum to represent the boot type
-pub const BootType = enum {
-    Bios,
-    Uefi,
-    Unknown,
-};
-
 pub const IsoParserError = error{
     IsoSystemBlockTooShort,
     IsoSectorTooShort,
 };
 
-pub fn readBytes(byteCursor: *u32, buffer: []const u8, len: u32) []const u8 {
-    var finalSlice: []const u8 = undefined;
-    finalSlice = buffer[byteCursor.* .. byteCursor.* + len];
-    byteCursor.* = byteCursor.* + len;
+pub fn readBootCatalog(pFile: *const std.fs.File, catalogLba: [4]u8) !iso9660.BootCatalog {
+    var bootCatalogSectorBuffer: [2048]u8 = undefined;
 
-    return finalSlice;
+    const catalogLbaOffset: u32 = @bitCast(endian.readLittle(i32, &catalogLba));
+
+    try pFile.*.seekTo(ISO_SECTOR_SIZE * catalogLbaOffset);
+    _ = try pFile.*.read(&bootCatalogSectorBuffer);
+
+    const bootCatalog: iso9660.BootCatalog = .{
+        .validationEntry = .{
+            .headerId = bootCatalogSectorBuffer[0],
+            .platformId = bootCatalogSectorBuffer[1],
+            .reserved1 = bootCatalogSectorBuffer[2],
+            .reserved2 = bootCatalogSectorBuffer[3],
+            .manufacturerDev = bootCatalogSectorBuffer[4..28].*,
+            .checksum = bootCatalogSectorBuffer[28..30].*,
+            .reserved3 = bootCatalogSectorBuffer[30],
+            .reserved4 = bootCatalogSectorBuffer[31],
+        },
+
+        .initialDefaultEntry = .{
+            .bootIndicator = bootCatalogSectorBuffer[32],
+            .bootMedia = bootCatalogSectorBuffer[33],
+            .loadSegment = bootCatalogSectorBuffer[34..36].*,
+            .systemType = bootCatalogSectorBuffer[36],
+            .unused1 = bootCatalogSectorBuffer[37],
+            .sectorCount = bootCatalogSectorBuffer[38..40].*,
+            .loadRba = bootCatalogSectorBuffer[40..44].*,
+            .unused2 = bootCatalogSectorBuffer[44..64].*,
+        },
+
+        .optional = bootCatalogSectorBuffer[64..2048].*,
+    };
+
+    return bootCatalog;
 }

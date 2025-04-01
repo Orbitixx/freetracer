@@ -1,5 +1,6 @@
 const std = @import("std");
 const eltorito = @import("eltorito.zig");
+const endian = @import("../util/endian.zig");
 const debug = @import("../util/debug.zig");
 
 pub const PrimaryVolumeDescriptor = struct {
@@ -75,23 +76,49 @@ pub const PrimaryVolumeDescriptor = struct {
         debug.printf("\n\tType Code:\t\t\t{d}", .{self.typeCode});
         debug.printf("\n\tStandard Identifier:\t\t{s}", .{self.standardIdentifier});
         debug.printf("\n\tVersion:\t\t\t{d}", .{self.version});
+        debug.printf("\n\tUnused1:\t\t\t0x{x}", .{self.unused1});
         debug.printf("\n\tSystem Identifier:\t\t{s}", .{self.systemIdentifier});
         debug.printf("\n\tVolume Identifier:\t\t{s}", .{self.volumeIdentifier});
+        debug.printf("\n\tUnused2:\t\t\t{any}", .{self.unused2});
         debug.printf("\n\tVolume Space Size:\t\t{any}", .{self.volumeSpaceSize});
+        debug.printf("\n\tUnused3:\t\t\t{any}", .{self.unused3});
         debug.printf("\n\tVolume Set Size:\t\t{any}", .{self.volumeSetSize});
         debug.printf("\n\tVolume Sequence Number:\t{any}", .{self.volumeSequenceNumber});
         debug.printf("\n\tLogical Block Size:\t{any}", .{self.logicalBlockSize});
         debug.printf("\n\tPath Table Size:\t\t{any}", .{self.pathTableSize});
-        debug.printf("\n\tLocation of Type-L Path Table:\t{any}", .{self.locationOfTypeLPathTable});
-        debug.printf("\n\tLocation of Optional Type-L Path Table:\t{any}", .{self.locationOfOptionalTypeLPathTable});
-        debug.printf("\n\tLocation of Type-M Path Table:\t{any}", .{self.locationOfTypeMPathTable});
-        debug.printf("\n\tLocation of Optional Type-M Path Table:\t{any}", .{self.locationOfOptionalTypeMPathTable});
-        debug.printf("\n\tVolume Set Identifier:\t{s}", .{self.volumeSetIdentifier});
-        debug.printf("\n\tPublisher Identifier:\t{s}", .{self.publisherIdentifier});
-        debug.printf("\n\tData Preparer Identifier:\t{s}", .{self.dataPreparerIdentifier});
+        debug.printf("\n\tLocation of Type-L Path Table:\t\t{any}", .{self.locationOfTypeLPathTable});
+        debug.printf("\n\tLocation of Optional Type-L Path Table:\t\t{any}", .{self.locationOfOptionalTypeLPathTable});
+        debug.printf("\n\tLocation of Type-M Path Table:\t\t{any}", .{self.locationOfTypeMPathTable});
+        debug.printf("\n\tLocation of Optional Type-M Path Table:\t\t{any}", .{self.locationOfOptionalTypeMPathTable});
+        debug.printf("\n\tRoot Directory Entry:\t\t{any}", .{self.rootDirectoryEntry});
+        debug.printf("\n\tVolume Set Identifier:\t\t{s}", .{self.volumeSetIdentifier});
+        debug.printf("\n\tPublisher Identifier:\t\t{s}", .{self.publisherIdentifier});
+        debug.printf("\n\tData Preparer Identifier:\t\t{s}", .{self.dataPreparerIdentifier});
         debug.printf("\n\tApplication Identifier:\t{s}", .{self.applicationIdentifier});
+        debug.printf("\n\tCopyright File Identifier:\t{s}", .{self.copyrightFileIdentifier});
+        debug.printf("\n\tAbstract File Identifier:\t{s}", .{self.abstractFileIdentifier});
+        debug.printf("\n\tBibliographic File Identifier:\t{s}", .{self.bibliographicFileIdentifier});
+        debug.printf("\n\tVolume Creation Date/Time:\t{s}", .{self.volumeCreationDateTime});
+        debug.printf("\n\tVolume Modification Date/Time:\t{s}", .{self.volumeModificationDateTime});
+        debug.printf("\n\tVolume Expiration Date/Time:\t{s}", .{self.volumeExpirationDateTime});
+        debug.printf("\n\tVolume Effective Date/Time:\t{s}", .{self.volumeEffectiveDateTime});
         debug.printf("\n\tFile Structure Version:\t{d}", .{self.fileStructureVersion});
+        debug.printf("\n\tUnused4:\t\t\t0x{x}", .{self.unused4});
+        debug.printf("\n\tApplication Used:\t{any}", .{self.applicationUsed});
+        debug.printf("\n\tReserved:\t\t{any}", .{self.reserved});
         debug.print("\n-------------------------------------------------------------------------------\n");
+    }
+
+    pub fn printAuto(self: @This()) void {
+        inline for (std.meta.fields(@TypeOf(self))) |field| {
+            debug.printf("\n\t{s}:\t\t\t\t{any}", .{ field.name, @as(field.type, @field(self, field.name)) });
+
+            // switch (@typeInfo(field.type)) {
+            //     .Pointer, .Array => debug.printf("{s}", @as(field.type, @field(self, field.name))),
+            //     .Int => debug.printf("{d}", @as(field.type, @field(self, field.name))),
+            //     else => debug.printf("{any}", @as(field.type, @field(self, field.name))),
+            // }
+        }
     }
 };
 
@@ -119,18 +146,24 @@ pub const BootRecord = struct {
         debug.printf("\n\tVersion:\t\t\t{d}", .{self.version});
         debug.printf("\n\tBoot System Identifier:\t\t{s}", .{self.bootSystemIdentifier});
         debug.printf("\n\tBoot Identifier:\t\t{s}", .{self.bootIdentifier});
-        debug.printf("\n\tCatalog LBA:\t\t\t{d}\n", .{std.mem.readInt(i32, &self.catalogLba, std.builtin.Endian.little)});
+        // debug.printf("\n\tCatalog LBA:\t\t\t{d}\n", .{std.mem.readInt(i32, &self.catalogLba, std.builtin.Endian.little)});
+        debug.printf("\n\tCatalog LBA:\t\t\t{d}\n", .{endian.readLittle(i32, &self.catalogLba)});
         debug.print("\n-------------------------------------------------------------------------------\n");
     }
 };
 
 pub const BootCatalog = struct {
-    validationEntry: eltorito.ValidationEntry, // 32b
-    initialDefaultEntry: eltorito.InitialDefaultEntry, // 32b
+    validationEntry: eltorito.ValidationEntry, // 32b wide
+    initialDefaultEntry: eltorito.InitialDefaultEntry, // 32b wide
 
     // Optional sector head and entries
     // https://dev.lovelyhq.com/libburnia/libisofs/raw/branch/master/doc/boot_sectors.txt
     optional: [1984]u8,
+
+    pub fn print(self: @This()) void {
+        self.validationEntry.print();
+        self.initialDefaultEntry.print();
+    }
 };
 
 pub const VolumeDescriptorSetTerminator = struct {
@@ -146,5 +179,43 @@ pub const VolumeDescriptorSetTerminator = struct {
         debug.printf("\n\tType Code:\t\t\t{d}", .{self.typeCode});
         debug.printf("\n\tIdentifier:\t\t\t{s}", .{self.standardIdentifier});
         debug.printf("\n\tVersion:\t\t\t{d}\n", .{self.version});
+    }
+};
+
+pub const DirectoryRecord = struct {
+    /// int8
+    lengthOfDirectoryRecord: u8,
+    /// int8
+    lengthOfExtendedAttributeRecord: u8,
+    /// int32_LSB-MSB (LBA)
+    locationOfExtent: [8]u8,
+    /// int32_LSB-MSB
+    dataLength: ?[8]u8 = null,
+    /// 7b
+    recordingDateTime: ?[7]u8 = null,
+    /// u8
+    fileFlags: u8,
+    /// int8
+    fileUnitSize: ?u8 = null,
+    /// int8
+    interleaveGapSize: ?u8 = null,
+    /// int16_LSB-MSB
+    volumeSequenceNumber: ?[4]u8 = null,
+    /// int8
+    lengthOfFileIdentifier: u8,
+    /// strD
+    fileIdentifier: u8,
+    /// --
+    paddingField: ?u8 = null,
+
+    pub fn print(self: @This()) void {
+        debug.print("\n----------------- Directory Record ---------------------");
+        debug.printf("\n\tLength of Dir Record:\t\t\t{d}", .{self.lengthOfDirectoryRecord});
+        debug.printf("\n\tLength of Ext Attr Record:\t\t{d}", .{self.lengthOfExtendedAttributeRecord});
+        debug.printf("\n\tLocation of Extent:\t\t\t{d}", .{endian.readBoth(i32, &self.locationOfExtent)});
+        debug.printf("\n\tFile Flags:\t\t\t{b:0>8}", .{self.fileFlags});
+        debug.printf("\n\tLength of File Identifier:\t\t{d}", .{self.lengthOfFileIdentifier});
+        debug.printf("\n\tfileIdentifier:\t\t\t{c}", .{self.fileIdentifier});
+        debug.print("\n");
     }
 };
