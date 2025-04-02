@@ -1,4 +1,5 @@
 const std = @import("std");
+const endian = @import("../util/endian.zig");
 const debug = @import("../util/debug.zig");
 
 pub const ValidationEntry = struct {
@@ -8,8 +9,8 @@ pub const ValidationEntry = struct {
     reserved2: u8,
     manufacturerDev: [24]u8,
     checksum: [2]u8,
-    reserved3: u8,
-    reserved4: u8,
+    signature1: u8,
+    signature2: u8,
 
     pub fn print(self: @This()) void {
         debug.print("\n\n---------------------------- El Torito Validation Entry -----------------------------");
@@ -19,8 +20,8 @@ pub const ValidationEntry = struct {
         debug.printf("\n\tReserved2:\t\t\t0x{x}", .{self.reserved2});
         debug.printf("\n\tManufacturer/Developer:\t{s}", .{self.manufacturerDev});
         debug.printf("\n\tChecksum:\t\t\t{any}", .{self.checksum});
-        debug.printf("\n\tReserved3:\t\t\t0x{x}", .{self.reserved3});
-        debug.printf("\n\tReserved4:\t\t\t0x{x}", .{self.reserved4});
+        debug.printf("\n\tSignature 1:\t\t\t0x{x}", .{self.signature1});
+        debug.printf("\n\tSignature 2:\t\t\t0x{x}", .{self.signature2});
         debug.print("\n-------------------------------------------------------------------------------\n");
     }
 };
@@ -31,6 +32,7 @@ pub const InitialDefaultEntry = struct {
     loadSegment: [2]u8,
     systemType: u8,
     unused1: u8,
+    ///int16_LSB
     sectorCount: [2]u8,
     /// int32_LSB
     loadRba: [4]u8,
@@ -39,12 +41,12 @@ pub const InitialDefaultEntry = struct {
     pub fn print(self: @This()) void {
         debug.print("\n\n---------------------------- El Torito Initial/Default Entry ----------------------");
         debug.printf("\n\tBoot Indicator:\t\t0x{x}", .{self.bootIndicator});
-        debug.printf("\n\tBoot Media:\t\t0x{x}", .{self.bootMedia});
+        debug.printf("\n\tBoot Media:\t\t{b:0>8}", .{self.bootMedia});
         debug.printf("\n\tLoad Segment:\t\t{any}", .{self.loadSegment});
         debug.printf("\n\tSystem Type:\t\t0x{x}", .{self.systemType});
         debug.printf("\n\tUnused1:\t\t0x{x}", .{self.unused1});
-        debug.printf("\n\tSector Count:\t\t{any}", .{self.sectorCount});
-        debug.printf("\n\tLoad RBA:\t\t{d}", .{std.mem.readInt(i32, &self.loadRba, std.builtin.Endian.little)});
+        debug.printf("\n\tSector Count:\t\t{d}", .{endian.readLittle(i16, &self.sectorCount)});
+        debug.printf("\n\tLoad RBA:\t\t{d}", .{endian.readLittle(i32, &self.loadRba)});
         debug.printf("\n\tUnused2:\t\t{any}", .{self.unused2});
         debug.print("\n-------------------------------------------------------------------------------\n");
     }

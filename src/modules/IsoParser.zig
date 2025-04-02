@@ -3,23 +3,25 @@ const debug = @import("../lib/util/debug.zig");
 const endian = @import("../lib/util/endian.zig");
 const iso9660 = @import("../lib/data/iso9660.zig");
 
+const assert = std.debug.assert;
+
 // ISO 9660: first 32kB are reserved system data (16 sectors, 2048 bytes wide)
 const ISO_SYS_SECTORS: u32 = 16;
 const ISO_SECTOR_SIZE: u32 = 2048;
 const ISO_SYS_BYTES_OFFSET: u32 = ISO_SYS_SECTORS * ISO_SECTOR_SIZE;
 
 const VolumeDescriptorsInitialized = struct {
-    bootRecord: bool = false,
+    bootRecordVolumeDescriptor: bool = false,
     primaryVolumeDescriptor: bool = false,
     volumeDescriptorSetTerminator: bool = false,
 };
 
-pub fn parseIso(isoPath: []const u8) anyerror!void {
+pub fn parseIso(pAllocator: *const std.mem.Allocator, isoPath: []const u8) anyerror!void {
     const file: std.fs.File = try std.fs.cwd().openFile(isoPath, .{ .mode = .read_only });
     defer file.close();
 
     var isoBuffer: [ISO_SYS_BYTES_OFFSET]u8 = undefined;
-    var bootRecord: iso9660.BootRecord = undefined;
+    var bootRecordVolumeDescriptor: iso9660.BootRecord = undefined;
     var bootCatalog: iso9660.BootCatalog = undefined;
     var primaryVolumeDescriptor: iso9660.PrimaryVolumeDescriptor = undefined;
     var volumeDescriptorSetTerminator: iso9660.VolumeDescriptorSetTerminator = undefined;
@@ -57,7 +59,7 @@ pub fn parseIso(isoPath: []const u8) anyerror!void {
         }
 
         if (sectorBuffer[0] == 0) {
-            bootRecord = .{
+            bootRecordVolumeDescriptor = .{
                 .typeCode = sectorBuffer[0],
                 .standardIdentifier = sectorBuffer[1..6].*,
                 .version = sectorBuffer[6],
@@ -66,7 +68,7 @@ pub fn parseIso(isoPath: []const u8) anyerror!void {
                 .catalogLba = sectorBuffer[71..75].*,
                 .unused = sectorBuffer[75..2048].*,
             };
-            volumeDescriptorsInitialized.bootRecord = true;
+            volumeDescriptorsInitialized.bootRecordVolumeDescriptor = true;
         }
 
         if (sectorBuffer[0] == 1) {
@@ -117,7 +119,7 @@ pub fn parseIso(isoPath: []const u8) anyerror!void {
             volumeDescriptorsInitialized.volumeDescriptorSetTerminator = true;
         }
 
-        if (volumeDescriptorsInitialized.bootRecord == true and
+        if (volumeDescriptorsInitialized.bootRecordVolumeDescriptor == true and
             volumeDescriptorsInitialized.primaryVolumeDescriptor == true and
             volumeDescriptorsInitialized.volumeDescriptorSetTerminator == true)
         {
@@ -125,60 +127,34 @@ pub fn parseIso(isoPath: []const u8) anyerror!void {
         }
     }
 
-    if (volumeDescriptorsInitialized.bootRecord == false or
+    if (volumeDescriptorsInitialized.bootRecordVolumeDescriptor == false or
         volumeDescriptorsInitialized.primaryVolumeDescriptor == false or
         volumeDescriptorsInitialized.volumeDescriptorSetTerminator == false)
     {
         return error.IsoParserUnableToParseIsoMimimumNecessaryDescriptors;
     }
 
-    bootCatalog = try readBootCatalog(&file, bootRecord.catalogLba);
+    bootCatalog = try readBootCatalog(&file, bootRecordVolumeDescriptor.catalogLba);
 
-    bootRecord.print();
+    assert(bootCatalog.initialDefaultEntry.bootIndicator == 0x88);
+    assert(bootCatalog.validationEntry.signature1 == 0x55 and bootCatalog.validationEntry.signature2 == 0xaa);
+
+    bootRecordVolumeDescriptor.print();
     bootCatalog.print();
     primaryVolumeDescriptor.print();
     volumeDescriptorSetTerminator.print();
 
-    const rootDirectoryEntry: iso9660.DirectoryRecord = .{
-        .lengthOfDirectoryRecord = primaryVolumeDescriptor.rootDirectoryEntry[0],
-        .lengthOfExtendedAttributeRecord = primaryVolumeDescriptor.rootDirectoryEntry[1],
-        .locationOfExtent = primaryVolumeDescriptor.rootDirectoryEntry[2..10].*,
-        .fileFlags = primaryVolumeDescriptor.rootDirectoryEntry[25],
-        .lengthOfFileIdentifier = primaryVolumeDescriptor.rootDirectoryEntry[32],
-        .fileIdentifier = primaryVolumeDescriptor.rootDirectoryEntry[33],
-    };
-
+    const rootDirectoryEntry = iso9660.DirectoryRecord().init(&primaryVolumeDescriptor.rootDirectoryEntry);
     rootDirectoryEntry.print();
 
-    const rootDirExtentOffset: u32 = @bitCast(endian.readBoth(i32, &rootDirectoryEntry.locationOfExtent));
-    try file.seekTo(ISO_SECTOR_SIZE * rootDirExtentOffset);
-    _ = try file.read(&sectorBuffer);
-
-    const rootDirExtent: iso9660.DirectoryRecord = .{
-        .lengthOfDirectoryRecord = sectorBuffer[0],
-        .lengthOfExtendedAttributeRecord = sectorBuffer[1],
-        .locationOfExtent = sectorBuffer[2..10].*,
-        .fileFlags = sectorBuffer[25],
-        .lengthOfFileIdentifier = sectorBuffer[32],
-        .fileIdentifier = sectorBuffer[33],
-    };
-
-    rootDirExtent.print();
-
-    const loadRbaSectorOffset: u32 = @bitCast(endian.readLittle(i32, &bootCatalog.initialDefaultEntry.loadRba));
+    const loadRbaSectorOffset: u32 = @bitCast(endian.readLittle(i32, &bootCatalog.initialDefaultEntry.loadRba) + 16);
     try file.seekTo(ISO_SECTOR_SIZE * loadRbaSectorOffset);
     _ = try file.read(&sectorBuffer);
 
-    const loadRbaSector: iso9660.DirectoryRecord = .{
-        .lengthOfDirectoryRecord = sectorBuffer[0],
-        .lengthOfExtendedAttributeRecord = sectorBuffer[1],
-        .locationOfExtent = sectorBuffer[2..10].*,
-        .fileFlags = sectorBuffer[25],
-        .lengthOfFileIdentifier = sectorBuffer[32],
-        .fileIdentifier = sectorBuffer[33],
-    };
-
+    const loadRbaSector = iso9660.DirectoryRecord().init(&sectorBuffer);
     loadRbaSector.print();
+
+    try walkDirectories(pAllocator, &file, @bitCast(endian.readBoth(i32, &rootDirectoryEntry.dataLength)), @bitCast(endian.readBoth(i32, &rootDirectoryEntry.locationOfExtent)));
 
     debug.print("\n");
 }
@@ -203,8 +179,8 @@ pub fn readBootCatalog(pFile: *const std.fs.File, catalogLba: [4]u8) !iso9660.Bo
             .reserved2 = bootCatalogSectorBuffer[3],
             .manufacturerDev = bootCatalogSectorBuffer[4..28].*,
             .checksum = bootCatalogSectorBuffer[28..30].*,
-            .reserved3 = bootCatalogSectorBuffer[30],
-            .reserved4 = bootCatalogSectorBuffer[31],
+            .signature1 = bootCatalogSectorBuffer[30],
+            .signature2 = bootCatalogSectorBuffer[31],
         },
 
         .initialDefaultEntry = .{
@@ -222,4 +198,130 @@ pub fn readBootCatalog(pFile: *const std.fs.File, catalogLba: [4]u8) !iso9660.Bo
     };
 
     return bootCatalog;
+}
+
+pub const DirectoryEntry = struct {
+    size: u32,
+    lba: u32,
+    flags: u8,
+    nameLength: u8,
+    name: []u8,
+    isDir: bool,
+};
+
+pub fn walkDirectories(pAllocator: *const std.mem.Allocator, pFile: *const std.fs.File, dataLength: u32, offsetLba: u32) !void {
+    debug.print("\n\n-------------------- BEGIN DIRECTORY WALKTHROUGH --------------------");
+    debug.printf("\n\tData Length: {d}\n\tOffset LBA: {d}\n\n", .{ dataLength, offsetLba });
+
+    var buffer: []u8 = try pAllocator.*.alloc(u8, dataLength);
+    defer pAllocator.*.free(buffer);
+
+    var dirEntries = std.ArrayList(DirectoryEntry).init(pAllocator.*);
+    defer dirEntries.deinit();
+
+    try pFile.*.seekTo(ISO_SECTOR_SIZE * offsetLba);
+    _ = try pFile.*.read(buffer);
+
+    var byteOffset: u64 = 0;
+
+    while (byteOffset < buffer.len) {
+        const recordLength = buffer[byteOffset];
+
+        if (recordLength == 0) break;
+
+        var lbaArray: [8]u8 = undefined;
+        @memcpy(&lbaArray, buffer[(byteOffset + 2)..(byteOffset + 10)]);
+        const lba: u32 = @bitCast(endian.readBoth(i32, &lbaArray));
+
+        var sizeArray: [8]u8 = undefined;
+        @memcpy(&sizeArray, buffer[(byteOffset + 10)..(byteOffset + 18)]);
+        const size: u32 = @bitCast(endian.readBoth(i32, &sizeArray));
+
+        const flags = buffer[byteOffset + 25];
+        const nameLength = buffer[byteOffset + 32];
+        const name = buffer[byteOffset + 33 .. byteOffset + 33 + nameLength];
+
+        const dirType = if ((flags & 0x02) != 0) "DIR" else "FILE";
+
+        const newDir = DirectoryEntry{
+            .name = name,
+            .nameLength = nameLength,
+            .size = size,
+            .lba = lba,
+            .flags = flags,
+            .isDir = if ((flags & 0x02) != 0) true else false,
+        };
+
+        // Filter out "." and ".." directories
+        if (name[0] != 0x00 and name[0] != 0x01) {
+            try dirEntries.append(newDir);
+
+            const str =
+                \\[{s}] {s} at LBA {d} ({d} bytes)
+            ;
+
+            debug.printf(str, .{ dirType, name, lba, size });
+            debug.print("\n");
+        }
+
+        byteOffset += recordLength;
+
+        // Directory records are 0-padded to begin on an even byte
+        if (byteOffset % 2 != 0) byteOffset += 1;
+    }
+
+    for (0..dirEntries.items.len) |i| {
+        if (dirEntries.items[i].isDir == true) try walkDirectories(pAllocator, pFile, dirEntries.items[i].size, dirEntries.items[i].lba);
+    }
+}
+
+pub fn walkDirectory(buffer: *const []u8, dirEntries: *std.ArrayList(DirectoryEntry)) !void {
+    var byteOffset: u64 = 0;
+
+    while (byteOffset < buffer.len) {
+        const recordLength = buffer[byteOffset];
+
+        if (recordLength == 0) break;
+
+        var lbaArray: [8]u8 = undefined;
+        @memcpy(&lbaArray, buffer[(byteOffset + 2)..(byteOffset + 10)]);
+
+        const lba = endian.readBoth(i32, &lbaArray);
+
+        var sizeArray: [8]u8 = undefined;
+        @memcpy(&sizeArray, buffer[(byteOffset + 10)..(byteOffset + 18)]);
+
+        const size = endian.readBoth(i32, &sizeArray);
+        const flags = buffer[byteOffset + 25];
+        const nameLength = buffer[byteOffset + 32];
+        const name = buffer[byteOffset + 33 .. byteOffset + 33 + nameLength];
+
+        const dirType = if ((flags & 0x02) != 0) "DIR" else "FILE";
+
+        const newDir = DirectoryEntry{
+            .name = name,
+            .nameLength = nameLength,
+            .size = size,
+            .lba = lba,
+            .flags = flags,
+            .isDir = if ((flags & 0x02) != 0) true else false,
+        };
+
+        // Filter out "." and ".." directories
+        if (name[0] != 0x00 and name[0] != 0x01) {
+            try dirEntries.*.append(newDir);
+
+            const str =
+                \\[{s}] {s} at LBA {d} ({d} bytes)
+            ;
+
+            debug.printf(str, .{ dirType, name, lba, size });
+            debug.print("\n");
+        }
+
+        byteOffset += recordLength;
+
+        // Directory records are 0-padded to begin on an even byte
+        if (byteOffset % 2 != 0) byteOffset += 1;
+    }
 }

@@ -146,7 +146,6 @@ pub const BootRecord = struct {
         debug.printf("\n\tVersion:\t\t\t{d}", .{self.version});
         debug.printf("\n\tBoot System Identifier:\t\t{s}", .{self.bootSystemIdentifier});
         debug.printf("\n\tBoot Identifier:\t\t{s}", .{self.bootIdentifier});
-        // debug.printf("\n\tCatalog LBA:\t\t\t{d}\n", .{std.mem.readInt(i32, &self.catalogLba, std.builtin.Endian.little)});
         debug.printf("\n\tCatalog LBA:\t\t\t{d}\n", .{endian.readLittle(i32, &self.catalogLba)});
         debug.print("\n-------------------------------------------------------------------------------\n");
     }
@@ -182,40 +181,55 @@ pub const VolumeDescriptorSetTerminator = struct {
     }
 };
 
-pub const DirectoryRecord = struct {
-    /// int8
-    lengthOfDirectoryRecord: u8,
-    /// int8
-    lengthOfExtendedAttributeRecord: u8,
-    /// int32_LSB-MSB (LBA)
-    locationOfExtent: [8]u8,
-    /// int32_LSB-MSB
-    dataLength: ?[8]u8 = null,
-    /// 7b
-    recordingDateTime: ?[7]u8 = null,
-    /// u8
-    fileFlags: u8,
-    /// int8
-    fileUnitSize: ?u8 = null,
-    /// int8
-    interleaveGapSize: ?u8 = null,
-    /// int16_LSB-MSB
-    volumeSequenceNumber: ?[4]u8 = null,
-    /// int8
-    lengthOfFileIdentifier: u8,
-    /// strD
-    fileIdentifier: u8,
-    /// --
-    paddingField: ?u8 = null,
+pub fn DirectoryRecord() type {
+    return struct {
+        /// int8
+        lengthOfDirectoryRecord: u8,
+        /// int8
+        lengthOfExtendedAttributeRecord: u8,
+        /// int32_LSB-MSB (LBA)
+        locationOfExtent: [8]u8,
+        /// int32_LSB-MSB
+        dataLength: [8]u8,
+        /// 7b
+        recordingDateTime: ?[7]u8 = null,
+        /// u8
+        fileFlags: u8,
+        /// int8
+        fileUnitSize: ?u8 = null,
+        /// int8
+        interleaveGapSize: ?u8 = null,
+        /// int16_LSB-MSB
+        volumeSequenceNumber: ?[4]u8 = null,
+        /// int8
+        lengthOfFileIdentifier: u8,
+        /// strD
+        fileIdentifier: u8,
+        /// --
+        paddingField: ?u8 = null,
 
-    pub fn print(self: @This()) void {
-        debug.print("\n----------------- Directory Record ---------------------");
-        debug.printf("\n\tLength of Dir Record:\t\t\t{d}", .{self.lengthOfDirectoryRecord});
-        debug.printf("\n\tLength of Ext Attr Record:\t\t{d}", .{self.lengthOfExtendedAttributeRecord});
-        debug.printf("\n\tLocation of Extent:\t\t\t{d}", .{endian.readBoth(i32, &self.locationOfExtent)});
-        debug.printf("\n\tFile Flags:\t\t\t{b:0>8}", .{self.fileFlags});
-        debug.printf("\n\tLength of File Identifier:\t\t{d}", .{self.lengthOfFileIdentifier});
-        debug.printf("\n\tfileIdentifier:\t\t\t{c}", .{self.fileIdentifier});
-        debug.print("\n");
-    }
-};
+        pub fn init(buffer: []const u8) @This() {
+            return .{
+                .lengthOfDirectoryRecord = @bitCast(buffer[0]),
+                .lengthOfExtendedAttributeRecord = @bitCast(buffer[1]),
+                .locationOfExtent = buffer[2..10].*,
+                .dataLength = buffer[10..18].*,
+                .fileFlags = @bitCast(buffer[25]),
+                .lengthOfFileIdentifier = @bitCast(buffer[32]),
+                .fileIdentifier = @bitCast(buffer[33]),
+            };
+        }
+
+        pub fn print(self: @This()) void {
+            debug.print("\n----------------- Directory Record ---------------------");
+            debug.printf("\n\tLength of Dir Record:\t\t\t{d}", .{self.lengthOfDirectoryRecord});
+            debug.printf("\n\tLength of Ext Attr Record:\t\t{d}", .{self.lengthOfExtendedAttributeRecord});
+            debug.printf("\n\tLocation of Extent:\t\t\t{d}", .{endian.readBoth(i32, &self.locationOfExtent)});
+            debug.printf("\n\tData Length:\t\t\t{d}", .{endian.readBoth(i32, &self.dataLength)});
+            debug.printf("\n\tFile Flags:\t\t\t{b:0>8}", .{self.fileFlags});
+            debug.printf("\n\tLength of File Identifier:\t\t{d}", .{self.lengthOfFileIdentifier});
+            debug.printf("\n\tfileIdentifier:\t\t\t{x}", .{self.fileIdentifier});
+            debug.print("\n");
+        }
+    };
+}
