@@ -12,14 +12,15 @@ pub fn write(isoPath: []const u8, devicePath: []const u8) !void {
     const device = try std.fs.openFileAbsolute(devicePath, .{ .mode = .read_write });
     defer device.close();
 
-    const ISO_SIZE = try isoFile.stat().size;
+    const fileStat = try isoFile.stat();
+    const ISO_SIZE = fileStat.size;
 
-    var currentByte = 0;
+    var currentByte: u64 = 0;
 
     debug.print("\n[*] Writing ISO to device, please wait...\n");
 
     while (currentByte < ISO_SIZE) {
-        try isoFile.seekTo(currentByte * WRITE_BLOCK_SIZE);
+        try isoFile.seekTo(currentByte);
         const bytesRead = try isoFile.read(&writeBuffer);
 
         if (bytesRead == 0) {
@@ -27,7 +28,10 @@ pub fn write(isoPath: []const u8, devicePath: []const u8) !void {
             break;
         }
 
-        const bytesWritten = try device.write(&writeBuffer);
+        // Important to use the slice syntax here, otherwise if writing &writeBuffer
+        // it only writes WRITE_BLOCK_SIZE blocks, meaning if the last block is smaller
+        // then the data will likely be corrupted.
+        const bytesWritten = try device.write(writeBuffer[0..bytesRead]);
 
         if (bytesWritten != bytesRead or bytesWritten == 0) {
             debug.print("\nCRITICAL ERROR: failed to correctly write to device. Aborting...");

@@ -38,30 +38,20 @@ pub fn main() !void {
         assert(args[i + 1].len != 0);
 
         if (strings.eql(args[i], ISO_ARG)) {
-            // isoPath = try allocator.alloc(u8, args[i + 1].len);
             isoPath = args[i + 1];
-            // errdefer allocator.free(isoPath);
-            // @memcpy(isoPath, args[i + 1]);
             argValidator.isoPath = true;
         } else if (strings.eql(args[i], DEVICE_ARG)) {
-            // devicePath = try allocator.alloc(u8, args[i + 1].len);
             devicePath = args[i + 1];
-            // errdefer allocator.free(devicePath);
-            // @memcpy(devicePath, args[i + 1]);
             argValidator.devicePath = true;
         }
     }
-
-    // defer {
-    //     allocator.free(isoPath);
-    //     allocator.free(devicePath);
-    // }
 
     debug.printf("\n--iso: {s}\n--device: {s}", .{ isoPath, devicePath });
 
     assert(argValidator.isoPath == true and argValidator.devicePath == true);
 
     try IsoParser.parseIso(&allocator, isoPath);
+    try IsoWriter.write(isoPath, devicePath);
     // try IsoParser.parseIso(&allocator, "/Users/cerberus/Documents/Projects/freetracer/alpine.iso");
     // try IsoParser.parseIso(&allocator, "/Users/cerberus/Documents/Projects/freetracer/tinycore.iso");
 
