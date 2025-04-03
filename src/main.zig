@@ -2,6 +2,7 @@ const std = @import("std");
 const debug = @import("lib/util/debug.zig");
 const strings = @import("lib/util/strings.zig");
 const rl = @import("raylib");
+const ui = @import("lib/ui/ui.zig");
 
 const assert = std.debug.assert;
 
@@ -12,6 +13,9 @@ const ArgValidator = struct {
     isoPath: bool = false,
     devicePath: bool = false,
 };
+
+const SCREEN_WIDTH = 850;
+const SCREEN_HEIGHT = 500;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -27,23 +31,46 @@ pub fn main() !void {
 
     debug.printf("\nTotal process arguments: {d}\n", .{args.len});
 
-    const screenWidth = 800;
-    const screenHeight = 500;
-
-    rl.initWindow(screenWidth, screenHeight, "");
+    rl.initWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "");
     defer rl.closeWindow(); // Close window and OpenGL context
     //
     const backgroundColor: rl.Color = .{ .r = 29, .g = 44, .b = 64, .a = 100 };
 
     rl.setTargetFPS(60); // Set our game to run at 60 frames-per-second
     //--------------------------------------------------------------------------------------
+    //
 
-    // Main game loop
+    const isoRect: ui.Rect = .{
+        .x = relW(0.08),
+        .y = relH(0.2),
+        .width = relW(0.35),
+        .height = relH(0.7),
+        .color = .fade(.light_gray, 0.3),
+    };
+
+    const usbRect: ui.Rect = .{
+        .x = isoRect.x + isoRect.width + relW(0.08),
+        .y = relH(0.2),
+        .width = relW(0.175),
+        .height = relH(0.7),
+        .color = .fade(.light_gray, 0.3),
+    };
+
+    const flashRect: ui.Rect = .{
+        .x = usbRect.x + usbRect.width + relW(0.08),
+        .y = relH(0.2),
+        .width = relW(0.175),
+        .height = relH(0.7),
+        .color = .fade(.light_gray, 0.3),
+    };
+
+    const isoBtn = ui.Button().init("Select ISO...", relW(0.12), relH(0.35), 14, .white, .red);
+
+    // Main application GUI loop
     while (!rl.windowShouldClose()) { // Detect window close button or ESC key
         // Update
         //----------------------------------------------------------------------------------
-        const SCREEN_HEIGHT: f32 = @floatFromInt(rl.getScreenHeight());
-        const SCREEN_WIDTH: f32 = @floatFromInt(rl.getScreenWidth());
+
         //----------------------------------------------------------------------------------
 
         // Draw
@@ -52,9 +79,15 @@ pub fn main() !void {
         defer rl.endDrawing();
 
         rl.clearBackground(backgroundColor);
-        rl.drawRectangle(560, 0, @intFromFloat(SCREEN_WIDTH - 500), @intFromFloat(SCREEN_HEIGHT), .fade(.light_gray, 0.3));
 
-        rl.drawText("freetracer", @intFromFloat(SCREEN_WIDTH * 0.1), @intFromFloat(SCREEN_HEIGHT * 0.1), 20, .light_gray);
+        isoRect.draw();
+        usbRect.draw();
+        flashRect.draw();
+
+        isoBtn.draw();
+
+        rl.drawText("freetracer", @intFromFloat(relW(0.08)), @intFromFloat(relH(0.035)), 22, .white);
+        rl.drawText("free and open-source by orbitixx", @intFromFloat(relW(0.08)), @intFromFloat(relH(0.035) + 23), 14, .light_gray);
         //----------------------------------------------------------------------------------
     }
 
@@ -89,4 +122,12 @@ pub fn main() !void {
     // try IsoParser.parseIso(&allocator, "/Users/cerberus/Documents/Projects/freetracer/tinycore.iso");
 
     debug.print("\n");
+}
+
+pub fn relW(x: f32) f32 {
+    return (SCREEN_WIDTH * x);
+}
+
+pub fn relH(y: f32) f32 {
+    return (SCREEN_HEIGHT * y);
 }
