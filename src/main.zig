@@ -17,6 +17,7 @@ const c = if (isMac) @cImport({
     @cInclude("IOKit/usb/USB.h");
     @cInclude("IOKit/usb/IOUSBLib.h");
     @cInclude("IOKit/IOCFPlugIn.h");
+    @cInclude("IOKit/IOBSD.h");
 }) else if (isLinux) @cImport({
     @cInclude("blkid/blkid.h");
 });
@@ -189,6 +190,20 @@ pub fn relH(y: f32) f32 {
     return (SCREEN_HEIGHT * y);
 }
 
+// Define a callback
+fn unmountCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: ?*anyopaque) callconv(.C) void {
+    _ = disk;
+    _ = context;
+
+    if (dissenter == null) {
+        debug.print("\nDisk unmount successful!\n");
+    } else {
+        const status = c.DADissenterGetStatus(dissenter);
+        debug.printf("\nUnmount failed with status: {any}.\n", .{status});
+        return;
+    }
+}
+
 pub fn macOS_listUSBDevices() void {
     var matchingDict: c.CFMutableDictionaryRef = null;
     var ioIterator: c.io_iterator_t = 0;
@@ -196,6 +211,7 @@ pub fn macOS_listUSBDevices() void {
     var device: c.io_service_t = 0;
 
     matchingDict = c.IOServiceMatching(c.kIOUSBDeviceClassName);
+    // defer _ = c.CFRelease(matchingDict);
 
     if (matchingDict == null) {
         debug.print("\nERROR: Unable to obtain a matching dictionary for USB Device class.");
@@ -212,17 +228,104 @@ pub fn macOS_listUSBDevices() void {
     device = c.IOIteratorNext(ioIterator);
 
     while (device != 0) {
+
+        //--- OBTAIN PARENT DEVICE NODE SECTION --------------------------------------
+        //----------------------------------------------------------------------------
+        defer _ = c.IOObjectRelease(device);
+
         var deviceName: c.io_name_t = undefined;
 
         kernReturn = c.IORegistryEntryGetName(device, &deviceName);
 
         if (kernReturn != c.KERN_SUCCESS) {
             debug.print("\nERROR: Unable to obtain USB device name.");
-        } else {
-            debug.printf("\nDEVICE: {s}", .{deviceName});
+            device = c.IOIteratorNext(ioIterator);
+            continue;
         }
 
-        _ = c.IOObjectRelease(device);
+        debug.printf("\nFound device (service name in IO Registry): {s}", .{deviceName});
+
+        var stringBuffer: [128]u8 = undefined;
+
+        const kIOBSDNameKey: c.CFStringRef = c.CFStringCreateWithCString(c.kCFAllocatorDefault, c.kIOBSDNameKey, c.kCFStringEncodingUTF8);
+        defer _ = c.CFRelease(kIOBSDNameKey);
+
+        const deviceBSDName_cf: c.CFStringRef = @ptrCast(c.IORegistryEntrySearchCFProperty(device, c.kIOServicePlane, kIOBSDNameKey, c.kCFAllocatorDefault, c.kIORegistryIterateRecursively));
+        defer _ = c.CFRelease(deviceBSDName_cf);
+
+        _ = c.CFStringGetCString(deviceBSDName_cf, &stringBuffer, stringBuffer.len, c.kCFStringEncodingUTF8);
+
+        debug.printf("\nDevice path: {s}", .{stringBuffer});
+
+        const session = c.DASessionCreate(c.kCFAllocatorDefault);
+        if (session == null) {
+            debug.print("\nFailed to create DA session\n");
+            return;
+        }
+
+        // c.CFStringGetCStringPtr(deviceBSDName_cf, c.kCFStringEncodingUTF8)
+
+        // const cfBsdName = c.CFStringCreateWithCString(c.kCFAllocatorDefault, deviceBSDName_cf, c.kCFStringEncodingUTF8);
+        const disk: c.DADiskRef = c.DADiskCreateFromBSDName(c.kCFAllocatorDefault, session, "disk4");
+
+        if (disk == null) {
+            debug.print("\nFailed to create DA disk\n");
+            return;
+        }
+
+        // Call the unmount function
+        c.DADiskUnmount(disk, c.kDADiskUnmountOptionDefault, unmountCallback, null);
+
+        // Run the runloop to allow async callback to fire
+        c.CFRunLoopRun();
+
+        // const kIOBootDeviceSizeKey: c.CFStringRef = c.CFStringCreateWithCString(c.kCFAllocatorDefault, c.kIOMaximumByteCountReadKey, c.kCFStringEncodingUTF8);
+        // defer _ = c.CFRelease(kIOBootDeviceSizeKey);
+        //
+        // const deviceSize_cf: c.CFStringRef = @ptrCast(c.IORegistryEntrySearchCFProperty(device, c.kIOServicePlane, kIOBootDeviceSizeKey, c.kCFAllocatorDefault, c.kIORegistryIterateRecursively));
+        // defer _ = c.CFRelease(deviceSize_cf);
+        //
+        // stringBuffer = undefined;
+        //
+        // _ = c.CFStringGetCString(deviceSize_cf, &stringBuffer, stringBuffer.len, c.kCFStringEncodingUTF8);
+        //
+        // debug.printf("\nDevice size: {s}", .{stringBuffer});
+
+        //----------------------------------------------------------------------------
+
+        //--- CHILD NODE PROPERTY ITERATION SECTION ----------------------------------
+        //----------------------------------------------------------------------------
+
+        // var childIterator: c.io_iterator_t = 0;
+        // var childNode: c.io_service_t = 0;
+        //
+        // kernReturn = c.IORegistryEntryGetChildIterator(device, c.kIOServicePlane, &childIterator);
+        // defer _ = c.IOObjectRelease(childIterator);
+        //
+        // if (kernReturn != c.KERN_SUCCESS) {
+        //     debug.print("\nUnable to obtain child iterator for device's registry entry.");
+        //     device = c.IOIteratorNext(ioIterator);
+        //     continue;
+        // }
+        //
+        // childNode = c.IOIteratorNext(childIterator);
+        //
+        // while (childIterator != 0) {
+        //     const wholeString: c.CFStringRef = c.CFStringCreateWithCString(c.kCFAllocatorDefault, "Whole", c.kCFStringEncodingUTF8);
+        //     defer _ = c.CFRelease(wholeString);
+        //
+        //     const isWhole: c.CFBooleanRef = @ptrCast(c.IORegistryEntryCreateCFProperty(childNode, wholeString, c.kCFAllocatorDefault, 0));
+        //     defer _ = c.CFRelease(isWhole);
+        //
+        //     if (isWhole != null) {
+        //         debug.printf("\nisWhole: {any}", .{c.CFBooleanGetValue(isWhole)});
+        //     }
+        //
+        //     childNode = c.IOIteratorNext(childIterator);
+        // }
+
+        //--- END CHILD NODE PROPERTY ITERATION SECTION -------------------------------
+
         device = c.IOIteratorNext(ioIterator);
     }
 

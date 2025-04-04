@@ -54,6 +54,10 @@ pub fn build(b: *std.Build) void {
     const osdialog_dep = b.dependency("osdialog", .{});
     exe.root_module.addImport("osdialog", osdialog_dep.module("osdialog"));
     // -------------------------------------------------------------------
+    //
+
+    exe.linkFramework("DiskArbitration"); // Required for DADisk functions
+    exe.linkFramework("CoreFoundation"); // Required for CF types and functions
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
