@@ -16,9 +16,15 @@ const c = if (isMac) @cImport({
 }) else if (isLinux) @cImport({});
 
 pub const IOMediaVolume = struct {
+    pAllocator: *const std.mem.Allocator,
     serviceId: c.io_service_t,
     bsdName: []const u8,
+    size: i64,
     isLeaf: bool,
+
+    pub fn deinit(self: @This()) void {
+        self.pAllocator.*.free(self.bsdName);
+    }
 };
 
 pub const USBDevice = struct {
@@ -27,11 +33,14 @@ pub const USBDevice = struct {
     ioMediaVolumes: std.ArrayList(IOMediaVolume),
 
     pub fn deinit(self: @This()) void {
+        for (self.ioMediaVolumes.items) |volume| {
+            volume.deinit();
+        }
         self.ioMediaVolumes.deinit();
     }
 };
 
-pub fn getIOMediaVolumesForDevice(device: c.io_service_t, pVolumesList: *std.ArrayList(IOMediaVolume)) !void {
+pub fn getIOMediaVolumesForDevice(device: c.io_service_t, pAllocator: *const std.mem.Allocator, pVolumesList: *std.ArrayList(IOMediaVolume)) !void {
     var kernReturn: ?c.kern_return_t = null;
     var childService: c.io_service_t = 1;
     var childIterator: c.io_iterator_t = 0;
@@ -50,38 +59,59 @@ pub fn getIOMediaVolumesForDevice(device: c.io_service_t, pVolumesList: *std.Arr
         const ioMediaCString = "IOMedia";
         const isIOMedia: bool = c.IOObjectConformsTo(childService, ioMediaCString) != 0;
 
-        if (!isIOMedia) {
-            try getIOMediaVolumesForDevice(childService, pVolumesList);
-        } else {
-            const ioMediaVolume = try getIOMediaVolumeDescription(childService);
+        if (isIOMedia) {
+            const ioMediaVolume = try getIOMediaVolumeDescription(childService, pAllocator);
+
             pVolumesList.*.append(ioMediaVolume) catch |err| {
                 debug.printf("\nERROR (IOKit.getIOMediaVolumesForDevice): unable to append child service to volumes list. Error message: {any}", .{err});
             };
         }
+
+        try getIOMediaVolumesForDevice(childService, pAllocator, pVolumesList);
     }
 
     defer _ = c.IOObjectRelease(childIterator);
 }
 
-pub fn getIOMediaVolumeDescription(service: c.io_service_t) !IOMediaVolume {
-    const bsdNameKey = c.CFStringCreateWithCString(c.kCFAllocatorDefault, c.kIOBSDNameKey, c.kCFStringEncodingUTF8);
-    const leafKey = c.CFStringCreateWithCStringNoCopy(c.kCFAllocatorDefault, c.kIOMediaLeafKey, c.kCFStringEncodingASCII, c.kCFAllocatorNull);
+pub fn getIOMediaVolumeDescription(service: c.io_service_t, pAllocator: *const std.mem.Allocator) !IOMediaVolume {
+    const bsdNameKey = c.CFStringCreateWithCStringNoCopy(c.kCFAllocatorDefault, c.kIOBSDNameKey, c.kCFStringEncodingUTF8, c.kCFAllocatorNull);
+    defer _ = c.CFRelease(bsdNameKey);
 
-    const bsdNameKeyRef: c.CFStringRef = @ptrCast(c.IORegistryEntryCreateCFProperty(service, bsdNameKey, c.kCFAllocatorDefault, 0));
-    if (bsdNameKeyRef == null) return error.UnableToLocateBSDNameForVolume;
-    defer _ = c.CFRelease(bsdNameKeyRef);
+    const leafKey = c.CFStringCreateWithCStringNoCopy(c.kCFAllocatorDefault, c.kIOMediaLeafKey, c.kCFStringEncodingUTF8, c.kCFAllocatorNull);
+    defer _ = c.CFRelease(leafKey);
+
+    const sizeKey = c.CFStringCreateWithCStringNoCopy(c.kCFAllocatorDefault, c.kIOMediaSizeKey, c.kCFStringEncodingUTF8, c.kCFAllocatorNull);
+    defer _ = c.CFRelease(sizeKey);
+
+    const bsdNameValueRef: c.CFStringRef = @ptrCast(c.IORegistryEntryCreateCFProperty(service, bsdNameKey, c.kCFAllocatorDefault, 0));
+    if (bsdNameValueRef == null) return error.FailedToObtainBSDNameForVolume;
+    defer _ = c.CFRelease(bsdNameValueRef);
     var bsdNameBuf: [128]u8 = undefined;
 
-    const leafKeyRef: c.CFBooleanRef = @ptrCast(c.IORegistryEntryCreateCFProperty(service, leafKey, c.kCFAllocatorDefault, 0));
-    if (leafKeyRef == null) return error.UnableToLocateLeafKeyForVolume;
-    defer _ = c.CFRelease(leafKeyRef);
-    const isLeaf: bool = leafKeyRef == c.kCFBooleanTrue;
+    const sizeValueRef: c.CFNumberRef = @ptrCast(c.IORegistryEntryCreateCFProperty(service, sizeKey, c.kCFAllocatorDefault, 0));
+    if (sizeValueRef == null) return error.FailedToObtainIOMediaVolumeSize;
+    defer _ = c.CFRelease(sizeValueRef);
+    var mediaSizeInBytes: i64 = 0;
 
-    _ = c.CFStringGetCString(bsdNameKeyRef, &bsdNameBuf, bsdNameBuf.len, c.kCFStringEncodingUTF8);
+    _ = c.CFNumberGetValue(sizeValueRef, c.kCFNumberLongLongType, &mediaSizeInBytes);
+
+    const leafValueRef: c.CFBooleanRef = @ptrCast(c.IORegistryEntryCreateCFProperty(service, leafKey, c.kCFAllocatorDefault, 0));
+    if (leafValueRef == null) return error.FailedToObtainLeafKeyForVolume;
+    defer _ = c.CFRelease(leafValueRef);
+    const isLeaf: bool = (leafValueRef == c.kCFBooleanTrue);
+
+    _ = c.CFStringGetCString(bsdNameValueRef, &bsdNameBuf, bsdNameBuf.len, c.kCFStringEncodingUTF8);
+
+    // bsdNameBuf is a stack-allocated buffer, which is erased when function exits,
+    // therefore the string must be saved on the heap and cleaned up later.
+    const heapBsdName = try pAllocator.*.alloc(u8, bsdNameBuf.len);
+    @memcpy(heapBsdName, &bsdNameBuf);
 
     return .{
+        .pAllocator = pAllocator,
         .serviceId = service,
-        .bsdName = &bsdNameBuf,
+        .bsdName = heapBsdName,
+        .size = mediaSizeInBytes,
         .isLeaf = isLeaf,
     };
 }

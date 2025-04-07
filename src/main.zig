@@ -254,7 +254,7 @@ pub fn macOS_listUSBDevices(pAllocator: *const std.mem.Allocator) void {
 
         //--- CHILD NODE PROPERTY ITERATION SECTION ----------------------------------
         //----------------------------------------------------------------------------
-        IOKit.getIOMediaVolumesForDevice(ioDevice, &deviceVolumesList) catch |err| {
+        IOKit.getIOMediaVolumesForDevice(ioDevice, pAllocator, &deviceVolumesList) catch |err| {
             debug.printf("\n{any}", .{err});
         };
 
@@ -287,7 +287,7 @@ pub fn macOS_listUSBDevices(pAllocator: *const std.mem.Allocator) void {
 
         for (0..usbDevice.ioMediaVolumes.items.len) |v| {
             const ioMediaVolume: IOKit.IOMediaVolume = usbDevice.ioMediaVolumes.items[v];
-            debug.printf("\n\tIOMedia Volume ({d})\n\t\tBSD Name: {s}\n\t\tLeaf: {any}\n", .{ ioMediaVolume.serviceId, ioMediaVolume.bsdName, ioMediaVolume.isLeaf });
+            debug.printf("\n\tIOMedia Volume ({d})\n\t\tBSD Name: {s}\n\t\tLeaf: {any}\n\t\tSize: {any}\n", .{ ioMediaVolume.serviceId, ioMediaVolume.bsdName, ioMediaVolume.isLeaf, std.fmt.fmtIntSizeDec(@intCast(ioMediaVolume.size)) });
         }
     }
 
