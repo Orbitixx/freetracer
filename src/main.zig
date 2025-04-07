@@ -26,6 +26,7 @@ const assert = std.debug.assert;
 
 const IsoParser = @import("modules/IsoParser.zig");
 const IsoWriter = @import("modules/IsoWriter.zig");
+const IOKit = @import("modules/IOKit.zig");
 
 const ArgValidator = struct {
     isoPath: bool = false,
@@ -68,9 +69,7 @@ pub fn main() !void {
     // debug.printf("\nDisk4 size is: {d}\n", .{diskStat.size});
     //
 
-    macOS_listUSBDevices();
-
-    _ = allocator;
+    macOS_listUSBDevices(&allocator);
 
     // const args = try std.process.argsAlloc(allocator);
     // defer std.process.argsFree(allocator, args);
@@ -206,11 +205,11 @@ fn unmountCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: ?*an
     }
 }
 
-pub fn macOS_listUSBDevices() void {
+pub fn macOS_listUSBDevices(pAllocator: *const std.mem.Allocator) void {
     var matchingDict: c.CFMutableDictionaryRef = null;
     var ioIterator: c.io_iterator_t = 0;
     var kernReturn: ?c.kern_return_t = null;
-    var device: c.io_service_t = 1;
+    var ioDevice: c.io_service_t = 1;
 
     matchingDict = c.IOServiceMatching(c.kIOUSBDeviceClassName);
 
@@ -226,19 +225,25 @@ pub fn macOS_listUSBDevices() void {
         return;
     }
 
-    // device = c.IOIteratorNext(ioIterator);
+    var usbMediaDevices = std.ArrayList(IOKit.USBDevice).init(pAllocator.*);
+    defer usbMediaDevices.deinit();
 
-    while (device != 0) {
+    while (ioDevice != 0) {
 
         //--- OBTAIN PARENT DEVICE NODE SECTION --------------------------------------
         //----------------------------------------------------------------------------
 
-        device = c.IOIteratorNext(ioIterator);
-        defer _ = c.IOObjectRelease(device);
+        ioDevice = c.IOIteratorNext(ioIterator);
+
+        if (ioDevice == 0) break;
+
+        defer _ = c.IOObjectRelease(ioDevice);
 
         var deviceName: c.io_name_t = undefined;
+        var deviceVolumesList = std.ArrayList(IOKit.IOMediaVolume).init(pAllocator.*);
+        defer deviceVolumesList.deinit();
 
-        kernReturn = c.IORegistryEntryGetName(device, &deviceName);
+        kernReturn = c.IORegistryEntryGetName(ioDevice, &deviceName);
 
         if (kernReturn != c.KERN_SUCCESS) {
             debug.print("\nERROR: Unable to obtain USB device name.");
@@ -247,50 +252,74 @@ pub fn macOS_listUSBDevices() void {
 
         debug.printf("\nFound device (service name in IO Registry): {s}", .{deviceName});
 
-        var stringBuffer: [128]u8 = undefined;
-
-        const kIOBSDNameKey: c.CFStringRef = c.CFStringCreateWithCString(c.kCFAllocatorDefault, c.kIOBSDNameKey, c.kCFStringEncodingUTF8);
-        defer _ = c.CFRelease(kIOBSDNameKey);
-
-        const deviceBSDName_cf: c.CFStringRef = @ptrCast(c.IORegistryEntrySearchCFProperty(device, c.kIOServicePlane, kIOBSDNameKey, c.kCFAllocatorDefault, c.kIORegistryIterateRecursively));
-
-        if (deviceBSDName_cf == null) {
-            debug.print("\nERROR: Unable to obtain device name CFStringRef. Continuting to next device...");
-            continue;
-        }
-
-        defer _ = c.CFRelease(deviceBSDName_cf);
-
-        _ = c.CFStringGetCString(deviceBSDName_cf, &stringBuffer, stringBuffer.len, c.kCFStringEncodingUTF8);
-
-        debug.printf("\nDevice path: {s}", .{stringBuffer});
-
         //--- CHILD NODE PROPERTY ITERATION SECTION ----------------------------------
         //----------------------------------------------------------------------------
+        IOKit.getIOMediaVolumesForDevice(ioDevice, &deviceVolumesList) catch |err| {
+            debug.printf("\n{any}", .{err});
+        };
 
-        // var childIterator: c.io_iterator_t = 0;
-        // var childService: c.io_service_t = 1;
-        //
-        // kernReturn = c.IORegistryEntryGetChildIterator(device, c.kIOServicePlane, &childIterator);
-        //
-        // if (kernReturn != c.KERN_SUCCESS) {
-        //     debug.print("\nUnable to obtain child iterator for device's registry entry.");
-        //     continue;
-        // }
-        //
-        // while (childService != 0) {
-        //     childService = c.IOIteratorNext(childIterator);
-        //     defer _ = c.IOObjectRelease(childService);
-        // }
-        //
-        // defer _ = c.IOObjectRelease(childIterator);
+        if (deviceVolumesList.items.len == 0) continue;
 
-        //----------------------------------------------------------------------------
+        usbMediaDevices.append(.{
+            .serviceId = ioDevice,
+            .deviceName = deviceName,
+            .ioMediaVolumes = deviceVolumesList.clone() catch |err| {
+                debug.printf("\nERROR: Unable to deep-copy the devicesVolumesList <ArrayList(IOKIT.IOMediaVolume)>. Error message: {any}", .{err});
+                continue;
+            },
+        }) catch |err| {
+            debug.printf("\nERROR: Unable to append item of type USBDevice to usbMediaDevices ArrayList. Error message: {any}", .{err});
+            continue;
+        };
 
+        //--- END -------------------------------------------------------------------------
+
+    }
+
+    if (usbMediaDevices.items.len == 0) {
+        debug.print("\nWARNING: No USB media devices were found with IOMedia volumes.");
+        return;
+    }
+
+    for (usbMediaDevices.items) |usbDevice| {
+        debug.printf("\nUSB Device with IOMedia volumes ({s} - {d})", .{ usbDevice.deviceName, usbDevice.serviceId });
+
+        for (usbDevice.ioMediaVolumes.items) |ioMediaVolume| {
+            debug.printf("\n\tIOMedia Volume ({d})\n\t\tBSD Name: {s}\n\t\tLeaf: {any}\n", .{ ioMediaVolume.serviceId, ioMediaVolume.bsdName, ioMediaVolume.isLeaf });
+        }
+    }
+
+    defer {
+        for (usbMediaDevices.items) |usbDevice| {
+            usbDevice.deinit();
+        }
     }
 
     defer _ = c.IOObjectRelease(ioIterator);
 }
+
+// var stringBuffer: [128]u8 = undefined;
+//
+// const kIOBSDNameKey: c.CFStringRef = c.CFStringCreateWithCString(c.kCFAllocatorDefault, c.kIOBSDNameKey, c.kCFStringEncodingUTF8);
+// defer _ = c.CFRelease(kIOBSDNameKey);
+//
+// if (kIOBSDNameKey == null) {
+//     debug.print("\nERROR: Unable to convert kIOBSDNameKey constant to CFStringRef. Continuting to next device...");
+//     continue;
+// }
+//
+// const deviceBSDName_cf: c.CFStringRef = @ptrCast(c.IORegistryEntrySearchCFProperty(device, c.kIOServicePlane, kIOBSDNameKey, c.kCFAllocatorDefault, c.kIORegistryIterateRecursively));
+//
+// if (deviceBSDName_cf == null) {
+//     debug.print("\nERROR: Unable to obtain device name CFStringRef. Continuting to next device...");
+//     continue;
+// }
+//
+// defer _ = c.CFRelease(deviceBSDName_cf);
+//
+// _ = c.CFStringGetCString(deviceBSDName_cf, &stringBuffer, stringBuffer.len, c.kCFStringEncodingUTF8);
+//
+// debug.printf("\nDevice path: {s}", .{stringBuffer});
 
 //
 //
