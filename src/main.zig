@@ -281,10 +281,12 @@ pub fn macOS_listUSBDevices(pAllocator: *const std.mem.Allocator) void {
         return;
     }
 
-    for (usbMediaDevices.items) |usbDevice| {
+    for (0..usbMediaDevices.items.len) |i| {
+        const usbDevice: IOKit.USBDevice = usbMediaDevices.items[i];
         debug.printf("\nUSB Device with IOMedia volumes ({s} - {d})", .{ usbDevice.deviceName, usbDevice.serviceId });
 
-        for (usbDevice.ioMediaVolumes.items) |ioMediaVolume| {
+        for (0..usbDevice.ioMediaVolumes.items.len) |v| {
+            const ioMediaVolume: IOKit.IOMediaVolume = usbDevice.ioMediaVolumes.items[v];
             debug.printf("\n\tIOMedia Volume ({d})\n\t\tBSD Name: {s}\n\t\tLeaf: {any}\n", .{ ioMediaVolume.serviceId, ioMediaVolume.bsdName, ioMediaVolume.isLeaf });
         }
     }
