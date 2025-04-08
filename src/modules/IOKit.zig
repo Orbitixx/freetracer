@@ -21,6 +21,10 @@ pub const IOMediaVolume = struct {
     bsdName: []const u8,
     size: i64,
     isLeaf: bool,
+    isWhole: bool,
+    isRemovable: bool,
+    isOpen: bool,
+    isWritable: bool,
 
     pub fn deinit(self: @This()) void {
         self.pAllocator.*.free(self.bsdName);
@@ -32,11 +36,34 @@ pub const USBDevice = struct {
     deviceName: c.io_name_t,
     ioMediaVolumes: std.ArrayList(IOMediaVolume),
 
-    pub fn deinit(self: @This()) void {
+    pub fn deinit(self: USBDevice) void {
         for (self.ioMediaVolumes.items) |volume| {
             volume.deinit();
         }
         self.ioMediaVolumes.deinit();
+    }
+};
+
+pub const USBStorageDevice = struct {
+    pAllocator: *const std.mem.Allocator,
+    serviceId: c.io_service_t = undefined,
+    deviceName: []u8 = undefined,
+    bsdName: []u8 = undefined,
+    size: i64 = undefined,
+    volumes: std.ArrayList(IOMediaVolume) = undefined,
+
+    pub fn deinit(self: USBStorageDevice) void {
+        self.pAllocator.*.free(self.deviceName);
+        self.pAllocator.*.free(self.bsdName);
+        self.volumes.deinit();
+    }
+
+    pub fn print(self: USBStorageDevice) void {
+        debug.printf("\n- /dev/{s}\t{s}\t({d})", .{ self.bsdName, self.deviceName, std.fmt.fmtIntSizeDec(@intCast(self.size)) });
+
+        for (self.volumes.items) |volume| {
+            debug.printf("\n\t- /dev/{s}\t({d})", .{ volume.bsdName, std.fmt.fmtIntSizeDec(@intCast(volume.size)) });
+        }
     }
 };
 
@@ -74,31 +101,16 @@ pub fn getIOMediaVolumesForDevice(device: c.io_service_t, pAllocator: *const std
 }
 
 pub fn getIOMediaVolumeDescription(service: c.io_service_t, pAllocator: *const std.mem.Allocator) !IOMediaVolume {
+
+    //--- @prop: BSDName (String) --------------------------------------------------------
+    //------------------------------------------------------------------------------------
     const bsdNameKey = c.CFStringCreateWithCStringNoCopy(c.kCFAllocatorDefault, c.kIOBSDNameKey, c.kCFStringEncodingUTF8, c.kCFAllocatorNull);
     defer _ = c.CFRelease(bsdNameKey);
-
-    const leafKey = c.CFStringCreateWithCStringNoCopy(c.kCFAllocatorDefault, c.kIOMediaLeafKey, c.kCFStringEncodingUTF8, c.kCFAllocatorNull);
-    defer _ = c.CFRelease(leafKey);
-
-    const sizeKey = c.CFStringCreateWithCStringNoCopy(c.kCFAllocatorDefault, c.kIOMediaSizeKey, c.kCFStringEncodingUTF8, c.kCFAllocatorNull);
-    defer _ = c.CFRelease(sizeKey);
 
     const bsdNameValueRef: c.CFStringRef = @ptrCast(c.IORegistryEntryCreateCFProperty(service, bsdNameKey, c.kCFAllocatorDefault, 0));
     if (bsdNameValueRef == null) return error.FailedToObtainBSDNameForVolume;
     defer _ = c.CFRelease(bsdNameValueRef);
     var bsdNameBuf: [128]u8 = undefined;
-
-    const sizeValueRef: c.CFNumberRef = @ptrCast(c.IORegistryEntryCreateCFProperty(service, sizeKey, c.kCFAllocatorDefault, 0));
-    if (sizeValueRef == null) return error.FailedToObtainIOMediaVolumeSize;
-    defer _ = c.CFRelease(sizeValueRef);
-    var mediaSizeInBytes: i64 = 0;
-
-    _ = c.CFNumberGetValue(sizeValueRef, c.kCFNumberLongLongType, &mediaSizeInBytes);
-
-    const leafValueRef: c.CFBooleanRef = @ptrCast(c.IORegistryEntryCreateCFProperty(service, leafKey, c.kCFAllocatorDefault, 0));
-    if (leafValueRef == null) return error.FailedToObtainLeafKeyForVolume;
-    defer _ = c.CFRelease(leafValueRef);
-    const isLeaf: bool = (leafValueRef == c.kCFBooleanTrue);
 
     _ = c.CFStringGetCString(bsdNameValueRef, &bsdNameBuf, bsdNameBuf.len, c.kCFStringEncodingUTF8);
 
@@ -106,6 +118,25 @@ pub fn getIOMediaVolumeDescription(service: c.io_service_t, pAllocator: *const s
     // therefore the string must be saved on the heap and cleaned up later.
     const heapBsdName = try pAllocator.*.alloc(u8, bsdNameBuf.len);
     @memcpy(heapBsdName, &bsdNameBuf);
+    //--- @endprop -----------------------------------------------------------------------
+
+    //--- @prop: Leaf (Bool) -------------------------------------------------------------
+    const isLeaf: bool = try getBoolFromIOService(service, c.kIOMediaLeafKey);
+
+    //--- @prop: Whole (Bool) ------------------------------------------------------------
+    const isWhole: bool = try getBoolFromIOService(service, c.kIOMediaWholeKey);
+
+    //--- @prop: isRemovable (Bool) ------------------------------------------------------
+    const isRemovable: bool = try getBoolFromIOService(service, c.kIOMediaRemovableKey);
+
+    //--- @prop: isOpen (Bool) ------------------------------------------------------
+    const isOpen: bool = try getBoolFromIOService(service, c.kIOMediaOpenKey);
+
+    //--- @prop: isWriteable (Bool) ------------------------------------------------------
+    const isWritable: bool = try getBoolFromIOService(service, c.kIOMediaWritableKey);
+
+    //--- @prop: Size (Number) -----------------------------------------------------------
+    const mediaSizeInBytes: i64 = try getNumberFromIOService(i64, service, c.kIOMediaSizeKey);
 
     return .{
         .pAllocator = pAllocator,
@@ -113,5 +144,39 @@ pub fn getIOMediaVolumeDescription(service: c.io_service_t, pAllocator: *const s
         .bsdName = heapBsdName,
         .size = mediaSizeInBytes,
         .isLeaf = isLeaf,
+        .isWhole = isWhole,
+        .isRemovable = isRemovable,
+        .isOpen = isOpen,
+        .isWritable = isWritable,
     };
+}
+
+pub fn getBoolFromIOService(service: c.io_service_t, key: [*:0]const u8) !bool {
+    const keyCString = c.CFStringCreateWithCStringNoCopy(c.kCFAllocatorDefault, key, c.kCFStringEncodingUTF8, c.kCFAllocatorNull);
+    defer _ = c.CFRelease(keyCString);
+
+    const keyValueRef: c.CFBooleanRef = @ptrCast(c.IORegistryEntryCreateCFProperty(service, keyCString, c.kCFAllocatorDefault, 0));
+
+    if (keyValueRef == null or c.CFGetTypeID(keyValueRef) != c.CFBooleanGetTypeID()) return error.FailedToObtainCFBooleanRefForKey;
+    defer _ = c.CFRelease(keyValueRef);
+
+    const resultBool: bool = (keyValueRef == c.kCFBooleanTrue);
+
+    return resultBool;
+}
+
+pub fn getNumberFromIOService(comptime T: type, service: c.io_service_t, key: [*:0]const u8) !T {
+    const keyCString = c.CFStringCreateWithCStringNoCopy(c.kCFAllocatorDefault, key, c.kCFStringEncodingUTF8, c.kCFAllocatorNull);
+    defer _ = c.CFRelease(keyCString);
+
+    const keyValueRef: c.CFNumberRef = @ptrCast(c.IORegistryEntryCreateCFProperty(service, keyCString, c.kCFAllocatorDefault, 0));
+
+    if (keyValueRef == null or c.CFGetTypeID(keyValueRef) != c.CFNumberGetTypeID()) return error.FailedToObtainCFNumberForKey;
+    defer _ = c.CFRelease(keyValueRef);
+
+    var result: T = 0;
+
+    if (c.CFNumberGetValue(keyValueRef, c.kCFNumberLongLongType, &result) != 1) return error.FailedToExtractValueFromCFNumberRef;
+
+    return result;
 }

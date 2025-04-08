@@ -225,8 +225,11 @@ pub fn macOS_listUSBDevices(pAllocator: *const std.mem.Allocator) void {
         return;
     }
 
-    var usbMediaDevices = std.ArrayList(IOKit.USBDevice).init(pAllocator.*);
-    defer usbMediaDevices.deinit();
+    var usbDevices = std.ArrayList(IOKit.USBDevice).init(pAllocator.*);
+    defer usbDevices.deinit();
+
+    var usbStorageDevices = std.ArrayList(IOKit.USBStorageDevice).init(pAllocator.*);
+    defer usbStorageDevices.deinit();
 
     while (ioDevice != 0) {
 
@@ -250,7 +253,7 @@ pub fn macOS_listUSBDevices(pAllocator: *const std.mem.Allocator) void {
             continue;
         }
 
-        debug.printf("\nFound device (service name in IO Registry): {s}", .{deviceName});
+        debug.printf("\nFound device (service name in IO Registry): {s}\n", .{deviceName});
 
         //--- CHILD NODE PROPERTY ITERATION SECTION ----------------------------------
         //----------------------------------------------------------------------------
@@ -260,7 +263,7 @@ pub fn macOS_listUSBDevices(pAllocator: *const std.mem.Allocator) void {
 
         if (deviceVolumesList.items.len == 0) continue;
 
-        usbMediaDevices.append(.{
+        usbDevices.append(.{
             .serviceId = ioDevice,
             .deviceName = deviceName,
             .ioMediaVolumes = deviceVolumesList.clone() catch |err| {
@@ -268,7 +271,7 @@ pub fn macOS_listUSBDevices(pAllocator: *const std.mem.Allocator) void {
                 continue;
             },
         }) catch |err| {
-            debug.printf("\nERROR: Unable to append item of type USBDevice to usbMediaDevices ArrayList. Error message: {any}", .{err});
+            debug.printf("\nERROR: Unable to append item of type USBDevice to usbDevices ArrayList. Error message: {any}", .{err});
             continue;
         };
 
@@ -276,24 +279,76 @@ pub fn macOS_listUSBDevices(pAllocator: *const std.mem.Allocator) void {
 
     }
 
-    if (usbMediaDevices.items.len == 0) {
+    if (usbDevices.items.len == 0) {
         debug.print("\nWARNING: No USB media devices were found with IOMedia volumes.");
         return;
     }
 
-    for (0..usbMediaDevices.items.len) |i| {
-        const usbDevice: IOKit.USBDevice = usbMediaDevices.items[i];
-        debug.printf("\nUSB Device with IOMedia volumes ({s} - {d})", .{ usbDevice.deviceName, usbDevice.serviceId });
+    for (0..usbDevices.items.len) |i| {
+        const usbDevice: IOKit.USBDevice = usbDevices.items[i];
+        debug.printf("\nUSB Device with IOMedia volumes ({s} - {d})\n", .{ usbDevice.deviceName, usbDevice.serviceId });
+
+        var usbStorageDevice: IOKit.USBStorageDevice = .{
+            .pAllocator = pAllocator,
+            .volumes = std.ArrayList(IOKit.IOMediaVolume).init(pAllocator.*),
+        };
 
         for (0..usbDevice.ioMediaVolumes.items.len) |v| {
             const ioMediaVolume: IOKit.IOMediaVolume = usbDevice.ioMediaVolumes.items[v];
-            debug.printf("\n\tIOMedia Volume ({d})\n\t\tBSD Name: {s}\n\t\tLeaf: {any}\n\t\tSize: {any}\n", .{ ioMediaVolume.serviceId, ioMediaVolume.bsdName, ioMediaVolume.isLeaf, std.fmt.fmtIntSizeDec(@intCast(ioMediaVolume.size)) });
+
+            // Capture the "parent" disk, e.g. the whole volume (disk4)
+            if (ioMediaVolume.isWhole and !ioMediaVolume.isLeaf and ioMediaVolume.isRemovable) {
+                usbStorageDevice.serviceId = ioMediaVolume.serviceId;
+                usbStorageDevice.size = ioMediaVolume.size;
+
+                const deviceNameSlice = std.mem.sliceTo(&usbDevice.deviceName, 0);
+
+                usbStorageDevice.deviceName = pAllocator.*.dupe(u8, deviceNameSlice) catch |err| {
+                    debug.printf("\nERROR: Failed to duplicate Device Name from USBDevice to USBStorageDevice. Error message: {any}", .{err});
+                    break;
+                };
+
+                usbStorageDevice.bsdName = pAllocator.*.dupe(u8, ioMediaVolume.bsdName) catch |err| {
+                    debug.printf("\nERROR: Failed to duplicate BSDName from USBDevice to USDStorageDevice. Error message: {any}", .{err});
+                    break;
+                };
+            } else if (!ioMediaVolume.isWhole and ioMediaVolume.isLeaf and ioMediaVolume.isRemovable) {
+                usbStorageDevice.volumes.append(ioMediaVolume) catch |err| {
+                    debug.printf("\nERROR: Failed to append IOMediaVolume to ArrayList<IOMediaVolume> within USBStorageDevice. Error message: {any}\n", .{err});
+                    break;
+                };
+            }
+
+            // const fmtStr = "\n\tIOMedia Volume ({d})\n\t\tBSD Name: {s}\n\t\tLeaf: {any}\n\t\tWhole: {any}\n\t\tRemovable: {any}\n\t\tWritable: {any}\n\t\tOpen: {any}\n\t\tSize: {any}\n";
+            // debug.printf(fmtStr, .{
+            //     ioMediaVolume.serviceId,
+            //     ioMediaVolume.bsdName,
+            //     ioMediaVolume.isLeaf,
+            //     ioMediaVolume.isWhole,
+            //     ioMediaVolume.isRemovable,
+            //     ioMediaVolume.isWritable,
+            //     ioMediaVolume.isOpen,
+            //     std.fmt.fmtIntSizeDec(@intCast(ioMediaVolume.size)),
+            // });
+        }
+
+        usbStorageDevices.append(usbStorageDevice) catch |err| {
+            debug.printf("\nERROR: Failed to append USBStorageDevice to ArrayList<USBStorageDevice>. Error message: {any}\n", .{err});
+        };
+
+        debug.print("\nDetected the following USB Media devices:\n");
+        for (usbStorageDevices.items) |dev| {
+            dev.print();
         }
     }
 
     defer {
-        for (usbMediaDevices.items) |usbDevice| {
+        for (usbDevices.items) |usbDevice| {
             usbDevice.deinit();
+        }
+
+        for (usbStorageDevices.items) |usbStorageDevice| {
+            usbStorageDevice.deinit();
         }
     }
 
