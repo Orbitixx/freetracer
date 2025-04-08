@@ -231,6 +231,12 @@ pub fn macOS_listUSBDevices(pAllocator: *const std.mem.Allocator) void {
     var usbStorageDevices = std.ArrayList(IOKit.USBStorageDevice).init(pAllocator.*);
     defer usbStorageDevices.deinit();
 
+    // const hello: []u8 = IOKit.toCString(pAllocator, "SomeString") catch |err| {
+    //     debug.printf("\nERROR: Failed to convert to C String. Err: {any}", .{err});
+    //     return;
+    // };
+    // defer pAllocator.*.free(hello);
+    //
     while (ioDevice != 0) {
 
         //--- OBTAIN PARENT DEVICE NODE SECTION --------------------------------------
@@ -337,8 +343,12 @@ pub fn macOS_listUSBDevices(pAllocator: *const std.mem.Allocator) void {
         };
 
         debug.print("\nDetected the following USB Media devices:\n");
-        for (usbStorageDevices.items) |dev| {
+        for (0..usbStorageDevices.items.len) |d| {
+            const dev: IOKit.USBStorageDevice = usbStorageDevices.items[d];
             dev.print();
+            dev.unmountAllVolumes() catch |err| {
+                debug.printf("\nERROR unmounting: {any}", .{err});
+            };
         }
     }
 

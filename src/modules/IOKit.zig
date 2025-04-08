@@ -65,7 +65,90 @@ pub const USBStorageDevice = struct {
             debug.printf("\n\t- /dev/{s}\t({d})", .{ volume.bsdName, std.fmt.fmtIntSizeDec(@intCast(volume.size)) });
         }
     }
+
+    pub fn unmountAllVolumes(self: USBStorageDevice) !void {
+        _ = self;
+        const daSession = c.DASessionCreate(c.kCFAllocatorDefault);
+
+        if (daSession == null) {
+            debug.print("ERROR: Failed to create DASession\n");
+            return error.FailedToCreateDiskArbitrationSession;
+        }
+        defer _ = c.CFRelease(daSession);
+
+        const currentLoop = c.CFRunLoopGetCurrent();
+        c.DASessionScheduleWithRunLoop(daSession, currentLoop, c.kCFRunLoopDefaultMode);
+
+        // Ensure unscheduling happens before session is released
+        defer c.DASessionUnscheduleFromRunLoop(daSession, currentLoop, c.kCFRunLoopDefaultMode);
+
+        const bsdName = "disk4s2";
+
+        const daDiskRef = c.DADiskCreateFromBSDName(c.kCFAllocatorDefault, daSession, bsdName);
+
+        if (daDiskRef == null) debug.print("\nERROR: CANNOT CREATE DISK REFERENCE.");
+
+        c.DADiskUnmount(daDiskRef, c.kDADiskUnmountOptionForce, unmountDiskCallback, null);
+        c.CFRunLoopRun();
+
+        // var queuedUnmounts: u8 = 0;
+        //
+        // for (self.volumes.items) |volume| {
+        //     const daDiskRef = c.DADiskCreateFromBSDName(c.kCFAllocatorDefault, daSession, volume.bsdName.ptr);
+        //
+        //     if (daDiskRef == null) {
+        //         debug.printf("\nWARNING: Could not create DADiskRef for '{s}', skipping.\n", .{volume.bsdName});
+        //         continue;
+        //     }
+        //     defer _ = c.CFRelease(daDiskRef);
+        //
+        //     debug.printf("\nInitiating unmount call for disk: {s}", .{volume.bsdName});
+        //
+        //     queuedUnmounts += 1;
+        //     c.DADiskUnmount(daDiskRef, c.kDADiskUnmountOptionForce, unmountDiskCallback, &queuedUnmounts);
+        // }
+        //
+        // if (queuedUnmounts > 0) {
+        //     c.CFRunLoopRun();
+        // } else {
+        //     debug.print("\nERROR: No valid unmount calls could be initiated.");
+        // }
+    }
 };
+
+fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: ?*anyopaque) callconv(.C) void {
+    // if (context == null) {
+    //     debug.print("\nERROR: Unmount callback returned NULL context.");
+    //     return;
+    // }
+    //
+    // const counter_ptr: *u8 = @ptrCast(context);
+    _ = context;
+    const bsdName = if (c.DADiskGetBSDName(disk)) |name| toSlice(name) else "Unknown Disk";
+
+    if (dissenter != null) {
+        debug.print("\nWARNING: Disk Arbitration Dissenter returned a non-empty status.");
+
+        const status = c.DADissenterGetStatus(dissenter);
+        const statusStringRef = c.DADissenterGetStatusString(dissenter);
+        var statusString: [256]u8 = undefined;
+
+        if (statusStringRef != null) {
+            _ = c.CFStringGetCString(statusStringRef, &statusString, statusString.len, c.kCFStringEncodingUTF8);
+        }
+
+        debug.printf("\nERROR: Failed to unmount {s}. Dissenter status code: {any}, status message: {s}", .{ bsdName, status, statusString });
+    } else {
+        debug.printf("\nSuccessfully unmounted disk: {s}", .{bsdName});
+        // counter_ptr.* -= 1;
+    }
+
+    // if (counter_ptr.* == 0) {
+    debug.print("\nSuccessfully unmounted all volumes for device.");
+    const currentLoop = c.CFRunLoopGetCurrent();
+    c.CFRunLoopStop(currentLoop);
+    // }
+}
 
 pub fn getIOMediaVolumesForDevice(device: c.io_service_t, pAllocator: *const std.mem.Allocator, pVolumesList: *std.ArrayList(IOMediaVolume)) !void {
     var kernReturn: ?c.kern_return_t = null;
@@ -104,8 +187,13 @@ pub fn getIOMediaVolumeDescription(service: c.io_service_t, pAllocator: *const s
 
     //--- @prop: BSDName (String) --------------------------------------------------------
     //------------------------------------------------------------------------------------
-    const bsdNameKey = c.CFStringCreateWithCStringNoCopy(c.kCFAllocatorDefault, c.kIOBSDNameKey, c.kCFStringEncodingUTF8, c.kCFAllocatorNull);
+    const bsdNameKey: c.CFStringRef = c.CFStringCreateWithCStringNoCopy(c.kCFAllocatorDefault, c.kIOBSDNameKey, c.kCFStringEncodingUTF8, c.kCFAllocatorNull);
     defer _ = c.CFRelease(bsdNameKey);
+
+    // const str = try toCString(pAllocator, c.kIOBSDNameKey);
+    // defer pAllocator.*.free(str);
+    //
+    // const bsdNameKey: c.CFStringRef = @ptrCast(str);
 
     const bsdNameValueRef: c.CFStringRef = @ptrCast(c.IORegistryEntryCreateCFProperty(service, bsdNameKey, c.kCFAllocatorDefault, 0));
     if (bsdNameValueRef == null) return error.FailedToObtainBSDNameForVolume;
@@ -179,4 +267,26 @@ pub fn getNumberFromIOService(comptime T: type, service: c.io_service_t, key: [*
     if (c.CFNumberGetValue(keyValueRef, c.kCFNumberLongLongType, &result) != 1) return error.FailedToExtractValueFromCFNumberRef;
 
     return result;
+}
+
+pub fn toCString(pAllocator: *const std.mem.Allocator, string: []const u8) ![]u8 {
+    if (string.len == 0) return error.OriginalStringMustBeNonZeroLength;
+
+    var cString: []u8 = pAllocator.*.alloc(u8, string.len + 1) catch |err| {
+        debug.printf("\nERROR (toCString()): Failed to allocate heap memory for C string. Error message: {any}", .{err});
+        return error.FailedToCreateCString;
+    };
+
+    for (0..string.len) |i| {
+        cString[i] = string[i];
+    }
+
+    cString[string.len] = 0;
+
+    // return @ptrCast(cString);
+    return cString;
+}
+
+pub fn toSlice(string: [*:0]const u8) []const u8 {
+    return std.mem.sliceTo(string, 0);
 }
