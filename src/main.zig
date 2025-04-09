@@ -26,7 +26,9 @@ const assert = std.debug.assert;
 
 const IsoParser = @import("modules/IsoParser.zig");
 const IsoWriter = @import("modules/IsoWriter.zig");
-const IOKit = @import("modules/IOKit.zig");
+const MacOS = @import("modules/macos/MacOSTypes.zig");
+const IOKit = @import("modules/macos/IOKit.zig");
+const DiskArbitration = @import("modules/macos/DiskArbitration.zig");
 
 const ArgValidator = struct {
     isoPath: bool = false,
@@ -68,8 +70,16 @@ pub fn main() !void {
     // const diskStat = try disk.stat();
     // debug.printf("\nDisk4 size is: {d}\n", .{diskStat.size});
     //
+    //
 
-    macOS_listUSBDevices(&allocator);
+    const usbStorageDevices = try macOS_getUSBStorageDevices(&allocator);
+    defer usbStorageDevices.deinit();
+
+    defer {
+        for (usbStorageDevices.items) |usbStorageDevice| {
+            usbStorageDevice.deinit();
+        }
+    }
 
     // const args = try std.process.argsAlloc(allocator);
     // defer std.process.argsFree(allocator, args);
@@ -189,23 +199,7 @@ pub fn relH(y: f32) f32 {
     return (SCREEN_HEIGHT * y);
 }
 
-// Define a callback
-fn unmountCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: ?*anyopaque) callconv(.C) void {
-    _ = disk;
-    _ = context;
-
-    if (dissenter == null) {
-        debug.print("\nDisk unmount successful!\n");
-        // c.CFRunLoopStop();
-    } else {
-        const status = c.DADissenterGetStatus(dissenter);
-        debug.printf("\nUnmount failed with status: {any}.\n", .{status});
-        // c.CFRunLoopStop();
-        return;
-    }
-}
-
-pub fn macOS_listUSBDevices(pAllocator: *const std.mem.Allocator) void {
+pub fn macOS_getUSBStorageDevices(pAllocator: *const std.mem.Allocator) !std.ArrayList(MacOS.USBStorageDevice) {
     var matchingDict: c.CFMutableDictionaryRef = null;
     var ioIterator: c.io_iterator_t = 0;
     var kernReturn: ?c.kern_return_t = null;
@@ -215,28 +209,21 @@ pub fn macOS_listUSBDevices(pAllocator: *const std.mem.Allocator) void {
 
     if (matchingDict == null) {
         debug.print("\nERROR: Unable to obtain a matching dictionary for USB Device class.");
-        return;
+        return error.FailedToObtainMatchingDictionary;
     }
 
     kernReturn = c.IOServiceGetMatchingServices(c.kIOMasterPortDefault, matchingDict, &ioIterator);
 
     if (kernReturn != c.KERN_SUCCESS) {
         debug.print("\nERROR: Unable to obtain matching services for the provided matching dictionary.");
-        return;
+        return error.FailedToObtainUSBServicesFromIORegistry;
     }
 
-    var usbDevices = std.ArrayList(IOKit.USBDevice).init(pAllocator.*);
+    var usbDevices = std.ArrayList(MacOS.USBDevice).init(pAllocator.*);
     defer usbDevices.deinit();
 
-    var usbStorageDevices = std.ArrayList(IOKit.USBStorageDevice).init(pAllocator.*);
-    defer usbStorageDevices.deinit();
+    var usbStorageDevices = std.ArrayList(MacOS.USBStorageDevice).init(pAllocator.*);
 
-    // const hello: []u8 = IOKit.toCString(pAllocator, "SomeString") catch |err| {
-    //     debug.printf("\nERROR: Failed to convert to C String. Err: {any}", .{err});
-    //     return;
-    // };
-    // defer pAllocator.*.free(hello);
-    //
     while (ioDevice != 0) {
 
         //--- OBTAIN PARENT DEVICE NODE SECTION --------------------------------------
@@ -249,7 +236,7 @@ pub fn macOS_listUSBDevices(pAllocator: *const std.mem.Allocator) void {
         defer _ = c.IOObjectRelease(ioDevice);
 
         var deviceName: c.io_name_t = undefined;
-        var deviceVolumesList = std.ArrayList(IOKit.IOMediaVolume).init(pAllocator.*);
+        var deviceVolumesList = std.ArrayList(MacOS.IOMediaVolume).init(pAllocator.*);
         defer deviceVolumesList.deinit();
 
         kernReturn = c.IORegistryEntryGetName(ioDevice, &deviceName);
@@ -273,7 +260,7 @@ pub fn macOS_listUSBDevices(pAllocator: *const std.mem.Allocator) void {
             .serviceId = ioDevice,
             .deviceName = deviceName,
             .ioMediaVolumes = deviceVolumesList.clone() catch |err| {
-                debug.printf("\nERROR: Unable to deep-copy the devicesVolumesList <ArrayList(IOKIT.IOMediaVolume)>. Error message: {any}", .{err});
+                debug.printf("\nERROR: Unable to deep-copy the devicesVolumesList <ArrayList(MacOS.IOMediaVolume)>. Error message: {any}", .{err});
                 continue;
             },
         }) catch |err| {
@@ -287,20 +274,20 @@ pub fn macOS_listUSBDevices(pAllocator: *const std.mem.Allocator) void {
 
     if (usbDevices.items.len == 0) {
         debug.print("\nWARNING: No USB media devices were found with IOMedia volumes.");
-        return;
+        return error.FailedToObtainUSBDevicesWithIOMediaServices;
     }
 
     for (0..usbDevices.items.len) |i| {
-        const usbDevice: IOKit.USBDevice = usbDevices.items[i];
+        const usbDevice: MacOS.USBDevice = usbDevices.items[i];
         debug.printf("\nUSB Device with IOMedia volumes ({s} - {d})\n", .{ usbDevice.deviceName, usbDevice.serviceId });
 
-        var usbStorageDevice: IOKit.USBStorageDevice = .{
+        var usbStorageDevice: MacOS.USBStorageDevice = .{
             .pAllocator = pAllocator,
-            .volumes = std.ArrayList(IOKit.IOMediaVolume).init(pAllocator.*),
+            .volumes = std.ArrayList(MacOS.IOMediaVolume).init(pAllocator.*),
         };
 
         for (0..usbDevice.ioMediaVolumes.items.len) |v| {
-            const ioMediaVolume: IOKit.IOMediaVolume = usbDevice.ioMediaVolumes.items[v];
+            const ioMediaVolume: MacOS.IOMediaVolume = usbDevice.ioMediaVolumes.items[v];
 
             // Capture the "parent" disk, e.g. the whole volume (disk4)
             if (ioMediaVolume.isWhole and !ioMediaVolume.isLeaf and ioMediaVolume.isRemovable) {
@@ -342,13 +329,10 @@ pub fn macOS_listUSBDevices(pAllocator: *const std.mem.Allocator) void {
             debug.printf("\nERROR: Failed to append USBStorageDevice to ArrayList<USBStorageDevice>. Error message: {any}\n", .{err});
         };
 
-        debug.print("\nDetected the following USB Media devices:\n");
+        debug.print("\nDetected the following USB Storage Devices:\n");
         for (0..usbStorageDevices.items.len) |d| {
-            const dev: IOKit.USBStorageDevice = usbStorageDevices.items[d];
+            const dev: MacOS.USBStorageDevice = usbStorageDevices.items[d];
             dev.print();
-            dev.unmountAllVolumes() catch |err| {
-                debug.printf("\nERROR unmounting: {any}", .{err});
-            };
         }
     }
 
@@ -356,107 +340,9 @@ pub fn macOS_listUSBDevices(pAllocator: *const std.mem.Allocator) void {
         for (usbDevices.items) |usbDevice| {
             usbDevice.deinit();
         }
-
-        for (usbStorageDevices.items) |usbStorageDevice| {
-            usbStorageDevice.deinit();
-        }
     }
 
     defer _ = c.IOObjectRelease(ioIterator);
+
+    return usbStorageDevices;
 }
-
-// var stringBuffer: [128]u8 = undefined;
-//
-// const kIOBSDNameKey: c.CFStringRef = c.CFStringCreateWithCString(c.kCFAllocatorDefault, c.kIOBSDNameKey, c.kCFStringEncodingUTF8);
-// defer _ = c.CFRelease(kIOBSDNameKey);
-//
-// if (kIOBSDNameKey == null) {
-//     debug.print("\nERROR: Unable to convert kIOBSDNameKey constant to CFStringRef. Continuting to next device...");
-//     continue;
-// }
-//
-// const deviceBSDName_cf: c.CFStringRef = @ptrCast(c.IORegistryEntrySearchCFProperty(device, c.kIOServicePlane, kIOBSDNameKey, c.kCFAllocatorDefault, c.kIORegistryIterateRecursively));
-//
-// if (deviceBSDName_cf == null) {
-//     debug.print("\nERROR: Unable to obtain device name CFStringRef. Continuting to next device...");
-//     continue;
-// }
-//
-// defer _ = c.CFRelease(deviceBSDName_cf);
-//
-// _ = c.CFStringGetCString(deviceBSDName_cf, &stringBuffer, stringBuffer.len, c.kCFStringEncodingUTF8);
-//
-// debug.printf("\nDevice path: {s}", .{stringBuffer});
-
-//
-//
-//
-//
-//
-// const session = c.DASessionCreate(c.kCFAllocatorDefault);
-// if (session == null) {
-//     debug.print("\nFailed to create DA session\n");
-//     return;
-// }
-
-// c.CFStringGetCStringPtr(deviceBSDName_cf, c.kCFStringEncodingUTF8)
-
-// const cfBsdName = c.CFStringCreateWithCString(c.kCFAllocatorDefault, deviceBSDName_cf, c.kCFStringEncodingUTF8);
-// const disk: c.DADiskRef = c.DADiskCreateFromBSDName(c.kCFAllocatorDefault, session, "disk4");
-
-// if (disk == null) {
-//     debug.print("\nFailed to create DA disk\n");
-//     return;
-// }
-
-// Call the unmount function
-// c.DADiskUnmount(disk, c.kDADiskUnmountOptionForce, unmountCallback, null);
-
-// Run the runloop to allow async callback to fire
-// c.CFRunLoopRun();
-
-// const kIOBootDeviceSizeKey: c.CFStringRef = c.CFStringCreateWithCString(c.kCFAllocatorDefault, c.kIOMaximumByteCountReadKey, c.kCFStringEncodingUTF8);
-// defer _ = c.CFRelease(kIOBootDeviceSizeKey);
-//
-// const deviceSize_cf: c.CFStringRef = @ptrCast(c.IORegistryEntrySearchCFProperty(device, c.kIOServicePlane, kIOBootDeviceSizeKey, c.kCFAllocatorDefault, c.kIORegistryIterateRecursively));
-// defer _ = c.CFRelease(deviceSize_cf);
-//
-// stringBuffer = undefined;
-//
-// _ = c.CFStringGetCString(deviceSize_cf, &stringBuffer, stringBuffer.len, c.kCFStringEncodingUTF8);
-// debug.printf("\nDevice size: {s}", .{stringBuffer});
-
-//----------------------------------------------------------------------------
-
-//--- CHILD NODE PROPERTY ITERATION SECTION ----------------------------------
-//----------------------------------------------------------------------------
-
-// var childIterator: c.io_iterator_t = 0;
-// var childNode: c.io_service_t = 0;
-//
-// kernReturn = c.IORegistryEntryGetChildIterator(device, c.kIOServicePlane, &childIterator);
-// defer _ = c.IOObjectRelease(childIterator);
-//
-// if (kernReturn != c.KERN_SUCCESS) {
-//     debug.print("\nUnable to obtain child iterator for device's registry entry.");
-//     device = c.IOIteratorNext(ioIterator);
-//     continue;
-// }
-//
-// childNode = c.IOIteratorNext(childIterator);
-//
-// while (childIterator != 0) {
-//     const wholeString: c.CFStringRef = c.CFStringCreateWithCString(c.kCFAllocatorDefault, "Whole", c.kCFStringEncodingUTF8);
-//     defer _ = c.CFRelease(wholeString);
-//
-//     const isWhole: c.CFBooleanRef = @ptrCast(c.IORegistryEntryCreateCFProperty(childNode, wholeString, c.kCFAllocatorDefault, 0));
-//     defer _ = c.CFRelease(isWhole);
-//
-//     if (isWhole != null) {
-//         debug.printf("\nisWhole: {any}", .{c.CFBooleanGetValue(isWhole)});
-//     }
-//
-//     childNode = c.IOIteratorNext(childIterator);
-// }
-
-//--- END CHILD NODE PROPERTY ITERATION SECTION -------------------------------

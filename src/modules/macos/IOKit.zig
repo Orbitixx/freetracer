@@ -1,5 +1,5 @@
 const std = @import("std");
-const debug = @import("../lib/util/debug.zig");
+const debug = @import("../../lib/util/debug.zig");
 
 const isMac: bool = @import("builtin").os.tag == .macos;
 const isLinux: bool = @import("builtin").os.tag == .linux;
@@ -15,155 +15,11 @@ const c = if (isMac) @cImport({
     @cInclude("IOKit/IOBSD.h");
 }) else if (isLinux) @cImport({});
 
-pub const IOMediaVolume = struct {
-    pAllocator: *const std.mem.Allocator,
-    serviceId: c.io_service_t,
-    bsdName: []const u8,
-    size: i64,
-    isLeaf: bool,
-    isWhole: bool,
-    isRemovable: bool,
-    isOpen: bool,
-    isWritable: bool,
+const macos = @import("MacOSTypes.zig");
 
-    pub fn deinit(self: @This()) void {
-        self.pAllocator.*.free(self.bsdName);
-    }
-};
-
-pub const USBDevice = struct {
-    serviceId: c.io_service_t,
-    deviceName: c.io_name_t,
-    ioMediaVolumes: std.ArrayList(IOMediaVolume),
-
-    pub fn deinit(self: USBDevice) void {
-        for (self.ioMediaVolumes.items) |volume| {
-            volume.deinit();
-        }
-        self.ioMediaVolumes.deinit();
-    }
-};
-
-pub const USBStorageDevice = struct {
-    pAllocator: *const std.mem.Allocator,
-    serviceId: c.io_service_t = undefined,
-    deviceName: []u8 = undefined,
-    bsdName: []u8 = undefined,
-    size: i64 = undefined,
-    volumes: std.ArrayList(IOMediaVolume) = undefined,
-
-    pub fn deinit(self: USBStorageDevice) void {
-        self.pAllocator.*.free(self.deviceName);
-        self.pAllocator.*.free(self.bsdName);
-        self.volumes.deinit();
-    }
-
-    pub fn print(self: USBStorageDevice) void {
-        debug.printf("\n- /dev/{s}\t{s}\t({d})", .{ self.bsdName, self.deviceName, std.fmt.fmtIntSizeDec(@intCast(self.size)) });
-
-        for (self.volumes.items) |volume| {
-            debug.printf("\n\t- /dev/{s}\t({d})", .{ volume.bsdName, std.fmt.fmtIntSizeDec(@intCast(volume.size)) });
-        }
-    }
-
-    pub fn unmountAllVolumes(self: USBStorageDevice) !void {
-        //
-        // TODO: Check for EFI partition -- do not attempt to unmount it
-        //
-        const daSession = c.DASessionCreate(c.kCFAllocatorDefault);
-
-        if (daSession == null) {
-            debug.print("ERROR: Failed to create DASession\n");
-            return error.FailedToCreateDiskArbitrationSession;
-        }
-        defer _ = c.CFRelease(daSession);
-
-        const currentLoop = c.CFRunLoopGetCurrent();
-        c.DASessionScheduleWithRunLoop(daSession, currentLoop, c.kCFRunLoopDefaultMode);
-
-        // Ensure unscheduling happens before session is released
-        defer c.DASessionUnscheduleFromRunLoop(daSession, currentLoop, c.kCFRunLoopDefaultMode);
-
-        // const bsdName = "disk4s1";
-        //
-        // const daDiskRef = c.DADiskCreateFromBSDName(c.kCFAllocatorDefault, daSession, bsdName);
-        //
-        // if (daDiskRef == null) debug.print("\nERROR: CANNOT CREATE DISK REFERENCE.");
-        //
-        // c.DADiskUnmount(daDiskRef, c.kDADiskUnmountOptionForce, unmountDiskCallback, null);
-        // c.CFRunLoopRun();
-
-        var queuedUnmounts: u8 = 0;
-
-        for (self.volumes.items) |volume| {
-            const daDiskRef = c.DADiskCreateFromBSDName(c.kCFAllocatorDefault, daSession, volume.bsdName.ptr);
-
-            if (daDiskRef == null) {
-                debug.printf("\nWARNING: Could not create DADiskRef for '{s}', skipping.\n", .{volume.bsdName});
-                continue;
-            }
-            defer _ = c.CFRelease(daDiskRef);
-
-            const diskInfo: c.CFDictionaryRef = @ptrCast(c.DADiskCopyDescription(daDiskRef));
-            defer _ = c.CFRelease(diskInfo);
-
-            // Do not release efiKey, release causes segmentation fault
-            const efiKey: c.CFStringRef = @ptrCast(c.CFDictionaryGetValue(diskInfo, c.kDADiskDescriptionVolumeNameKey));
-
-            _ = c.CFShow(diskInfo);
-
-            var efiKeyBuf: [128]u8 = undefined;
-            _ = c.CFStringGetCString(efiKey, &efiKeyBuf, efiKeyBuf.len, c.kCFStringEncodingUTF8);
-
-            if (efiKey != null) debug.printf("\nDisk EFI Key: {s}", .{efiKeyBuf});
-
-            debug.printf("\nInitiating unmount call for disk: {s}", .{volume.bsdName});
-
-            queuedUnmounts += 1;
-            c.DADiskUnmount(daDiskRef, c.kDADiskUnmountOptionForce, unmountDiskCallback, &queuedUnmounts);
-        }
-
-        if (queuedUnmounts > 0) {
-            c.CFRunLoopRun();
-        } else {
-            debug.print("\nERROR: No valid unmount calls could be initiated.");
-        }
-    }
-};
-
-fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: ?*anyopaque) callconv(.C) void {
-    if (context == null) {
-        debug.print("\nERROR: Unmount callback returned NULL context.");
-        return;
-    }
-
-    const counter_ptr: *u8 = @ptrCast(context);
-    // _ = context;
-    const bsdName = if (c.DADiskGetBSDName(disk)) |name| toSlice(name) else "Unknown Disk";
-
-    if (dissenter != null) {
-        debug.print("\nWARNING: Disk Arbitration Dissenter returned a non-empty status.");
-
-        const status = c.DADissenterGetStatus(dissenter);
-        const statusStringRef = c.DADissenterGetStatusString(dissenter);
-        var statusString: [256]u8 = undefined;
-
-        if (statusStringRef != null) {
-            _ = c.CFStringGetCString(statusStringRef, &statusString, statusString.len, c.kCFStringEncodingUTF8);
-        }
-
-        debug.printf("\nERROR: Failed to unmount {s}. Dissenter status code: {any}, status message: {s}", .{ bsdName, status, statusString });
-    } else {
-        debug.printf("\nSuccessfully unmounted disk: {s}", .{bsdName});
-        counter_ptr.* -= 1;
-    }
-
-    if (counter_ptr.* == 0) {
-        debug.print("\nSuccessfully unmounted all volumes for device.");
-        const currentLoop = c.CFRunLoopGetCurrent();
-        c.CFRunLoopStop(currentLoop);
-    }
-}
+const IOMediaVolume = macos.IOMediaVolume;
+const USBDevice = macos.USBDevice;
+const USBStorageDevice = macos.USBStorageDevice;
 
 pub fn getIOMediaVolumesForDevice(device: c.io_service_t, pAllocator: *const std.mem.Allocator, pVolumesList: *std.ArrayList(IOMediaVolume)) !void {
     var kernReturn: ?c.kern_return_t = null;
