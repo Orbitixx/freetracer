@@ -67,7 +67,9 @@ pub const USBStorageDevice = struct {
     }
 
     pub fn unmountAllVolumes(self: USBStorageDevice) !void {
-        _ = self;
+        //
+        // TODO: Check for EFI partition -- do not attempt to unmount it
+        //
         const daSession = c.DASessionCreate(c.kCFAllocatorDefault);
 
         if (daSession == null) {
@@ -82,48 +84,61 @@ pub const USBStorageDevice = struct {
         // Ensure unscheduling happens before session is released
         defer c.DASessionUnscheduleFromRunLoop(daSession, currentLoop, c.kCFRunLoopDefaultMode);
 
-        const bsdName = "disk4s2";
+        // const bsdName = "disk4s1";
+        //
+        // const daDiskRef = c.DADiskCreateFromBSDName(c.kCFAllocatorDefault, daSession, bsdName);
+        //
+        // if (daDiskRef == null) debug.print("\nERROR: CANNOT CREATE DISK REFERENCE.");
+        //
+        // c.DADiskUnmount(daDiskRef, c.kDADiskUnmountOptionForce, unmountDiskCallback, null);
+        // c.CFRunLoopRun();
 
-        const daDiskRef = c.DADiskCreateFromBSDName(c.kCFAllocatorDefault, daSession, bsdName);
+        var queuedUnmounts: u8 = 0;
 
-        if (daDiskRef == null) debug.print("\nERROR: CANNOT CREATE DISK REFERENCE.");
+        for (self.volumes.items) |volume| {
+            const daDiskRef = c.DADiskCreateFromBSDName(c.kCFAllocatorDefault, daSession, volume.bsdName.ptr);
 
-        c.DADiskUnmount(daDiskRef, c.kDADiskUnmountOptionForce, unmountDiskCallback, null);
-        c.CFRunLoopRun();
+            if (daDiskRef == null) {
+                debug.printf("\nWARNING: Could not create DADiskRef for '{s}', skipping.\n", .{volume.bsdName});
+                continue;
+            }
+            defer _ = c.CFRelease(daDiskRef);
 
-        // var queuedUnmounts: u8 = 0;
-        //
-        // for (self.volumes.items) |volume| {
-        //     const daDiskRef = c.DADiskCreateFromBSDName(c.kCFAllocatorDefault, daSession, volume.bsdName.ptr);
-        //
-        //     if (daDiskRef == null) {
-        //         debug.printf("\nWARNING: Could not create DADiskRef for '{s}', skipping.\n", .{volume.bsdName});
-        //         continue;
-        //     }
-        //     defer _ = c.CFRelease(daDiskRef);
-        //
-        //     debug.printf("\nInitiating unmount call for disk: {s}", .{volume.bsdName});
-        //
-        //     queuedUnmounts += 1;
-        //     c.DADiskUnmount(daDiskRef, c.kDADiskUnmountOptionForce, unmountDiskCallback, &queuedUnmounts);
-        // }
-        //
-        // if (queuedUnmounts > 0) {
-        //     c.CFRunLoopRun();
-        // } else {
-        //     debug.print("\nERROR: No valid unmount calls could be initiated.");
-        // }
+            const diskInfo: c.CFDictionaryRef = @ptrCast(c.DADiskCopyDescription(daDiskRef));
+            defer _ = c.CFRelease(diskInfo);
+
+            // Do not release efiKey, release causes segmentation fault
+            const efiKey: c.CFStringRef = @ptrCast(c.CFDictionaryGetValue(diskInfo, c.kDADiskDescriptionVolumeNameKey));
+
+            _ = c.CFShow(diskInfo);
+
+            var efiKeyBuf: [128]u8 = undefined;
+            _ = c.CFStringGetCString(efiKey, &efiKeyBuf, efiKeyBuf.len, c.kCFStringEncodingUTF8);
+
+            if (efiKey != null) debug.printf("\nDisk EFI Key: {s}", .{efiKeyBuf});
+
+            debug.printf("\nInitiating unmount call for disk: {s}", .{volume.bsdName});
+
+            queuedUnmounts += 1;
+            c.DADiskUnmount(daDiskRef, c.kDADiskUnmountOptionForce, unmountDiskCallback, &queuedUnmounts);
+        }
+
+        if (queuedUnmounts > 0) {
+            c.CFRunLoopRun();
+        } else {
+            debug.print("\nERROR: No valid unmount calls could be initiated.");
+        }
     }
 };
 
 fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: ?*anyopaque) callconv(.C) void {
-    // if (context == null) {
-    //     debug.print("\nERROR: Unmount callback returned NULL context.");
-    //     return;
-    // }
-    //
-    // const counter_ptr: *u8 = @ptrCast(context);
-    _ = context;
+    if (context == null) {
+        debug.print("\nERROR: Unmount callback returned NULL context.");
+        return;
+    }
+
+    const counter_ptr: *u8 = @ptrCast(context);
+    // _ = context;
     const bsdName = if (c.DADiskGetBSDName(disk)) |name| toSlice(name) else "Unknown Disk";
 
     if (dissenter != null) {
@@ -140,14 +155,14 @@ fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: 
         debug.printf("\nERROR: Failed to unmount {s}. Dissenter status code: {any}, status message: {s}", .{ bsdName, status, statusString });
     } else {
         debug.printf("\nSuccessfully unmounted disk: {s}", .{bsdName});
-        // counter_ptr.* -= 1;
+        counter_ptr.* -= 1;
     }
 
-    // if (counter_ptr.* == 0) {
-    debug.print("\nSuccessfully unmounted all volumes for device.");
-    const currentLoop = c.CFRunLoopGetCurrent();
-    c.CFRunLoopStop(currentLoop);
-    // }
+    if (counter_ptr.* == 0) {
+        debug.print("\nSuccessfully unmounted all volumes for device.");
+        const currentLoop = c.CFRunLoopGetCurrent();
+        c.CFRunLoopStop(currentLoop);
+    }
 }
 
 pub fn getIOMediaVolumesForDevice(device: c.io_service_t, pAllocator: *const std.mem.Allocator, pVolumesList: *std.ArrayList(IOMediaVolume)) !void {
