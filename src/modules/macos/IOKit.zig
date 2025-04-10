@@ -1,25 +1,13 @@
 const std = @import("std");
 const debug = @import("../../lib/util/debug.zig");
 
-const isMac: bool = @import("builtin").os.tag == .macos;
-const isLinux: bool = @import("builtin").os.tag == .linux;
+const c = @import("../../lib/sys/system.zig").c;
 
-const c = if (isMac) @cImport({
-    @cInclude("IOKit/storage/IOMedia.h");
-    @cInclude("IOKit/IOKitLib.h");
-    @cInclude("DiskArbitration/DiskArbitration.h");
-    @cInclude("CoreFoundation/CoreFoundation.h");
-    @cInclude("IOKit/usb/USB.h");
-    @cInclude("IOKit/usb/IOUSBLib.h");
-    @cInclude("IOKit/IOCFPlugIn.h");
-    @cInclude("IOKit/IOBSD.h");
-}) else if (isLinux) @cImport({});
+const MacOS = @import("MacOSTypes.zig");
 
-const macos = @import("MacOSTypes.zig");
-
-const IOMediaVolume = macos.IOMediaVolume;
-const USBDevice = macos.USBDevice;
-const USBStorageDevice = macos.USBStorageDevice;
+const IOMediaVolume = MacOS.IOMediaVolume;
+const USBDevice = MacOS.USBDevice;
+const USBStorageDevice = MacOS.USBStorageDevice;
 
 pub fn getIOMediaVolumesForDevice(device: c.io_service_t, pAllocator: *const std.mem.Allocator, pVolumesList: *std.ArrayList(IOMediaVolume)) !void {
     var kernReturn: ?c.kern_return_t = null;

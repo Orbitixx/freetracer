@@ -1,28 +1,12 @@
 const std = @import("std");
+const c = @import("lib/sys/system.zig").c;
+
 const debug = @import("lib/util/debug.zig");
 const strings = @import("lib/util/strings.zig");
 
 const rl = @import("raylib");
 const ui = @import("lib/ui/ui.zig");
 const osd = @import("osdialog");
-
-const isMac = @import("builtin").os.tag == .macos;
-const isLinux = @import("builtin").os.tag == .linux;
-
-const c = if (isMac) @cImport({
-    @cInclude("IOKit/storage/IOMedia.h");
-    @cInclude("IOKit/IOKitLib.h");
-    @cInclude("DiskArbitration/DiskArbitration.h");
-    @cInclude("CoreFoundation/CoreFoundation.h");
-    @cInclude("IOKit/usb/USB.h");
-    @cInclude("IOKit/usb/IOUSBLib.h");
-    @cInclude("IOKit/IOCFPlugIn.h");
-    @cInclude("IOKit/IOBSD.h");
-}) else if (isLinux) @cImport({
-    @cInclude("blkid/blkid.h");
-});
-
-const assert = std.debug.assert;
 
 const IsoParser = @import("modules/IsoParser.zig");
 const IsoWriter = @import("modules/IsoWriter.zig");

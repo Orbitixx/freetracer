@@ -1,19 +1,7 @@
 const std = @import("std");
 const debug = @import("../../lib/util/debug.zig");
 
-const isMac: bool = @import("builtin").os.tag == .macos;
-const isLinux: bool = @import("builtin").os.tag == .linux;
-
-const c = if (isMac) @cImport({
-    @cInclude("IOKit/storage/IOMedia.h");
-    @cInclude("IOKit/IOKitLib.h");
-    @cInclude("DiskArbitration/DiskArbitration.h");
-    @cInclude("CoreFoundation/CoreFoundation.h");
-    @cInclude("IOKit/usb/USB.h");
-    @cInclude("IOKit/usb/IOUSBLib.h");
-    @cInclude("IOKit/IOCFPlugIn.h");
-    @cInclude("IOKit/IOBSD.h");
-}) else if (isLinux) @cImport({});
+const c = @import("../../lib/sys/system.zig").c;
 
 const MacOS = @import("MacOSTypes.zig");
 const toSlice = @import("IOKit.zig").toSlice;
