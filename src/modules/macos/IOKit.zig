@@ -5,11 +5,158 @@ const c = @import("../../lib/sys/system.zig").c;
 
 const MacOS = @import("MacOSTypes.zig");
 
-const IOMediaVolume = MacOS.IOMediaVolume;
-const USBDevice = MacOS.USBDevice;
-const USBStorageDevice = MacOS.USBStorageDevice;
+pub fn getUSBStorageDevices(pAllocator: *const std.mem.Allocator) !std.ArrayList(MacOS.USBStorageDevice) {
+    var matchingDict: c.CFMutableDictionaryRef = null;
+    var ioIterator: c.io_iterator_t = 0;
+    var kernReturn: ?c.kern_return_t = null;
+    var ioDevice: c.io_service_t = 1;
 
-pub fn getIOMediaVolumesForDevice(device: c.io_service_t, pAllocator: *const std.mem.Allocator, pVolumesList: *std.ArrayList(IOMediaVolume)) !void {
+    matchingDict = c.IOServiceMatching(c.kIOUSBDeviceClassName);
+
+    if (matchingDict == null) {
+        debug.print("\nERROR: Unable to obtain a matching dictionary for USB Device class.");
+        return error.FailedToObtainMatchingDictionary;
+    }
+
+    kernReturn = c.IOServiceGetMatchingServices(c.kIOMasterPortDefault, matchingDict, &ioIterator);
+
+    if (kernReturn != c.KERN_SUCCESS) {
+        debug.print("\nERROR: Unable to obtain matching services for the provided matching dictionary.");
+        return error.FailedToObtainUSBServicesFromIORegistry;
+    }
+
+    var usbDevices = std.ArrayList(MacOS.USBDevice).init(pAllocator.*);
+    defer usbDevices.deinit();
+
+    var usbStorageDevices = std.ArrayList(MacOS.USBStorageDevice).init(pAllocator.*);
+
+    while (ioDevice != 0) {
+
+        //--- OBTAIN PARENT DEVICE NODE SECTION --------------------------------------
+        //----------------------------------------------------------------------------
+
+        ioDevice = c.IOIteratorNext(ioIterator);
+
+        if (ioDevice == 0) break;
+
+        defer _ = c.IOObjectRelease(ioDevice);
+
+        var deviceName: c.io_name_t = undefined;
+        var deviceVolumesList = std.ArrayList(MacOS.IOMediaVolume).init(pAllocator.*);
+        defer deviceVolumesList.deinit();
+
+        kernReturn = c.IORegistryEntryGetName(ioDevice, &deviceName);
+
+        if (kernReturn != c.KERN_SUCCESS) {
+            debug.print("\nERROR: Unable to obtain USB device name.");
+            continue;
+        }
+
+        debug.printf("\nFound device (service name in IO Registry): {s}\n", .{deviceName});
+
+        //--- CHILD NODE PROPERTY ITERATION SECTION ----------------------------------
+        //----------------------------------------------------------------------------
+        getIOMediaVolumesForDevice(ioDevice, pAllocator, &deviceVolumesList) catch |err| {
+            debug.printf("\n{any}", .{err});
+        };
+
+        if (deviceVolumesList.items.len == 0) continue;
+
+        usbDevices.append(.{
+            .serviceId = ioDevice,
+            .deviceName = deviceName,
+            .ioMediaVolumes = deviceVolumesList.clone() catch |err| {
+                debug.printf("\nERROR: Unable to deep-copy the devicesVolumesList <ArrayList(MacOS.IOMediaVolume)>. Error message: {any}", .{err});
+                continue;
+            },
+        }) catch |err| {
+            debug.printf("\nERROR: Unable to append item of type USBDevice to usbDevices ArrayList. Error message: {any}", .{err});
+            continue;
+        };
+
+        //--- END -------------------------------------------------------------------------
+
+    }
+
+    if (usbDevices.items.len == 0) {
+        debug.print("\nWARNING: No USB media devices were found with IOMedia volumes.");
+        return error.FailedToObtainUSBDevicesWithIOMediaServices;
+    }
+
+    for (0..usbDevices.items.len) |i| {
+        const usbDevice: MacOS.USBDevice = usbDevices.items[i];
+        debug.printf("\nUSB Device with IOMedia volumes ({s} - {d})\n", .{ usbDevice.deviceName, usbDevice.serviceId });
+
+        var usbStorageDevice: MacOS.USBStorageDevice = .{
+            .pAllocator = pAllocator,
+            .volumes = std.ArrayList(MacOS.IOMediaVolume).init(pAllocator.*),
+        };
+
+        for (0..usbDevice.ioMediaVolumes.items.len) |v| {
+            var ioMediaVolume: MacOS.IOMediaVolume = usbDevice.ioMediaVolumes.items[v];
+
+            // Need to re-allocate the bsdName slice, otherwise the lifespan of the old slice is cleaned up too soon
+            ioMediaVolume.bsdName = pAllocator.*.dupe(u8, usbDevice.ioMediaVolumes.items[v].bsdName) catch |err| {
+                debug.printf("\nERROR: Ran out of memory attempting to allocate IOMediaVolume BSDName. Error message: {any}", .{err});
+                return error.FailedToAllocateBSDNameMemoryDuringCopy;
+            };
+
+            // TODO: Make sure memory is cleaned up on every possible function exit (errors specifically!)
+
+            errdefer ioMediaVolume.deinit();
+
+            // Volume is the "parent" disk, e.g. the whole volume (disk4)
+            if (ioMediaVolume.isWhole and !ioMediaVolume.isLeaf and ioMediaVolume.isRemovable) {
+                // Important to realease memory in this exit scenario
+                defer ioMediaVolume.deinit();
+
+                usbStorageDevice.serviceId = ioMediaVolume.serviceId;
+                usbStorageDevice.size = ioMediaVolume.size;
+
+                const deviceNameSlice = std.mem.sliceTo(&usbDevice.deviceName, 0);
+
+                usbStorageDevice.deviceName = pAllocator.*.dupe(u8, deviceNameSlice) catch |err| {
+                    debug.printf("\nERROR: Failed to duplicate Device Name from USBDevice to USBStorageDevice. Error message: {any}", .{err});
+                    break;
+                };
+
+                usbStorageDevice.bsdName = pAllocator.*.dupe(u8, ioMediaVolume.bsdName) catch |err| {
+                    debug.printf("\nERROR: Failed to duplicate BSDName from USBDevice to USDStorageDevice. Error message: {any}", .{err});
+                    break;
+                };
+
+                // Volume is a Leaf scenario
+            } else if (!ioMediaVolume.isWhole and ioMediaVolume.isLeaf and ioMediaVolume.isRemovable) {
+                usbStorageDevice.volumes.append(ioMediaVolume) catch |err| {
+                    debug.printf("\nERROR: Failed to append IOMediaVolume to ArrayList<IOMediaVolume> within USBStorageDevice. Error message: {any}\n", .{err});
+                    break;
+                };
+            }
+        }
+
+        usbStorageDevices.append(usbStorageDevice) catch |err| {
+            debug.printf("\nERROR: Failed to append USBStorageDevice to ArrayList<USBStorageDevice>. Error message: {any}\n", .{err});
+        };
+
+        debug.print("\nDetected the following USB Storage Devices:\n");
+        for (0..usbStorageDevices.items.len) |d| {
+            const dev: MacOS.USBStorageDevice = usbStorageDevices.items[d];
+            dev.print();
+        }
+    }
+
+    defer {
+        for (usbDevices.items) |usbDevice| {
+            usbDevice.deinit();
+        }
+    }
+
+    defer _ = c.IOObjectRelease(ioIterator);
+
+    return usbStorageDevices;
+}
+
+pub fn getIOMediaVolumesForDevice(device: c.io_service_t, pAllocator: *const std.mem.Allocator, pVolumesList: *std.ArrayList(MacOS.IOMediaVolume)) !void {
     var kernReturn: ?c.kern_return_t = null;
     var childService: c.io_service_t = 1;
     var childIterator: c.io_iterator_t = 0;
@@ -42,7 +189,7 @@ pub fn getIOMediaVolumesForDevice(device: c.io_service_t, pAllocator: *const std
     defer _ = c.IOObjectRelease(childIterator);
 }
 
-pub fn getIOMediaVolumeDescription(service: c.io_service_t, pAllocator: *const std.mem.Allocator) !IOMediaVolume {
+pub fn getIOMediaVolumeDescription(service: c.io_service_t, pAllocator: *const std.mem.Allocator) !MacOS.IOMediaVolume {
 
     //--- @prop: BSDName (String) --------------------------------------------------------
     //------------------------------------------------------------------------------------

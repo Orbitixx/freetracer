@@ -94,5 +94,10 @@ pub fn Button() type {
                 }
             }
         }
+
+        pub fn deinit(self: Self) void {
+            if (self.pPath.* != null)
+                self.allocator.free(self.pPath.*.?);
+        }
     };
 }
