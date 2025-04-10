@@ -26,7 +26,7 @@ pub const IOMediaVolume = struct {
     isOpen: bool,
     isWritable: bool,
 
-    pub fn deinit(self: @This()) void {
+    pub fn deinit(self: IOMediaVolume) void {
         self.pAllocator.*.free(self.bsdName);
     }
 };
@@ -55,6 +55,11 @@ pub const USBStorageDevice = struct {
     pub fn deinit(self: USBStorageDevice) void {
         self.pAllocator.*.free(self.deviceName);
         self.pAllocator.*.free(self.bsdName);
+
+        for (self.volumes.items) |volume| {
+            self.pAllocator.*.free(volume.bsdName);
+        }
+
         self.volumes.deinit();
     }
 

@@ -72,8 +72,21 @@ pub fn main() !void {
     //
     //
 
-    const usbStorageDevices = try macOS_getUSBStorageDevices(&allocator);
+    const usbStorageDevices = macOS_getUSBStorageDevices(&allocator) catch blk: {
+        debug.print("\nWARNING: Unable to capture USB devices. Please make sure a USB flash drive is plugged in.");
+        break :blk std.ArrayList(MacOS.USBStorageDevice).init(allocator);
+    };
+
     defer usbStorageDevices.deinit();
+
+    if (usbStorageDevices.items.len > 0) {
+        if (std.mem.count(u8, usbStorageDevices.items[0].bsdName, "disk4") > 0) {
+            debug.print("\nFound disk4 by literal. Preparing to unmount...");
+            DiskArbitration.unmountAllVolumes(&usbStorageDevices.items[0]) catch |err| {
+                debug.printf("\nERROR: Failed to unmount volumes on {s}. Error message: {any}", .{ usbStorageDevices.items[0].bsdName, err });
+            };
+        }
+    }
 
     defer {
         for (usbStorageDevices.items) |usbStorageDevice| {
@@ -287,10 +300,23 @@ pub fn macOS_getUSBStorageDevices(pAllocator: *const std.mem.Allocator) !std.Arr
         };
 
         for (0..usbDevice.ioMediaVolumes.items.len) |v| {
-            const ioMediaVolume: MacOS.IOMediaVolume = usbDevice.ioMediaVolumes.items[v];
+            var ioMediaVolume: MacOS.IOMediaVolume = usbDevice.ioMediaVolumes.items[v];
 
-            // Capture the "parent" disk, e.g. the whole volume (disk4)
+            // Need to re-allocate the bsdName slice, otherwise the lifespan of the old slice is cleaned up too soon
+            ioMediaVolume.bsdName = pAllocator.*.dupe(u8, usbDevice.ioMediaVolumes.items[v].bsdName) catch |err| {
+                debug.printf("\nERROR: Ran out of memory attempting to allocate IOMediaVolume BSDName. Error message: {any}", .{err});
+                return error.FailedToAllocateBSDNameMemoryDuringCopy;
+            };
+
+            // TODO: Make sure memory is cleaned up on every possible function exit (errors specifically!)
+
+            errdefer ioMediaVolume.deinit();
+
+            // Volume is the "parent" disk, e.g. the whole volume (disk4)
             if (ioMediaVolume.isWhole and !ioMediaVolume.isLeaf and ioMediaVolume.isRemovable) {
+                // Important to realease memory in this exit scenario
+                defer ioMediaVolume.deinit();
+
                 usbStorageDevice.serviceId = ioMediaVolume.serviceId;
                 usbStorageDevice.size = ioMediaVolume.size;
 
@@ -305,24 +331,14 @@ pub fn macOS_getUSBStorageDevices(pAllocator: *const std.mem.Allocator) !std.Arr
                     debug.printf("\nERROR: Failed to duplicate BSDName from USBDevice to USDStorageDevice. Error message: {any}", .{err});
                     break;
                 };
+
+                // Volume is a Leaf scenario
             } else if (!ioMediaVolume.isWhole and ioMediaVolume.isLeaf and ioMediaVolume.isRemovable) {
                 usbStorageDevice.volumes.append(ioMediaVolume) catch |err| {
                     debug.printf("\nERROR: Failed to append IOMediaVolume to ArrayList<IOMediaVolume> within USBStorageDevice. Error message: {any}\n", .{err});
                     break;
                 };
             }
-
-            // const fmtStr = "\n\tIOMedia Volume ({d})\n\t\tBSD Name: {s}\n\t\tLeaf: {any}\n\t\tWhole: {any}\n\t\tRemovable: {any}\n\t\tWritable: {any}\n\t\tOpen: {any}\n\t\tSize: {any}\n";
-            // debug.printf(fmtStr, .{
-            //     ioMediaVolume.serviceId,
-            //     ioMediaVolume.bsdName,
-            //     ioMediaVolume.isLeaf,
-            //     ioMediaVolume.isWhole,
-            //     ioMediaVolume.isRemovable,
-            //     ioMediaVolume.isWritable,
-            //     ioMediaVolume.isOpen,
-            //     std.fmt.fmtIntSizeDec(@intCast(ioMediaVolume.size)),
-            // });
         }
 
         usbStorageDevices.append(usbStorageDevice) catch |err| {

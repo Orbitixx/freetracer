@@ -15,14 +15,14 @@ const c = if (isMac) @cImport({
     @cInclude("IOKit/IOBSD.h");
 }) else if (isLinux) @cImport({});
 
-const macos = @import("MacOSTypes.zig");
+const MacOS = @import("MacOSTypes.zig");
 const toSlice = @import("IOKit.zig").toSlice;
 
-const IOMediaVolume = macos.IOMediaVolume;
-const USBDevice = macos.USBDevice;
-const USBStorageDevice = macos.USBStorageDevice;
+const IOMediaVolume = MacOS.IOMediaVolume;
+const USBDevice = MacOS.USBDevice;
+const USBStorageDevice = MacOS.USBStorageDevice;
 
-pub fn unmountAllVolumes(pDevice: *USBStorageDevice) !void {
+pub fn unmountAllVolumes(pDevice: *const USBStorageDevice) !void {
     const daSession = c.DASessionCreate(c.kCFAllocatorDefault);
 
     if (daSession == null) {
@@ -32,15 +32,17 @@ pub fn unmountAllVolumes(pDevice: *USBStorageDevice) !void {
     defer _ = c.CFRelease(daSession);
 
     const currentLoop = c.CFRunLoopGetCurrent();
-    c.DASessionScheduleWithRunLoop(daSession, currentLoop, c.kCFRunLoopDefaultMode);
 
+    c.DASessionScheduleWithRunLoop(daSession, currentLoop, c.kCFRunLoopDefaultMode);
     // Ensure unscheduling happens before session is released
     defer c.DASessionUnscheduleFromRunLoop(daSession, currentLoop, c.kCFRunLoopDefaultMode);
 
     var queuedUnmounts: u8 = 0;
 
     for (pDevice.*.volumes.items) |volume| {
-        const daDiskRef = c.DADiskCreateFromBSDName(c.kCFAllocatorDefault, daSession, volume.bsdName.ptr);
+        const daDiskRef: c.DADiskRef = c.DADiskCreateFromBSDName(c.kCFAllocatorDefault, daSession, volume.bsdName.ptr);
+
+        debug.printf("\nRetrieving details for disk: '{s}'.", .{volume.bsdName});
 
         if (daDiskRef == null) {
             debug.printf("\nWARNING: Could not create DADiskRef for '{s}', skipping.\n", .{volume.bsdName});
@@ -49,6 +51,8 @@ pub fn unmountAllVolumes(pDevice: *USBStorageDevice) !void {
         defer _ = c.CFRelease(daDiskRef);
 
         const diskInfo: c.CFDictionaryRef = @ptrCast(c.DADiskCopyDescription(daDiskRef));
+
+        if (diskInfo == null) return error.DAFailedToObtainADiskInfoDictionaryRef;
         defer _ = c.CFRelease(diskInfo);
 
         // _ = c.CFShow(diskInfo);
@@ -60,6 +64,7 @@ pub fn unmountAllVolumes(pDevice: *USBStorageDevice) !void {
         // --- @PROP: Check for EFI parition ---------------------------------------------------
         // Do not release efiKey, release causes segmentation fault
         const efiKeyRef: c.CFStringRef = @ptrCast(c.CFDictionaryGetValue(diskInfo, c.kDADiskDescriptionVolumeNameKey));
+
         var efiKeyBuf: [128]u8 = undefined;
         _ = c.CFStringGetCString(efiKeyRef, &efiKeyBuf, efiKeyBuf.len, c.kCFStringEncodingUTF8);
 
@@ -67,11 +72,11 @@ pub fn unmountAllVolumes(pDevice: *USBStorageDevice) !void {
             return error.DAFailedToObtainEFIKeyCFString;
         }
 
-        const isEfi = std.mem.count(u8, efiKeyBuf, "EFI") > 0;
+        const isEfi = std.mem.count(u8, &efiKeyBuf, "EFI") > 0;
         // --- @ENDPROP: EFI
 
         // --- @PROP: Check for DeviceInternal ---------------------------------------------------
-        const isInternalDeviceRef: c.CFBooleanRef = @ptrCast(c.CFDictionaryGetValue(diskInfo, c.kDADiskDecscriptionDeviceInternalKey));
+        const isInternalDeviceRef: c.CFBooleanRef = @ptrCast(c.CFDictionaryGetValue(diskInfo, c.kDADiskDescriptionDeviceInternalKey));
 
         if (isInternalDeviceRef == null or c.CFGetTypeID(isInternalDeviceRef) != c.CFBooleanGetTypeID()) {
             return error.DAFailedToObtainInternalDeviceCFBoolean;
@@ -86,7 +91,7 @@ pub fn unmountAllVolumes(pDevice: *USBStorageDevice) !void {
         }
 
         if (isEfi) {
-            debug.printf("\nWARNING: Skipping unmount for a potential EFI partition for disk: {s}.", .{volume.bsdName});
+            debug.printf("\nWARNING: Skipping unmount because of a potential EFI partition on disk: {s}.", .{volume.bsdName});
             continue;
         }
 
