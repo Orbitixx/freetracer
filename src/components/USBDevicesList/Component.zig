@@ -1,33 +1,27 @@
 const std = @import("std");
 const osd = @import("osdialog");
 
-const debug = @import("../../../util/debug.zig");
-const ui = @import("../../ui.zig");
+const debug = @import("../../lib/util/debug.zig");
+const UI = @import("../../lib/ui/ui.zig");
 
 const Thread = std.Thread;
-const FilePickerState = @import("./FilePickerTypes.zig").FilePickerState;
 
-const runFilePickerWorker = @import("FilePickerWorker.zig").runFilePickerWorker;
+const USBDevicesListState = @import("State.zig").USBDevicesListState;
 
-pub fn FilePickerComponent() type {
+const runUSBDevicesListWorker = @import("Worker.zig").runUSBDevicesListWorker;
+
+pub fn USBDevicesListComponent() type {
     return struct {
         const Self = @This();
 
         allocator: std.mem.Allocator,
-        button: ?ui.Button() = null,
-        state: FilePickerState,
+        state: USBDevicesListState,
         worker: ?std.Thread = null,
-        interactible: bool = true,
-        currentPath: ?[]u8 = null,
-
-        pub fn getSelectedPath(self: Self) ?[]const u8 {
-            return self.currentPath;
-        }
 
         pub fn init(allocator: std.mem.Allocator) Self {
             return .{
                 .allocator = allocator,
-                .state = FilePickerState{ .allocator = allocator },
+                .state = USBDevicesListState{ .allocator = allocator },
             };
         }
 
@@ -45,7 +39,10 @@ pub fn FilePickerComponent() type {
             self.state.mutex.lock();
 
             if (self.state.taskDone) {
+                debug.print("\nFilePickerComponent: processing file picker result.");
                 processFilePickerResult(self);
+                debug.print("\nFilePickerComponent: finished processing file picker result.");
+
                 workerFinished = true;
             }
 
@@ -81,7 +78,7 @@ pub fn FilePickerComponent() type {
     };
 }
 
-fn dispatchFilePickerAction(self: *FilePickerComponent()) void {
+fn dispatchFilePickerAction(self: *USBDevicesListComponent()) void {
     self.state.mutex.lock();
     // Schedule Mutex unclock whenever function exits
     // defer self.state.mutex.unlock();
@@ -105,7 +102,7 @@ fn dispatchFilePickerAction(self: *FilePickerComponent()) void {
 
     self.state.mutex.unlock();
 
-    self.worker = Thread.spawn(.{}, runFilePickerWorker, .{ self.allocator, &self.state }) catch blk: {
+    self.worker = Thread.spawn(.{}, runUSBDevicesListWorker(.{ self.allocator, &self.state })) catch blk: {
         debug.print("\nERROR! FilePickerComponent: Failed to spawn worker.\n");
 
         self.state.mutex.lock();
@@ -119,7 +116,7 @@ fn dispatchFilePickerAction(self: *FilePickerComponent()) void {
     };
 }
 
-fn processFilePickerResult(self: *FilePickerComponent()) void {
+fn processFilePickerResult(self: *USBDevicesListComponent()) void {
     if (self.state.taskError) |err| {
         debug.printf("Component: Worker finished with error: {any}\n", .{err});
 
@@ -137,7 +134,7 @@ fn processFilePickerResult(self: *FilePickerComponent()) void {
                 break :blk null;
             };
 
-            self.allocator.free(newPath);
+            // self.allocator.free(newPath);
         } else {
             debug.print("\nFilePickerComponent: worker successfully return without a path (null/cancelled).");
 
@@ -149,6 +146,6 @@ fn processFilePickerResult(self: *FilePickerComponent()) void {
         self.state.filePath = null;
     }
 
-    self.state.taskDone = true;
+    self.state.taskDone = false;
     self.state.taskRunning = false;
 }

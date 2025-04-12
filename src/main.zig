@@ -13,18 +13,21 @@ const MacOS = @import("modules/macos/MacOSTypes.zig");
 const IOKit = @import("modules/macos/IOKit.zig");
 const DiskArbitration = @import("modules/macos/DiskArbitration.zig");
 
-const ui = @import("lib/ui/ui.zig");
-const FilePicker = @import("lib/ui/components/FilePicker/FilePicker.zig");
+const AppController = @import("AppController.zig");
 
-const FilePickerComponent = FilePicker.FilePickerComponent();
+const UI = @import("lib/ui/ui.zig");
+
+const Component = @import("components/Component.zig").Blueprint;
+const FilePicker = @import("components/FilePicker/Index.zig");
+const USBDevicesList = @import("components/USBDevicesList/Index.zig");
 
 const ArgValidator = struct {
     isoPath: bool = false,
     devicePath: bool = false,
 };
 
-const SCREEN_WIDTH = 850;
-const SCREEN_HEIGHT = 500;
+const WINDOW_WIDTH = 850;
+const WINDOW_HEIGHT = 500;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{ .thread_safe = true }){};
@@ -35,23 +38,49 @@ pub fn main() !void {
         _ = gpa.deinit();
     }
 
-    rl.initWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "");
+    rl.initWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "");
     defer rl.closeWindow(); // Close window and OpenGL context
 
     // LOAD FONTS HERE
 
     rl.setTargetFPS(60);
     //--------------------------------------------------------------------------------------
+    //
 
     const backgroundColor: rl.Color = .{ .r = 29, .g = 44, .b = 64, .a = 100 };
 
+    var isoFilePickerState: FilePicker.State = .{ .allocator = allocator };
+    var usbDevicesListState: USBDevicesList.State = .{ .allocator = allocator };
+
+    var appController: AppController = .{
+        .isoFilePickerState = &isoFilePickerState,
+        .usbDevicesListState = &usbDevicesListState,
+    };
+
     //--- @COMPONENTS ----------------------------------------------------------------------
-    var filePicker = FilePickerComponent.init(allocator);
-    filePicker.button = ui.Button().init("Select ISO...", relW(0.12), relH(0.35), 14, .white, .red);
-    defer filePicker.deinit();
+
+    var ComponentRegistry = std.ArrayList(Component).init(allocator);
+    defer ComponentRegistry.deinit();
+
+    var isoFilePicker: FilePicker.Component = .{
+        .allocator = allocator,
+        .state = &isoFilePickerState,
+        .appController = &appController,
+        .button = UI.Button().init("Select ISO...", relW(0.19), relH(0.80), 14, .white, .red),
+    };
+
+    ComponentRegistry.append(.{ .FilePicker = &isoFilePicker }) catch |err| {
+        debug.printf("\nERROR: Unable to append FilePickerComponent to Component Registry. Message: {any}", .{err});
+    };
+
+    defer {
+        for (ComponentRegistry.items) |component| {
+            component.deinit();
+        }
+    }
     //--- @ENDCOMPONENTS -------------------------------------------------------------------
 
-    const isoRect: ui.Rect = .{
+    const isoRect: UI.Rect = .{
         .x = relW(0.08),
         .y = relH(0.2),
         .width = relW(0.35),
@@ -59,32 +88,34 @@ pub fn main() !void {
         .color = .fade(.light_gray, 0.3),
     };
 
-    const usbRect: ui.Rect = .{
-        .x = isoRect.x + isoRect.width + relW(0.08),
+    const usbRect: UI.Rect = .{
+        .x = isoRect.x + isoRect.width + relW(0.04),
         .y = relH(0.2),
-        .width = relW(0.175),
+        .width = relW(0.20),
         .height = relH(0.7),
         .color = .fade(.light_gray, 0.3),
     };
 
-    const flashRect: ui.Rect = .{
-        .x = usbRect.x + usbRect.width + relW(0.08),
+    const flashRect: UI.Rect = .{
+        .x = usbRect.x + usbRect.width + relW(0.04),
         .y = relH(0.2),
-        .width = relW(0.175),
+        .width = relW(0.20),
         .height = relH(0.7),
         .color = .fade(.light_gray, 0.3),
     };
 
     // var isoPath: ?[]u8 = null;
     //
-    // var isoBtn = ui.Button().init(allocator, &isoPath, "Select ISO...", relW(0.12), relH(0.35), 14, .white, .red);
+    // var isoBtn = UI.Button().init(allocator, &isoPath, "Select ISO...", relW(0.12), relH(0.35), 14, .white, .red);
     // defer isoBtn.deinit();
 
-    // Main application GUI loop
+    // Main application GUI.loop
     while (!rl.windowShouldClose()) { // Detect window close button or ESC key
         //----------------------------------------------------------------------------------
         //--- @UPDATE ----------------------------------------------------------------------
-        filePicker.update();
+        for (ComponentRegistry.items) |component| {
+            component.update();
+        }
         //----------------------------------------------------------------------------------
 
         // if (isoPath) |path| {
@@ -113,7 +144,6 @@ pub fn main() !void {
         //--- @DRAW ------------------------------------------------------------------------
         //----------------------------------------------------------------------------------
         rl.beginDrawing();
-        defer rl.endDrawing();
 
         rl.clearBackground(backgroundColor);
 
@@ -121,13 +151,17 @@ pub fn main() !void {
         usbRect.draw();
         flashRect.draw();
 
-        filePicker.draw();
+        for (ComponentRegistry.items) |component| {
+            component.draw();
+        }
 
         // isoBtn.draw();
         // isoBtn.events();
 
         rl.drawText("freetracer", @intFromFloat(relW(0.08)), @intFromFloat(relH(0.035)), 22, .white);
         rl.drawText("free and open-source by orbitixx", @intFromFloat(relW(0.08)), @intFromFloat(relH(0.035) + 23), 14, .light_gray);
+
+        defer rl.endDrawing();
         //--- @ENDDRAW----------------------------------------------------------------------
 
     }
@@ -166,9 +200,9 @@ pub fn main() !void {
 }
 
 pub fn relW(x: f32) f32 {
-    return (SCREEN_WIDTH * x);
+    return (WINDOW_WIDTH * x);
 }
 
 pub fn relH(y: f32) f32 {
-    return (SCREEN_HEIGHT * y);
+    return (WINDOW_HEIGHT * y);
 }
