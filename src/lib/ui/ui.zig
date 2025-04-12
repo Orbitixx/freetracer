@@ -1,6 +1,5 @@
 const std = @import("std");
 const rl = @import("raylib");
-const osd = @import("osdialog");
 
 pub const Rect = struct {
     x: f32,
@@ -26,18 +25,14 @@ pub fn Button() type {
     return struct {
         const Self = @This();
 
-        allocator: std.mem.Allocator,
-        pPath: *?[]u8,
         rect: Rect,
         text: Text,
-        action: *const fn (allocator: std.mem.Allocator, action: osd.PathAction, options: osd.PathOptions) ?[:0]u8,
         mouseHover: bool = false,
+        mouseClick: bool = false,
 
-        pub fn init(allocator: std.mem.Allocator, pPath: *?[]u8, text: [:0]const u8, x: f32, y: f32, fontSize: i32, rectColor: rl.Color, textColor: rl.Color) Self {
+        pub fn init(text: [:0]const u8, x: f32, y: f32, fontSize: i32, rectColor: rl.Color, textColor: rl.Color) Self {
             const width: i32 = rl.measureText(text, fontSize);
             return .{
-                .allocator = allocator,
-                .pPath = pPath,
                 .rect = .{
                     .x = x,
                     .y = y,
@@ -52,7 +47,7 @@ pub fn Button() type {
                     .fontSize = fontSize,
                     .color = textColor,
                 },
-                .action = osd.path,
+                // .action = osd.path,
             };
         }
 
@@ -78,26 +73,22 @@ pub fn Button() type {
                 self.mouseHover = false;
             }
 
-            if (self.mouseHover == true) {
+            if (self.mouseHover == true and self.mouseClick == false) {
                 if (rl.isMouseButtonPressed(.left)) {
                     self.rect.color = .gray;
+                    self.mouseClick = true;
 
-                    if (self.action(self.allocator, .open, .{})) |path| {
-                        defer self.allocator.free(path);
-
-                        if (self.allocator.dupe(u8, path)) |dupedPath| {
-                            self.pPath.* = dupedPath;
-                        } else |_| {
-                            std.debug.print("\nERROR: unabaled to allocate memory for selected file path!", .{});
-                        }
-                    }
+                    // if (self.action(self.allocator, .open, .{})) |path| {
+                    //     defer self.allocator.free(path);
+                    //
+                    //     if (self.allocator.dupe(u8, path)) |dupedPath| {
+                    //         self.pPath.* = dupedPath;
+                    //     } else |_| {
+                    //         std.debug.print("\nERROR: unabaled to allocate memory for selected file path!", .{});
+                    //     }
+                    // }
                 }
-            }
-        }
-
-        pub fn deinit(self: Self) void {
-            if (self.pPath.* != null)
-                self.allocator.free(self.pPath.*.?);
+            } else self.mouseClick = false;
         }
     };
 }

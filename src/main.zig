@@ -3,7 +3,6 @@ const c = @import("lib/sys/system.zig").c;
 
 const rl = @import("raylib");
 const osd = @import("osdialog");
-const ui = @import("lib/ui/ui.zig");
 
 const debug = @import("lib/util/debug.zig");
 const strings = @import("lib/util/strings.zig");
@@ -14,6 +13,11 @@ const MacOS = @import("modules/macos/MacOSTypes.zig");
 const IOKit = @import("modules/macos/IOKit.zig");
 const DiskArbitration = @import("modules/macos/DiskArbitration.zig");
 
+const ui = @import("lib/ui/ui.zig");
+const FilePicker = @import("lib/ui/components/FilePicker/FilePicker.zig");
+
+const FilePickerComponent = FilePicker.FilePickerComponent();
+
 const ArgValidator = struct {
     isoPath: bool = false,
     devicePath: bool = false,
@@ -21,22 +25,6 @@ const ArgValidator = struct {
 
 const SCREEN_WIDTH = 850;
 const SCREEN_HEIGHT = 500;
-
-const ISOFileState = struct {
-    mutex: std.Thread.Mutex = .{},
-    allocator: std.mem.Allocator,
-
-    taskRunning: bool = false,
-    taskDone: bool = false,
-    taskError: ?anyerror = null,
-
-    isoPath: ?[]const u8 = null,
-
-    pub fn deinit(self: ISOFileState) void {
-        if (self.isoPath != null)
-            self.allocator.free(self.isoPath.?);
-    }
-};
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{ .thread_safe = true }){};
@@ -55,12 +43,13 @@ pub fn main() !void {
     rl.setTargetFPS(60);
     //--------------------------------------------------------------------------------------
 
-    var isoFileState: ISOFileState = .{
-        .allocator = allocator,
-    };
-    defer isoFileState.deinit();
-
     const backgroundColor: rl.Color = .{ .r = 29, .g = 44, .b = 64, .a = 100 };
+
+    //--- @COMPONENTS ----------------------------------------------------------------------
+    var filePicker = FilePickerComponent.init(allocator);
+    filePicker.button = ui.Button().init("Select ISO...", relW(0.12), relH(0.35), 14, .white, .red);
+    defer filePicker.deinit();
+    //--- @ENDCOMPONENTS -------------------------------------------------------------------
 
     const isoRect: ui.Rect = .{
         .x = relW(0.08),
@@ -86,35 +75,37 @@ pub fn main() !void {
         .color = .fade(.light_gray, 0.3),
     };
 
-    var isoPath: ?[]u8 = null;
-
-    var isoBtn = ui.Button().init(allocator, &isoPath, "Select ISO...", relW(0.12), relH(0.35), 14, .white, .red);
-    defer isoBtn.deinit();
+    // var isoPath: ?[]u8 = null;
+    //
+    // var isoBtn = ui.Button().init(allocator, &isoPath, "Select ISO...", relW(0.12), relH(0.35), 14, .white, .red);
+    // defer isoBtn.deinit();
 
     // Main application GUI loop
     while (!rl.windowShouldClose()) { // Detect window close button or ESC key
         //----------------------------------------------------------------------------------
         //--- @UPDATE ----------------------------------------------------------------------
+        filePicker.update();
         //----------------------------------------------------------------------------------
-        if (isoPath) |path| {
-            isoFileState.mutex.lock();
-            const isoPathState = isoFileState.isoPath != null;
-            isoFileState.mutex.unlock();
 
-            if (!isoPathState) {
-                debug.printf("\n\nReceived ISO path: {s}", .{path});
-
-                isoFileState.mutex.lock();
-                isoFileState.isoPath = isoFileState.allocator.dupe(u8, path) catch blk: {
-                    debug.print("\nERROR: Unable to duplicate isoPath to the ISOFileState member.");
-                    break :blk null;
-                };
-                isoFileState.mutex.unlock();
-
-                allocator.free(isoPath.?);
-                isoPath = null;
-            }
-        }
+        // if (isoPath) |path| {
+        //     isoFileState.mutex.lock();
+        //     const isoPathState = isoFileState.isoPath != null;
+        //     isoFileState.mutex.unlock();
+        //
+        //     if (!isoPathState) {
+        //         debug.printf("\n\nReceived ISO path: {s}", .{path});
+        //
+        //         isoFileState.mutex.lock();
+        //         isoFileState.isoPath = isoFileState.allocator.dupe(u8, path) catch blk: {
+        //             debug.print("\nERROR: Unable to duplicate isoPath to the ISOFileState member.");
+        //             break :blk null;
+        //         };
+        //         isoFileState.mutex.unlock();
+        //
+        //         allocator.free(isoPath.?);
+        //         isoPath = null;
+        //     }
+        // }
 
         //--- @ENDUPDATE -------------------------------------------------------------------
 
@@ -130,8 +121,10 @@ pub fn main() !void {
         usbRect.draw();
         flashRect.draw();
 
-        isoBtn.draw();
-        isoBtn.events();
+        filePicker.draw();
+
+        // isoBtn.draw();
+        // isoBtn.events();
 
         rl.drawText("freetracer", @intFromFloat(relW(0.08)), @intFromFloat(relH(0.035)), 22, .white);
         rl.drawText("free and open-source by orbitixx", @intFromFloat(relW(0.08)), @intFromFloat(relH(0.035) + 23), 14, .light_gray);
