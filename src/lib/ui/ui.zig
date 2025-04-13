@@ -16,9 +16,24 @@ pub const Rect = struct {
 pub const Text = struct {
     x: i32,
     y: i32,
+    padding: rl.Rectangle = .{ .x = 0, .y = 0, .width = 0, .height = 0 },
     value: [:0]const u8,
     fontSize: i32,
     color: rl.Color,
+
+    pub fn getWidth(self: Text) i32 {
+        return rl.measureText(self.value, self.fontSize);
+    }
+
+    pub fn draw(self: Text) void {
+        rl.drawText(
+            self.value,
+            self.x,
+            self.y,
+            self.fontSize,
+            self.color,
+        );
+    }
 };
 
 pub fn Button() type {
@@ -47,7 +62,6 @@ pub fn Button() type {
                     .fontSize = fontSize,
                     .color = textColor,
                 },
-                // .action = osd.path,
             };
         }
 
@@ -77,16 +91,6 @@ pub fn Button() type {
                 if (rl.isMouseButtonPressed(.left)) {
                     self.rect.color = .gray;
                     self.mouseClick = true;
-
-                    // if (self.action(self.allocator, .open, .{})) |path| {
-                    //     defer self.allocator.free(path);
-                    //
-                    //     if (self.allocator.dupe(u8, path)) |dupedPath| {
-                    //         self.pPath.* = dupedPath;
-                    //     } else |_| {
-                    //         std.debug.print("\nERROR: unabaled to allocate memory for selected file path!", .{});
-                    //     }
-                    // }
                 }
             } else self.mouseClick = false;
         }

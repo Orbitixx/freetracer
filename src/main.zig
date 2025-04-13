@@ -2,6 +2,7 @@ const std = @import("std");
 const c = @import("lib/sys/system.zig").c;
 
 const rl = @import("raylib");
+const rg = @import("raygui");
 const osd = @import("osdialog");
 
 const debug = @import("lib/util/debug.zig");
@@ -13,18 +14,19 @@ const MacOS = @import("modules/macos/MacOSTypes.zig");
 const IOKit = @import("modules/macos/IOKit.zig");
 const DiskArbitration = @import("modules/macos/DiskArbitration.zig");
 
-const AppController = @import("AppController.zig");
-
 const UI = @import("lib/ui/ui.zig");
+const Checkbox = @import("lib/ui/Checkbox.zig").Checkbox();
 
+const AppController = @import("AppController.zig");
 const Component = @import("components/Component.zig").Blueprint;
+
 const FilePicker = @import("components/FilePicker/Index.zig");
 const USBDevicesList = @import("components/USBDevicesList/Index.zig");
 
-const ArgValidator = struct {
-    isoPath: bool = false,
-    devicePath: bool = false,
-};
+// const ArgValidator = struct {
+//     isoPath: bool = false,
+//     devicePath: bool = false,
+// };
 
 const WINDOW_WIDTH = 850;
 const WINDOW_HEIGHT = 500;
@@ -44,13 +46,17 @@ pub fn main() !void {
     // LOAD FONTS HERE
 
     rl.setTargetFPS(60);
+
     //--------------------------------------------------------------------------------------
     //
 
     const backgroundColor: rl.Color = .{ .r = 29, .g = 44, .b = 64, .a = 100 };
 
     var isoFilePickerState: FilePicker.State = .{ .allocator = allocator };
-    var usbDevicesListState: USBDevicesList.State = .{ .allocator = allocator };
+    var usbDevicesListState: USBDevicesList.State = .{
+        .allocator = allocator,
+        .devices = std.ArrayList(MacOS.USBStorageDevice).init(allocator),
+    };
 
     var appController: AppController = .{
         .isoFilePickerState = &isoFilePickerState,
@@ -109,6 +115,8 @@ pub fn main() !void {
     // var isoBtn = UI.Button().init(allocator, &isoPath, "Select ISO...", relW(0.12), relH(0.35), 14, .white, .red);
     // defer isoBtn.deinit();
 
+    var checkbox = Checkbox.init("Hello test", 100, 150, 20);
+
     // Main application GUI.loop
     while (!rl.windowShouldClose()) { // Detect window close button or ESC key
         //----------------------------------------------------------------------------------
@@ -116,28 +124,8 @@ pub fn main() !void {
         for (ComponentRegistry.items) |component| {
             component.update();
         }
-        //----------------------------------------------------------------------------------
 
-        // if (isoPath) |path| {
-        //     isoFileState.mutex.lock();
-        //     const isoPathState = isoFileState.isoPath != null;
-        //     isoFileState.mutex.unlock();
-        //
-        //     if (!isoPathState) {
-        //         debug.printf("\n\nReceived ISO path: {s}", .{path});
-        //
-        //         isoFileState.mutex.lock();
-        //         isoFileState.isoPath = isoFileState.allocator.dupe(u8, path) catch blk: {
-        //             debug.print("\nERROR: Unable to duplicate isoPath to the ISOFileState member.");
-        //             break :blk null;
-        //         };
-        //         isoFileState.mutex.unlock();
-        //
-        //         allocator.free(isoPath.?);
-        //         isoPath = null;
-        //     }
-        // }
-
+        checkbox.update();
         //--- @ENDUPDATE -------------------------------------------------------------------
 
         //----------------------------------------------------------------------------------
@@ -150,6 +138,8 @@ pub fn main() !void {
         isoRect.draw();
         usbRect.draw();
         flashRect.draw();
+
+        checkbox.draw();
 
         for (ComponentRegistry.items) |component| {
             component.draw();

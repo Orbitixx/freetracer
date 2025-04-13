@@ -1,4 +1,5 @@
 const std = @import("std");
+const MacOS = @import("../../modules/macos/MacOSTypes.zig");
 
 pub const USBDevicesListState = struct {
     mutex: std.Thread.Mutex = .{},
@@ -8,10 +9,13 @@ pub const USBDevicesListState = struct {
     taskDone: bool = false,
     taskError: ?anyerror = null,
 
-    filePath: ?[]const u8 = null,
+    devices: std.ArrayList(MacOS.USBStorageDevice),
 
     pub fn deinit(self: USBDevicesListState) void {
-        if (self.filePath != null)
-            self.allocator.free(self.filePath.?);
+        for (self.devices.items) |device| {
+            device.deinit();
+        }
+
+        self.devices.deinit();
     }
 };
