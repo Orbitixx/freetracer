@@ -3,40 +3,46 @@ const osd = @import("osdialog");
 
 const debug = @import("../../lib/util/debug.zig");
 
+const MacOS = @import("../../modules/macos/MacOSTypes.zig");
+const IOKit = @import("../../modules/macos/IOKit.zig");
+
 const ComponentState = @import("State.zig").USBDevicesListState;
 
 pub fn runUSBDevicesListWorker(allocator: std.mem.Allocator, state: *ComponentState) void {
-    debug.print("Worker: Starting file picker...\n");
+    debug.print("\nUSBDevicesList Worker: starting devices discovery...");
 
     // --- Perform the potentially blocking action ---
-    // Let's assume osd.path allocates the returned path using the provided allocator
-    // and returns null if the user cancels.
-    var maybe_path: ?[]const u8 = null;
-    _ = allocator;
-    // const maybe_error: ?anyerror = null;
-
-    // maybe_path = osd.path(allocator, .open, .{});
-    // if (maybe_path) |path| {
-    //     debug.printf("\nFilePickerWorker: File picker returned path: {s}\n", .{path});
-    // } else if (maybe_error == null) {
-    //     debug.print("\nFilePickerWorker: File picker cancelled or returned null.\n");
-    // }
+    // const usbStorageDevices = IOKit.getUSBStorageDevices(&allocator) catch blk: {
+    //     debug.print("\nWARNING: Unable to capture USB devices. Please make sure a USB flash drive is plugged in.");
+    //     break :blk std.ArrayList(MacOS.USBStorageDevice).init(allocator);
+    // };
     //
-
-    std.Thread.sleep(2 * std.time.ns_per_s);
-    maybe_path = "/some/test/path/";
+    // defer {
+    //     if (usbStorageDevices.items.len > 0) {
+    //         for (usbStorageDevices.items) |device| {
+    //             device.deinit();
+    //         }
+    //     }
+    //
+    //     usbStorageDevices.deinit();
+    // }
 
     // --- Critical Section: Update Shared State ---
     state.mutex.lock();
-    defer state.mutex.unlock();
+
+    state.devices = IOKit.getUSBStorageDevices(allocator) catch blk: {
+        debug.print("\nWARNING: Unable to capture USB devices. Please make sure a USB flash drive is plugged in.");
+        break :blk std.ArrayList(MacOS.USBStorageDevice).init(allocator);
+    };
 
     // Store results/errors
-    state.filePath = maybe_path; // Transfer ownership of allocation to SharedState
     state.taskError = null;
 
     // Update flags
     state.taskDone = true;
     state.taskRunning = false;
 
-    debug.print("\nFilePickerWorker: Updated shared state. Exiting.\n");
+    state.mutex.unlock();
+
+    debug.print("\nUSBDevcesList Worker: Updated shared state. Exiting.\n");
 }

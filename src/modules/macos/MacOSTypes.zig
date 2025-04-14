@@ -16,7 +16,7 @@ const c = if (isMac) @cImport({
 }) else if (isLinux) @cImport({});
 
 pub const IOMediaVolume = struct {
-    pAllocator: *const std.mem.Allocator,
+    allocator: std.mem.Allocator,
     serviceId: c.io_service_t,
     bsdName: []const u8,
     size: i64,
@@ -27,7 +27,7 @@ pub const IOMediaVolume = struct {
     isWritable: bool,
 
     pub fn deinit(self: IOMediaVolume) void {
-        self.pAllocator.*.free(self.bsdName);
+        self.allocator.free(self.bsdName);
     }
 };
 
@@ -45,7 +45,7 @@ pub const USBDevice = struct {
 };
 
 pub const USBStorageDevice = struct {
-    pAllocator: *const std.mem.Allocator,
+    allocator: std.mem.Allocator,
     serviceId: c.io_service_t = undefined,
     deviceName: []u8 = undefined,
     bsdName: []u8 = undefined,
@@ -53,11 +53,11 @@ pub const USBStorageDevice = struct {
     volumes: std.ArrayList(IOMediaVolume) = undefined,
 
     pub fn deinit(self: USBStorageDevice) void {
-        self.pAllocator.*.free(self.deviceName);
-        self.pAllocator.*.free(self.bsdName);
+        self.allocator.free(self.deviceName);
+        self.allocator.free(self.bsdName);
 
         for (self.volumes.items) |volume| {
-            self.pAllocator.*.free(volume.bsdName);
+            self.allocator.free(volume.bsdName);
         }
 
         self.volumes.deinit();

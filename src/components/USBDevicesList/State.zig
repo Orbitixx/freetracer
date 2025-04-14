@@ -12,8 +12,10 @@ pub const USBDevicesListState = struct {
     devices: std.ArrayList(MacOS.USBStorageDevice),
 
     pub fn deinit(self: USBDevicesListState) void {
-        for (self.devices.items) |device| {
-            device.deinit();
+        if (self.devices.items.len > 0) {
+            for (self.devices.items) |device| {
+                device.deinit();
+            }
         }
 
         self.devices.deinit();

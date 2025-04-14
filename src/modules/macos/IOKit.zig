@@ -5,7 +5,7 @@ const c = @import("../../lib/sys/system.zig").c;
 
 const MacOS = @import("MacOSTypes.zig");
 
-pub fn getUSBStorageDevices(pAllocator: *const std.mem.Allocator) !std.ArrayList(MacOS.USBStorageDevice) {
+pub fn getUSBStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(MacOS.USBStorageDevice) {
     var matchingDict: c.CFMutableDictionaryRef = null;
     var ioIterator: c.io_iterator_t = 0;
     var kernReturn: ?c.kern_return_t = null;
@@ -25,10 +25,10 @@ pub fn getUSBStorageDevices(pAllocator: *const std.mem.Allocator) !std.ArrayList
         return error.FailedToObtainUSBServicesFromIORegistry;
     }
 
-    var usbDevices = std.ArrayList(MacOS.USBDevice).init(pAllocator.*);
+    var usbDevices = std.ArrayList(MacOS.USBDevice).init(allocator);
     defer usbDevices.deinit();
 
-    var usbStorageDevices = std.ArrayList(MacOS.USBStorageDevice).init(pAllocator.*);
+    var usbStorageDevices = std.ArrayList(MacOS.USBStorageDevice).init(allocator);
 
     while (ioDevice != 0) {
 
@@ -42,7 +42,7 @@ pub fn getUSBStorageDevices(pAllocator: *const std.mem.Allocator) !std.ArrayList
         defer _ = c.IOObjectRelease(ioDevice);
 
         var deviceName: c.io_name_t = undefined;
-        var deviceVolumesList = std.ArrayList(MacOS.IOMediaVolume).init(pAllocator.*);
+        var deviceVolumesList = std.ArrayList(MacOS.IOMediaVolume).init(allocator);
         defer deviceVolumesList.deinit();
 
         kernReturn = c.IORegistryEntryGetName(ioDevice, &deviceName);
@@ -56,7 +56,7 @@ pub fn getUSBStorageDevices(pAllocator: *const std.mem.Allocator) !std.ArrayList
 
         //--- CHILD NODE PROPERTY ITERATION SECTION ----------------------------------
         //----------------------------------------------------------------------------
-        getIOMediaVolumesForDevice(ioDevice, pAllocator, &deviceVolumesList) catch |err| {
+        getIOMediaVolumesForDevice(ioDevice, allocator, &deviceVolumesList) catch |err| {
             debug.printf("\n{any}", .{err});
         };
 
@@ -88,15 +88,15 @@ pub fn getUSBStorageDevices(pAllocator: *const std.mem.Allocator) !std.ArrayList
         debug.printf("\nUSB Device with IOMedia volumes ({s} - {d})\n", .{ usbDevice.deviceName, usbDevice.serviceId });
 
         var usbStorageDevice: MacOS.USBStorageDevice = .{
-            .pAllocator = pAllocator,
-            .volumes = std.ArrayList(MacOS.IOMediaVolume).init(pAllocator.*),
+            .allocator = allocator,
+            .volumes = std.ArrayList(MacOS.IOMediaVolume).init(allocator),
         };
 
         for (0..usbDevice.ioMediaVolumes.items.len) |v| {
             var ioMediaVolume: MacOS.IOMediaVolume = usbDevice.ioMediaVolumes.items[v];
 
             // Need to re-allocate the bsdName slice, otherwise the lifespan of the old slice is cleaned up too soon
-            ioMediaVolume.bsdName = pAllocator.*.dupe(u8, usbDevice.ioMediaVolumes.items[v].bsdName) catch |err| {
+            ioMediaVolume.bsdName = allocator.dupe(u8, usbDevice.ioMediaVolumes.items[v].bsdName) catch |err| {
                 debug.printf("\nERROR: Ran out of memory attempting to allocate IOMediaVolume BSDName. Error message: {any}", .{err});
                 return error.FailedToAllocateBSDNameMemoryDuringCopy;
             };
@@ -115,12 +115,12 @@ pub fn getUSBStorageDevices(pAllocator: *const std.mem.Allocator) !std.ArrayList
 
                 const deviceNameSlice = std.mem.sliceTo(&usbDevice.deviceName, 0);
 
-                usbStorageDevice.deviceName = pAllocator.*.dupe(u8, deviceNameSlice) catch |err| {
+                usbStorageDevice.deviceName = allocator.dupe(u8, deviceNameSlice) catch |err| {
                     debug.printf("\nERROR: Failed to duplicate Device Name from USBDevice to USBStorageDevice. Error message: {any}", .{err});
                     break;
                 };
 
-                usbStorageDevice.bsdName = pAllocator.*.dupe(u8, ioMediaVolume.bsdName) catch |err| {
+                usbStorageDevice.bsdName = allocator.dupe(u8, ioMediaVolume.bsdName) catch |err| {
                     debug.printf("\nERROR: Failed to duplicate BSDName from USBDevice to USDStorageDevice. Error message: {any}", .{err});
                     break;
                 };
@@ -156,7 +156,7 @@ pub fn getUSBStorageDevices(pAllocator: *const std.mem.Allocator) !std.ArrayList
     return usbStorageDevices;
 }
 
-pub fn getIOMediaVolumesForDevice(device: c.io_service_t, pAllocator: *const std.mem.Allocator, pVolumesList: *std.ArrayList(MacOS.IOMediaVolume)) !void {
+pub fn getIOMediaVolumesForDevice(device: c.io_service_t, allocator: std.mem.Allocator, pVolumesList: *std.ArrayList(MacOS.IOMediaVolume)) !void {
     var kernReturn: ?c.kern_return_t = null;
     var childService: c.io_service_t = 1;
     var childIterator: c.io_iterator_t = 0;
@@ -176,28 +176,28 @@ pub fn getIOMediaVolumesForDevice(device: c.io_service_t, pAllocator: *const std
         const isIOMedia: bool = c.IOObjectConformsTo(childService, ioMediaCString) != 0;
 
         if (isIOMedia) {
-            const ioMediaVolume = try getIOMediaVolumeDescription(childService, pAllocator);
+            const ioMediaVolume = try getIOMediaVolumeDescription(childService, allocator);
 
             pVolumesList.*.append(ioMediaVolume) catch |err| {
                 debug.printf("\nERROR (IOKit.getIOMediaVolumesForDevice): unable to append child service to volumes list. Error message: {any}", .{err});
             };
         }
 
-        try getIOMediaVolumesForDevice(childService, pAllocator, pVolumesList);
+        try getIOMediaVolumesForDevice(childService, allocator, pVolumesList);
     }
 
     defer _ = c.IOObjectRelease(childIterator);
 }
 
-pub fn getIOMediaVolumeDescription(service: c.io_service_t, pAllocator: *const std.mem.Allocator) !MacOS.IOMediaVolume {
+pub fn getIOMediaVolumeDescription(service: c.io_service_t, allocator: std.mem.Allocator) !MacOS.IOMediaVolume {
 
     //--- @prop: BSDName (String) --------------------------------------------------------
     //------------------------------------------------------------------------------------
     const bsdNameKey: c.CFStringRef = c.CFStringCreateWithCStringNoCopy(c.kCFAllocatorDefault, c.kIOBSDNameKey, c.kCFStringEncodingUTF8, c.kCFAllocatorNull);
     defer _ = c.CFRelease(bsdNameKey);
 
-    // const str = try toCString(pAllocator, c.kIOBSDNameKey);
-    // defer pAllocator.*.free(str);
+    // const str = try toCString(allocator, c.kIOBSDNameKey);
+    // defer allocator.free(str);
     //
     // const bsdNameKey: c.CFStringRef = @ptrCast(str);
 
@@ -210,7 +210,7 @@ pub fn getIOMediaVolumeDescription(service: c.io_service_t, pAllocator: *const s
 
     // bsdNameBuf is a stack-allocated buffer, which is erased when function exits,
     // therefore the string must be saved on the heap and cleaned up later.
-    const heapBsdName = try pAllocator.*.alloc(u8, bsdNameBuf.len);
+    const heapBsdName = try allocator.alloc(u8, bsdNameBuf.len);
     @memcpy(heapBsdName, &bsdNameBuf);
     //--- @endprop -----------------------------------------------------------------------
 
@@ -233,7 +233,7 @@ pub fn getIOMediaVolumeDescription(service: c.io_service_t, pAllocator: *const s
     const mediaSizeInBytes: i64 = try getNumberFromIOService(i64, service, c.kIOMediaSizeKey);
 
     return .{
-        .pAllocator = pAllocator,
+        .allocator = allocator,
         .serviceId = service,
         .bsdName = heapBsdName,
         .size = mediaSizeInBytes,
@@ -275,10 +275,10 @@ pub fn getNumberFromIOService(comptime T: type, service: c.io_service_t, key: [*
     return result;
 }
 
-pub fn toCString(pAllocator: *const std.mem.Allocator, string: []const u8) ![]u8 {
+pub fn toCString(allocator: std.mem.Allocator, string: []const u8) ![]u8 {
     if (string.len == 0) return error.OriginalStringMustBeNonZeroLength;
 
-    var cString: []u8 = pAllocator.*.alloc(u8, string.len + 1) catch |err| {
+    var cString: []u8 = allocator.alloc(u8, string.len + 1) catch |err| {
         debug.printf("\nERROR (toCString()): Failed to allocate heap memory for C string. Error message: {any}", .{err});
         return error.FailedToCreateCString;
     };

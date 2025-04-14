@@ -5,6 +5,7 @@ const debug = @import("../../lib/util/debug.zig");
 const UI = @import("../../lib/ui/ui.zig");
 
 const MacOS = @import("../../modules/macos/MacOSTypes.zig");
+const IOKit = @import("../../modules/macos/IOKit.zig");
 
 const Thread = std.Thread;
 
@@ -22,7 +23,11 @@ pub fn USBDevicesListComponent() type {
         state: *USBDevicesListState,
         appController: ?*AppController = null,
         worker: ?std.Thread = null,
-        canBegin: bool = false,
+        componentActive: bool = false,
+
+        pub fn enable(self: *Self) void {
+            self.componentActive = true;
+        }
 
         pub fn init(allocator: std.mem.Allocator) Self {
             return .{
@@ -35,32 +40,41 @@ pub fn USBDevicesListComponent() type {
         }
 
         pub fn update(self: *Self) void {
-            if (self.canBegin)
-                debug.print("\nUSBDevicesListComponent: Called to work!!!");
-            // dispatchFilePickerAction(self);
-            //
-            // var workerFinished = false;
-            //
-            // self.state.mutex.lock();
-            //
-            // if (self.state.taskDone) {
-            //     debug.print("\nUSBDevicesListComponent: processing file picker result.");
-            //     processFilePickerResult(self);
-            //     debug.print("\nUSBDevicesListComponent: finished processing file picker result.");
-            //
-            //     workerFinished = true;
-            // }
-            //
-            // self.state.mutex.unlock();
-            //
-            // if (workerFinished) {
-            //     if (self.worker) |thread| {
-            //         debug.print("\nUSBDevicesListComponent: joining worker thread...");
-            //         thread.join();
-            //         self.worker = null;
-            //         debug.print("\nUSBDevicesListComponent: worker joined.");
-            //     }
-            // }
+            if (self.componentActive) {
+                debug.print("\nUSBDevicesListComponent: Dispatching component action...");
+                dispatchComponentAction(self);
+                self.componentActive = false;
+            }
+
+            var workerFinished = false;
+
+            self.state.mutex.lock();
+
+            if (self.state.taskDone) {
+                debug.print("\nUSBDevicesListComponent: task done signal receieved.");
+                workerFinished = true;
+            }
+
+            self.state.mutex.unlock();
+
+            if (workerFinished) {
+                debug.print("\nGot to worker check");
+                if (self.worker) |thread| {
+                    debug.print("\nUSBDevicesListComponent: joining worker thread...");
+                    thread.join();
+                    self.worker = null;
+                    debug.print("\nUSBDevicesListComponent: worker joined.");
+                }
+
+                self.state.mutex.lock();
+
+                self.state.taskDone = false;
+                self.state.taskRunning = false;
+
+                self.state.mutex.unlock();
+
+                debug.print("\nUSBDevicesListComponent: Finished finding USB devices.");
+            }
         }
 
         pub fn draw(self: *Self) void {
@@ -80,42 +94,44 @@ pub fn USBDevicesListComponent() type {
     };
 }
 
-fn dispatchFilePickerAction(self: *USBDevicesListComponent()) void {
+fn dispatchComponentAction(self: *USBDevicesListComponent()) void {
     self.state.mutex.lock();
-    // Schedule Mutex unclock whenever function exits
-    // defer self.state.mutex.unlock();
 
     if (self.state.taskRunning) {
-        debug.print("\nWARNING! FilePickerComponent: worker task already running!");
+        debug.print("\nWARNING! USBDevicesListComponent: worker task already running!");
         self.state.mutex.unlock();
         return;
     }
 
-    debug.print("\nFilePickerComponent: Button clicked, starting worker...");
+    debug.print("\nUSBDevicesListComponent: Starting worker...");
 
     self.state.taskRunning = true;
     self.state.taskDone = false;
     self.state.taskError = null;
 
-    if (self.state.filePath) |oldPath| {
-        self.allocator.free(oldPath);
-        self.state.filePath = null;
+    if (self.state.devices.items.len > 0) {
+        for (self.state.devices.items) |device| {
+            device.deinit();
+        }
+        self.state.devices.clearAndFree();
     }
 
     self.state.mutex.unlock();
 
-    self.worker = Thread.spawn(.{}, runUSBDevicesListWorker(.{ self.allocator, &self.state })) catch blk: {
-        debug.print("\nERROR! FilePickerComponent: Failed to spawn worker.\n");
+    self.worker = Thread.spawn(.{}, runUSBDevicesListWorker, .{ self.allocator, self.state }) catch blk: {
+        debug.print("\nERROR! USBDevicesListComponent: Failed to spawn worker.\n");
 
         self.state.mutex.lock();
         // Reset state
         self.state.taskDone = false;
         self.state.taskRunning = false;
-        self.state.taskError = error.FailedToSpawnFilePickerWorker;
+        self.state.taskError = error.FailedToSpawnUSBDevicesListWorker;
 
         self.state.mutex.unlock();
         break :blk null;
     };
+
+    debug.print("\nUSBDevicesListComponent: Finished worker dispatch.");
 }
 
 fn processFilePickerResult(self: *USBDevicesListComponent()) void {
