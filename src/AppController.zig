@@ -8,10 +8,11 @@ const Self = @This();
 
 isoFilePathObtained: bool = false,
 
-isoFilePickerState: *FilePicker.State,
-usbDevicesListState: *USBDevicesList.State,
+isoFilePicker: *FilePicker.Component = undefined,
+usbDevicesList: *USBDevicesList.Component = undefined,
 
 pub fn notifyISOFilePathObtained(self: *Self, path: []u8) void {
     self.isoFilePathObtained = true;
     debug.printf("\nAppController: confirmation of obtained ISO path: {s}", .{path});
+    self.usbDevicesList.canBegin = true;
 }

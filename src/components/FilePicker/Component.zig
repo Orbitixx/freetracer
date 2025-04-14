@@ -18,7 +18,7 @@ pub fn FilePickerComponent() type {
         allocator: std.mem.Allocator,
         button: UI.Button(),
         state: *ComponentState,
-        appController: *AppController,
+        appController: ?*AppController = null,
         worker: ?std.Thread = null,
         interactible: bool = true,
         currentPath: ?[]u8 = null,
@@ -63,7 +63,7 @@ pub fn FilePickerComponent() type {
                     debug.print("\nFilePickerComponent: worker joined.");
                 }
 
-                self.appController.notifyISOFilePathObtained(self.currentPath.?);
+                if (self.appController) |appController| appController.notifyISOFilePathObtained(self.currentPath.?);
             }
         }
 

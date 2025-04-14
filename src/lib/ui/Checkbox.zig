@@ -59,6 +59,7 @@ pub fn Checkbox() type {
                 }
             } else self.pressed = false;
 
+            // Toggle CHECKED state on press
             if (self.pressed)
                 self.checked = !self.checked;
         }

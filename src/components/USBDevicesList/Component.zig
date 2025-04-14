@@ -4,7 +4,11 @@ const osd = @import("osdialog");
 const debug = @import("../../lib/util/debug.zig");
 const UI = @import("../../lib/ui/ui.zig");
 
+const MacOS = @import("../../modules/macos/MacOSTypes.zig");
+
 const Thread = std.Thread;
+
+const AppController = @import("../../AppController.zig");
 
 const USBDevicesListState = @import("State.zig").USBDevicesListState;
 
@@ -15,59 +19,57 @@ pub fn USBDevicesListComponent() type {
         const Self = @This();
 
         allocator: std.mem.Allocator,
-        state: USBDevicesListState,
+        state: *USBDevicesListState,
+        appController: ?*AppController = null,
         worker: ?std.Thread = null,
+        canBegin: bool = false,
 
         pub fn init(allocator: std.mem.Allocator) Self {
             return .{
                 .allocator = allocator,
-                .state = USBDevicesListState{ .allocator = allocator },
+                .state = USBDevicesListState{
+                    .allocator = allocator,
+                    .devices = std.ArrayList(MacOS.USBStorageDevice).init(allocator),
+                },
             };
         }
 
         pub fn update(self: *Self) void {
-            if (self.button == null) return;
-
-            self.button.?.events();
-
-            const isBtnClicked = self.button.?.mouseClick;
-
-            if (isBtnClicked) dispatchFilePickerAction(self);
-
-            var workerFinished = false;
-
-            self.state.mutex.lock();
-
-            if (self.state.taskDone) {
-                debug.print("\nFilePickerComponent: processing file picker result.");
-                processFilePickerResult(self);
-                debug.print("\nFilePickerComponent: finished processing file picker result.");
-
-                workerFinished = true;
-            }
-
-            self.state.mutex.unlock();
-
-            if (workerFinished) {
-                if (self.worker) |thread| {
-                    debug.print("\nFilePickerComponent: joining worker thread...");
-                    thread.join();
-                    self.worker = null;
-                    debug.print("\nFilePickerComponent: worker joined.");
-                }
-            }
+            if (self.canBegin)
+                debug.print("\nUSBDevicesListComponent: Called to work!!!");
+            // dispatchFilePickerAction(self);
+            //
+            // var workerFinished = false;
+            //
+            // self.state.mutex.lock();
+            //
+            // if (self.state.taskDone) {
+            //     debug.print("\nUSBDevicesListComponent: processing file picker result.");
+            //     processFilePickerResult(self);
+            //     debug.print("\nUSBDevicesListComponent: finished processing file picker result.");
+            //
+            //     workerFinished = true;
+            // }
+            //
+            // self.state.mutex.unlock();
+            //
+            // if (workerFinished) {
+            //     if (self.worker) |thread| {
+            //         debug.print("\nUSBDevicesListComponent: joining worker thread...");
+            //         thread.join();
+            //         self.worker = null;
+            //         debug.print("\nUSBDevicesListComponent: worker joined.");
+            //     }
+            // }
         }
 
         pub fn draw(self: *Self) void {
-            if (self.button == null) return;
-            self.button.?.draw();
+            _ = self;
         }
 
         pub fn deinit(self: *Self) void {
-            if (self.currentPath) |path| self.allocator.free(path);
-
             if (self.worker) |thread| {
-                debug.print("FilePickerComponent.deinit(): Joining worker thread...\n");
+                debug.print("USBDevicesListComponent.deinit(): Joining worker thread...\n");
                 // TODO: Signal the worker to cancel here, if possible
                 thread.join();
                 self.worker = null;

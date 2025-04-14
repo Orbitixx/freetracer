@@ -53,37 +53,49 @@ pub fn main() !void {
     const backgroundColor: rl.Color = .{ .r = 29, .g = 44, .b = 64, .a = 100 };
 
     var isoFilePickerState: FilePicker.State = .{ .allocator = allocator };
+
     var usbDevicesListState: USBDevicesList.State = .{
         .allocator = allocator,
         .devices = std.ArrayList(MacOS.USBStorageDevice).init(allocator),
     };
 
-    var appController: AppController = .{
-        .isoFilePickerState = &isoFilePickerState,
-        .usbDevicesListState = &usbDevicesListState,
-    };
+    var appController: AppController = .{};
 
     //--- @COMPONENTS ----------------------------------------------------------------------
 
-    var ComponentRegistry = std.ArrayList(Component).init(allocator);
-    defer ComponentRegistry.deinit();
+    var componentRegistry: ComponentRegistry = .{
+        .allocator = allocator,
+        .components = std.ArrayList(*Component).init(allocator),
+    };
+    defer componentRegistry.deinit();
 
-    var isoFilePicker: FilePicker.Component = .{
+    var filePickerComponent: FilePicker.Component = .{
         .allocator = allocator,
         .state = &isoFilePickerState,
-        .appController = &appController,
         .button = UI.Button().init("Select ISO...", relW(0.19), relH(0.80), 14, .white, .red),
     };
 
-    ComponentRegistry.append(.{ .FilePicker = &isoFilePicker }) catch |err| {
-        debug.printf("\nERROR: Unable to append FilePickerComponent to Component Registry. Message: {any}", .{err});
+    const pISOFilePickerComponent = componentRegistry.registerComponent(
+        allocator,
+        &appController,
+        .{ .FilePicker = &filePickerComponent },
+    );
+
+    appController.isoFilePicker = pISOFilePickerComponent.FilePicker;
+
+    var usbDevicesListComponent: USBDevicesList.Component = .{
+        .allocator = allocator,
+        .state = &usbDevicesListState,
     };
 
-    defer {
-        for (ComponentRegistry.items) |component| {
-            component.deinit();
-        }
-    }
+    const pUSBDevicesListComponent = componentRegistry.registerComponent(
+        allocator,
+        &appController,
+        .{ .USBDevicesList = &usbDevicesListComponent },
+    );
+
+    appController.usbDevicesList = pUSBDevicesListComponent.USBDevicesList;
+
     //--- @ENDCOMPONENTS -------------------------------------------------------------------
 
     const isoRect: UI.Rect = .{
@@ -110,22 +122,11 @@ pub fn main() !void {
         .color = .fade(.light_gray, 0.3),
     };
 
-    // var isoPath: ?[]u8 = null;
-    //
-    // var isoBtn = UI.Button().init(allocator, &isoPath, "Select ISO...", relW(0.12), relH(0.35), 14, .white, .red);
-    // defer isoBtn.deinit();
-
-    var checkbox = Checkbox.init("Hello test", 100, 150, 20);
-
     // Main application GUI.loop
     while (!rl.windowShouldClose()) { // Detect window close button or ESC key
         //----------------------------------------------------------------------------------
         //--- @UPDATE ----------------------------------------------------------------------
-        for (ComponentRegistry.items) |component| {
-            component.update();
-        }
-
-        checkbox.update();
+        componentRegistry.processUpdates();
         //--- @ENDUPDATE -------------------------------------------------------------------
 
         //----------------------------------------------------------------------------------
@@ -139,17 +140,10 @@ pub fn main() !void {
         usbRect.draw();
         flashRect.draw();
 
-        checkbox.draw();
-
-        for (ComponentRegistry.items) |component| {
-            component.draw();
-        }
-
-        // isoBtn.draw();
-        // isoBtn.events();
-
         rl.drawText("freetracer", @intFromFloat(relW(0.08)), @intFromFloat(relH(0.035)), 22, .white);
         rl.drawText("free and open-source by orbitixx", @intFromFloat(relW(0.08)), @intFromFloat(relH(0.035) + 23), 14, .light_gray);
+
+        componentRegistry.processRendering();
 
         defer rl.endDrawing();
         //--- @ENDDRAW----------------------------------------------------------------------
@@ -196,3 +190,47 @@ pub fn relW(x: f32) f32 {
 pub fn relH(y: f32) f32 {
     return (WINDOW_HEIGHT * y);
 }
+
+pub const ComponentRegistry = struct {
+    components: std.ArrayList(*Component),
+    allocator: std.mem.Allocator,
+
+    pub fn registerComponent(self: *ComponentRegistry, allocator: std.mem.Allocator, pAppController: *AppController, component: Component) *Component {
+        const componentPointer = allocator.create(Component) catch |err| {
+            debug.printf("\nERROR: ComponentRegistry is unable to successfully create a pointer to Component. Error message: {any}", .{err});
+            std.debug.panic("\nUnable to allocate memory for Component in ComponentRegistry. Error: {any}", .{err});
+        };
+
+        component.setAppController(pAppController);
+
+        componentPointer.* = component;
+
+        self.components.append(componentPointer) catch |err| {
+            debug.printf("\nERROR: ComponentRegistry unable to register component. Error message: {any}", .{err});
+            std.debug.panic("\nComponentRegistry unable to register component. Error: {any}", .{err});
+        };
+
+        return componentPointer;
+    }
+
+    pub fn processUpdates(self: *ComponentRegistry) void {
+        for (self.components.items) |pComponent| {
+            pComponent.*.update();
+        }
+    }
+
+    pub fn processRendering(self: *ComponentRegistry) void {
+        for (self.components.items) |pComponent| {
+            pComponent.*.draw();
+        }
+    }
+
+    pub fn deinit(self: *ComponentRegistry) void {
+        for (self.components.items) |pComponent| {
+            pComponent.*.deinit();
+
+            self.allocator.destroy(pComponent);
+        }
+        self.components.deinit();
+    }
+};
