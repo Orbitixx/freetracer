@@ -3,6 +3,7 @@ const osd = @import("osdialog");
 
 const debug = @import("../../lib/util/debug.zig");
 const UI = @import("../../lib/ui/ui.zig");
+const Checkbox = @import("../../lib/ui/Checkbox.zig").Checkbox();
 
 const MacOS = @import("../../modules/macos/MacOSTypes.zig");
 const IOKit = @import("../../modules/macos/IOKit.zig");
@@ -24,6 +25,7 @@ pub fn USBDevicesListComponent() type {
         appController: ?*AppController = null,
         worker: ?std.Thread = null,
         componentActive: bool = false,
+        devicesFound: bool = false,
 
         pub fn enable(self: *Self) void {
             self.componentActive = true;
@@ -42,7 +44,7 @@ pub fn USBDevicesListComponent() type {
         pub fn update(self: *Self) void {
             if (self.componentActive) {
                 debug.print("\nUSBDevicesListComponent: Dispatching component action...");
-                dispatchComponentAction(self);
+                if (!self.devicesFound) dispatchComponentAction(self);
                 self.componentActive = false;
             }
 
@@ -53,12 +55,13 @@ pub fn USBDevicesListComponent() type {
             if (self.state.taskDone) {
                 debug.print("\nUSBDevicesListComponent: task done signal receieved.");
                 workerFinished = true;
+
+                if (self.state.devices.items.len > 0) self.devicesFound = true;
             }
 
             self.state.mutex.unlock();
 
             if (workerFinished) {
-                debug.print("\nGot to worker check");
                 if (self.worker) |thread| {
                     debug.print("\nUSBDevicesListComponent: joining worker thread...");
                     thread.join();
@@ -78,7 +81,24 @@ pub fn USBDevicesListComponent() type {
         }
 
         pub fn draw(self: *Self) void {
-            _ = self;
+            if (!self.devicesFound) return;
+
+            self.state.mutex.lock();
+            for (self.state.devices.items) |device| {
+                const string = std.fmt.allocPrintZ(
+                    self.allocator,
+                    "{s} {d}GB",
+                    .{ device.deviceName, @divTrunc(device.size, 1_000_000_000) },
+                ) catch blk: {
+                    debug.print("\nUSBDevicesListComponent: Error when constructing device string buffer.");
+                    break :blk "NULL";
+                };
+                var checkbox = Checkbox.init(string, 120, 150, 20);
+                checkbox.update();
+                checkbox.draw();
+                self.allocator.free(string);
+            }
+            self.state.mutex.unlock();
         }
 
         pub fn deinit(self: *Self) void {
@@ -109,6 +129,7 @@ fn dispatchComponentAction(self: *USBDevicesListComponent()) void {
     self.state.taskDone = false;
     self.state.taskError = null;
 
+    // Clear out old devices
     if (self.state.devices.items.len > 0) {
         for (self.state.devices.items) |device| {
             device.deinit();
