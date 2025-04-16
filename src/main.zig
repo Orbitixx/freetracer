@@ -17,8 +17,13 @@ const DiskArbitration = @import("modules/macos/DiskArbitration.zig");
 const UI = @import("lib/ui/ui.zig");
 const Checkbox = @import("lib/ui/Checkbox.zig").Checkbox();
 
+const AppObserver = @import("observers/AppObserver.zig").AppObserver;
 const AppController = @import("AppController.zig");
-const Component = @import("components/Component.zig").Blueprint;
+
+const comp = @import("components/Component.zig");
+const Component = comp.Component;
+const ComponentID = comp.ComponentID;
+const ComponentRegistry = comp.ComponentRegistry;
 
 const FilePicker = @import("components/FilePicker/Index.zig");
 const USBDevicesList = @import("components/USBDevicesList/Index.zig");
@@ -59,42 +64,44 @@ pub fn main() !void {
         .devices = std.ArrayList(MacOS.USBStorageDevice).init(allocator),
     };
 
-    var appController: AppController = .{};
-
     //--- @COMPONENTS ----------------------------------------------------------------------
 
     var componentRegistry: ComponentRegistry = .{
-        .allocator = allocator,
-        .components = std.ArrayList(*Component).init(allocator),
+        .components = std.AutoHashMap(ComponentID, Component).init(allocator),
     };
     defer componentRegistry.deinit();
 
+    defer {
+        var iter = componentRegistry.components.iterator();
+        while (iter.next()) |component| {
+            component.value_ptr.deinit();
+        }
+    }
+
+    const appObserver: AppObserver = .{ .componentRegistry = &componentRegistry };
+
     var filePickerComponent: FilePicker.Component = .{
         .allocator = allocator,
+        .appObserver = &appObserver,
         .state = &isoFilePickerState,
         .button = UI.Button().init("Select ISO...", relW(0.19), relH(0.80), 14, .white, .red),
     };
 
-    const pISOFilePickerComponent = componentRegistry.registerComponent(
-        allocator,
-        &appController,
+    componentRegistry.registerComponent(
+        ComponentID.ISOFilePicker,
         .{ .FilePicker = &filePickerComponent },
     );
 
-    appController.isoFilePicker = pISOFilePickerComponent.FilePicker;
-
     var usbDevicesListComponent: USBDevicesList.Component = .{
         .allocator = allocator,
+        .appObserver = &appObserver,
         .state = &usbDevicesListState,
     };
 
-    const pUSBDevicesListComponent = componentRegistry.registerComponent(
-        allocator,
-        &appController,
+    componentRegistry.registerComponent(
+        ComponentID.USBDevicesList,
         .{ .USBDevicesList = &usbDevicesListComponent },
     );
-
-    appController.usbDevicesList = pUSBDevicesListComponent.USBDevicesList;
 
     //--- @ENDCOMPONENTS -------------------------------------------------------------------
 
@@ -190,47 +197,3 @@ pub fn relW(x: f32) f32 {
 pub fn relH(y: f32) f32 {
     return (WINDOW_HEIGHT * y);
 }
-
-pub const ComponentRegistry = struct {
-    components: std.ArrayList(*Component),
-    allocator: std.mem.Allocator,
-
-    pub fn registerComponent(self: *ComponentRegistry, allocator: std.mem.Allocator, pAppController: *AppController, component: Component) *Component {
-        const componentPointer = allocator.create(Component) catch |err| {
-            debug.printf("\nERROR: ComponentRegistry is unable to successfully create a pointer to Component. Error message: {any}", .{err});
-            std.debug.panic("\nUnable to allocate memory for Component in ComponentRegistry. Error: {any}", .{err});
-        };
-
-        component.setAppController(pAppController);
-
-        componentPointer.* = component;
-
-        self.components.append(componentPointer) catch |err| {
-            debug.printf("\nERROR: ComponentRegistry unable to register component. Error message: {any}", .{err});
-            std.debug.panic("\nComponentRegistry unable to register component. Error: {any}", .{err});
-        };
-
-        return componentPointer;
-    }
-
-    pub fn processUpdates(self: *ComponentRegistry) void {
-        for (self.components.items) |pComponent| {
-            pComponent.*.update();
-        }
-    }
-
-    pub fn processRendering(self: *ComponentRegistry) void {
-        for (self.components.items) |pComponent| {
-            pComponent.*.draw();
-        }
-    }
-
-    pub fn deinit(self: *ComponentRegistry) void {
-        for (self.components.items) |pComponent| {
-            pComponent.*.deinit();
-
-            self.allocator.destroy(pComponent);
-        }
-        self.components.deinit();
-    }
-};

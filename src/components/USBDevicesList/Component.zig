@@ -10,7 +10,7 @@ const IOKit = @import("../../modules/macos/IOKit.zig");
 
 const Thread = std.Thread;
 
-const AppController = @import("../../AppController.zig");
+const AppObserver = @import("../../observers/AppObserver.zig").AppObserver;
 
 const USBDevicesListState = @import("State.zig").USBDevicesListState;
 
@@ -22,7 +22,7 @@ pub fn USBDevicesListComponent() type {
 
         allocator: std.mem.Allocator,
         state: *USBDevicesListState,
-        appController: ?*AppController = null,
+        appObserver: *const AppObserver,
         worker: ?std.Thread = null,
         componentActive: bool = false,
         devicesFound: bool = false,
@@ -153,38 +153,4 @@ fn dispatchComponentAction(self: *USBDevicesListComponent()) void {
     };
 
     debug.print("\nUSBDevicesListComponent: Finished worker dispatch.");
-}
-
-fn processFilePickerResult(self: *USBDevicesListComponent()) void {
-    if (self.state.taskError) |err| {
-        debug.printf("Component: Worker finished with error: {any}\n", .{err});
-
-        if (self.currentPath) |oldPath| self.allocator.free(oldPath);
-
-        self.currentPath = null;
-    } else {
-        if (self.state.filePath) |newPath| {
-            debug.printf("\nFilePickerComponent: worker successfully returned with path: {s}", .{newPath});
-
-            if (self.currentPath) |oldPath| self.allocator.free(oldPath);
-
-            self.currentPath = self.allocator.dupe(u8, newPath) catch blk: {
-                debug.print("\nERROR! FilePickerComponent: Unable to allocate heap memory to duplicate current path.");
-                break :blk null;
-            };
-
-            // self.allocator.free(newPath);
-        } else {
-            debug.print("\nFilePickerComponent: worker successfully return without a path (null/cancelled).");
-
-            if (self.currentPath) |oldPath| self.allocator.free(oldPath);
-
-            self.currentPath = null;
-        }
-
-        self.state.filePath = null;
-    }
-
-    self.state.taskDone = false;
-    self.state.taskRunning = false;
 }

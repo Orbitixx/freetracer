@@ -6,7 +6,10 @@ const Thread = std.Thread;
 const debug = @import("../../lib/util/debug.zig");
 const UI = @import("../../lib/ui/ui.zig");
 
-pub const AppController = @import("../../AppController.zig");
+const Component = @import("../Component.zig").Component;
+const AppObserver = @import("../../observers/AppObserver.zig").AppObserver;
+const Event = @import("../../observers/AppObserver.zig").Event;
+
 pub const ComponentState = @import("./State.zig").FilePickerState;
 
 const runFilePickerWorker = @import("Worker.zig").runFilePickerWorker;
@@ -18,7 +21,7 @@ pub fn FilePickerComponent() type {
         allocator: std.mem.Allocator,
         button: UI.Button(),
         state: *ComponentState,
-        appController: ?*AppController = null,
+        appObserver: *const AppObserver,
         worker: ?std.Thread = null,
         interactible: bool = true,
         currentPath: ?[]u8 = null,
@@ -63,7 +66,7 @@ pub fn FilePickerComponent() type {
                     debug.print("\nFilePickerComponent: worker joined.");
                 }
 
-                if (self.appController) |appController| appController.notifyISOFilePathObtained(self.currentPath.?);
+                self.notify(Event.ISO_FILE_SELECTED);
             }
         }
 
@@ -82,6 +85,10 @@ pub fn FilePickerComponent() type {
             }
 
             self.state.deinit();
+        }
+
+        pub fn notify(self: Self, event: Event) void {
+            self.appObserver.*.onNotify(event);
         }
     };
 }
