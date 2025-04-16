@@ -8,6 +8,7 @@ const ComponentRegistry = comp.ComponentRegistry;
 
 pub const Event = enum {
     ISO_FILE_SELECTED,
+    USB_DEVICES_DISCOVERED,
 };
 
 pub const AppObserver = struct {
@@ -16,6 +17,7 @@ pub const AppObserver = struct {
     pub fn onNotify(self: AppObserver, event: Event) void {
         switch (event) {
             Event.ISO_FILE_SELECTED => self.processISOFileSelected(),
+            Event.USB_DEVICES_DISCOVERED => debug.print("\nReceived USB_DEVICES_DISCOVERED signal."),
         }
     }
 

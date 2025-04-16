@@ -78,7 +78,6 @@ pub fn FilePickerComponent() type {
 
             if (self.worker) |thread| {
                 debug.print("FilePickerComponent.deinit(): Joining worker thread...\n");
-                // TODO: Signal the worker to cancel here, if possible
                 thread.join();
                 self.worker = null;
             }

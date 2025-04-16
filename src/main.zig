@@ -57,13 +57,6 @@ pub fn main() !void {
 
     const backgroundColor: rl.Color = .{ .r = 29, .g = 44, .b = 64, .a = 100 };
 
-    var isoFilePickerState: FilePicker.State = .{ .allocator = allocator };
-
-    var usbDevicesListState: USBDevicesList.State = .{
-        .allocator = allocator,
-        .devices = std.ArrayList(MacOS.USBStorageDevice).init(allocator),
-    };
-
     //--- @COMPONENTS ----------------------------------------------------------------------
 
     var componentRegistry: ComponentRegistry = .{
@@ -72,6 +65,8 @@ pub fn main() !void {
     defer componentRegistry.deinit();
 
     const appObserver: AppObserver = .{ .componentRegistry = &componentRegistry };
+
+    var isoFilePickerState: FilePicker.State = .{ .allocator = allocator };
 
     var filePickerComponent: FilePicker.Component = .{
         .allocator = allocator,
@@ -84,6 +79,11 @@ pub fn main() !void {
         ComponentID.ISOFilePicker,
         .{ .FilePicker = &filePickerComponent },
     );
+
+    var usbDevicesListState: USBDevicesList.State = .{
+        .allocator = allocator,
+        .devices = std.ArrayList(MacOS.USBStorageDevice).init(allocator),
+    };
 
     var usbDevicesListComponent: USBDevicesList.Component = .{
         .allocator = allocator,

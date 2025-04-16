@@ -10,7 +10,9 @@ const IOKit = @import("../../modules/macos/IOKit.zig");
 
 const Thread = std.Thread;
 
-const AppObserver = @import("../../observers/AppObserver.zig").AppObserver;
+const AppObserverImport = @import("../../observers/AppObserver.zig");
+const AppObserver = AppObserverImport.AppObserver;
+const Event = AppObserverImport.Event;
 
 const USBDevicesListState = @import("State.zig").USBDevicesListState;
 
@@ -57,6 +59,8 @@ pub fn USBDevicesListComponent() type {
                 workerFinished = true;
 
                 if (self.state.devices.items.len > 0) self.devicesFound = true;
+                self.notify(.USB_DEVICES_DISCOVERED);
+                self.componentActive = false;
             }
 
             self.state.mutex.unlock();
@@ -110,6 +114,10 @@ pub fn USBDevicesListComponent() type {
             }
 
             self.state.deinit();
+        }
+
+        pub fn notify(self: *Self, event: Event) void {
+            self.appObserver.*.onNotify(event);
         }
     };
 }
