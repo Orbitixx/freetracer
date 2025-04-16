@@ -15,7 +15,7 @@ pub const AppObserver = struct {
 
     pub fn onNotify(self: AppObserver, event: Event) void {
         switch (event) {
-            Event.ISO_FILE_SELECTED => processISOFileSelected(self),
+            Event.ISO_FILE_SELECTED => self.processISOFileSelected(),
         }
     }
 
