@@ -71,6 +71,11 @@ pub const ComponentRegistry = struct {
     }
 
     pub fn deinit(self: *ComponentRegistry) void {
+        var iter = self.components.iterator();
+        while (iter.next()) |component| {
+            component.value_ptr.deinit();
+        }
+
         self.components.deinit();
     }
 };

@@ -23,8 +23,7 @@ pub fn FilePickerComponent() type {
         state: *ComponentState,
         appObserver: *const AppObserver,
         worker: ?std.Thread = null,
-        interactible: bool = true,
-        currentPath: ?[]u8 = null,
+        currentPath: ?[:0]const u8 = null,
 
         pub fn getSelectedPath(self: Self) ?[]const u8 {
             return self.currentPath;
@@ -95,8 +94,6 @@ pub fn FilePickerComponent() type {
 
 fn dispatchFilePickerAction(self: *FilePickerComponent()) void {
     self.state.mutex.lock();
-    // Schedule Mutex unclock whenever function exits
-    // defer self.state.mutex.unlock();
 
     if (self.state.taskRunning) {
         debug.print("\nWARNING! FilePickerComponent: worker task already running!");
@@ -117,50 +114,48 @@ fn dispatchFilePickerAction(self: *FilePickerComponent()) void {
 
     self.state.mutex.unlock();
 
-    self.worker = Thread.spawn(.{}, runFilePickerWorker, .{ self.allocator, self.state }) catch blk: {
-        debug.print("\nERROR! FilePickerComponent: Failed to spawn worker.\n");
+    // self.worker = Thread.spawn(.{}, runFilePickerWorker, .{ self.allocator, self.state }) catch blk: {
+    //     debug.print("\nERROR! FilePickerComponent: Failed to spawn worker.\n");
+    //
+    //     self.state.mutex.lock();
+    //     // Reset state
+    //     self.state.taskDone = false;
+    //     self.state.taskRunning = false;
+    //     self.state.taskError = error.FailedToSpawnFilePickerWorker;
+    //
+    //     self.state.mutex.unlock();
+    //     break :blk null;
+    // };
 
-        self.state.mutex.lock();
-        // Reset state
-        self.state.taskDone = false;
-        self.state.taskRunning = false;
-        self.state.taskError = error.FailedToSpawnFilePickerWorker;
-
-        self.state.mutex.unlock();
-        break :blk null;
-    };
+    runFilePickerWorker(self.allocator, self.state);
 }
 
 fn processFilePickerResult(self: *FilePickerComponent()) void {
+    defer self.state.taskDone = false;
+    defer self.state.taskRunning = false;
+
+    // If error is not null
     if (self.state.taskError) |err| {
         debug.printf("Component: Worker finished with error: {any}\n", .{err});
 
         if (self.currentPath) |oldPath| self.allocator.free(oldPath);
 
         self.currentPath = null;
-    } else {
-        if (self.state.filePath) |newPath| {
-            debug.printf("\nFilePickerComponent: worker successfully returned with path: {s}", .{newPath});
-
-            if (self.currentPath) |oldPath| self.allocator.free(oldPath);
-
-            self.currentPath = self.allocator.dupe(u8, newPath) catch blk: {
-                debug.print("\nERROR! FilePickerComponent: Unable to allocate heap memory to duplicate current path.");
-                break :blk null;
-            };
-
-            // self.allocator.free(newPath);
-        } else {
-            debug.print("\nFilePickerComponent: worker successfully return without a path (null/cancelled).");
-
-            if (self.currentPath) |oldPath| self.allocator.free(oldPath);
-
-            self.currentPath = null;
-        }
-
-        self.state.filePath = null;
+        return;
     }
 
-    self.state.taskDone = false;
-    self.state.taskRunning = false;
+    // If valid file path
+    if (self.state.filePath) |newPath| {
+        debug.printf("\nFilePickerComponent: worker successfully returned with path: {s}", .{newPath});
+
+        if (self.currentPath) |oldPath| self.allocator.free(oldPath);
+
+        self.currentPath = newPath;
+        return;
+    }
+
+    // If file picker dialog cancelled without picking a file.
+    debug.print("\nFilePickerComponent: worker successfully returned without a path (null/cancelled).");
+    if (self.currentPath) |oldPath| self.allocator.free(oldPath);
+    self.currentPath = null;
 }

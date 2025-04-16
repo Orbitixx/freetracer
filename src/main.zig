@@ -71,13 +71,6 @@ pub fn main() !void {
     };
     defer componentRegistry.deinit();
 
-    defer {
-        var iter = componentRegistry.components.iterator();
-        while (iter.next()) |component| {
-            component.value_ptr.deinit();
-        }
-    }
-
     const appObserver: AppObserver = .{ .componentRegistry = &componentRegistry };
 
     var filePickerComponent: FilePicker.Component = .{

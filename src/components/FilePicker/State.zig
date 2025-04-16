@@ -8,10 +8,11 @@ pub const FilePickerState = struct {
     taskDone: bool = false,
     taskError: ?anyerror = null,
 
-    filePath: ?[]const u8 = null,
+    filePath: ?[:0]const u8 = null,
 
     pub fn deinit(self: FilePickerState) void {
-        if (self.filePath != null)
-            self.allocator.free(self.filePath.?);
+        _ = self;
+        // if (self.filePath) |path|
+        //     self.allocator.free(path);
     }
 };
