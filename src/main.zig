@@ -2,7 +2,6 @@ const std = @import("std");
 const c = @import("lib/sys/system.zig").c;
 
 const rl = @import("raylib");
-const rg = @import("raygui");
 const osd = @import("osdialog");
 
 const debug = @import("lib/util/debug.zig");
@@ -19,7 +18,6 @@ const UI = @import("lib/ui/ui.zig");
 const Checkbox = @import("lib/ui/Checkbox.zig").Checkbox();
 
 const AppObserver = @import("observers/AppObserver.zig").AppObserver;
-const AppController = @import("AppController.zig");
 
 const Component = @import("components/Component.zig");
 const ComponentID = @import("components/Registry.zig").ComponentID;
@@ -33,8 +31,13 @@ const USBDevicesListComponent = @import("components/USBDevicesList/Component.zig
 //     devicePath: bool = false,
 // };
 
-const WINDOW_WIDTH = 850;
-const WINDOW_HEIGHT = 500;
+const WINDOW_WIDTH_FACTOR: f32 = 0.5;
+const WINDOW_HEIGHT_FACTOR: f32 = 0.5;
+
+var Window: UI.Window = .{
+    .width = 0,
+    .height = 0,
+};
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{ .thread_safe = true }){};
@@ -45,8 +48,23 @@ pub fn main() !void {
         _ = gpa.deinit();
     }
 
-    rl.initWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "");
+    rl.initWindow(Window.width, Window.height, "");
     defer rl.closeWindow(); // Close window and OpenGL context
+
+    const m = rl.getCurrentMonitor();
+    const mWidth = rl.getMonitorWidth(m);
+    const mHeight = rl.getMonitorHeight(m);
+
+    Window.width = @intFromFloat(@as(f32, @floatFromInt(mWidth)) * WINDOW_WIDTH_FACTOR);
+    Window.height = @intFromFloat(@as(f32, @floatFromInt(mHeight)) * WINDOW_HEIGHT_FACTOR);
+
+    debug.printf("\nWINDOW INITIALIZED: {d}x{d}\n", .{ Window.width, Window.height });
+
+    rl.setWindowSize(Window.width, Window.height);
+    rl.setWindowPosition(
+        @as(i32, @divTrunc(mWidth, 2) - @divTrunc(Window.width, 2)),
+        @as(i32, @divTrunc(mHeight, 2) - @divTrunc(Window.height, 2)),
+    );
 
     // LOAD FONTS HERE
 
@@ -148,7 +166,7 @@ pub fn main() !void {
     //     if (std.mem.count(u8, usbStorageDevices.items[0].bsdName, "disk4") > 0) {
     //         debug.print("\nFound disk4 by literal. Preparing to unmount...");
     //         DiskArbitration.unmountAllVolumes(&usbStorageDevices.items[0]) catch |err| {
-    //             debug.printf("\nERROR: Failed to unmount volumes on {s}. Error message: {any}", .{ usbStorageDevices.items[0].bsdName, err });
+    //             debu.printf("\nERROR: Failed to unmount volumes on {s}. Error message: {any}", .{ usbStorageDevices.items[0].bsdName, err });
     //         };
     //     }
     // }
@@ -163,9 +181,9 @@ pub fn main() !void {
 }
 
 pub fn relW(x: f32) f32 {
-    return (WINDOW_WIDTH * x);
+    return (@as(f32, @floatFromInt(Window.width)) * x);
 }
 
 pub fn relH(y: f32) f32 {
-    return (WINDOW_HEIGHT * y);
+    return (@as(f32, @floatFromInt(Window.height)) * y);
 }

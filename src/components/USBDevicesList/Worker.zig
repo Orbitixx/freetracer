@@ -8,7 +8,7 @@ const IOKit = @import("../../modules/macos/IOKit.zig");
 
 const ComponentState = @import("State.zig");
 
-pub fn runUSBDevicesListWorker(allocator: std.mem.Allocator, state: *ComponentState) void {
+pub fn run(allocator: std.mem.Allocator, state: *ComponentState) void {
     debug.print("\nUSBDevicesList Worker: starting devices discovery...");
 
     // --- Perform the potentially blocking action ---

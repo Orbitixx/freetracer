@@ -1,6 +1,11 @@
 const std = @import("std");
 const rl = @import("raylib");
 
+pub const Window = struct {
+    width: i32,
+    height: i32,
+};
+
 pub const Rect = struct {
     x: f32,
     y: f32,

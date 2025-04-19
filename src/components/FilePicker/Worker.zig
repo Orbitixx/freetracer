@@ -5,7 +5,10 @@ const debug = @import("../../lib/util/debug.zig");
 
 const ComponentState = @import("State.zig");
 
-pub fn runFilePickerWorker(allocator: std.mem.Allocator, state: *ComponentState) void {
+maybe_path: ?[:0]const u8 = null,
+maybe_error: ?anyerror = null,
+
+pub fn run(allocator: std.mem.Allocator, state: *ComponentState) void {
     debug.print("\nWorker: Starting file picker...");
 
     // --- Perform the potentially blocking action ---
@@ -36,10 +39,8 @@ pub fn runFilePickerWorker(allocator: std.mem.Allocator, state: *ComponentState)
     // if (maybe_path) |path| allocator.free(path);
 
     state.taskError = null;
-
-    // Update flags
     state.taskDone = true;
     state.taskRunning = false;
 
-    debug.print("\nFilePickerWorker: Updated shared state. Exiting...");
+    debug.print("\nFilePicker Worker: Updated shared state. Exiting...");
 }

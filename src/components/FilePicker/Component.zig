@@ -10,8 +10,7 @@ const Component = @import("../Component.zig");
 
 const FilePickerComponent = @This();
 const FilePickerState = @import("State.zig");
-
-const runFilePickerWorker = @import("Worker.zig").runFilePickerWorker;
+const FilePickerWorker = @import("Worker.zig");
 
 allocator: std.mem.Allocator,
 appObserver: *const AppObserver,
@@ -48,7 +47,7 @@ pub fn update(self: *FilePickerComponent) void {
 
     const isBtnClicked = self.button.mouseClick;
 
-    if (isBtnClicked) dispatchFilePickerAction(self);
+    if (isBtnClicked) dispatchComponentAction(self);
 
     var workerFinished = false;
 
@@ -105,7 +104,7 @@ pub fn asComponent(self: *const FilePickerComponent) Component {
     };
 }
 
-fn dispatchFilePickerAction(self: *FilePickerComponent) void {
+fn dispatchComponentAction(self: *FilePickerComponent) void {
     self.state.mutex.lock();
 
     if (self.state.taskRunning) {
@@ -140,7 +139,7 @@ fn dispatchFilePickerAction(self: *FilePickerComponent) void {
     //     break :blk null;
     // };
 
-    runFilePickerWorker(self.allocator, self.state);
+    FilePickerWorker.run(self.allocator, self.state);
 }
 
 fn processFilePickerResult(self: *FilePickerComponent) void {

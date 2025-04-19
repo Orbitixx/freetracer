@@ -16,8 +16,7 @@ const Event = AppObserverF.Event;
 const Component = @import("../Component.zig");
 const USBDevicesListComponent = @This();
 const USBDevicesListState = @import("State.zig");
-
-const runUSBDevicesListWorker = @import("Worker.zig").runUSBDevicesListWorker;
+const USBDevicesListWorker = @import("Worker.zig");
 
 allocator: std.mem.Allocator,
 state: *USBDevicesListState,
@@ -158,7 +157,7 @@ fn dispatchComponentAction(self: *USBDevicesListComponent) void {
 
     self.state.mutex.unlock();
 
-    self.worker = Thread.spawn(.{}, runUSBDevicesListWorker, .{ self.allocator, self.state }) catch blk: {
+    self.worker = Thread.spawn(.{}, USBDevicesListWorker.run, .{ self.allocator, self.state }) catch blk: {
         debug.print("\nERROR! USBDevicesListComponent: Failed to spawn worker.\n");
 
         self.state.mutex.lock();
