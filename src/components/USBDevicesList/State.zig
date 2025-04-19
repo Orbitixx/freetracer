@@ -1,23 +1,23 @@
 const std = @import("std");
 const MacOS = @import("../../modules/macos/MacOSTypes.zig");
 
-pub const USBDevicesListState = struct {
-    mutex: std.Thread.Mutex = .{},
-    allocator: std.mem.Allocator,
+const USBDevicesListState = @This();
 
-    taskRunning: bool = false,
-    taskDone: bool = false,
-    taskError: ?anyerror = null,
+mutex: std.Thread.Mutex = .{},
+allocator: std.mem.Allocator,
 
-    devices: std.ArrayList(MacOS.USBStorageDevice),
+taskRunning: bool = false,
+taskDone: bool = false,
+taskError: ?anyerror = null,
 
-    pub fn deinit(self: USBDevicesListState) void {
-        if (self.devices.items.len > 0) {
-            for (self.devices.items) |device| {
-                device.deinit();
-            }
+devices: std.ArrayList(MacOS.USBStorageDevice),
+
+pub fn deinit(self: USBDevicesListState) void {
+    if (self.devices.items.len > 0) {
+        for (self.devices.items) |device| {
+            device.deinit();
         }
-
-        self.devices.deinit();
     }
-};
+
+    self.devices.deinit();
+}

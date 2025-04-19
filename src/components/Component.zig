@@ -1,81 +1,37 @@
 const std = @import("std");
 const debug = @import("../lib/util/debug.zig");
 
-const FilePicker = @import("FilePicker/Index.zig");
-const USBDevicesList = @import("USBDevicesList/Index.zig");
+const AppObserverEvent = @import("../observers/AppObserver.zig").Event;
 
-const AppController = @import("../AppController.zig");
+const Component = @This();
 
-pub const Component = union(enum) {
-    FilePicker: *FilePicker.Component,
-    USBDevicesList: *USBDevicesList.Component,
+ptr: *anyopaque,
+vtable: *const VTable,
 
-    pub fn getSelf(self: Component) Component {
-        switch (self) {
-            inline else => |s| return s,
-        }
-    }
-
-    pub fn draw(self: Component) void {
-        switch (self) {
-            inline else => |s| s.draw(),
-        }
-    }
-
-    pub fn update(self: Component) void {
-        switch (self) {
-            inline else => |s| s.update(),
-        }
-    }
-
-    pub fn deinit(self: Component) void {
-        switch (self) {
-            inline else => |s| s.deinit(),
-        }
-    }
+pub const VTable = struct {
+    enable: *const fn (*anyopaque) void,
+    draw: *const fn (*anyopaque) void,
+    update: *const fn (*anyopaque) void,
+    deinit: *const fn (*anyopaque) void,
+    notify: *const fn (*anyopaque, event: AppObserverEvent) void,
 };
 
-pub const ComponentID = enum {
-    ISOFilePicker,
-    USBDevicesList,
-};
+pub fn enable(self: Component) void {
+    self.vtable.enable(self.ptr);
+}
 
-pub const ComponentRegistry = struct {
-    components: std.AutoHashMap(ComponentID, Component),
+pub fn draw(self: Component) void {
+    self.vtable.draw(self.ptr);
+}
 
-    pub fn registerComponent(self: *ComponentRegistry, componentId: ComponentID, component: Component) void {
-        self.components.put(componentId, component) catch |err| {
-            debug.printf("\nError: Unable to register component in the Component Registry via PUT. {any}", .{err});
-            std.debug.panic("\n{any}", .{err});
-        };
-    }
+pub fn update(self: Component) void {
+    self.vtable.update(self.ptr);
+}
 
-    pub fn getComponent(self: ComponentRegistry, componentId: ComponentID) ?Component {
-        return self.components.get(componentId);
-    }
+pub fn deinit(self: Component) void {
+    self.vtable.deinit(self.ptr);
+}
 
-    pub fn processUpdates(self: ComponentRegistry) void {
-        var iter = self.components.iterator();
-
-        while (iter.next()) |pComponent| {
-            pComponent.value_ptr.update();
-        }
-    }
-
-    pub fn processRendering(self: ComponentRegistry) void {
-        var iter = self.components.iterator();
-
-        while (iter.next()) |pComponent| {
-            pComponent.value_ptr.draw();
-        }
-    }
-
-    pub fn deinit(self: *ComponentRegistry) void {
-        var iter = self.components.iterator();
-        while (iter.next()) |component| {
-            component.value_ptr.deinit();
-        }
-
-        self.components.deinit();
-    }
-};
+pub fn notify(self: Component, event: AppObserverEvent) void {
+    self.vtable.notify(self.ptr, event);
+}

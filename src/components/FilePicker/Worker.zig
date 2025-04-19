@@ -3,7 +3,7 @@ const osd = @import("osdialog");
 
 const debug = @import("../../lib/util/debug.zig");
 
-const ComponentState = @import("State.zig").FilePickerState;
+const ComponentState = @import("State.zig");
 
 pub fn runFilePickerWorker(allocator: std.mem.Allocator, state: *ComponentState) void {
     debug.print("\nWorker: Starting file picker...");

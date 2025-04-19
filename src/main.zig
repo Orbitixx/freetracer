@@ -15,18 +15,18 @@ const IOKit = @import("modules/macos/IOKit.zig");
 const DiskArbitration = @import("modules/macos/DiskArbitration.zig");
 
 const UI = @import("lib/ui/ui.zig");
+
 const Checkbox = @import("lib/ui/Checkbox.zig").Checkbox();
 
 const AppObserver = @import("observers/AppObserver.zig").AppObserver;
 const AppController = @import("AppController.zig");
 
-const comp = @import("components/Component.zig");
-const Component = comp.Component;
-const ComponentID = comp.ComponentID;
-const ComponentRegistry = comp.ComponentRegistry;
+const Component = @import("components/Component.zig");
+const ComponentID = @import("components/Registry.zig").ComponentID;
+const ComponentRegistry = @import("components/Registry.zig").ComponentRegistry;
 
-const FilePicker = @import("components/FilePicker/Index.zig");
-const USBDevicesList = @import("components/USBDevicesList/Index.zig");
+const FilePickerComponent = @import("components/FilePicker/Component.zig");
+const USBDevicesListComponent = @import("components/USBDevicesList/Component.zig");
 
 // const ArgValidator = struct {
 //     isoPath: bool = false,
@@ -53,7 +53,6 @@ pub fn main() !void {
     rl.setTargetFPS(60);
 
     //--------------------------------------------------------------------------------------
-    //
 
     const backgroundColor: rl.Color = .{ .r = 29, .g = 44, .b = 64, .a = 100 };
 
@@ -66,34 +65,14 @@ pub fn main() !void {
 
     const appObserver: AppObserver = .{ .componentRegistry = &componentRegistry };
 
-    var isoFilePickerState: FilePicker.State = .{ .allocator = allocator };
-
-    var filePickerComponent: FilePicker.Component = .{
-        .allocator = allocator,
-        .appObserver = &appObserver,
-        .state = &isoFilePickerState,
-        .button = UI.Button().init("Select ISO...", relW(0.19), relH(0.80), 14, .white, .red),
-    };
-
     componentRegistry.registerComponent(
         ComponentID.ISOFilePicker,
-        .{ .FilePicker = &filePickerComponent },
+        FilePickerComponent.init(allocator, &appObserver).asComponent(),
     );
-
-    var usbDevicesListState: USBDevicesList.State = .{
-        .allocator = allocator,
-        .devices = std.ArrayList(MacOS.USBStorageDevice).init(allocator),
-    };
-
-    var usbDevicesListComponent: USBDevicesList.Component = .{
-        .allocator = allocator,
-        .appObserver = &appObserver,
-        .state = &usbDevicesListState,
-    };
 
     componentRegistry.registerComponent(
         ComponentID.USBDevicesList,
-        .{ .USBDevicesList = &usbDevicesListComponent },
+        USBDevicesListComponent.init(allocator, &appObserver).asComponent(),
     );
 
     //--- @ENDCOMPONENTS -------------------------------------------------------------------

@@ -2,9 +2,9 @@ const std = @import("std");
 const debug = @import("../lib/util/debug.zig");
 
 const comp = @import("../components/Component.zig");
-const Component = comp.Component;
-const ComponentID = comp.ComponentID;
-const ComponentRegistry = comp.ComponentRegistry;
+const Component = @import("../components/Component.zig");
+const ComponentID = @import("../components/Registry.zig").ComponentID;
+const ComponentRegistry = @import("../components/Registry.zig").ComponentRegistry;
 
 pub const Event = enum {
     ISO_FILE_SELECTED,
@@ -22,6 +22,6 @@ pub const AppObserver = struct {
     }
 
     pub fn processISOFileSelected(self: AppObserver) void {
-        self.componentRegistry.getComponent(ComponentID.USBDevicesList).?.USBDevicesList.*.componentActive = true;
+        self.componentRegistry.getComponent(ComponentID.USBDevicesList).?.enable();
     }
 };

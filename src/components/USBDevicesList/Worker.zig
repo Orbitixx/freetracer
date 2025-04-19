@@ -6,7 +6,7 @@ const debug = @import("../../lib/util/debug.zig");
 const MacOS = @import("../../modules/macos/MacOSTypes.zig");
 const IOKit = @import("../../modules/macos/IOKit.zig");
 
-const ComponentState = @import("State.zig").USBDevicesListState;
+const ComponentState = @import("State.zig");
 
 pub fn runUSBDevicesListWorker(allocator: std.mem.Allocator, state: *ComponentState) void {
     debug.print("\nUSBDevicesList Worker: starting devices discovery...");

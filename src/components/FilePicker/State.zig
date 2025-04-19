@@ -1,18 +1,18 @@
 const std = @import("std");
 
-pub const FilePickerState = struct {
-    mutex: std.Thread.Mutex = .{},
-    allocator: std.mem.Allocator,
+const FilePickerState = @This();
 
-    taskRunning: bool = false,
-    taskDone: bool = false,
-    taskError: ?anyerror = null,
+mutex: std.Thread.Mutex = .{},
+allocator: std.mem.Allocator,
 
-    filePath: ?[:0]const u8 = null,
+taskRunning: bool = false,
+taskDone: bool = false,
+taskError: ?anyerror = null,
 
-    pub fn deinit(self: FilePickerState) void {
-        _ = self;
-        // if (self.filePath) |path|
-        //     self.allocator.free(path);
-    }
-};
+filePath: ?[:0]const u8 = null,
+
+pub fn deinit(self: FilePickerState) void {
+    _ = self;
+    // if (self.filePath) |path|
+    //     self.allocator.free(path);
+}
