@@ -14,6 +14,7 @@ const AppObserver = AppObserverF.AppObserver;
 const Event = AppObserverF.Event;
 
 const Component = @import("../Component.zig");
+
 const USBDevicesListComponent = @This();
 const USBDevicesListState = @import("State.zig");
 const USBDevicesListWorker = @import("Worker.zig");
@@ -24,6 +25,7 @@ appObserver: *const AppObserver,
 worker: ?std.Thread = null,
 componentActive: bool = false,
 devicesFound: bool = false,
+ui: ComponentUI,
 
 pub fn init(allocator: std.mem.Allocator, appObserver: *const AppObserver) USBDevicesListComponent {
     const state = allocator.create(USBDevicesListState) catch |err| {
@@ -40,6 +42,7 @@ pub fn init(allocator: std.mem.Allocator, appObserver: *const AppObserver) USBDe
         .allocator = allocator,
         .appObserver = appObserver,
         .state = state,
+        .ui = .{ .devices = std.ArrayList(UIDevice).init(allocator) },
     };
 }
 
@@ -49,10 +52,14 @@ pub fn enable(self: *USBDevicesListComponent) void {
 
 pub fn update(self: *USBDevicesListComponent) void {
     if (self.componentActive) {
-        debug.print("\nUSBDevicesListComponent: Dispatching component action...");
-        if (!self.devicesFound) dispatchComponentAction(self);
+        if (!self.devicesFound) {
+            debug.print("\nUSBDevicesListComponent: Dispatching component action...");
+            dispatchComponentAction(self);
+        }
         self.componentActive = false;
     }
+
+    self.ui.update();
 
     var workerFinished = false;
 
@@ -62,8 +69,15 @@ pub fn update(self: *USBDevicesListComponent) void {
         debug.print("\nUSBDevicesListComponent: task done signal receieved.");
         workerFinished = true;
 
-        if (self.state.devices.items.len > 0) self.devicesFound = true;
+        if (self.state.devices.items.len > 0) {
+            self.devicesFound = true;
+
+            // Initialize component's UI
+            self.ui.init(self.state.devices.items);
+        }
+
         self.notify(.USB_DEVICES_DISCOVERED);
+
         self.componentActive = false;
     }
 
@@ -91,22 +105,7 @@ pub fn update(self: *USBDevicesListComponent) void {
 pub fn draw(self: *USBDevicesListComponent) void {
     if (!self.devicesFound) return;
 
-    self.state.mutex.lock();
-    for (self.state.devices.items) |device| {
-        const string = std.fmt.allocPrintZ(
-            self.allocator,
-            "{s} {d}GB",
-            .{ device.deviceName, @divTrunc(device.size, 1_000_000_000) },
-        ) catch blk: {
-            debug.print("\nUSBDevicesListComponent: Error when constructing device string buffer.");
-            break :blk "NULL";
-        };
-        var checkbox = Checkbox.init(string, 120, 150, 20);
-        checkbox.update();
-        checkbox.draw();
-        self.allocator.free(string);
-    }
-    self.state.mutex.unlock();
+    self.ui.draw();
 }
 
 pub fn deinit(self: *USBDevicesListComponent) void {
@@ -116,8 +115,8 @@ pub fn deinit(self: *USBDevicesListComponent) void {
         self.worker = null;
     }
 
+    self.ui.deinit();
     self.state.deinit();
-
     self.allocator.destroy(self.state);
 }
 
@@ -210,3 +209,65 @@ fn rawDeinit(selfOpaque: *anyopaque) void {
     return USBDevicesListComponent.deinit(self);
 }
 
+pub const ComponentUI = struct {
+    devices: std.ArrayList(UIDevice),
+
+    pub fn init(self: *ComponentUI, devices: []MacOS.USBStorageDevice) void {
+        // self.devices = std.ArrayList(UIDevice).init(allocator);
+
+        for (devices, 0..devices.len) |device, i| {
+            var buffer: [40]u8 = undefined;
+
+            const fmtString = std.fmt.bufPrintZ(
+                &buffer,
+                "{s} ({s})\t{d}GB",
+                .{
+                    device.deviceName,
+                    device.bsdName,
+                    @divTrunc(device.size, 1_000_000_000),
+                },
+            ) catch blk: {
+                debug.print("\nWARNING: Unable to prepare a null-terminated string for USB device, defaulting to NULL...");
+                break :blk "NULL";
+            };
+
+            self.devices.append(UIDevice{
+                .name = device.deviceName,
+                .bsdName = device.bsdName,
+                .size = device.size,
+                .checkbox = Checkbox.init(fmtString, 200, @as(f32, @floatFromInt(100 + 40 * i)), 20),
+            }) catch |err| {
+                debug.printf("\nWARNING: (USBDevicesListComponent) Unable to append UIDevice to ArrayList on first init. {any}", .{err});
+            };
+        }
+
+        debug.printf("\nAppended {d} devices!", .{self.devices.items.len});
+    }
+
+    pub fn update(self: *ComponentUI) void {
+        if (self.devices.items.len < 1) return;
+
+        for (self.devices.items) |*device| {
+            device.checkbox.update();
+        }
+    }
+
+    pub fn draw(self: ComponentUI) void {
+        if (self.devices.items.len < 1) return;
+
+        for (self.devices.items) |*device| {
+            device.checkbox.draw();
+        }
+    }
+
+    pub fn deinit(self: ComponentUI) void {
+        self.devices.deinit();
+    }
+};
+
+pub const UIDevice = struct {
+    name: []u8,
+    bsdName: []u8,
+    size: i64,
+    checkbox: Checkbox,
+};

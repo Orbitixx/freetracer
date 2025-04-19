@@ -70,15 +70,19 @@ pub fn main() !void {
 
     rl.setTargetFPS(60);
 
+    var buffer: [40]u8 = undefined;
+
+    const result = try std.fmt.bufPrintZ(&buffer, "{s} {s} - {d}", .{ "Hello", "world", 4 });
+
+    debug.printf("{s}", .{result});
+
     //--------------------------------------------------------------------------------------
 
     const backgroundColor: rl.Color = .{ .r = 29, .g = 44, .b = 64, .a = 100 };
 
     //--- @COMPONENTS ----------------------------------------------------------------------
 
-    var componentRegistry: ComponentRegistry = .{
-        .components = std.AutoHashMap(ComponentID, Component).init(allocator),
-    };
+    var componentRegistry: ComponentRegistry = .{ .components = std.AutoHashMap(ComponentID, Component).init(allocator) };
     defer componentRegistry.deinit();
 
     const appObserver: AppObserver = .{ .componentRegistry = &componentRegistry };
