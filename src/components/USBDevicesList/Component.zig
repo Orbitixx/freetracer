@@ -231,6 +231,8 @@ pub const ComponentUI = struct {
                 break :blk "NULL";
             };
 
+            debug.printf("\nComponentUI: formatted string is: {s}", .{fmtString});
+
             self.devices.append(UIDevice{
                 .name = device.deviceName,
                 .bsdName = device.bsdName,

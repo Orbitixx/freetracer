@@ -160,7 +160,7 @@ fn processFilePickerResult(self: *FilePickerComponent) void {
     if (self.state.filePath) |newPath| {
         debug.printf("\nFilePickerComponent: worker successfully returned with path: {s}", .{newPath});
 
-        if (self.currentPath) |oldPath| self.allocator.free(oldPath);
+        // if (self.currentPath) |oldPath| self.allocator.free(oldPath);
 
         self.currentPath = newPath;
         return;
@@ -208,4 +208,3 @@ fn rawDeinit(selfOpaque: *anyopaque) void {
     const self: *FilePickerComponent = @ptrCast(@alignCast(selfOpaque));
     FilePickerComponent.deinit(self);
 }
-
