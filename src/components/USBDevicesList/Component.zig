@@ -42,7 +42,10 @@ pub fn init(allocator: std.mem.Allocator, appObserver: *const AppObserver) USBDe
         .allocator = allocator,
         .appObserver = appObserver,
         .state = state,
-        .ui = .{ .devices = std.ArrayList(UIDevice).init(allocator) },
+        .ui = .{
+            .allocator = allocator,
+            .devices = std.ArrayList(UIDevice).init(allocator),
+        },
     };
 }
 
@@ -210,35 +213,39 @@ fn rawDeinit(selfOpaque: *anyopaque) void {
 }
 
 pub const ComponentUI = struct {
+    allocator: std.mem.Allocator,
     devices: std.ArrayList(UIDevice),
 
     pub fn init(self: *ComponentUI, devices: []MacOS.USBStorageDevice) void {
-        // self.devices = std.ArrayList(UIDevice).init(allocator);
-
         for (devices, 0..devices.len) |device, i| {
-            var buffer: [40]u8 = undefined;
+            const buffer = self.allocator.allocSentinel(u8, 254, 0x00) catch |err| {
+                std.debug.panic("\n{any}", .{err});
+            };
 
-            const fmtString = std.fmt.bufPrintZ(
-                &buffer,
-                "{s} ({s})\t{d}GB",
+            _ = std.fmt.bufPrintZ(
+                buffer,
+                "{s} - {s} ({d:.0}GB)",
                 .{
                     device.deviceName,
                     device.bsdName,
                     @divTrunc(device.size, 1_000_000_000),
                 },
-            ) catch blk: {
-                debug.print("\nWARNING: Unable to prepare a null-terminated string for USB device, defaulting to NULL...");
-                break :blk "NULL";
+            ) catch |err| {
+                std.debug.panic("\n{any}", .{err});
             };
 
-            debug.printf("\nComponentUI: formatted string is: {s}", .{fmtString});
+            debug.printf("\nComponentUI: formatted string is: {s}", .{buffer});
 
-            self.devices.append(UIDevice{
+            var uiDevice: UIDevice = .{
                 .name = device.deviceName,
                 .bsdName = device.bsdName,
                 .size = device.size,
-                .checkbox = Checkbox.init(fmtString, 200, @as(f32, @floatFromInt(100 + 40 * i)), 20),
-            }) catch |err| {
+                .fmtBuffer = buffer,
+            };
+
+            uiDevice.checkbox = Checkbox.init(uiDevice.fmtBuffer, 200, @as(f32, @floatFromInt(100 + 40 * i)), 20);
+
+            self.devices.append(uiDevice) catch |err| {
                 debug.printf("\nWARNING: (USBDevicesListComponent) Unable to append UIDevice to ArrayList on first init. {any}", .{err});
             };
         }
@@ -263,6 +270,9 @@ pub const ComponentUI = struct {
     }
 
     pub fn deinit(self: ComponentUI) void {
+        for (self.devices.items) |device| {
+            self.allocator.free(device.fmtBuffer);
+        }
         self.devices.deinit();
     }
 };
@@ -271,5 +281,6 @@ pub const UIDevice = struct {
     name: []u8,
     bsdName: []u8,
     size: i64,
-    checkbox: Checkbox,
+    fmtBuffer: [:0]u8,
+    checkbox: Checkbox = undefined,
 };
