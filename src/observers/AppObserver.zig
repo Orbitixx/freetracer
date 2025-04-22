@@ -23,7 +23,7 @@ pub const AppObserver = struct {
         switch (event) {
             .ISO_FILE_SELECTED => self.processISOFileSelected(),
             .USB_DEVICES_DISCOVERED => debug.print("\nAppObserver: USB_DEVICES_DISCOVERED signal received."),
-            .USB_DEVICE_SELECTED => debug.printf("\nAppObserver: USB_DEVICE_SELECTED signal received, data: {any}", .{payload.data}),
+            .USB_DEVICE_SELECTED => debug.printf("\nAppObserver: USB_DEVICE_SELECTED signal received, data: {s}", .{payload.data.?}),
         }
     }
 

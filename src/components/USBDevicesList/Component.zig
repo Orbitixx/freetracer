@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const debug = @import("../../lib/util/debug.zig");
+const String = @import("../../lib/util/strings.zig");
 const UI = @import("../../lib/ui/ui.zig");
 
 const MacOS = @import("../../modules/macos/MacOSTypes.zig");
@@ -77,7 +78,7 @@ pub fn update(self: *USBDevicesListComponent) void {
             self.devicesFound = true;
 
             // Initialize component's UI
-            self.ui.init(self.state.devices.items);
+            self.ui.init(self, self.state.devices.items);
         }
 
         self.notify(.USB_DEVICES_DISCOVERED, .{});
@@ -217,7 +218,7 @@ pub const ComponentUI = struct {
     allocator: std.mem.Allocator,
     devices: std.ArrayList(UIDevice),
 
-    pub fn init(self: *ComponentUI, devices: []MacOS.USBStorageDevice) void {
+    pub fn init(self: *ComponentUI, parent: *USBDevicesListComponent, devices: []MacOS.USBStorageDevice) void {
         for (devices, 0..devices.len) |device, i| {
             const buffer = self.allocator.allocSentinel(u8, 254, 0x00) catch |err| {
                 std.debug.panic("\n{any}", .{err});
@@ -244,7 +245,9 @@ pub const ComponentUI = struct {
                 .fmtBuffer = buffer,
             };
 
-            uiDevice.checkbox = Checkbox.init(uiDevice.fmtBuffer, USBDevicesListComponent.notify, 200, @as(f32, @floatFromInt(100 + 40 * i)), 20);
+            // const callback = USBDevicesListComponent.notify(parent, .USB_DEVICE_SELECTED, .{ .data = device.bsdName });
+
+            uiDevice.checkbox = Checkbox.init(uiDevice.fmtBuffer, USBDevicesListComponent.notify, parent, String.trunc(device.bsdName), 200, @as(f32, @floatFromInt(100 + 40 * i)), 20);
 
             self.devices.append(uiDevice) catch |err| {
                 debug.printf("\nWARNING: (USBDevicesListComponent) Unable to append UIDevice to ArrayList on first init. {any}", .{err});
