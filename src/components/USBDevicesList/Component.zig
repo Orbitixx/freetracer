@@ -12,6 +12,7 @@ const Checkbox = @import("../../lib/ui/Checkbox.zig").Checkbox();
 const AppObserverF = @import("../../observers/AppObserver.zig");
 const AppObserver = AppObserverF.AppObserver;
 const Event = AppObserverF.Event;
+const EventPayload = AppObserverF.Payload;
 
 const Component = @import("../Component.zig");
 
@@ -79,7 +80,7 @@ pub fn update(self: *USBDevicesListComponent) void {
             self.ui.init(self.state.devices.items);
         }
 
-        self.notify(.USB_DEVICES_DISCOVERED);
+        self.notify(.USB_DEVICES_DISCOVERED, .{});
 
         self.componentActive = false;
     }
@@ -123,8 +124,8 @@ pub fn deinit(self: *USBDevicesListComponent) void {
     self.allocator.destroy(self.state);
 }
 
-pub fn notify(self: *USBDevicesListComponent, event: Event) void {
-    self.appObserver.*.onNotify(event);
+pub fn notify(self: *USBDevicesListComponent, event: Event, payload: EventPayload) void {
+    self.appObserver.*.onNotify(event, payload);
 }
 
 pub fn asComponent(self: *const USBDevicesListComponent) Component {
@@ -202,9 +203,9 @@ fn rawDraw(selfOpaque: *anyopaque) void {
     return USBDevicesListComponent.draw(self);
 }
 
-fn rawNotify(selfOpaque: *anyopaque, event: Event) void {
+fn rawNotify(selfOpaque: *anyopaque, event: Event, payload: EventPayload) void {
     const self: *USBDevicesListComponent = @ptrCast(@alignCast(selfOpaque));
-    return USBDevicesListComponent.notify(self, event);
+    return USBDevicesListComponent.notify(self, event, payload);
 }
 
 fn rawDeinit(selfOpaque: *anyopaque) void {
@@ -243,7 +244,7 @@ pub const ComponentUI = struct {
                 .fmtBuffer = buffer,
             };
 
-            uiDevice.checkbox = Checkbox.init(uiDevice.fmtBuffer, 200, @as(f32, @floatFromInt(100 + 40 * i)), 20);
+            uiDevice.checkbox = Checkbox.init(uiDevice.fmtBuffer, USBDevicesListComponent.notify, 200, @as(f32, @floatFromInt(100 + 40 * i)), 20);
 
             self.devices.append(uiDevice) catch |err| {
                 debug.printf("\nWARNING: (USBDevicesListComponent) Unable to append UIDevice to ArrayList on first init. {any}", .{err});

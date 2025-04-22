@@ -5,6 +5,7 @@ const UI = @import("../../lib/ui/ui.zig");
 const AppObserverF = @import("../../observers/AppObserver.zig");
 const AppObserver = AppObserverF.AppObserver;
 const Event = AppObserverF.Event;
+const EventPayload = AppObserverF.Payload;
 
 const Component = @import("../Component.zig");
 
@@ -71,7 +72,7 @@ pub fn update(self: *FilePickerComponent) void {
             debug.print("\nFilePickerComponent: worker joined.");
         }
 
-        self.notify(Event.ISO_FILE_SELECTED);
+        self.notify(Event.ISO_FILE_SELECTED, .{});
     }
 }
 
@@ -80,8 +81,8 @@ pub fn draw(self: *FilePickerComponent) void {
     self.button.draw();
 }
 
-pub fn notify(self: *FilePickerComponent, event: Event) void {
-    self.appObserver.*.onNotify(event);
+pub fn notify(self: *FilePickerComponent, event: Event, payload: EventPayload) void {
+    self.appObserver.*.onNotify(event, payload);
 }
 
 pub fn deinit(self: *FilePickerComponent) void {
@@ -199,9 +200,9 @@ fn rawUpdate(selfOpaque: *anyopaque) void {
     FilePickerComponent.update(self);
 }
 
-fn rawNotify(selfOpaque: *anyopaque, event: Event) void {
+fn rawNotify(selfOpaque: *anyopaque, event: Event, payload: EventPayload) void {
     const self: *FilePickerComponent = @ptrCast(@alignCast(selfOpaque));
-    FilePickerComponent.notify(self, event);
+    FilePickerComponent.notify(self, event, payload);
 }
 
 fn rawDeinit(selfOpaque: *anyopaque) void {

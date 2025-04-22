@@ -2,6 +2,7 @@ const std = @import("std");
 const debug = @import("../lib/util/debug.zig");
 
 const AppObserverEvent = @import("../observers/AppObserver.zig").Event;
+const AppObserverPayload = @import("../observers/AppObserver.zig").Payload;
 
 const Component = @This();
 
@@ -13,7 +14,7 @@ pub const VTable = struct {
     draw: *const fn (*anyopaque) void,
     update: *const fn (*anyopaque) void,
     deinit: *const fn (*anyopaque) void,
-    notify: *const fn (*anyopaque, event: AppObserverEvent) void,
+    notify: *const fn (*anyopaque, event: AppObserverEvent, payload: AppObserverPayload) void,
 };
 
 pub fn enable(self: Component) void {
@@ -32,6 +33,6 @@ pub fn deinit(self: Component) void {
     self.vtable.deinit(self.ptr);
 }
 
-pub fn notify(self: Component, event: AppObserverEvent) void {
-    self.vtable.notify(self.ptr, event);
+pub fn notify(self: Component, event: AppObserverEvent, payload: AppObserverPayload) void {
+    self.vtable.notify(self.ptr, event, payload);
 }

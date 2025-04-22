@@ -2,6 +2,10 @@ const std = @import("std");
 const rl = @import("raylib");
 const UI = @import("../ui/ui.zig");
 
+const Event = @import("../../observers/AppObserver.zig").Event;
+const Payload = @import("../../observers/AppObserver.zig").Payload;
+const USBDevicesListComponent = @import("../../components/USBDevicesList/Component.zig");
+
 const INNER_PADDING = 2;
 
 pub fn Checkbox() type {
@@ -13,11 +17,14 @@ pub fn Checkbox() type {
         checked: bool = false,
         pressed: bool = false,
         hovered: bool = false,
+        onSelected: *const fn (component: *USBDevicesListComponent, event: Event, payload: Payload) void,
 
-        pub fn init(text: [:0]const u8, x: f32, y: f32, size: f32) Self {
+        pub fn init(text: [:0]const u8, callback: *const fn (component: *USBDevicesListComponent, event: Event, payload: Payload) void, x: f32, y: f32, size: f32) Self {
             const fontSize: i32 = 14;
 
             return .{
+                .onSelected = callback,
+
                 .rect = .{
                     .x = x,
                     .y = y,
@@ -62,6 +69,10 @@ pub fn Checkbox() type {
             // Toggle CHECKED state on press
             if (self.pressed)
                 self.checked = !self.checked;
+
+            if (self.checked and self.pressed) {
+                // self.onSelected(
+            }
         }
 
         pub fn draw(self: *Self) void {
