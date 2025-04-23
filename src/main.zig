@@ -137,6 +137,14 @@ pub fn main() !void {
 
         rl.clearBackground(backgroundColor);
 
+        // rl.drawText(
+        //     str,
+        //     450,
+        //     150,
+        //     20,
+        //     .white,
+        // );
+
         isoRect.draw();
         usbRect.draw();
         flashRect.draw();

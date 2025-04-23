@@ -12,15 +12,19 @@ pub fn eql(str1: []const u8, str2: []const u8) bool {
     return true;
 }
 
-pub fn trunc(slice: []u8) []u8 {
+pub fn truncToNull(string: []u8) []u8 {
     var nullPosition: u32 = 0;
 
-    for (0..slice.len) |i| {
-        if (slice[i] != 0x00) continue;
+    for (0..string.len) |i| {
+        if (string[i] != 0x00) continue;
 
         nullPosition = @intCast(i);
         break;
     }
 
-    return slice[0..nullPosition];
+    return string[0..nullPosition];
 }
+
+// pub fn toNullTerminated(string: []u8) [:0]const u8 {
+//
+// }

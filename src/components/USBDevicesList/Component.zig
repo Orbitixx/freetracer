@@ -129,6 +129,11 @@ pub fn notify(self: *USBDevicesListComponent, event: Event, payload: EventPayloa
     self.appObserver.*.onNotify(event, payload);
 }
 
+pub fn notifyCallback(ctx: *anyopaque, event: Event, payload: EventPayload) void {
+    const self: *USBDevicesListComponent = @ptrCast(@alignCast(ctx));
+    self.notify(event, payload);
+}
+
 pub fn asComponent(self: *const USBDevicesListComponent) Component {
     return Component{
         .ptr = @constCast(self),
@@ -218,7 +223,7 @@ pub const ComponentUI = struct {
     allocator: std.mem.Allocator,
     devices: std.ArrayList(UIDevice),
 
-    pub fn init(self: *ComponentUI, parent: *USBDevicesListComponent, devices: []MacOS.USBStorageDevice) void {
+    pub fn init(self: *ComponentUI, ctx: *USBDevicesListComponent, devices: []MacOS.USBStorageDevice) void {
         for (devices, 0..devices.len) |device, i| {
             const buffer = self.allocator.allocSentinel(u8, 254, 0x00) catch |err| {
                 std.debug.panic("\n{any}", .{err});
@@ -247,7 +252,10 @@ pub const ComponentUI = struct {
 
             // const callback = USBDevicesListComponent.notify(parent, .USB_DEVICE_SELECTED, .{ .data = device.bsdName });
 
-            uiDevice.checkbox = Checkbox.init(uiDevice.fmtBuffer, USBDevicesListComponent.notify, parent, String.trunc(device.bsdName), 200, @as(f32, @floatFromInt(100 + 40 * i)), 20);
+            uiDevice.checkbox = Checkbox.init(uiDevice.fmtBuffer, 200, @as(f32, @floatFromInt(100 + 40 * i)), 20);
+            uiDevice.checkbox.onSelected = USBDevicesListComponent.notifyCallback;
+            uiDevice.checkbox.context = ctx;
+            uiDevice.checkbox.data = String.truncToNull(device.bsdName);
 
             self.devices.append(uiDevice) catch |err| {
                 debug.printf("\nWARNING: (USBDevicesListComponent) Unable to append UIDevice to ArrayList on first init. {any}", .{err});

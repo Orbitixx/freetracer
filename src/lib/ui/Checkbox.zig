@@ -12,24 +12,20 @@ pub fn Checkbox() type {
     return struct {
         const Self = @This();
 
-        parent: *USBDevicesListComponent,
-        data: []u8,
+        onSelected: ?*const fn (component: *anyopaque, event: Event, payload: Payload) void = null,
+        context: ?*anyopaque = null,
+        data: ?[]u8 = null,
 
         rect: UI.Rect,
         text: UI.Text,
         checked: bool = false,
         pressed: bool = false,
         hovered: bool = false,
-        onSelected: *const fn (component: *USBDevicesListComponent, event: Event, payload: Payload) void,
 
-        pub fn init(text: [:0]const u8, callback: *const fn (component: *USBDevicesListComponent, event: Event, payload: Payload) void, parent: *USBDevicesListComponent, data: []u8, x: f32, y: f32, size: f32) Self {
+        pub fn init(text: [:0]const u8, x: f32, y: f32, size: f32) Self {
             const fontSize: i32 = 14;
 
             return .{
-                .onSelected = callback,
-                .parent = parent,
-                .data = data,
-
                 .rect = .{
                     .x = x,
                     .y = y,
@@ -76,7 +72,7 @@ pub fn Checkbox() type {
                 self.checked = !self.checked;
 
             if (self.checked and self.pressed) {
-                self.onSelected(self.parent, Event.USB_DEVICE_SELECTED, Payload{ .data = self.data });
+                self.onSelected.?(self.context.?, Event.USB_DEVICE_SELECTED, Payload{ .data = self.data.? });
             }
         }
 
