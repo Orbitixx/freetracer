@@ -141,6 +141,22 @@ pub fn asComponent(self: *const USBDevicesListComponent) Component {
     };
 }
 
+pub fn macos_getDevice(self: *const USBDevicesListComponent, bsdName: []u8) ?MacOS.USBStorageDevice {
+    self.state.mutex.lock();
+    defer self.state.mutex.unlock();
+
+    if (self.state.devices.items.len < 1) return null;
+
+    for (self.state.devices.items) |device| {
+        debug.printf("\nmacos_getDevice(): comparing {s} and {s}, byte representation: \nstr1: {any}\nstr2: {any}", .{ device.bsdName, bsdName, String.truncToNull(device.bsdName), String.truncToNull(bsdName) });
+        if (String.eql(String.truncToNull(device.bsdName), String.truncToNull(bsdName))) return device;
+    }
+
+    std.debug.panic("\nWARNING: USBDevicesListComponent() -> macos_getDevice() returned NULL for device '{s}'", .{bsdName});
+
+    return null;
+}
+
 fn dispatchComponentAction(self: *USBDevicesListComponent) void {
     self.state.mutex.lock();
 
@@ -234,7 +250,7 @@ pub const ComponentUI = struct {
                 "{s} - {s} ({d:.0}GB)",
                 .{
                     device.deviceName,
-                    device.bsdName,
+                    String.truncToNull(device.bsdName),
                     @divTrunc(device.size, 1_000_000_000),
                 },
             ) catch |err| {
@@ -244,15 +260,13 @@ pub const ComponentUI = struct {
             debug.printf("\nComponentUI: formatted string is: {s}", .{buffer});
 
             var uiDevice: UIDevice = .{
-                .name = device.deviceName,
-                .bsdName = device.bsdName,
+                .name = String.truncToNull(device.deviceName),
+                .bsdName = String.truncToNull(device.bsdName),
                 .size = device.size,
                 .fmtBuffer = buffer,
             };
 
-            // const callback = USBDevicesListComponent.notify(parent, .USB_DEVICE_SELECTED, .{ .data = device.bsdName });
-
-            uiDevice.checkbox = Checkbox.init(uiDevice.fmtBuffer, 200, @as(f32, @floatFromInt(100 + 40 * i)), 20);
+            uiDevice.checkbox = Checkbox.init(uiDevice.fmtBuffer, 400, @as(f32, @floatFromInt(160 + 40 * i)), 20);
             uiDevice.checkbox.onSelected = USBDevicesListComponent.notifyCallback;
             uiDevice.checkbox.context = ctx;
             uiDevice.checkbox.data = String.truncToNull(device.bsdName);

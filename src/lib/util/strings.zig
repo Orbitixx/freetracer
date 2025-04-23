@@ -22,6 +22,8 @@ pub fn truncToNull(string: []u8) []u8 {
         break;
     }
 
+    if (nullPosition == 0) return string;
+
     return string[0..nullPosition];
 }
 
