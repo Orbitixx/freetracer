@@ -3,6 +3,9 @@
 *.iso
 .DS_Store
 .vscode/
+*.sh
 
 .zig-cache/
+
 zig-out/
+Freetracer.app/
