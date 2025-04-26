@@ -178,7 +178,7 @@ pub fn main() !void {
     //     if (std.mem.count(u8, usbStorageDevices.items[0].bsdName, "disk4") > 0) {
     //         debug.print("\nFound disk4 by literal. Preparing to unmount...");
     //         DiskArbitration.unmountAllVolumes(&usbStorageDevices.items[0]) catch |err| {
-    //             debu.printf("\nERROR: Failed to unmount volumes on {s}. Error message: {any}", .{ usbStorageDevices.items[0].bsdName, err });
+    //             debug.printf("\nERROR: Failed to unmount volumes on {s}. Error message: {any}", .{ usbStorageDevices.items[0].bsdName, err });
     //         };
     //     }
     // }
