@@ -39,6 +39,21 @@ var Window: UI.Window = .{
     .height = 0,
 };
 
+// Define the Info.plist content directly in your main file
+// comptime {
+//     @export(@as([*:0]const u8, @ptrCast(
+//         \\<?xml version="1.0" encoding="UTF-8"?>
+//         \\<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+//         \\<plist version="1.0">
+//         \\<dict>
+//         \\    <key>CFBundleIdentifier</key>
+//         \\    <string>com.example.your-app</string>
+//         \\    <!-- Other Info.plist content here -->
+//         \\</dict>
+//         \\</plist>
+//     )), .{ .name = "__info_plist", .section = "__TEXT,__info_plist" });
+// }
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{ .thread_safe = true }){};
     const allocator = gpa.allocator();

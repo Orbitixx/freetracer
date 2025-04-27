@@ -34,6 +34,9 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
 
+    //zig build-exe src/main.zig -lc -target x86_64-macos -Wl,-sectcreate,__TEXT,__info_plist,Info.plist
+    //
+
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
     // step when running `zig build`).
