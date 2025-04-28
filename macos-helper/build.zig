@@ -35,8 +35,9 @@ pub fn build(b: *std.Build) void {
     });
 
     exe.linkLibC();
-
     exe.linkFramework("CoreFoundation");
+    exe.linkFramework("DiskArbitration");
+    addPaths(exe);
 
     //zig build-exe src/main.zig -lc -target x86_64-macos -Wl,-sectcreate,__TEXT,__info_plist,Info.plist
     //
@@ -80,4 +81,10 @@ pub fn build(b: *std.Build) void {
     // running the unit tests.
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_exe_unit_tests.step);
+}
+
+pub fn addPaths(step: *std.Build.Step.Compile) void {
+    step.addSystemFrameworkPath(.{ .cwd_relative = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks" });
+    step.addSystemIncludePath(.{ .cwd_relative = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include" });
+    step.addLibraryPath(.{ .cwd_relative = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib" });
 }

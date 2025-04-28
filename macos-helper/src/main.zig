@@ -5,21 +5,6 @@ const c = @cImport({
     @cInclude("CoreFoundation/CoreFoundation.h");
 });
 
-// Define the Info.plist content directly in your main file
-// comptime {
-//     @export(@as([*:0]const u8, @ptrCast(
-//         \\<?xml version="1.0" encoding="UTF-8"?>
-//         \\<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-//         \\<plist version="1.0">
-//         \\<dict>
-//         \\    <key>CFBundleIdentifier</key>
-//         \\    <string>com.example.your-app</string>
-//         \\    <!-- Other Info.plist content here -->
-//         \\</dict>
-//         \\</plist>
-//     )), .{ .name = "__info_plist", .section = "__TEXT,__info_plist" });
-// }
-
 const kUnmountDiskRequest: i32 = 101;
 const kUnmountDiskResponse: i32 = 201;
 
@@ -93,4 +78,53 @@ pub fn messagePortCallback(port: c.CFMessagePortRef, msgId: c.SInt32, data: c.CF
 
     std.log.info("Freetracer Helper Tool successfully packaged response: {d}.", .{result});
     return returnData;
+}
+
+comptime {
+    @export(@as([*:0]const u8, @ptrCast(
+        \\<?xml version="1.0" encoding="UTF-8"?>
+        \\<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        \\<plist version="1.0">
+        \\<dict>
+        \\<key>CFBundleIdentifier</key>
+        \\<string>com.orbitixx.freetracer-helper</string>
+        \\<key>CFBundleInfoDictionaryVersion</key>
+        \\<string>6.0</string>
+        \\<key>CFBundleName</key>
+        \\<string>Freetracer Helper</string>
+        \\<key>CFBundleVersion</key>
+        \\<string>3</string>
+        \\<key>SMAuthorizedClients</key>
+        \\<array>
+        \\<string>identifier "com.orbitixx.freetracer" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and certificate leaf[subject.OU] = 75MN4F7F72</string>
+        \\</array>
+        \\</dict>
+        \\</plist>    
+    )), .{ .name = "__info_plist", .section = "__TEXT,__info_plist" });
+}
+
+comptime {
+    @export(@as([*:0]const u8, @ptrCast(
+        \\<?xml version="1.0" encoding="UTF-8"?>
+        \\<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        \\<plist version="1.0">
+        \\<dict>
+        \\<key>Label</key>
+        \\<string>com.orbitixx.freetracer-helper</string>
+        \\<key>ProgramArguments</key>
+        \\<array>
+        \\<string>/Library/PrivilegedHelperTools/com.orbitixx.freetracer-helper</string>
+        \\</array>
+        \\<key>MachServices</key>
+        \\<dict>
+        \\<key>com.orbitixx.freetracer-helper</key>
+        \\<true/>
+        \\</dict>
+        \\<key>StandardOutPath</key>
+        \\<string>/var/log/obx.stdout</string>
+        \\<key>StandardErrorPath</key>
+        \\<string>/var/log/obx.stderr</string>
+        \\</dict>
+        \\</plist>
+    )), .{ .name = "__launchd_plist", .section = "__TEXT,__launchd_plist" });
 }

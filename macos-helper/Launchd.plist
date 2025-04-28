@@ -6,10 +6,10 @@
     <string>com.orbitixx.freetracer-helper</string>
     <key>ProgramArguments</key>
     <array>
-        <string>This seems required per documentation</string>
+        <string>/Library/PrivilegedHelperTools/com.orbitixx.freetracer-helper</string>
     </array>
-    <key>RunAtLoad</key>
-    <true/>
+    <!-- <key>RunAtLoad</key> -->
+    <!-- <true/> -->
     <key>MachServices</key>
         <dict>
             <key>com.orbitixx.freetracer-helper</key>

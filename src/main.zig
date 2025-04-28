@@ -48,7 +48,7 @@ pub fn main() !void {
         _ = gpa.deinit();
     }
 
-    performPrivilegedTask();
+    const helperResponse: bool = performPrivilegedTask();
 
     rl.initWindow(Window.width, Window.height, "");
     defer rl.closeWindow(); // Close window and OpenGL context
@@ -154,6 +154,14 @@ pub fn main() !void {
         rl.drawText("freetracer", @intFromFloat(relW(0.08)), @intFromFloat(relH(0.035)), 22, .white);
         rl.drawText("free and open-source by orbitixx", @intFromFloat(relW(0.08)), @intFromFloat(relH(0.035) + 23), 14, .light_gray);
 
+        rl.drawText(
+            if (helperResponse) "HELPER SUCCESS" else "HELPER FAILED",
+            @intFromFloat(relW(0.12)),
+            @intFromFloat(relH(0.4)),
+            15,
+            if (helperResponse) .green else .red,
+        );
+
         componentRegistry.processRendering();
 
         defer rl.endDrawing();
@@ -202,7 +210,7 @@ pub fn relH(y: f32) f32 {
     return (@as(f32, @floatFromInt(Window.height)) * y);
 }
 
-pub fn performPrivilegedTask() void {
+pub fn performPrivilegedTask() bool {
     const idString = "com.orbitixx.freetracer-helper";
 
     const portNameRef: c.CFStringRef = c.CFStringCreateWithCStringNoCopy(
@@ -217,7 +225,7 @@ pub fn performPrivilegedTask() void {
 
     if (remoteMessagePort == null) {
         std.log.err("Freetracer unable to create a remote message port to Freetracer Helper Tool.", .{});
-        return;
+        return false;
     }
 
     defer _ = c.CFRelease(remoteMessagePort);
@@ -250,7 +258,7 @@ pub fn performPrivilegedTask() void {
             "Freetracer failed to communicate with Freetracer Helper Tool - received invalid response code ({d}) or null response data {any}",
             .{ responseCode, responseData },
         );
-        return;
+        return false;
     }
 
     var result: i32 = -1;
@@ -261,8 +269,11 @@ pub fn performPrivilegedTask() void {
         result = resultPtr.*;
     }
 
-    if (result == 0) std.log.info("Freetracer successfully received reseponse from Freetracer Helper Tool: {d}", .{result}) else {
+    if (result == 0) {
+        std.log.info("Freetracer successfully received reseponse from Freetracer Helper Tool: {d}", .{result});
+        return true;
+    } else {
         std.log.err("Freetracer recieved unsuccessful response from Freetracer Helper Tool: {d}.", .{result});
-        return;
+        return false;
     }
 }
