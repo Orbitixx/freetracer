@@ -34,6 +34,10 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
 
+    exe.linkLibC();
+
+    exe.linkFramework("CoreFoundation");
+
     //zig build-exe src/main.zig -lc -target x86_64-macos -Wl,-sectcreate,__TEXT,__info_plist,Info.plist
     //
 

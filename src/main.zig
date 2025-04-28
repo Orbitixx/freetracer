@@ -39,21 +39,6 @@ var Window: UI.Window = .{
     .height = 0,
 };
 
-// Define the Info.plist content directly in your main file
-// comptime {
-//     @export(@as([*:0]const u8, @ptrCast(
-//         \\<?xml version="1.0" encoding="UTF-8"?>
-//         \\<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-//         \\<plist version="1.0">
-//         \\<dict>
-//         \\    <key>CFBundleIdentifier</key>
-//         \\    <string>com.example.your-app</string>
-//         \\    <!-- Other Info.plist content here -->
-//         \\</dict>
-//         \\</plist>
-//     )), .{ .name = "__info_plist", .section = "__TEXT,__info_plist" });
-// }
-
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{ .thread_safe = true }){};
     const allocator = gpa.allocator();
@@ -62,6 +47,8 @@ pub fn main() !void {
         _ = gpa.detectLeaks();
         _ = gpa.deinit();
     }
+
+    performPrivilegedTask();
 
     rl.initWindow(Window.width, Window.height, "");
     defer rl.closeWindow(); // Close window and OpenGL context
@@ -213,4 +200,69 @@ pub fn relW(x: f32) f32 {
 
 pub fn relH(y: f32) f32 {
     return (@as(f32, @floatFromInt(Window.height)) * y);
+}
+
+pub fn performPrivilegedTask() void {
+    const idString = "com.orbitixx.freetracer-helper";
+
+    const portNameRef: c.CFStringRef = c.CFStringCreateWithCStringNoCopy(
+        c.kCFAllocatorDefault,
+        idString,
+        c.kCFStringEncodingUTF8,
+        c.kCFAllocatorNull,
+    );
+    defer _ = c.CFRelease(portNameRef);
+
+    const remoteMessagePort: c.CFMessagePortRef = c.CFMessagePortCreateRemote(c.kCFAllocatorDefault, portNameRef);
+
+    if (remoteMessagePort == null) {
+        std.log.err("Freetracer unable to create a remote message port to Freetracer Helper Tool.", .{});
+        return;
+    }
+
+    defer _ = c.CFRelease(remoteMessagePort);
+
+    const dataPayload: i32 = 200;
+    const dataPayloadBytePtr: [*c]const u8 = @ptrCast(&dataPayload);
+
+    const requestDataRef: c.CFDataRef = c.CFDataCreate(c.kCFAllocatorDefault, dataPayloadBytePtr, @sizeOf(i32));
+    defer _ = c.CFRelease(requestDataRef);
+
+    var responseCode: c.SInt32 = 0;
+    var responseData: c.CFDataRef = null;
+
+    const kSendTimeoutInSeconds: f64 = 5.0;
+    const kReceiveTimeoutInSeconds: f64 = 5.0;
+    const kUnmountDiskRequest: i32 = 101;
+
+    responseCode = c.CFMessagePortSendRequest(
+        remoteMessagePort,
+        kUnmountDiskRequest,
+        requestDataRef,
+        kSendTimeoutInSeconds,
+        kReceiveTimeoutInSeconds,
+        c.kCFRunLoopDefaultMode,
+        &responseData,
+    );
+
+    if (responseCode != c.kCFMessagePortSuccess or responseData == null) {
+        std.log.err(
+            "Freetracer failed to communicate with Freetracer Helper Tool - received invalid response code ({d}) or null response data {any}",
+            .{ responseCode, responseData },
+        );
+        return;
+    }
+
+    var result: i32 = -1;
+
+    if (c.CFDataGetLength(responseData) >= @sizeOf(i32)) {
+        const dataPtr = c.CFDataGetBytePtr(responseData);
+        const resultPtr: *const i32 = @ptrCast(@alignCast(dataPtr));
+        result = resultPtr.*;
+    }
+
+    if (result == 0) std.log.info("Freetracer successfully received reseponse from Freetracer Helper Tool: {d}", .{result}) else {
+        std.log.err("Freetracer recieved unsuccessful response from Freetracer Helper Tool: {d}.", .{result});
+        return;
+    }
 }

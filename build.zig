@@ -56,6 +56,7 @@ pub fn build(b: *std.Build) void {
     // -------------------------------------------------------------------
 
     exe.linkLibC();
+    exe.linkFramework("CoreFoundation");
     exe.linkFramework("DiskArbitration");
     addPaths(exe);
     //
