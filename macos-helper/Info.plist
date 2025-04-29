@@ -12,7 +12,16 @@
     <string>3</string>
     <key>SMAuthorizedClients</key>
     <array>
-        <string>identifier "com.orbitixx.freetracer" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and certificate leaf[subject.OU] = 75MN4F7F72</string>
+        <string>identifier "com.orbitixx.freetracer" and anchor apple generic and (certificate leaf[field.1.2.840.113635.100.6.1.9] /* exists */ or certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and certificate leaf[subject.OU] = TW4N5HWZXY)</string>
     </array>
 </dict>
 </plist>
+
+
+
+<!-- old -->
+<!-- <key>SMAuthorizedClients</key> -->
+<!--     <array> -->
+<!--         <string>identifier "com.orbitixx.freetracer" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and certificate leaf[subject.OU] = 75MN4F7F72</string> -->
+<!--     </array> -->
+

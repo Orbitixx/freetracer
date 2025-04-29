@@ -58,6 +58,8 @@ pub fn build(b: *std.Build) void {
     exe.linkLibC();
     exe.linkFramework("CoreFoundation");
     exe.linkFramework("DiskArbitration");
+    exe.linkFramework("ServiceManagement");
+    exe.linkFramework("Security");
     addPaths(exe);
     //
     // exe.linkFramework("CoreFoundation"); // Required for CF types and functions

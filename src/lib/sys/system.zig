@@ -10,6 +10,8 @@ pub const c = if (isMac) @cImport({
     @cInclude("IOKit/usb/IOUSBLib.h");
     @cInclude("IOKit/IOCFPlugIn.h");
     @cInclude("IOKit/IOBSD.h");
+    @cInclude("ServiceManagement/ServiceManagement.h");
+    @cInclude("Security/Authorization.h");
 }) else if (isLinux) @cImport({
     // @cInclude("blkid/blkid.h");
 });

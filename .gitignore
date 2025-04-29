@@ -9,3 +9,5 @@
 
 zig-out/
 Freetracer.app/
+
+*.py

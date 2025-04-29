@@ -96,14 +96,12 @@ comptime {
         \\<string>3</string>
         \\<key>SMAuthorizedClients</key>
         \\<array>
-        \\<string>identifier "com.orbitixx.freetracer" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and certificate leaf[subject.OU] = 75MN4F7F72</string>
+        \\<string>identifier "com.orbitixx.freetracer" and anchor apple generic and certificate leaf[subject.CN] = "Apple Development: Mark Slivka (75MN4F7F72)" and certificate 1[field.1.2.840.113635.100.6.2.1] /* exists */</string>
         \\</array>
         \\</dict>
-        \\</plist>    
+        \\</plist>  
     )), .{ .name = "__info_plist", .section = "__TEXT,__info_plist" });
-}
 
-comptime {
     @export(@as([*:0]const u8, @ptrCast(
         \\<?xml version="1.0" encoding="UTF-8"?>
         \\<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
