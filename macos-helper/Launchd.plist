@@ -1,23 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.orbitixx.freetracer-helper</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/Library/PrivilegedHelperTools/com.orbitixx.freetracer-helper</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>MachServices</key>
+    <dict>
+        <key>Label</key>
+        <string>com.orbitixx.freetracer-helper</string>
+        <key>ProgramArguments</key>
+        <array>
+            <string>/Library/PrivilegedHelperTools/com.orbitixx.freetracer-helper</string>
+        </array>
+        <key>MachServices</key>
         <dict>
             <key>com.orbitixx.freetracer-helper</key>
             <true/>
         </dict>
-    <key>StandardOutPath</key>
-    <string>/var/log/obx.stdout</string>
-    <key>StandardErrorPath</key>
-    <string>/var/log/obx.stderr</string>
-</dict>
+        <key>StandardOutPath</key>
+        <string>/var/log/obx.stdout</string>
+        <key>StandardErrorPath</key>
+        <string>/var/log/obx.stderr</string>
+    </dict>
 </plist>

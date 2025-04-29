@@ -1,13 +1,16 @@
 
+env.zig
 
-*.iso
-.DS_Store
-.vscode/
 *.sh
+*.py
+*.iso
+*.plist
 
+.DS_Store
+
+*.app/
+zig-out/
+
+.vscode/
 .zig-cache/
 
-zig-out/
-Freetracer.app/
-
-*.py

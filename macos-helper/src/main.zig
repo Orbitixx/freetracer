@@ -1,4 +1,6 @@
 const std = @import("std");
+const env = @import("env.zig");
+
 const print = std.debug.print;
 
 const c = @cImport({
@@ -9,17 +11,15 @@ const kUnmountDiskRequest: i32 = 101;
 const kUnmountDiskResponse: i32 = 201;
 
 pub fn main() !void {
-    const idString = "com.orbitixx.freetracer-helper";
-
     const portNameRef: c.CFStringRef = c.CFStringCreateWithCStringNoCopy(
         c.kCFAllocatorDefault,
-        idString,
+        env.BUNDLE_ID,
         c.kCFStringEncodingUTF8,
         c.kCFAllocatorNull,
     );
     defer _ = c.CFRelease(portNameRef);
 
-    var messagePortContext = c.CFMessagePortContext{
+    var messagePortContext: c.CFMessagePortContext = c.CFMessagePortContext{
         .version = 0,
         .copyDescription = null,
         .info = null,
@@ -50,7 +50,7 @@ pub fn main() !void {
     c.CFRunLoopAddSource(c.CFRunLoopGetCurrent(), runLoopSource, c.kCFRunLoopDefaultMode);
     defer c.CFRunLoopSourceInvalidate(runLoopSource);
 
-    std.log.info("Freetracer Heloper Tool started. Awaiting requests...", .{});
+    std.log.info("Freetracer Helper Tool started. Awaiting requests...", .{});
 
     c.CFRunLoopRun();
 }
@@ -81,48 +81,6 @@ pub fn messagePortCallback(port: c.CFMessagePortRef, msgId: c.SInt32, data: c.CF
 }
 
 comptime {
-    @export(@as([*:0]const u8, @ptrCast(
-        \\<?xml version="1.0" encoding="UTF-8"?>
-        \\<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-        \\<plist version="1.0">
-        \\<dict>
-        \\<key>CFBundleIdentifier</key>
-        \\<string>com.orbitixx.freetracer-helper</string>
-        \\<key>CFBundleInfoDictionaryVersion</key>
-        \\<string>6.0</string>
-        \\<key>CFBundleName</key>
-        \\<string>Freetracer Helper</string>
-        \\<key>CFBundleVersion</key>
-        \\<string>3</string>
-        \\<key>SMAuthorizedClients</key>
-        \\<array>
-        \\<string>identifier "com.orbitixx.freetracer" and anchor apple generic and certificate leaf[subject.CN] = "Apple Development: Mark Slivka (75MN4F7F72)" and certificate 1[field.1.2.840.113635.100.6.2.1] /* exists */</string>
-        \\</array>
-        \\</dict>
-        \\</plist>  
-    )), .{ .name = "__info_plist", .section = "__TEXT,__info_plist" });
-
-    @export(@as([*:0]const u8, @ptrCast(
-        \\<?xml version="1.0" encoding="UTF-8"?>
-        \\<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-        \\<plist version="1.0">
-        \\<dict>
-        \\<key>Label</key>
-        \\<string>com.orbitixx.freetracer-helper</string>
-        \\<key>ProgramArguments</key>
-        \\<array>
-        \\<string>/Library/PrivilegedHelperTools/com.orbitixx.freetracer-helper</string>
-        \\</array>
-        \\<key>MachServices</key>
-        \\<dict>
-        \\<key>com.orbitixx.freetracer-helper</key>
-        \\<true/>
-        \\</dict>
-        \\<key>StandardOutPath</key>
-        \\<string>/var/log/obx.stdout</string>
-        \\<key>StandardErrorPath</key>
-        \\<string>/var/log/obx.stderr</string>
-        \\</dict>
-        \\</plist>
-    )), .{ .name = "__launchd_plist", .section = "__TEXT,__launchd_plist" });
+    @export(@as([*:0]const u8, @ptrCast(env.INFO_PLIST)), .{ .name = "__info_plist", .section = "__TEXT,__info_plist", .visibility = .default, .linkage = .strong });
+    @export(@as([*:0]const u8, @ptrCast(env.LAUNCHD_PLIST)), .{ .name = "__launchd_plist", .section = "__TEXT,__launchd_plist", .visibility = .default, .linkage = .strong });
 }

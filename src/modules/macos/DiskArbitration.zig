@@ -22,7 +22,7 @@ pub fn unmountAllVolumes(pDevice: *const USBStorageDevice) !void {
     const currentLoop = c.CFRunLoopGetCurrent();
 
     c.DASessionScheduleWithRunLoop(daSession, currentLoop, c.kCFRunLoopDefaultMode);
-    // Ensure unscheduling happens before session is released
+    // Ensure unscheduling happens before the session is released
     defer c.DASessionUnscheduleFromRunLoop(daSession, currentLoop, c.kCFRunLoopDefaultMode);
 
     var queuedUnmounts: u8 = 0;
