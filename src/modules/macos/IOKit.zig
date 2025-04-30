@@ -5,6 +5,7 @@ const c = @import("../../lib/sys/system.zig").c;
 
 const MacOS = @import("MacOSTypes.zig");
 
+/// TODO: needs refactoring - useless work being done to get to a list of IOMediaVolumes
 pub fn getUSBStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(MacOS.USBStorageDevice) {
     var matchingDict: c.CFMutableDictionaryRef = null;
     var ioIterator: c.io_iterator_t = 0;
@@ -195,11 +196,6 @@ pub fn getIOMediaVolumeDescription(service: c.io_service_t, allocator: std.mem.A
     //------------------------------------------------------------------------------------
     const bsdNameKey: c.CFStringRef = c.CFStringCreateWithCStringNoCopy(c.kCFAllocatorDefault, c.kIOBSDNameKey, c.kCFStringEncodingUTF8, c.kCFAllocatorNull);
     defer _ = c.CFRelease(bsdNameKey);
-
-    // const str = try toCString(allocator, c.kIOBSDNameKey);
-    // defer allocator.free(str);
-    //
-    // const bsdNameKey: c.CFStringRef = @ptrCast(str);
 
     const bsdNameValueRef: c.CFStringRef = @ptrCast(c.IORegistryEntryCreateCFProperty(service, bsdNameKey, c.kCFAllocatorDefault, 0));
     if (bsdNameValueRef == null) return error.FailedToObtainBSDNameForVolume;

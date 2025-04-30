@@ -109,7 +109,7 @@ pub fn installPrivilegedHelperTool() bool {
     return false;
 }
 
-pub fn performPrivilegedTask() bool {
+pub fn performPrivilegedTask(payload: []const u8) bool {
     const portNameRef: c.CFStringRef = c.CFStringCreateWithCStringNoCopy(
         c.kCFAllocatorDefault,
         env.HELPER_BUNDLE_ID,
@@ -127,10 +127,11 @@ pub fn performPrivilegedTask() bool {
 
     defer _ = c.CFRelease(remoteMessagePort);
 
-    const dataPayload: i32 = 200;
-    const dataPayloadBytePtr: [*c]const u8 = @ptrCast(&dataPayload);
+    const dataPayload: [*c]const u8 = @ptrCast(payload);
+    const dataLength: i32 = @intCast(payload.len);
+    // const dataPayloadBytePtr: [*c]const u8 = @ptrCast(&dataPayload);
 
-    const requestDataRef: c.CFDataRef = c.CFDataCreate(c.kCFAllocatorDefault, dataPayloadBytePtr, @sizeOf(i32));
+    const requestDataRef: c.CFDataRef = c.CFDataCreate(c.kCFAllocatorDefault, dataPayload, dataLength);
     defer _ = c.CFRelease(requestDataRef);
 
     var helperResponseCode: c.SInt32 = 0;
@@ -163,10 +164,10 @@ pub fn performPrivilegedTask() bool {
     }
 
     if (result == 0) {
-        debug.printf("Freetracer successfully received reseponse from Freetracer Helper Tool: {d}", .{result});
+        debug.printf("Freetracer successfully received response from Freetracer Helper Tool: {d}", .{result});
         return true;
     } else {
-        debug.printf("Freetracer recieved unsuccessful response from Freetracer Helper Tool: {d}.", .{result});
+        debug.printf("Freetracer failed to receive a structured response from Freetracer Helper Tool: {d}.", .{result});
         return false;
     }
 }

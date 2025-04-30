@@ -3,6 +3,7 @@ const debug = @import("../lib/util/debug.zig");
 
 const MacOS = @import("../modules/macos/MacOSTypes.zig");
 const DiskArbitration = @import("../modules/macos/DiskArbitration.zig");
+const PrivilegedHelper = @import("../modules/macos/PrivilegedHelper.zig");
 
 const USBDevicesListComponent = @import("../components/USBDevicesList/Component.zig");
 
@@ -52,8 +53,13 @@ pub const AppObserver = struct {
 
         debug.printf("\nAppObserver, processUSBDeviceSelected(): device name: {s}, service id: {d}", .{ device.deviceName, device.serviceId });
 
-        DiskArbitration.unmountAllVolumes(&device) catch |err| {
-            debug.printf("\nERROR: Failed to unmount volumes on {s}. Error message: {any}", .{ device.bsdName, err });
-        };
+        for (device.volumes.items) |volume| {
+            const response = PrivilegedHelper.performPrivilegedTask(volume.bsdName);
+            debug.printf("\nAppObserver unmount request for {s} received response: {any}", .{ volume.bsdName, response });
+        }
+
+        // DiskArbitration.unmountAllVolumes(&device) catch |err| {
+        //     debug.printf("\nERROR: Failed to unmount volumes on {s}. Error message: {any}", .{ device.bsdName, err });
+        // };
     }
 };

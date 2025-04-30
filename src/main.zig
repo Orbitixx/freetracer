@@ -128,7 +128,7 @@ pub fn main() !void {
 
     // if (!PrivilegedHelper.isHelperToolInstalled()) {
     helperResponse = PrivilegedHelper.installPrivilegedHelperTool();
-    if (helperResponse) helperResponse = PrivilegedHelper.performPrivilegedTask();
+    // if (helperResponse) helperResponse = PrivilegedHelper.performPrivilegedTask(disk);
     // } else helperResponse = true;
 
     // Main application GUI.loop
