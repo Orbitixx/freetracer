@@ -14,7 +14,8 @@ pub const Rect = struct {
     color: rl.Color,
 
     pub fn draw(self: @This()) void {
-        rl.drawRectangleV(.{ .x = self.x, .y = self.y }, .{ .x = self.width, .y = self.height }, self.color);
+        // rl.drawRectangleV(.{ .x = self.x, .y = self.y }, .{ .x = self.width, .y = self.height }, self.color);
+        rl.drawRectangleRounded(.{ .x = self.x, .y = self.y, .width = self.width, .height = self.height }, 0.04, 6, self.color);
     }
 };
 

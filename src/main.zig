@@ -105,29 +105,29 @@ pub fn main() !void {
         .y = relH(0.2),
         .width = relW(0.35),
         .height = relH(0.7),
-        .color = .fade(.light_gray, 0.3),
+        .color = .{ .r = 248, .g = 135, .b = 255, .a = 17 },
     };
 
     const usbRect: UI.Rect = .{
-        .x = isoRect.x + isoRect.width + relW(0.04),
+        .x = isoRect.x + isoRect.width + relW(0.02),
         .y = relH(0.2),
         .width = relW(0.20),
         .height = relH(0.7),
-        .color = .fade(.light_gray, 0.3),
+        .color = .{ .r = 91, .g = 130, .b = 149, .a = 100 },
     };
 
     const flashRect: UI.Rect = .{
-        .x = usbRect.x + usbRect.width + relW(0.04),
+        .x = usbRect.x + usbRect.width + relW(0.02),
         .y = relH(0.2),
         .width = relW(0.20),
         .height = relH(0.7),
-        .color = .fade(.light_gray, 0.3),
+        .color = .{ .r = 47, .g = 102, .b = 77, .a = 100 },
     };
 
     var helperResponse: bool = false;
-
+    helperResponse = true;
     // if (!PrivilegedHelper.isHelperToolInstalled()) {
-    helperResponse = PrivilegedHelper.installPrivilegedHelperTool();
+    // helperResponse = PrivilegedHelper.installPrivilegedHelperTool();
     // if (helperResponse) helperResponse = PrivilegedHelper.performPrivilegedTask(disk);
     // } else helperResponse = true;
 

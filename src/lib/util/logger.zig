@@ -1,33 +1,38 @@
 const std = @import("std");
+const env = @import("../../env.zig");
 
 pub const LoggerSingleton = struct {
     var instance: ?Logger = null;
-    var allocator: ?std.mem.Allocator = null;
+    var mutex: std.Thread.Mutex = .{};
 
     pub const Logger = struct {
-        latestLog: [:0]const u8,
-        logWritten: bool = false,
+        allocator: std.mem.Allocator,
         file: std.fs.File,
+        latestLog: ?[:0]const u8,
 
         pub fn log(self: *Logger, comptime msg: []const u8, args: anytype) void {
-            var buffer: [256]u8 = undefined;
+            mutex.lock();
+            errdefer mutex.unlock();
+            defer mutex.unlock();
 
-            if (self.logWritten) {
-                allocator.?.free(self.latestLog);
-                self.logWritten = false;
+            var buffer: [512]u8 = undefined;
+
+            if (self.latestLog != null) {
+                self.allocator.free(self.latestLog.?);
+                self.latestLog = null;
             }
 
-            const fmtStr = std.fmt.bufPrint(&buffer, msg, args) catch |err| {
-                std.log.err("Logger.log() failed to print to formatted string. Last message: {s}. Error: {any}.", .{ msg, err });
-                return;
+            const fmtStr = std.fmt.bufPrint(&buffer, msg, args) catch blk: {
+                std.log.err("Logger.log() failed to print to formatted string. Last message: {s}.", .{msg});
+                break :blk "WARNING: BADLY_FORMATTED_STRING: " ++ msg;
             };
 
-            self.latestLog = allocator.?.dupeZ(u8, fmtStr) catch |err| {
+            const duped = self.allocator.dupeZ(u8, fmtStr) catch |err| {
                 std.log.err("Logger.log() failed to allocate sentinel-terminated slice. Last message: {s}. Error: {any}.", .{ msg, err });
                 return;
             };
 
-            self.logWritten = true;
+            self.latestLog = duped;
 
             _ = self.file.write("\n") catch |err| {
                 std.log.err("Error: Logger.log() unable to write am empty line into the log file. {any}.", .{err});
@@ -39,29 +44,51 @@ pub const LoggerSingleton = struct {
         }
     };
 
-    pub fn init(_allocator: std.mem.Allocator) !void {
-        instance = .{
-            .file = try std.fs.cwd().createFile("/Users/cerberus/freetracer_logs.log", .{}),
-            .latestLog = "",
-        };
+    pub fn init(allocator: std.mem.Allocator) !void {
+        mutex.lock();
+        defer mutex.unlock();
 
-        allocator = _allocator;
+        instance = .{
+            .allocator = allocator,
+            .file = try std.fs.cwd().createFile(env.MAIN_APP_LOGS_PATH, .{}),
+            .latestLog = null,
+        };
     }
 
     pub fn log(comptime msg: []const u8, args: anytype) void {
-        instance.?.log(msg, args);
+        // mutex.lock();
+        // defer mutex.unlock();
+
+        if (instance != null) {
+            instance.?.log(msg, args);
+        } else std.log.err("Error: Attempted to call Logger.log() before Logger is initialized! Culprit: {s}", .{msg});
     }
 
     pub fn deinit() void {
-        instance.?.file.close();
-        if (instance.?.logWritten) allocator.?.free(instance.?.latestLog);
+        mutex.lock();
+        defer mutex.unlock();
+
+        if (instance) |*inst| {
+            inst.file.close();
+
+            if (inst.latestLog != null) {
+                inst.allocator.free(inst.latestLog.?);
+                inst.latestLog = null;
+            }
+        }
 
         instance = null;
-        allocator = null;
     }
 
     pub fn getLatestLog() [:0]const u8 {
-        return instance.?.latestLog;
+        mutex.lock();
+        defer mutex.unlock();
+
+        if (instance == null) return "";
+
+        if (instance.?.latestLog == null) return "";
+
+        return instance.?.latestLog.?;
     }
 };
 
