@@ -1,5 +1,8 @@
 const std = @import("std");
 const rl = @import("raylib");
+const _ResourceManager = @import("../../managers/ResourceManager.zig");
+const ResourceManager = _ResourceManager.ResourceManagerSingleton;
+const Font = _ResourceManager.FONT;
 
 pub const Window = struct {
     width: i32,
@@ -32,11 +35,20 @@ pub const Text = struct {
     }
 
     pub fn draw(self: Text) void {
-        rl.drawText(
+        // rl.drawText(
+        //     self.value,
+        //     self.x,
+        //     self.y,
+        //     self.fontSize,
+        //     self.color,
+        // );
+
+        rl.drawTextEx(
+            ResourceManager.getFont(Font.ROBOTO_REGULAR),
             self.value,
-            self.x,
-            self.y,
-            self.fontSize,
+            .{ .x = @floatFromInt(self.x), .y = @floatFromInt(self.y) },
+            @floatFromInt(self.fontSize),
+            0,
             self.color,
         );
     }
@@ -73,13 +85,23 @@ pub fn Button() type {
 
         pub fn draw(self: @This()) void {
             self.rect.draw();
-            rl.drawText(
-                self.text.value,
-                self.text.x,
-                self.text.y,
-                self.text.fontSize,
-                self.text.color,
-            );
+            self.text.draw();
+            // rl.drawText(
+            //     self.text.value,
+            //     self.text.x,
+            //     self.text.y,
+            //     self.text.fontSize,
+            //     self.text.color,
+            // );
+            //
+            // rl.drawTextEx(
+            //     ResourceManager.getFont(Font.ROBOTO_REGULAR),
+            //     self.value,
+            //     .{ .x = @floatFromInt(self.x), .y = @floatFromInt(self.y) },
+            //     @floatFromInt(self.text.fontSize),
+            //     0,
+            //     self.color,
+            // );
         }
 
         pub fn events(self: *Self) void {

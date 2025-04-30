@@ -1,5 +1,5 @@
 const std = @import("std");
-const env = @import("../../env.zig");
+const env = @import("../env.zig");
 
 pub const LoggerSingleton = struct {
     var instance: ?Logger = null;
@@ -48,6 +48,11 @@ pub const LoggerSingleton = struct {
         mutex.lock();
         defer mutex.unlock();
 
+        if (instance != null) {
+            std.log.err("Error: attempted to re-initialize an existing GlobalLogger singleton instance.", .{});
+            return;
+        }
+
         instance = .{
             .allocator = allocator,
             .file = try std.fs.cwd().createFile(env.MAIN_APP_LOGS_PATH, .{}),
@@ -56,9 +61,6 @@ pub const LoggerSingleton = struct {
     }
 
     pub fn log(comptime msg: []const u8, args: anytype) void {
-        // mutex.lock();
-        // defer mutex.unlock();
-
         if (instance != null) {
             instance.?.log(msg, args);
         } else std.log.err("Error: Attempted to call Logger.log() before Logger is initialized! Culprit: {s}", .{msg});

@@ -4,7 +4,8 @@ const c = @import("lib/sys/system.zig").c;
 const rl = @import("raylib");
 const osd = @import("osdialog");
 
-const Logger = @import("./lib/util/logger.zig").LoggerSingleton;
+const Logger = @import("managers/GlobalLogger.zig").LoggerSingleton;
+const ResourceManager = @import("managers/ResourceManager.zig").ResourceManagerSingleton;
 
 const debug = @import("lib/util/debug.zig");
 const strings = @import("lib/util/strings.zig");
@@ -18,13 +19,13 @@ const PrivilegedHelper = @import("modules/macos/PrivilegedHelper.zig");
 
 const UI = @import("lib/ui/ui.zig");
 
-const Checkbox = @import("lib/ui/Checkbox.zig").Checkbox();
-
 const AppObserver = @import("observers/AppObserver.zig").AppObserver;
 
 const Component = @import("components/Component.zig");
 const ComponentID = @import("components/Registry.zig").ComponentID;
 const ComponentRegistry = @import("components/Registry.zig").ComponentRegistry;
+
+const Font = @import("managers/ResourceManager.zig").FONT;
 
 const FilePickerComponent = @import("components/FilePicker/Component.zig");
 const USBDevicesListComponent = @import("components/USBDevicesList/Component.zig");
@@ -56,7 +57,7 @@ pub fn main() !void {
     defer Logger.deinit();
 
     rl.initWindow(Window.width, Window.height, "");
-    defer rl.closeWindow(); // Close window and OpenGL context
+    defer rl.closeWindow();
 
     const m = rl.getCurrentMonitor();
     const mWidth = rl.getMonitorWidth(m);
@@ -73,9 +74,10 @@ pub fn main() !void {
         @as(i32, @divTrunc(mHeight, 2) - @divTrunc(Window.height, 2)),
     );
 
-    // LOAD FONTS HERE
-
     rl.setTargetFPS(60);
+
+    try ResourceManager.init(allocator);
+    defer ResourceManager.deinit();
 
     //--------------------------------------------------------------------------------------
 
@@ -150,7 +152,13 @@ pub fn main() !void {
         flashRect.draw();
 
         rl.drawText("freetracer", @intFromFloat(relW(0.08)), @intFromFloat(relH(0.035)), 22, .white);
-        rl.drawText("free and open-source by orbitixx", @intFromFloat(relW(0.08)), @intFromFloat(relH(0.035) + 23), 14, .light_gray);
+        rl.drawText(
+            "free and open-source by orbitixx",
+            @intFromFloat(relW(0.08)),
+            @intFromFloat(relH(0.035) + 23),
+            13,
+            .light_gray,
+        );
 
         rl.drawText(
             if (helperResponse) "HELPER SUCCESS" else "HELPER FAILED",
@@ -160,12 +168,13 @@ pub fn main() !void {
             if (helperResponse) .green else .red,
         );
 
-        rl.drawText(
+        rl.drawTextEx(
+            ResourceManager.getFont(Font.ROBOTO_REGULAR),
             Logger.getLatestLog(),
-            @intFromFloat(relW(0.02)),
-            @intFromFloat(relH(0.95)),
-            13,
-            .white,
+            .{ .x = relW(0.02), .y = relH(0.95) },
+            14,
+            0,
+            .light_gray,
         );
 
         componentRegistry.processRendering();

@@ -3,6 +3,7 @@ const debug = @import("../../lib/util/debug.zig");
 const UI = @import("../../lib/ui/ui.zig");
 
 const AppObserverF = @import("../../observers/AppObserver.zig");
+
 const AppObserver = AppObserverF.AppObserver;
 const Event = AppObserverF.Event;
 const EventPayload = AppObserverF.Payload;
@@ -33,7 +34,7 @@ pub fn init(allocator: std.mem.Allocator, appObserver: *const AppObserver) FileP
         .allocator = allocator,
         .appObserver = appObserver,
         .state = state,
-        .button = UI.Button().init("Select ISO...", 150, 150, 14, .white, .red),
+        .button = UI.Button().init("Select ISO...", 150, 150, 18, .white, .red),
     };
 }
 

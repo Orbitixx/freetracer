@@ -1,5 +1,5 @@
 const std = @import("std");
-const Logger = @import("./logger.zig").LoggerSingleton;
+const Logger = @import("../../managers/GlobalLogger.zig").LoggerSingleton;
 
 pub fn print(comptime msg: []const u8) void {
     std.debug.print(msg, .{});
