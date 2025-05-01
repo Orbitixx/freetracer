@@ -22,7 +22,7 @@ pub const ResourceManagerSingleton = struct {
         const cwd = try std.process.getCwdAlloc(allocator);
         defer allocator.free(cwd);
 
-        const robotoFontFile = try std.fs.path.joinZ(allocator, &[_][]const u8{ cwd, "src/resources/Roboto-Regular.ttf" });
+        const robotoFontFile = try getResourcePath(allocator, "Roboto-Regular.ttf");
         defer allocator.free(robotoFontFile);
 
         debug.printf("Final file: {s}", .{robotoFontFile});
@@ -68,3 +68,36 @@ pub const ResourceError = error{
 pub const FONT = enum(usize) {
     ROBOTO_REGULAR = 0,
 };
+
+// TODO: Make a Linux adaptation
+fn getResourcePath(allocator: std.mem.Allocator, resourceName: []const u8) ![:0]u8 {
+    // On macOS, get the path to the executable
+    const execPath = try std.fs.selfExePathAlloc(allocator);
+    defer allocator.free(execPath);
+
+    // For a .app bundle, the executable is typically in Contents/MacOS
+    // and resources are in Contents/Resources
+    const execDir = std.fs.path.dirname(execPath) orelse ".";
+
+    // Check if we're in a .app bundle (Contents/MacOS directory)
+    if (std.mem.endsWith(u8, execDir, "Contents/MacOS")) {
+        // Navigate to Contents/Resources
+        const resourcesDir = try std.fs.path.join(allocator, &[_][]const u8{
+            execDir, "../Resources",
+        });
+        defer allocator.free(resourcesDir);
+
+        // Join with the resource name
+        return std.fs.path.joinZ(allocator, &[_][]const u8{
+            resourcesDir, resourceName,
+        });
+    } else {
+        // Fallback for development: try looking in src/resources relative to CWD
+        const cwd = try std.process.getCwdAlloc(allocator);
+        defer allocator.free(cwd);
+
+        return std.fs.path.joinZ(allocator, &[_][]const u8{
+            cwd, "src/resources", resourceName,
+        });
+    }
+}

@@ -5,6 +5,7 @@ const MacOS = @import("../modules/macos/MacOSTypes.zig");
 const DiskArbitration = @import("../modules/macos/DiskArbitration.zig");
 const PrivilegedHelper = @import("../modules/macos/PrivilegedHelper.zig");
 
+const FilePickerComponent = @import("../components/FilePicker/Component.zig");
 const USBDevicesListComponent = @import("../components/USBDevicesList/Component.zig");
 
 const comp = @import("../components/Component.zig");
@@ -13,6 +14,7 @@ const ComponentID = @import("../components/Registry.zig").ComponentID;
 const ComponentRegistry = @import("../components/Registry.zig").ComponentRegistry;
 
 pub const Event = enum {
+    SELECT_ISO_BTN_CLICKED,
     ISO_FILE_SELECTED,
     USB_DEVICES_DISCOVERED,
     USB_DEVICE_SELECTED,
@@ -27,6 +29,7 @@ pub const AppObserver = struct {
 
     pub fn onNotify(self: AppObserver, event: Event, payload: Payload) void {
         switch (event) {
+            .SELECT_ISO_BTN_CLICKED => self.processSelectISOBtnClicked(),
             .ISO_FILE_SELECTED => self.processISOFileSelected(),
             .USB_DEVICES_DISCOVERED => debug.print("\nAppObserver: USB_DEVICES_DISCOVERED signal received."),
             .USB_DEVICE_SELECTED => {
@@ -34,6 +37,11 @@ pub const AppObserver = struct {
                 if (payload.data) |data| self.processUSBDeviceSelected(data) else debug.print("\nAppObserver: NULL payload data received.");
             },
         }
+    }
+
+    pub fn processSelectISOBtnClicked(self: AppObserver) void {
+        const isoFilePickerComp: *FilePickerComponent = @ptrCast(@alignCast(self.componentRegistry.getComponent(ComponentID.ISOFilePicker).?.ptr));
+        isoFilePickerComp.dispatchComponentAction();
     }
 
     pub fn processISOFileSelected(self: AppObserver) void {

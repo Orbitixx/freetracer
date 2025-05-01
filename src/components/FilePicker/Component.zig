@@ -13,14 +13,15 @@ const Component = @import("../Component.zig");
 const FilePickerComponent = @This();
 const FilePickerState = @import("State.zig");
 const FilePickerWorker = @import("Worker.zig");
+const ComponentUI = @import("UI.zig");
 
 allocator: std.mem.Allocator,
 appObserver: *const AppObserver,
 state: *FilePickerState,
-button: UI.Button(),
 worker: ?std.Thread = null,
 componentActive: bool = true,
 currentPath: ?[:0]const u8 = null,
+ui: ComponentUI,
 
 pub fn init(allocator: std.mem.Allocator, appObserver: *const AppObserver) FilePickerComponent {
     const state = allocator.create(FilePickerState) catch |err| {
@@ -30,12 +31,18 @@ pub fn init(allocator: std.mem.Allocator, appObserver: *const AppObserver) FileP
 
     state.* = .{ .allocator = allocator };
 
-    return .{
+    var component: FilePickerComponent = .{
         .allocator = allocator,
         .appObserver = appObserver,
         .state = state,
-        .button = UI.Button().init("Select ISO...", 150, 150, 18, .white, .red),
+        .ui = .{
+            .appObserver = appObserver,
+        },
     };
+
+    component.ui.init();
+
+    return component;
 }
 
 pub fn enable(self: *FilePickerComponent) void {
@@ -45,13 +52,9 @@ pub fn enable(self: *FilePickerComponent) void {
 pub fn update(self: *FilePickerComponent) void {
     if (!self.componentActive) return;
 
-    self.button.events();
-
-    const isBtnClicked = self.button.mouseClick;
-
-    if (isBtnClicked) dispatchComponentAction(self);
-
     var workerFinished = false;
+
+    self.ui.update();
 
     self.state.mutex.lock();
 
@@ -79,7 +82,9 @@ pub fn update(self: *FilePickerComponent) void {
 
 pub fn draw(self: *FilePickerComponent) void {
     if (!self.componentActive) return;
-    self.button.draw();
+
+    self.ui.draw();
+    // self.button.draw();
 }
 
 pub fn notify(self: *FilePickerComponent, event: Event, payload: EventPayload) void {
@@ -106,7 +111,7 @@ pub fn asComponent(self: *const FilePickerComponent) Component {
     };
 }
 
-fn dispatchComponentAction(self: *FilePickerComponent) void {
+pub fn dispatchComponentAction(self: *FilePickerComponent) void {
     self.state.mutex.lock();
 
     if (self.state.taskRunning) {
@@ -127,19 +132,6 @@ fn dispatchComponentAction(self: *FilePickerComponent) void {
     }
 
     self.state.mutex.unlock();
-
-    // self.worker = Thread.spawn(.{}, runFilePickerWorker, .{ self.allocator, self.state }) catch blk: {
-    //     debug.print("\nERROR! FilePickerComponent: Failed to spawn worker.\n");
-    //
-    //     self.state.mutex.lock();
-    //     // Reset state
-    //     self.state.taskDone = false;
-    //     self.state.taskRunning = false;
-    //     self.state.taskError = error.FailedToSpawnFilePickerWorker;
-    //
-    //     self.state.mutex.unlock();
-    //     break :blk null;
-    // };
 
     FilePickerWorker.run(self.allocator, self.state);
 }
