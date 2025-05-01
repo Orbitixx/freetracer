@@ -6,6 +6,7 @@ const osd = @import("osdialog");
 
 const Logger = @import("managers/GlobalLogger.zig").LoggerSingleton;
 const ResourceManager = @import("managers/ResourceManager.zig").ResourceManagerSingleton;
+const WindowManager = @import("managers/WindowManager.zig").WindowManagerSingleton;
 
 const debug = @import("lib/util/debug.zig");
 const strings = @import("lib/util/strings.zig");
@@ -30,18 +31,8 @@ const Font = @import("managers/ResourceManager.zig").FONT;
 const FilePickerComponent = @import("components/FilePicker/Component.zig");
 const USBDevicesListComponent = @import("components/USBDevicesList/Component.zig");
 
-// const ArgValidator = struct {
-//     isoPath: bool = false,
-//     devicePath: bool = false,
-// };
-
-const WINDOW_WIDTH_FACTOR: f32 = 0.5;
-const WINDOW_HEIGHT_FACTOR: f32 = 0.5;
-
-var Window: UI.Window = .{
-    .width = 0,
-    .height = 0,
-};
+const relH = WindowManager.relH;
+const relW = WindowManager.relW;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{ .thread_safe = true }){};
@@ -53,28 +44,10 @@ pub fn main() !void {
     }
 
     try Logger.init(allocator);
-    errdefer Logger.deinit();
     defer Logger.deinit();
 
-    rl.initWindow(Window.width, Window.height, "");
-    defer rl.closeWindow();
-
-    const m = rl.getCurrentMonitor();
-    const mWidth = rl.getMonitorWidth(m);
-    const mHeight = rl.getMonitorHeight(m);
-
-    Window.width = @intFromFloat(@as(f32, @floatFromInt(mWidth)) * WINDOW_WIDTH_FACTOR);
-    Window.height = @intFromFloat(@as(f32, @floatFromInt(mHeight)) * WINDOW_HEIGHT_FACTOR);
-
-    debug.printf("\nWINDOW INITIALIZED: {d}x{d}\n", .{ Window.width, Window.height });
-
-    rl.setWindowSize(Window.width, Window.height);
-    rl.setWindowPosition(
-        @as(i32, @divTrunc(mWidth, 2) - @divTrunc(Window.width, 2)),
-        @as(i32, @divTrunc(mHeight, 2) - @divTrunc(Window.height, 2)),
-    );
-
-    rl.setTargetFPS(60);
+    try WindowManager.init();
+    defer WindowManager.deinit();
 
     try ResourceManager.init(allocator);
     defer ResourceManager.deinit();
@@ -102,35 +75,34 @@ pub fn main() !void {
 
     //--- @ENDCOMPONENTS -------------------------------------------------------------------
 
-    const isoRect: UI.Rect = .{
-        .x = relW(0.08),
-        .y = relH(0.2),
-        .width = relW(0.35),
-        .height = relH(0.7),
-        .color = .{ .r = 248, .g = 135, .b = 255, .a = 17 },
-    };
-
-    const usbRect: UI.Rect = .{
-        .x = isoRect.x + isoRect.width + relW(0.02),
-        .y = relH(0.2),
-        .width = relW(0.20),
-        .height = relH(0.7),
-        .color = .{ .r = 91, .g = 130, .b = 149, .a = 100 },
-    };
-
-    const flashRect: UI.Rect = .{
-        .x = usbRect.x + usbRect.width + relW(0.02),
-        .y = relH(0.2),
-        .width = relW(0.20),
-        .height = relH(0.7),
-        .color = .{ .r = 47, .g = 102, .b = 77, .a = 100 },
-    };
+    // const isoRect: UI.Rect = .{
+    //     .x = relW(0.08),
+    //     .y = relH(0.2),
+    //     .width = relW(0.35),
+    //     .height = relH(0.7),
+    //     .color = .{ .r = 248, .g = 135, .b = 255, .a = 17 },
+    // };
+    //
+    // const usbRect: UI.Rect = .{
+    //     .x = isoRect.x + isoRect.width + relW(0.02),
+    //     .y = relH(0.2),
+    //     .width = relW(0.20),
+    //     .height = relH(0.7),
+    //     .color = .{ .r = 91, .g = 130, .b = 149, .a = 100 },
+    // };
+    //
+    // const flashRect: UI.Rect = .{
+    //     .x = usbRect.x + usbRect.width + relW(0.02),
+    //     .y = relH(0.2),
+    //     .width = relW(0.20),
+    //     .height = relH(0.7),
+    //     .color = .{ .r = 47, .g = 102, .b = 77, .a = 100 },
+    // };
 
     var helperResponse: bool = false;
     helperResponse = true;
     // if (!PrivilegedHelper.isHelperToolInstalled()) {
     // helperResponse = PrivilegedHelper.installPrivilegedHelperTool();
-    // if (helperResponse) helperResponse = PrivilegedHelper.performPrivilegedTask(disk);
     // } else helperResponse = true;
 
     // Main application GUI.loop
@@ -147,9 +119,9 @@ pub fn main() !void {
 
         rl.clearBackground(backgroundColor);
 
-        isoRect.draw();
-        usbRect.draw();
-        flashRect.draw();
+        // isoRect.draw();
+        // usbRect.draw();
+        // flashRect.draw();
 
         rl.drawText("freetracer", @intFromFloat(relW(0.08)), @intFromFloat(relH(0.035)), 22, .white);
         rl.drawText(
@@ -215,12 +187,4 @@ pub fn main() !void {
     // }
 
     debug.print("\n");
-}
-
-pub fn relW(x: f32) f32 {
-    return (@as(f32, @floatFromInt(Window.width)) * x);
-}
-
-pub fn relH(y: f32) f32 {
-    return (@as(f32, @floatFromInt(Window.height)) * y);
 }

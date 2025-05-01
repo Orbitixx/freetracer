@@ -23,7 +23,7 @@ pub fn Checkbox() type {
         hovered: bool = false,
 
         pub fn init(text: [:0]const u8, x: f32, y: f32, size: f32) Self {
-            const fontSize: i32 = 14;
+            const fontSize: f32 = 14;
 
             return .{
                 .rect = .{
@@ -35,8 +35,8 @@ pub fn Checkbox() type {
                 },
 
                 .text = .{
-                    .x = @as(i32, @intFromFloat(x + size + 4)),
-                    .y = @as(i32, @intFromFloat(y + (size / 2))) - fontSize / 2,
+                    .x = x + size + 4,
+                    .y = y + (size / 2) - fontSize / 2,
                     .value = text,
                     .fontSize = fontSize,
                     .color = rl.Color.white,
@@ -50,7 +50,7 @@ pub fn Checkbox() type {
             const totalBounds: rl.Rectangle = .{
                 .x = self.rect.x,
                 .y = self.rect.y,
-                .width = self.rect.width + @as(f32, @floatFromInt(self.text.getWidth())) + self.text.padding.x + self.text.padding.width,
+                .width = self.rect.width + self.text.getWidth() + self.text.padding.x + self.text.padding.width,
                 .height = self.rect.height,
             };
 

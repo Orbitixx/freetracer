@@ -15,39 +15,32 @@ pub const Rect = struct {
     width: f32,
     height: f32,
     color: rl.Color,
+    inactiveColor: ?rl.Color = null,
 
     pub fn draw(self: @This()) void {
-        // rl.drawRectangleV(.{ .x = self.x, .y = self.y }, .{ .x = self.width, .y = self.height }, self.color);
         rl.drawRectangleRounded(.{ .x = self.x, .y = self.y, .width = self.width, .height = self.height }, 0.04, 6, self.color);
     }
 };
 
 pub const Text = struct {
-    x: i32,
-    y: i32,
+    x: f32,
+    y: f32,
     padding: rl.Rectangle = .{ .x = 0, .y = 0, .width = 0, .height = 0 },
     value: [:0]const u8,
-    fontSize: i32,
+    fontSize: f32,
     color: rl.Color,
 
-    pub fn getWidth(self: Text) i32 {
-        return rl.measureText(self.value, self.fontSize);
+    pub fn getWidth(self: Text) f32 {
+        // TODO: Fix casts by using measureTextEx
+        return @floatFromInt(rl.measureText(self.value, @as(i32, @intFromFloat(self.fontSize))));
     }
 
     pub fn draw(self: Text) void {
-        // rl.drawText(
-        //     self.value,
-        //     self.x,
-        //     self.y,
-        //     self.fontSize,
-        //     self.color,
-        // );
-
         rl.drawTextEx(
             ResourceManager.getFont(Font.ROBOTO_REGULAR),
             self.value,
-            .{ .x = @floatFromInt(self.x), .y = @floatFromInt(self.y) },
-            @floatFromInt(self.fontSize),
+            .{ .x = self.x, .y = self.y },
+            self.fontSize,
             0,
             self.color,
         );
@@ -63,20 +56,23 @@ pub fn Button() type {
         mouseHover: bool = false,
         mouseClick: bool = false,
 
-        pub fn init(text: [:0]const u8, x: f32, y: f32, fontSize: i32, rectColor: rl.Color, textColor: rl.Color) Self {
-            const width: i32 = rl.measureText(text, fontSize);
+        pub fn init(text: [:0]const u8, x: f32, y: f32, fontSize: f32, rectColor: rl.Color, textColor: rl.Color) Self {
+            // TODO: Fix casts
+            const width: i32 = rl.measureText(text, @as(i32, @intFromFloat(fontSize)));
+
             return .{
                 .rect = .{
                     .x = x,
                     .y = y,
                     .width = @floatFromInt(width + 32),
-                    .height = @floatFromInt(fontSize + 16),
+                    .height = fontSize + 16,
                     .color = rectColor,
                 },
+
                 .text = .{
                     .value = text,
-                    .x = @intFromFloat(x + 16),
-                    .y = @intFromFloat(y + 8),
+                    .x = x + 16,
+                    .y = y + 8,
                     .fontSize = fontSize,
                     .color = textColor,
                 },
@@ -86,22 +82,6 @@ pub fn Button() type {
         pub fn draw(self: @This()) void {
             self.rect.draw();
             self.text.draw();
-            // rl.drawText(
-            //     self.text.value,
-            //     self.text.x,
-            //     self.text.y,
-            //     self.text.fontSize,
-            //     self.text.color,
-            // );
-            //
-            // rl.drawTextEx(
-            //     ResourceManager.getFont(Font.ROBOTO_REGULAR),
-            //     self.value,
-            //     .{ .x = @floatFromInt(self.x), .y = @floatFromInt(self.y) },
-            //     @floatFromInt(self.text.fontSize),
-            //     0,
-            //     self.color,
-            // );
         }
 
         pub fn events(self: *Self) void {
@@ -111,7 +91,7 @@ pub fn Button() type {
                 self.rect.color = .yellow;
                 self.mouseHover = true;
             } else {
-                self.rect.color = .white;
+                self.rect.color = self.rect.inactiveColor orelse .white;
                 self.mouseHover = false;
             }
 

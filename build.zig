@@ -24,6 +24,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
+        .strip = false,
     });
 
     // This creates another `std.Build.Step.Compile`, but this one builds an executable
