@@ -15,10 +15,9 @@ pub const Rect = struct {
     width: f32,
     height: f32,
     color: rl.Color,
-    inactiveColor: ?rl.Color = null,
 
     pub fn draw(self: @This()) void {
-        rl.drawRectangleRounded(.{ .x = self.x, .y = self.y, .width = self.width, .height = self.height }, 0.04, 6, self.color);
+        rl.drawRectangleRounded(.{ .x = self.x, .y = self.y, .width = self.width, .height = self.height }, 0.2, 6, self.color);
     }
 };
 
@@ -47,60 +46,104 @@ pub const Text = struct {
     }
 };
 
+const BUTTON_PADDING: f32 = 16;
+
+pub const ButtonState = enum {
+    NORMAL,
+    HOVER,
+    ACTIVE,
+};
+
+pub const ButtonColorVariant = struct {
+    rect: rl.Color,
+    text: rl.Color,
+};
+
+pub const ButtonColorVariants = struct {
+    normal: ButtonColorVariant,
+    hover: ButtonColorVariant,
+    active: ButtonColorVariant,
+};
+
 pub fn Button() type {
     return struct {
         const Self = @This();
 
         rect: Rect,
         text: Text,
-        mouseHover: bool = false,
-        mouseClick: bool = false,
+        state: ButtonState = ButtonState.NORMAL,
+        variants: ButtonColorVariants,
 
-        pub fn init(text: [:0]const u8, x: f32, y: f32, fontSize: f32, rectColor: rl.Color, textColor: rl.Color) Self {
-            // TODO: Fix casts
+        pub fn init(text: [:0]const u8, x: f32, y: f32, fontSize: f32, variants: ButtonColorVariants) Self {
+            // TODO: Fix casts by using measureTextEx
             const width: i32 = rl.measureText(text, @as(i32, @intFromFloat(fontSize)));
 
             return .{
                 .rect = .{
                     .x = x,
                     .y = y,
-                    .width = @floatFromInt(width + 32),
-                    .height = fontSize + 16,
-                    .color = rectColor,
+                    .width = @as(f32, @floatFromInt(width)) + BUTTON_PADDING * 2,
+                    .height = fontSize + BUTTON_PADDING,
+                    .color = .white,
                 },
 
                 .text = .{
                     .value = text,
-                    .x = x + 16,
-                    .y = y + 8,
+                    .x = x + BUTTON_PADDING,
+                    .y = y + BUTTON_PADDING / 2,
                     .fontSize = fontSize,
-                    .color = textColor,
+                    .color = .black,
                 },
+
+                .variants = variants,
             };
         }
 
-        pub fn draw(self: @This()) void {
+        pub fn draw(self: Self) void {
             self.rect.draw();
             self.text.draw();
         }
 
         pub fn events(self: *Self) void {
             const mousePos: rl.Vector2 = rl.getMousePosition();
+            const isButtonClicked: bool = rl.isMouseButtonPressed(.left);
+            const isButtonHovered: bool = rl.checkCollisionPointRec(mousePos, .{
+                .x = self.rect.x,
+                .y = self.rect.y,
+                .width = self.rect.width,
+                .height = self.rect.height,
+            });
 
-            if (mousePos.x > self.rect.x and mousePos.x < self.rect.x + self.rect.width and mousePos.y > self.rect.y and mousePos.y < self.rect.y + self.rect.height) {
-                self.rect.color = .yellow;
-                self.mouseHover = true;
+            if (isButtonHovered and isButtonClicked) {
+                self.state = ButtonState.ACTIVE;
+            } else if (isButtonHovered) {
+                self.state = ButtonState.HOVER;
             } else {
-                self.rect.color = self.rect.inactiveColor orelse .white;
-                self.mouseHover = false;
+                self.state = ButtonState.NORMAL;
             }
 
-            if (self.mouseHover == true and self.mouseClick == false) {
-                if (rl.isMouseButtonPressed(.left)) {
-                    self.rect.color = .gray;
-                    self.mouseClick = true;
-                }
-            } else self.mouseClick = false;
+            switch (self.state) {
+                .HOVER => {
+                    self.rect.color = self.variants.hover.rect;
+                    self.text.color = self.variants.hover.text;
+                },
+                .ACTIVE => {
+                    self.rect.color = self.variants.active.rect;
+                    self.text.color = self.variants.active.text;
+                },
+                .NORMAL => {
+                    self.rect.color = self.variants.normal.rect;
+                    self.text.color = self.variants.normal.text;
+                },
+            }
+        }
+
+        pub fn setPosition(self: *Self, x: f32, y: f32) void {
+            self.rect.x = x;
+            self.rect.y = y;
+
+            self.text.x = x + BUTTON_PADDING;
+            self.text.y = y + BUTTON_PADDING / 2;
         }
     };
 }

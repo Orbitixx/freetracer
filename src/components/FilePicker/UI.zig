@@ -11,6 +11,10 @@ const AppObserverEvent = @import("../../observers/AppObserver.zig").Event;
 const relW = WindowManager.relW;
 const relH = WindowManager.relH;
 
+const ButtonState = UI.ButtonState;
+const ButtonColorVariants = UI.ButtonColorVariants;
+const ButtonColorVariant = UI.ButtonColorVariant;
+
 const Self = @This();
 
 /// ComponentUI's focused state relative to other components
@@ -27,31 +31,45 @@ pub fn init(self: *Self) void {
     const rectY1: f32 = self.bgRect.?.y;
     const rectY2: f32 = self.bgRect.?.y + self.bgRect.?.height;
 
-    const btnFgColor: rl.Color = .{ .r = 115, .g = 102, .b = 162, .a = 100 };
-
-    self.button = UI.Button().init("SELECT ISO", 0, 0, 18, btnFgColor, .white);
+    self.button = UI.Button().init("SELECT ISO", 0, 0, 18, BUTTON_COLOR_VARIANTS);
 
     const btnX: f32 = @divTrunc(rectX1 + rectX2, @as(f32, 2.0)) - @divTrunc(self.button.?.rect.width, @as(f32, 2.0));
     const btnY: f32 = @divTrunc(rectY1 + rectY2, @as(f32, 2.0)) - @divTrunc(self.button.?.rect.height, @as(f32, 2.0));
 
-    self.button.?.rect.x = btnX;
-    self.button.?.rect.y = btnY;
+    self.button.?.setPosition(btnX, btnY);
 }
 
 pub fn update(self: *Self) void {
-    var isBtnClicked = false;
-
-    if (self.button != null) {
-        self.button.?.events();
-        isBtnClicked = self.button.?.mouseClick;
+    if (self.button) |*button| {
+        button.events();
+        if (button.state == ButtonState.ACTIVE) self.appObserver.onNotify(AppObserverEvent.SELECT_ISO_BTN_CLICKED, .{});
     }
-
-    if (isBtnClicked) self.appObserver.onNotify(AppObserverEvent.SELECT_ISO_BTN_CLICKED, .{});
 }
 
 pub fn draw(self: Self) void {
     rl.drawRectangleRounded(self.bgRect.?, 0.04, 0, .{ .r = 248, .g = 135, .b = 255, .a = 17 });
     rl.drawRectangleRoundedLinesEx(self.bgRect.?, 0.04, 0, 2, .white);
 
-    if (self.button != null) self.button.?.draw();
+    if (self.button) |button| button.draw();
 }
+
+const BUTTON_VARIANT_NORMAL: ButtonColorVariant = .{
+    .rect = .{ .r = 115, .g = 102, .b = 162, .a = 100 },
+    .text = .white,
+};
+
+const BUTTON_VARIANT_HOVER: ButtonColorVariant = .{
+    .rect = .{ .r = 115, .g = 102, .b = 162, .a = 50 },
+    .text = .white,
+};
+
+const BUTTON_VARIANT_ACTIVE: ButtonColorVariant = .{
+    .rect = .{ .r = 96, .g = 83, .b = 145, .a = 100 },
+    .text = .white,
+};
+
+const BUTTON_COLOR_VARIANTS: ButtonColorVariants = .{
+    .normal = BUTTON_VARIANT_NORMAL,
+    .hover = BUTTON_VARIANT_HOVER,
+    .active = BUTTON_VARIANT_ACTIVE,
+};
