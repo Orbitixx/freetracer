@@ -10,6 +10,7 @@ env.zig
 
 *.app/
 zig-out/
+src/resources/
 
 .vscode/
 .zig-cache/
