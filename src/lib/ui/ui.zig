@@ -9,15 +9,12 @@ pub const Window = struct {
     height: i32,
 };
 
-pub const Rect = struct {
-    x: f32,
-    y: f32,
-    width: f32,
-    height: f32,
+pub const UIRectangle = struct {
+    transform: Rectangle,
     color: rl.Color,
 
-    pub fn draw(self: @This()) void {
-        rl.drawRectangleRounded(.{ .x = self.x, .y = self.y, .width = self.width, .height = self.height }, 0.2, 6, self.color);
+    pub fn draw(self: UIRectangle) void {
+        rl.drawRectangleRounded(self.transform.toRaylibRectangle(), 0.2, 6, self.color);
     }
 };
 
@@ -46,6 +43,27 @@ pub const Text = struct {
     }
 };
 
+pub const Rectangle = struct {
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+
+    /// Returns absolute X coordinate relative to the Rectange's position and width
+    pub fn relW(self: Rectangle, x: f32) f32 {
+        return self.x + self.w * x;
+    }
+
+    /// Returns absolute X coordinate relative to the Rectange's position and width
+    pub fn relH(self: Rectangle, y: f32) f32 {
+        return self.y + self.h * y;
+    }
+
+    pub fn toRaylibRectangle(self: Rectangle) rl.Rectangle {
+        return rl.Rectangle{ .x = self.x, .y = self.y, .width = self.w, .height = self.h };
+    }
+};
+
 const BUTTON_PADDING: f32 = 16;
 
 pub const ButtonState = enum {
@@ -69,10 +87,11 @@ pub fn Button() type {
     return struct {
         const Self = @This();
 
-        rect: Rect,
+        rect: UIRectangle,
         text: Text,
         state: ButtonState = ButtonState.NORMAL,
         variants: ButtonColorVariants,
+        hasShadow: bool = false,
 
         pub fn init(text: [:0]const u8, x: f32, y: f32, fontSize: f32, variants: ButtonColorVariants) Self {
             // TODO: Fix casts by using measureTextEx
@@ -80,10 +99,12 @@ pub fn Button() type {
 
             return .{
                 .rect = .{
-                    .x = x,
-                    .y = y,
-                    .width = @as(f32, @floatFromInt(width)) + BUTTON_PADDING * 2,
-                    .height = fontSize + BUTTON_PADDING,
+                    .transform = .{
+                        .x = x,
+                        .y = y,
+                        .w = @as(f32, @floatFromInt(width)) + BUTTON_PADDING * 2,
+                        .h = fontSize + BUTTON_PADDING,
+                    },
                     .color = .white,
                 },
 
@@ -100,6 +121,13 @@ pub fn Button() type {
         }
 
         pub fn draw(self: Self) void {
+            // if (self.hasShadow) rl.drawRectangleRounded(.{
+            //     .x = self.rect.transform.x + 3,
+            //     .y = self.rect.transform.y + 3,
+            //     .width = self.rect.transform.w,
+            //     .height = self.rect.transform.h,
+            // }, 0.2, 6, .black);
+
             self.rect.draw();
             self.text.draw();
         }
@@ -107,12 +135,7 @@ pub fn Button() type {
         pub fn events(self: *Self) void {
             const mousePos: rl.Vector2 = rl.getMousePosition();
             const isButtonClicked: bool = rl.isMouseButtonPressed(.left);
-            const isButtonHovered: bool = rl.checkCollisionPointRec(mousePos, .{
-                .x = self.rect.x,
-                .y = self.rect.y,
-                .width = self.rect.width,
-                .height = self.rect.height,
-            });
+            const isButtonHovered: bool = rl.checkCollisionPointRec(mousePos, self.rect.transform.toRaylibRectangle());
 
             if (isButtonHovered and isButtonClicked) {
                 self.state = ButtonState.ACTIVE;
@@ -139,8 +162,8 @@ pub fn Button() type {
         }
 
         pub fn setPosition(self: *Self, x: f32, y: f32) void {
-            self.rect.x = x;
-            self.rect.y = y;
+            self.rect.transform.x = x;
+            self.rect.transform.y = y;
 
             self.text.x = x + BUTTON_PADDING;
             self.text.y = y + BUTTON_PADDING / 2;

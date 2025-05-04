@@ -25,20 +25,23 @@ pub const ResourceManagerSingleton = struct {
         const robotoFontFile = try getResourcePath(allocator, "Roboto-Regular.ttf");
         defer allocator.free(robotoFontFile);
 
+        const jerseyFontFile = try getResourcePath(allocator, "Jersey10-Regular.ttf");
+        defer allocator.free(jerseyFontFile);
+
         debug.printf("Final file: {s}", .{robotoFontFile});
 
-        const robotoRegular = try rl.loadFontEx(
-            robotoFontFile,
-            512,
-            null,
-        );
+        const robotoRegular = try rl.loadFontEx(robotoFontFile, 512, null);
+        const jersey10Regular = try rl.loadFontEx(jerseyFontFile, 512, null);
 
         instance = .{
             .allocator = allocator,
-            .fonts = try allocator.alloc(rl.Font, 1),
+            .fonts = try allocator.alloc(rl.Font, 2),
         };
 
-        instance.?.fonts[0] = robotoRegular;
+        if (instance) |*inst| {
+            inst.fonts[0] = robotoRegular;
+            inst.fonts[1] = jersey10Regular;
+        }
     }
 
     pub fn getFont(font: FONT) rl.Font {
@@ -67,6 +70,7 @@ pub const ResourceError = error{
 
 pub const FONT = enum(usize) {
     ROBOTO_REGULAR = 0,
+    JERSEY10_REGULAR = 1,
 };
 
 // TODO: Make a Linux adaptation

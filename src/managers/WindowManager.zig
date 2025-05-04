@@ -64,6 +64,7 @@ pub const WindowManagerSingleton = struct {
         return 0;
     }
 
+    /// Determines absolute X position relative to the main window's dimensions
     pub fn relW(x: f32) f32 {
         std.debug.assert(x > 0);
         if (instance) |inst| return inst.width * x;
@@ -72,6 +73,7 @@ pub const WindowManagerSingleton = struct {
         return 0;
     }
 
+    /// Determines absolute Y position relative to the main window's dimensions
     pub fn relH(y: f32) f32 {
         std.debug.assert(y > 0);
         if (instance) |inst| return inst.height * y;

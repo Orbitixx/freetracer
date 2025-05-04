@@ -16,7 +16,7 @@ pub fn Checkbox() type {
         context: ?*anyopaque = null,
         data: ?[]u8 = null,
 
-        rect: UI.Rect,
+        rect: UI.UIRectangle,
         text: UI.Text,
         checked: bool = false,
         pressed: bool = false,
@@ -27,10 +27,12 @@ pub fn Checkbox() type {
 
             return .{
                 .rect = .{
-                    .x = x,
-                    .y = y,
-                    .width = size,
-                    .height = size,
+                    .transform = .{
+                        .x = x,
+                        .y = y,
+                        .w = size,
+                        .h = size,
+                    },
                     .color = rl.Color.white,
                 },
 
@@ -48,10 +50,10 @@ pub fn Checkbox() type {
             const mousePos: rl.Vector2 = rl.getMousePosition();
 
             const totalBounds: rl.Rectangle = .{
-                .x = self.rect.x,
-                .y = self.rect.y,
-                .width = self.rect.width + self.text.getWidth() + self.text.padding.x + self.text.padding.width,
-                .height = self.rect.height,
+                .x = self.rect.transform.x,
+                .y = self.rect.transform.y,
+                .width = self.rect.transform.w + self.text.getWidth() + self.text.padding.x + self.text.padding.width,
+                .height = self.rect.transform.w,
             };
 
             // Check HOVERED state
@@ -89,11 +91,13 @@ pub fn Checkbox() type {
             self.text.draw();
 
             if (self.checked) {
-                const innerRect: UI.Rect = .{
-                    .x = self.rect.x + INNER_PADDING,
-                    .y = self.rect.y + INNER_PADDING,
-                    .width = self.rect.width - INNER_PADDING * 2,
-                    .height = self.rect.height - INNER_PADDING * 2,
+                const innerRect: UI.UIRectangle = .{
+                    .transform = .{
+                        .x = self.rect.transform.x + INNER_PADDING,
+                        .y = self.rect.transform.y + INNER_PADDING,
+                        .w = self.rect.transform.w - INNER_PADDING * 2,
+                        .h = self.rect.transform.h - INNER_PADDING * 2,
+                    },
                     .color = .black,
                 };
 

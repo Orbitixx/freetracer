@@ -3,6 +3,9 @@ const debug = @import("../../lib/util/debug.zig");
 const rl = @import("raylib");
 const UI = @import("../../lib/ui/ui.zig");
 const WindowManager = @import("../../managers/WindowManager.zig").WindowManagerSingleton;
+const ResourceManager = @import("../../managers/ResourceManager.zig").ResourceManagerSingleton;
+
+const Font = @import("../../managers/ResourceManager.zig").FONT;
 
 const FilePickerComponent = @import("Component.zig");
 const AppObserver = @import("../../observers/AppObserver.zig").AppObserver;
@@ -21,22 +24,20 @@ const Self = @This();
 active: bool = false,
 appObserver: *const AppObserver,
 button: ?UI.Button() = null,
-bgRect: ?rl.Rectangle = null,
+bgRect: ?UI.Rectangle = null,
+diskImage: ?rl.Texture2D = null,
 
 pub fn init(self: *Self) void {
-    self.bgRect = rl.Rectangle{ .x = relW(0.08), .y = relH(0.2), .width = relW(0.35), .height = relH(0.7) };
+    self.bgRect = UI.Rectangle{ .x = relW(0.08), .y = relH(0.2), .w = relW(0.35), .h = relH(0.7) };
 
-    const rectX1: f32 = self.bgRect.?.x;
-    const rectX2: f32 = self.bgRect.?.x + self.bgRect.?.width;
-    const rectY1: f32 = self.bgRect.?.y;
-    const rectY2: f32 = self.bgRect.?.y + self.bgRect.?.height;
+    self.button = UI.Button().init("SELECT ISO", 0, 0, 14, BUTTON_COLOR_VARIANTS);
 
-    self.button = UI.Button().init("SELECT ISO", 0, 0, 18, BUTTON_COLOR_VARIANTS);
-
-    const btnX: f32 = @divTrunc(rectX1 + rectX2, @as(f32, 2.0)) - @divTrunc(self.button.?.rect.width, @as(f32, 2.0));
-    const btnY: f32 = @divTrunc(rectY1 + rectY2, @as(f32, 2.0)) - @divTrunc(self.button.?.rect.height, @as(f32, 2.0));
+    const btnX: f32 = self.bgRect.?.relW(0.5) - @divTrunc(self.button.?.rect.transform.w, @as(f32, 2.0));
+    const btnY: f32 = self.bgRect.?.relH(0.9) - @divTrunc(self.button.?.rect.transform.h, @as(f32, 2.0));
 
     self.button.?.setPosition(btnX, btnY);
+    self.button.?.hasShadow = true;
+    self.diskImage = rl.loadTexture("/Users/cerberus/Documents/Projects/freetracer/src/resources/img/disk_image.png") catch unreachable;
 }
 
 pub fn update(self: *Self) void {
@@ -47,24 +48,35 @@ pub fn update(self: *Self) void {
 }
 
 pub fn draw(self: Self) void {
-    rl.drawRectangleRounded(self.bgRect.?, 0.04, 0, .{ .r = 248, .g = 135, .b = 255, .a = 17 });
-    rl.drawRectangleRoundedLinesEx(self.bgRect.?, 0.04, 0, 2, .white);
+    rl.drawRectangleRounded(self.bgRect.?.toRaylibRectangle(), 0.04, 0, .{ .r = 248, .g = 135, .b = 255, .a = 43 });
+    rl.drawRectangleRoundedLinesEx(self.bgRect.?.toRaylibRectangle(), 0.04, 0, 2, .white);
+
+    rl.drawTextEx(
+        ResourceManager.getFont(Font.JERSEY10_REGULAR),
+        "image",
+        .{ .x = self.bgRect.?.relW(0.04), .y = self.bgRect.?.relH(0.01) },
+        34,
+        0,
+        .white,
+    );
+
+    rl.drawTextureEx(self.diskImage.?, .{ .x = self.bgRect.?.relW(0.25), .y = self.bgRect.?.relH(0.3) }, 0, 1.0, .white);
 
     if (self.button) |button| button.draw();
 }
 
 const BUTTON_VARIANT_NORMAL: ButtonColorVariant = .{
-    .rect = .{ .r = 115, .g = 102, .b = 162, .a = 100 },
+    .rect = .{ .r = 115, .g = 102, .b = 162, .a = 255 },
     .text = .white,
 };
 
 const BUTTON_VARIANT_HOVER: ButtonColorVariant = .{
-    .rect = .{ .r = 115, .g = 102, .b = 162, .a = 50 },
+    .rect = .{ .r = 115, .g = 102, .b = 162, .a = 127 },
     .text = .white,
 };
 
 const BUTTON_VARIANT_ACTIVE: ButtonColorVariant = .{
-    .rect = .{ .r = 96, .g = 83, .b = 145, .a = 100 },
+    .rect = .{ .r = 96, .g = 83, .b = 145, .a = 255 },
     .text = .white,
 };
 

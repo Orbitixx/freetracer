@@ -3,6 +3,7 @@ const c = @import("lib/sys/system.zig").c;
 
 const rl = @import("raylib");
 const osd = @import("osdialog");
+const env = @import("env.zig");
 
 const Logger = @import("managers/GlobalLogger.zig").LoggerSingleton;
 const ResourceManager = @import("managers/ResourceManager.zig").ResourceManagerSingleton;
@@ -123,21 +124,41 @@ pub fn main() !void {
         // usbRect.draw();
         // flashRect.draw();
 
-        rl.drawText("freetracer", @intFromFloat(relW(0.08)), @intFromFloat(relH(0.035)), 22, .white);
-        rl.drawText(
-            "free and open-source by orbitixx",
-            @intFromFloat(relW(0.08)),
-            @intFromFloat(relH(0.035) + 23),
-            13,
-            .light_gray,
+        rl.drawTextEx(
+            ResourceManager.getFont(Font.JERSEY10_REGULAR),
+            "freetracer",
+            .{ .x = relW(0.08), .y = relH(0.035) },
+            40,
+            0,
+            .white,
         );
 
-        rl.drawText(
-            if (helperResponse) "HELPER SUCCESS" else "HELPER FAILED",
-            @intFromFloat(relW(0.86)),
-            @intFromFloat(relH(0.035)),
-            12,
-            if (helperResponse) .green else .red,
+        rl.drawTextEx(
+            ResourceManager.getFont(Font.JERSEY10_REGULAR),
+            "free and open-source by orbitixx",
+            .{ .x = relW(0.08), .y = relH(0.035) + 32 },
+            18,
+            0,
+            rl.Color.init(78, 96, 121, 255),
+        );
+
+        // rl.drawText(
+        //     if (helperResponse) "HELPER SUCCESS" else "HELPER FAILED",
+        //     @intFromFloat(relW(0.86)),
+        //     @intFromFloat(relH(0.035)),
+        //     12,
+        //     if (helperResponse) .green else .red,
+        // );
+
+        rl.drawCircleV(.{ .x = relW(0.9), .y = relH(0.065) }, 6, if (helperResponse) .green else .red);
+
+        rl.drawTextEx(
+            ResourceManager.getFont(Font.JERSEY10_REGULAR),
+            env.APP_VERSION,
+            .{ .x = relW(0.92), .y = relH(0.05) },
+            16,
+            0,
+            rl.Color.init(78, 96, 121, 255),
         );
 
         rl.drawTextEx(
