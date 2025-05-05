@@ -6,6 +6,7 @@ const WindowManager = @import("../../managers/WindowManager.zig").WindowManagerS
 const ResourceManager = @import("../../managers/ResourceManager.zig").ResourceManagerSingleton;
 
 const Font = @import("../../managers/ResourceManager.zig").FONT;
+const Texture = @import("../../managers/ResourceManager.zig").TEXTURE;
 
 const FilePickerComponent = @import("Component.zig");
 const AppObserver = @import("../../observers/AppObserver.zig").AppObserver;
@@ -25,7 +26,6 @@ active: bool = false,
 appObserver: *const AppObserver,
 button: ?UI.Button() = null,
 bgRect: ?UI.Rectangle = null,
-diskImage: ?rl.Texture2D = null,
 
 pub fn init(self: *Self) void {
     self.bgRect = UI.Rectangle{ .x = relW(0.08), .y = relH(0.2), .w = relW(0.35), .h = relH(0.7) };
@@ -37,7 +37,6 @@ pub fn init(self: *Self) void {
 
     self.button.?.setPosition(btnX, btnY);
     self.button.?.hasShadow = true;
-    self.diskImage = rl.loadTexture("/Users/cerberus/Documents/Projects/freetracer/src/resources/img/disk_image.png") catch unreachable;
 }
 
 pub fn update(self: *Self) void {
@@ -60,7 +59,7 @@ pub fn draw(self: Self) void {
         .white,
     );
 
-    rl.drawTextureEx(self.diskImage.?, .{ .x = self.bgRect.?.relW(0.25), .y = self.bgRect.?.relH(0.3) }, 0, 1.0, .white);
+    rl.drawTextureEx(ResourceManager.getTexture(Texture.DISK_IMAGE), .{ .x = self.bgRect.?.relW(0.25), .y = self.bgRect.?.relH(0.3) }, 0, 1.0, .white);
 
     if (self.button) |button| button.draw();
 }

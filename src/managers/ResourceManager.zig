@@ -9,10 +9,15 @@ pub const ResourceManagerSingleton = struct {
     pub const ResourceManager = struct {
         allocator: std.mem.Allocator,
         fonts: []rl.Font,
+        textures: []rl.Texture2D,
 
         pub fn getFont(self: ResourceManager, font: FONT) rl.Font {
             // if (self.fonts.len < 1) return ResourceError.NoFontsLoaded;
             return self.fonts[@intFromEnum(font)];
+        }
+
+        pub fn getTexture(self: ResourceManager, texture: TEXTURE) rl.Texture2D {
+            return self.textures[@intFromEnum(texture)];
         }
     };
 
@@ -22,30 +27,53 @@ pub const ResourceManagerSingleton = struct {
         const cwd = try std.process.getCwdAlloc(allocator);
         defer allocator.free(cwd);
 
+        //--------------------------------------//
+        //-------- *** LOAD FONTS *** ----------//
+        //--------------------------------------//
+
         const robotoFontFile = try getResourcePath(allocator, "Roboto-Regular.ttf");
         defer allocator.free(robotoFontFile);
 
         const jerseyFontFile = try getResourcePath(allocator, "Jersey10-Regular.ttf");
         defer allocator.free(jerseyFontFile);
 
-        debug.printf("Final file: {s}", .{robotoFontFile});
-
         const robotoRegular = try rl.loadFontEx(robotoFontFile, 512, null);
         const jersey10Regular = try rl.loadFontEx(jerseyFontFile, 512, null);
+
+        //----------------------------------------//
+        //-------- *** LOAD TEXTURES *** ---------//
+        //----------------------------------------//
+
+        const diskTextureFile = try getResourcePath(allocator, "disk_image.png");
+        defer allocator.free(diskTextureFile);
+
+        const diskTexture = try rl.loadTexture(diskTextureFile);
+
+        //----------------------------------------//
+        //-------- *** INITIALIZE INSTANCE *** ---//
+        //----------------------------------------//
 
         instance = .{
             .allocator = allocator,
             .fonts = try allocator.alloc(rl.Font, 2),
+            .textures = try allocator.alloc(rl.Texture2D, 1),
         };
 
         if (instance) |*inst| {
             inst.fonts[0] = robotoRegular;
             inst.fonts[1] = jersey10Regular;
+            inst.textures[0] = diskTexture;
         }
     }
 
+    // TODO: handle unhappy path
     pub fn getFont(font: FONT) rl.Font {
         return instance.?.getFont(font);
+    }
+
+    // TODO: handle unhappy path
+    pub fn getTexture(texture: TEXTURE) rl.Texture2D {
+        return instance.?.getTexture(texture);
     }
 
     pub fn deinit() void {
@@ -58,7 +86,12 @@ pub const ResourceManagerSingleton = struct {
             font.unload();
         }
 
+        for (instance.?.textures) |texture| {
+            texture.unload();
+        }
+
         allocator.free(instance.?.fonts);
+        allocator.free(instance.?.textures);
 
         instance = null;
     }
@@ -71,6 +104,10 @@ pub const ResourceError = error{
 pub const FONT = enum(usize) {
     ROBOTO_REGULAR = 0,
     JERSEY10_REGULAR = 1,
+};
+
+pub const TEXTURE = enum(usize) {
+    DISK_IMAGE = 0,
 };
 
 // TODO: Make a Linux adaptation

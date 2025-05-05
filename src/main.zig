@@ -150,7 +150,8 @@ pub fn main() !void {
         //     if (helperResponse) .green else .red,
         // );
 
-        rl.drawCircleV(.{ .x = relW(0.9), .y = relH(0.065) }, 6, if (helperResponse) .green else .red);
+        rl.drawCircleV(.{ .x = relW(0.9), .y = relH(0.065) }, 4.5, if (helperResponse) .green else .red);
+        rl.drawCircleLinesV(.{ .x = relW(0.9), .y = relH(0.065) }, 4.5, .white);
 
         rl.drawTextEx(
             ResourceManager.getFont(Font.JERSEY10_REGULAR),

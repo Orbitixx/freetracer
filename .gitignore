@@ -5,6 +5,8 @@ env.zig
 *.py
 *.iso
 *.plist
+*.png
+*.ttf
 
 .DS_Store
 
