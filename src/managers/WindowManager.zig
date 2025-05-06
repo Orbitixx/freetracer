@@ -28,7 +28,7 @@ pub const Window = struct {
 
         rl.setWindowPosition(newX, newY);
 
-        rl.setTargetFPS(60);
+        rl.setTargetFPS(env.WINDOW_FPS);
     }
 
     pub fn deinit(self: Window) void {

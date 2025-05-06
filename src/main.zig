@@ -19,8 +19,6 @@ const IOKit = @import("modules/macos/IOKit.zig");
 const DiskArbitration = @import("modules/macos/DiskArbitration.zig");
 const PrivilegedHelper = @import("modules/macos/PrivilegedHelper.zig");
 
-const UI = @import("lib/ui/ui.zig");
-
 const AppObserver = @import("observers/AppObserver.zig").AppObserver;
 
 const Component = @import("components/Component.zig");
@@ -44,6 +42,10 @@ pub fn main() !void {
         _ = gpa.deinit();
     }
 
+    //----------------------------------------------------------------------------------
+    //--- @MANAGERS --------------------------------------------------------------------
+    //----------------------------------------------------------------------------------
+
     try Logger.init(allocator);
     defer Logger.deinit();
 
@@ -53,11 +55,13 @@ pub fn main() !void {
     try ResourceManager.init(allocator);
     defer ResourceManager.deinit();
 
-    //--------------------------------------------------------------------------------------
+    //----------------------------------------------------------------------------------
+    //--- @END MANAGERS ----------------------------------------------------------------
+    //----------------------------------------------------------------------------------
 
-    const backgroundColor: rl.Color = .{ .r = 29, .g = 44, .b = 64, .a = 100 };
-
-    //--- @COMPONENTS ----------------------------------------------------------------------
+    //----------------------------------------------------------------------------------
+    //--- @COMPONENTS ------------------------------------------------------------------
+    //----------------------------------------------------------------------------------
 
     var componentRegistry: ComponentRegistry = .{ .components = std.AutoHashMap(ComponentID, Component).init(allocator) };
     defer componentRegistry.deinit();
@@ -74,31 +78,9 @@ pub fn main() !void {
         USBDevicesListComponent.init(allocator, &appObserver).asComponent(),
     );
 
-    //--- @ENDCOMPONENTS -------------------------------------------------------------------
-
-    // const isoRect: UI.Rect = .{
-    //     .x = relW(0.08),
-    //     .y = relH(0.2),
-    //     .width = relW(0.35),
-    //     .height = relH(0.7),
-    //     .color = .{ .r = 248, .g = 135, .b = 255, .a = 17 },
-    // };
-    //
-    // const usbRect: UI.Rect = .{
-    //     .x = isoRect.x + isoRect.width + relW(0.02),
-    //     .y = relH(0.2),
-    //     .width = relW(0.20),
-    //     .height = relH(0.7),
-    //     .color = .{ .r = 91, .g = 130, .b = 149, .a = 100 },
-    // };
-    //
-    // const flashRect: UI.Rect = .{
-    //     .x = usbRect.x + usbRect.width + relW(0.02),
-    //     .y = relH(0.2),
-    //     .width = relW(0.20),
-    //     .height = relH(0.7),
-    //     .color = .{ .r = 47, .g = 102, .b = 77, .a = 100 },
-    // };
+    //----------------------------------------------------------------------------------
+    //--- @END COMPONENTS --------------------------------------------------------------
+    //----------------------------------------------------------------------------------
 
     var helperResponse: bool = false;
     helperResponse = true;
@@ -106,23 +88,27 @@ pub fn main() !void {
     // helperResponse = PrivilegedHelper.installPrivilegedHelperTool();
     // } else helperResponse = true;
 
+    const backgroundColor: rl.Color = .{ .r = 29, .g = 44, .b = 64, .a = 100 };
+
     // Main application GUI.loop
     while (!rl.windowShouldClose()) { // Detect window close button or ESC key
         //----------------------------------------------------------------------------------
-        //--- @UPDATE ----------------------------------------------------------------------
+        //--- @UPDATE COMPONENTS -----------------------------------------------------------
+        //----------------------------------------------------------------------------------
+
         componentRegistry.processUpdates();
-        //--- @ENDUPDATE -------------------------------------------------------------------
+
+        //----------------------------------------------------------------------------------
+        //--- @ENDUPDATE COMPONENTS --------------------------------------------------------
+        //----------------------------------------------------------------------------------
 
         //----------------------------------------------------------------------------------
         //--- @DRAW ------------------------------------------------------------------------
         //----------------------------------------------------------------------------------
+
         rl.beginDrawing();
 
         rl.clearBackground(backgroundColor);
-
-        // isoRect.draw();
-        // usbRect.draw();
-        // flashRect.draw();
 
         rl.drawTextEx(
             ResourceManager.getFont(Font.JERSEY10_REGULAR),
@@ -141,14 +127,6 @@ pub fn main() !void {
             0,
             rl.Color.init(78, 96, 121, 255),
         );
-
-        // rl.drawText(
-        //     if (helperResponse) "HELPER SUCCESS" else "HELPER FAILED",
-        //     @intFromFloat(relW(0.86)),
-        //     @intFromFloat(relH(0.035)),
-        //     12,
-        //     if (helperResponse) .green else .red,
-        // );
 
         rl.drawCircleV(.{ .x = relW(0.9), .y = relH(0.065) }, 4.5, if (helperResponse) .green else .red);
         rl.drawCircleLinesV(.{ .x = relW(0.9), .y = relH(0.065) }, 4.5, .white);
@@ -174,7 +152,10 @@ pub fn main() !void {
         componentRegistry.processRendering();
 
         defer rl.endDrawing();
-        //--- @ENDDRAW----------------------------------------------------------------------
+
+        //----------------------------------------------------------------------------------
+        //--- @END DRAW --------------------------------------------------------------------
+        //----------------------------------------------------------------------------------
 
     }
 

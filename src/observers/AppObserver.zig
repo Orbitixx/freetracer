@@ -45,7 +45,15 @@ pub const AppObserver = struct {
     }
 
     pub fn processISOFileSelected(self: AppObserver) void {
+        const filePicker: *FilePickerComponent = self.getComponent(FilePickerComponent, ComponentID.ISOFilePicker);
+        filePicker.ui.active = false;
+
         self.componentRegistry.getComponent(ComponentID.USBDevicesList).?.enable();
+    }
+
+    pub fn getComponent(self: AppObserver, comptime T: type, componentId: ComponentID) *T {
+        const componentPtr: *T = @ptrCast(@alignCast(self.componentRegistry.getComponent(componentId).?.ptr));
+        return componentPtr;
     }
 
     pub fn processUSBDeviceSelected(self: AppObserver, bsdName: []u8) void {
