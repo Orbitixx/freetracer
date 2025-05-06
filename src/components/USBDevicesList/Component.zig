@@ -20,7 +20,7 @@ const USBDevicesListComponent = @This();
 const USBDevicesListState = @import("State.zig");
 const USBDevicesListWorker = @import("Worker.zig");
 
-const ComponentUI = @import("UI.zig").ComponentUI;
+const ComponentUI = @import("UI.zig");
 const UIDevice = @import("UI.zig").UIDevice;
 
 allocator: std.mem.Allocator,
@@ -42,29 +42,35 @@ pub fn init(allocator: std.mem.Allocator, appObserver: *const AppObserver) USBDe
         .devices = std.ArrayList(MacOS.USBStorageDevice).init(allocator),
     };
 
-    return .{
+    var component: USBDevicesListComponent = .{
         .allocator = allocator,
         .appObserver = appObserver,
         .state = state,
         .ui = .{
             .allocator = allocator,
             .devices = std.ArrayList(UIDevice).init(allocator),
+            .appObserver = appObserver,
         },
     };
+
+    component.ui.init();
+
+    return component;
 }
 
 pub fn enable(self: *USBDevicesListComponent) void {
     self.componentActive = true;
+    self.ui.active = true;
 }
 
 pub fn update(self: *USBDevicesListComponent) void {
-    if (self.componentActive) {
-        if (!self.devicesFound) {
-            debug.print("\nUSBDevicesListComponent: Dispatching component action...");
-            dispatchComponentAction(self);
-        }
-        self.componentActive = false;
-    }
+    // if (self.componentActive) {
+    //     if (!self.devicesFound) {
+    //         debug.print("\nUSBDevicesListComponent: Dispatching component action...");
+    //         dispatchComponentAction(self);
+    //     }
+    //     self.componentActive = false;
+    // }
 
     self.ui.update();
 
@@ -79,8 +85,7 @@ pub fn update(self: *USBDevicesListComponent) void {
         if (self.state.devices.items.len > 0) {
             self.devicesFound = true;
 
-            // Initialize component's UI
-            self.ui.init(self, self.state.devices.items);
+            self.ui.setDevices(self, self.state.devices.items);
         }
 
         self.notify(.USB_DEVICES_DISCOVERED, .{});
@@ -110,9 +115,8 @@ pub fn update(self: *USBDevicesListComponent) void {
 }
 
 pub fn draw(self: *USBDevicesListComponent) void {
-    if (!self.devicesFound) return;
-
     self.ui.draw();
+    // if (!self.devicesFound) return;
 }
 
 pub fn deinit(self: *USBDevicesListComponent) void {
@@ -159,7 +163,7 @@ pub fn macos_getDevice(self: *const USBDevicesListComponent, bsdName: []u8) ?Mac
     return null;
 }
 
-fn dispatchComponentAction(self: *USBDevicesListComponent) void {
+pub fn dispatchComponentAction(self: *USBDevicesListComponent) void {
     self.state.mutex.lock();
 
     if (self.state.taskRunning) {

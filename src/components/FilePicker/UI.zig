@@ -49,7 +49,9 @@ pub fn update(self: *Self) void {
     }
 }
 
-fn drawActive(self: Self) void {
+fn drawActive(self: *Self) void {
+    self.bgRect = UI.Rectangle{ .x = relW(0.08), .y = relH(0.2), .w = relW(0.35), .h = relH(0.7) };
+
     rl.drawRectangleRounded(self.bgRect.?.toRaylibRectangle(), 0.04, 0, .{ .r = 248, .g = 135, .b = 255, .a = 43 });
     rl.drawRectangleRoundedLinesEx(self.bgRect.?.toRaylibRectangle(), 0.04, 0, 2, .white);
 
@@ -68,10 +70,10 @@ fn drawActive(self: Self) void {
 }
 
 fn drawInactive(self: *Self) void {
-    const bgRect = UI.Rectangle{ .x = relW(0.08), .y = relH(0.2), .w = relW(0.16), .h = relH(0.7) };
+    self.bgRect = UI.Rectangle{ .x = relW(0.08), .y = relH(0.2), .w = relW(0.16), .h = relH(0.7) };
 
-    rl.drawRectangleRounded(bgRect.toRaylibRectangle(), 0.04, 0, rl.Color.init(248, 135, 255, 20));
-    rl.drawRectangleRoundedLinesEx(bgRect.toRaylibRectangle(), 0.04, 0, 2, rl.Color.init(248, 135, 255, 43));
+    rl.drawRectangleRounded(self.bgRect.?.toRaylibRectangle(), 0.04, 0, rl.Color.init(248, 135, 255, 20));
+    rl.drawRectangleRoundedLinesEx(self.bgRect.?.toRaylibRectangle(), 0.04, 0, 2, rl.Color.init(248, 135, 255, 43));
 
     const comp: *FilePickerComponent = self.appObserver.getComponent(FilePickerComponent, ComponentID.ISOFilePicker);
 
@@ -102,7 +104,7 @@ fn drawInactive(self: *Self) void {
     rl.drawTextEx(
         ResourceManager.getFont(Font.ROBOTO_REGULAR),
         self.fileName.?,
-        .{ .x = bgRect.relW(0.5) - textWidthCorrection, .y = bgRect.relH(0.7) },
+        .{ .x = self.bgRect.?.relW(0.5) - textWidthCorrection, .y = self.bgRect.?.relH(0.7) },
         14,
         0,
         .white,
@@ -118,7 +120,7 @@ fn drawInactive(self: *Self) void {
 
     rl.drawTextureEx(
         diskTexture,
-        .{ .x = bgRect.relW(0.5) - widthCorrection, .y = bgRect.relH(0.5) - heightCorrection },
+        .{ .x = self.bgRect.?.relW(0.5) - widthCorrection, .y = self.bgRect.?.relH(0.5) - heightCorrection },
         0,
         textureScale,
         rl.Color.init(255, 255, 255, 80),

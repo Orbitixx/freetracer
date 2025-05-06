@@ -27,6 +27,11 @@ pub const Payload = struct {
 pub const AppObserver = struct {
     componentRegistry: *ComponentRegistry,
 
+    pub fn getComponent(self: AppObserver, comptime T: type, componentId: ComponentID) *T {
+        const componentPtr: *T = @ptrCast(@alignCast(self.componentRegistry.getComponent(componentId).?.ptr));
+        return componentPtr;
+    }
+
     pub fn onNotify(self: AppObserver, event: Event, payload: Payload) void {
         switch (event) {
             .SELECT_ISO_BTN_CLICKED => self.processSelectISOBtnClicked(),
@@ -48,12 +53,9 @@ pub const AppObserver = struct {
         const filePicker: *FilePickerComponent = self.getComponent(FilePickerComponent, ComponentID.ISOFilePicker);
         filePicker.ui.active = false;
 
-        self.componentRegistry.getComponent(ComponentID.USBDevicesList).?.enable();
-    }
-
-    pub fn getComponent(self: AppObserver, comptime T: type, componentId: ComponentID) *T {
-        const componentPtr: *T = @ptrCast(@alignCast(self.componentRegistry.getComponent(componentId).?.ptr));
-        return componentPtr;
+        const component: *USBDevicesListComponent = self.getComponent(USBDevicesListComponent, ComponentID.USBDevicesList);
+        component.enable();
+        component.dispatchComponentAction();
     }
 
     pub fn processUSBDeviceSelected(self: AppObserver, bsdName: []u8) void {
