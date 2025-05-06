@@ -28,6 +28,7 @@ active: bool = true,
 appObserver: *const AppObserver,
 button: ?UI.Button() = null,
 bgRect: ?UI.Rectangle = null,
+fileName: ?[:0]const u8 = null,
 
 pub fn init(self: *Self) void {
     self.bgRect = UI.Rectangle{ .x = relW(0.08), .y = relH(0.2), .w = relW(0.35), .h = relH(0.7) };
@@ -66,7 +67,7 @@ fn drawActive(self: Self) void {
     if (self.button) |button| button.draw();
 }
 
-fn drawInactive(self: Self) void {
+fn drawInactive(self: *Self) void {
     const bgRect = UI.Rectangle{ .x = relW(0.08), .y = relH(0.2), .w = relW(0.16), .h = relH(0.7) };
 
     rl.drawRectangleRounded(bgRect.toRaylibRectangle(), 0.04, 0, rl.Color.init(248, 135, 255, 20));
@@ -83,11 +84,26 @@ fn drawInactive(self: Self) void {
         rl.Color.init(190, 190, 190, 255),
     );
 
+    if (self.fileName == null) {
+        const path: [:0]const u8 = comp.state.filePath orelse "No ISO selected...";
+        var lastSlash: usize = 0;
+
+        for (0..path.len) |i| {
+            // Find the last forward slash in the path (0x2f)
+            if (path[i] == 0x2f) lastSlash = i;
+        }
+
+        self.fileName = path[lastSlash + 1 .. path.len :0];
+    }
+
+    const textWidth: f32 = rl.measureTextEx(ResourceManager.getFont(Font.ROBOTO_REGULAR), self.fileName.?, 14, 0).x;
+    const textWidthCorrection: f32 = textWidth / 2.0;
+
     rl.drawTextEx(
         ResourceManager.getFont(Font.ROBOTO_REGULAR),
-        if (comp.state.filePath) |path| path else "No ISO selected...",
-        .{ .x = self.bgRect.?.relW(0.04), .y = self.bgRect.?.relH(0.7) },
-        20,
+        self.fileName.?,
+        .{ .x = bgRect.relW(0.5) - textWidthCorrection, .y = bgRect.relH(0.7) },
+        14,
         0,
         .white,
     );
@@ -109,7 +125,7 @@ fn drawInactive(self: Self) void {
     );
 }
 
-pub fn draw(self: Self) void {
+pub fn draw(self: *Self) void {
     if (self.active) self.drawActive() else self.drawInactive();
 }
 
