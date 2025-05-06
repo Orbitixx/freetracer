@@ -28,7 +28,6 @@ active: bool = true,
 appObserver: *const AppObserver,
 button: ?UI.Button() = null,
 bgRect: ?UI.Rectangle = null,
-// parent: ?*FilePickerComponent = null,
 
 pub fn init(self: *Self) void {
     self.bgRect = UI.Rectangle{ .x = relW(0.08), .y = relH(0.2), .w = relW(0.35), .h = relH(0.7) };
@@ -40,8 +39,6 @@ pub fn init(self: *Self) void {
 
     self.button.?.setPosition(btnX, btnY);
     self.button.?.hasShadow = true;
-
-    // self.parent = self.appObserver.getComponent(FilePickerComponent, ComponentID.ISOFilePicker);
 }
 
 pub fn update(self: *Self) void {
@@ -71,8 +68,9 @@ fn drawActive(self: Self) void {
 
 fn drawInactive(self: Self) void {
     const bgRect = UI.Rectangle{ .x = relW(0.08), .y = relH(0.2), .w = relW(0.16), .h = relH(0.7) };
-    rl.drawRectangleRounded(bgRect.toRaylibRectangle(), 0.04, 0, .{ .r = 248, .g = 135, .b = 255, .a = 20 });
-    rl.drawRectangleRoundedLinesEx(bgRect.toRaylibRectangle(), 0.04, 0, 2, .{ .r = 248, .g = 135, .b = 255, .a = 43 });
+
+    rl.drawRectangleRounded(bgRect.toRaylibRectangle(), 0.04, 0, rl.Color.init(248, 135, 255, 20));
+    rl.drawRectangleRoundedLinesEx(bgRect.toRaylibRectangle(), 0.04, 0, 2, rl.Color.init(248, 135, 255, 43));
 
     const comp: *FilePickerComponent = self.appObserver.getComponent(FilePickerComponent, ComponentID.ISOFilePicker);
 
@@ -94,7 +92,21 @@ fn drawInactive(self: Self) void {
         .white,
     );
 
-    rl.drawTextureEx(ResourceManager.getTexture(Texture.DISK_IMAGE), .{ .x = bgRect.relW(0.25), .y = bgRect.relH(0.3) }, 0, 0.6, rl.Color.init(255, 255, 255, 80));
+    const diskTexture = ResourceManager.getTexture(Texture.DISK_IMAGE);
+    const textureScale: f32 = 0.6;
+    const textureWidth: f32 = @floatFromInt(diskTexture.width);
+    const textureHeight: f32 = @floatFromInt(diskTexture.height);
+
+    const widthCorrection: f32 = @divTrunc(textureWidth * textureScale, 2);
+    const heightCorrection: f32 = @divTrunc(textureHeight * textureScale, 2);
+
+    rl.drawTextureEx(
+        diskTexture,
+        .{ .x = bgRect.relW(0.5) - widthCorrection, .y = bgRect.relH(0.5) - heightCorrection },
+        0,
+        textureScale,
+        rl.Color.init(255, 255, 255, 80),
+    );
 }
 
 pub fn draw(self: Self) void {
