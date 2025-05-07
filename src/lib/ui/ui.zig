@@ -94,24 +94,27 @@ pub fn Button() type {
         hasShadow: bool = false,
 
         pub fn init(text: [:0]const u8, x: f32, y: f32, fontSize: f32, variants: ButtonColorVariants) Self {
-            // TODO: Fix casts by using measureTextEx
-            const width: i32 = rl.measureText(text, @as(i32, @intFromFloat(fontSize)));
+            // const textDimensions = rl.measureTextEx(ResourceManager.getFont(Font.ROBOTO_REGULAR), text, fontSize, 0);
+
+            const textWidth = rl.measureText(text, @as(i32, @intFromFloat(fontSize)));
+
+            const rect: UIRectangle = .{
+                .transform = .{
+                    .x = x,
+                    .y = y,
+                    .w = @as(f32, @floatFromInt(textWidth)) + BUTTON_PADDING * 2,
+                    .h = fontSize + BUTTON_PADDING,
+                },
+                .color = .white,
+            };
 
             return .{
-                .rect = .{
-                    .transform = .{
-                        .x = x,
-                        .y = y,
-                        .w = @as(f32, @floatFromInt(width)) + BUTTON_PADDING * 2,
-                        .h = fontSize + BUTTON_PADDING,
-                    },
-                    .color = .white,
-                },
+                .rect = rect,
 
                 .text = .{
                     .value = text,
-                    .x = x + BUTTON_PADDING,
-                    .y = y + BUTTON_PADDING / 2,
+                    .x = rect.transform.relW(0.5) - @as(f32, @floatFromInt(@divTrunc(textWidth, 2))),
+                    .y = rect.transform.relH(0.5) - @divTrunc(fontSize, 2),
                     .fontSize = fontSize,
                     .color = .black,
                 },

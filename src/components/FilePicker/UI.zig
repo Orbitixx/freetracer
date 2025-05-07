@@ -35,8 +35,8 @@ pub fn init(self: *Self) void {
 
     self.button = UI.Button().init("SELECT ISO", 0, 0, 14, BUTTON_COLOR_VARIANTS);
 
-    const btnX: f32 = self.bgRect.?.relW(0.5) - @divTrunc(self.button.?.rect.transform.w, @as(f32, 2.0));
-    const btnY: f32 = self.bgRect.?.relH(0.9) - @divTrunc(self.button.?.rect.transform.h, @as(f32, 2.0));
+    const btnX: f32 = self.bgRect.?.relW(0.5) - @divTrunc(self.button.?.rect.transform.w, 2);
+    const btnY: f32 = self.bgRect.?.relH(0.9) - @divTrunc(self.button.?.rect.transform.h, 2);
 
     self.button.?.setPosition(btnX, btnY);
     self.button.?.hasShadow = true;
@@ -58,7 +58,7 @@ fn drawActive(self: *Self) void {
     rl.drawTextEx(
         ResourceManager.getFont(Font.JERSEY10_REGULAR),
         "image",
-        .{ .x = self.bgRect.?.relW(0.04), .y = self.bgRect.?.relH(0.01) },
+        .{ .x = self.bgRect.?.x + 12, .y = self.bgRect.?.relH(0.01) },
         34,
         0,
         .white,
@@ -80,7 +80,7 @@ fn drawInactive(self: *Self) void {
     rl.drawTextEx(
         ResourceManager.getFont(Font.JERSEY10_REGULAR),
         "image",
-        .{ .x = self.bgRect.?.relW(0.04), .y = self.bgRect.?.relH(0.01) },
+        .{ .x = self.bgRect.?.x + 12, .y = self.bgRect.?.relH(0.01) },
         34,
         0,
         rl.Color.init(190, 190, 190, 255),
@@ -146,7 +146,7 @@ const BUTTON_VARIANT_ACTIVE: ButtonColorVariant = .{
     .text = .white,
 };
 
-const BUTTON_COLOR_VARIANTS: ButtonColorVariants = .{
+pub const BUTTON_COLOR_VARIANTS: ButtonColorVariants = .{
     .normal = BUTTON_VARIANT_NORMAL,
     .hover = BUTTON_VARIANT_HOVER,
     .active = BUTTON_VARIANT_ACTIVE,
