@@ -36,29 +36,16 @@ appObserver: *const AppObserver,
 prevSiblingUI: ?*SiblingComponentUI = null,
 bgRect: ?UI.Rectangle = null,
 confirmButton: ?UI.Button() = null,
-// scrollPanelRect: ?rl.Rectangle = null,
-// scrollPanelContentRect: ?rl.Rectangle = null,
-// scrollPanelViewRect: rl.Rectangle = .{ .x = 0, .y = 0, .width = 0, .height = 0 },
-// scrollPanelScroll: rl.Vector2 = .{ .x = 0, .y = 0 },
 
 pub fn init(self: *Self) void {
     self.prevSiblingUI = &self.appObserver.getComponent(FilePickerComponent, ComponentID.ISOFilePicker).ui;
 
+    self.recalculateUi();
+}
+
+pub fn recalculateUi(self: *Self) void {
     const xOffset: f32 = self.prevSiblingUI.?.bgRect.?.x + self.prevSiblingUI.?.bgRect.?.w;
     self.bgRect = UI.Rectangle{ .x = xOffset + relW(0.02), .y = relH(0.2), .w = relW(0.35), .h = relH(0.7) };
-
-    // self.scrollPanelRect = rl.Rectangle.init(
-    //     self.bgRect.?.x,
-    //     self.bgRect.?.relH(0.12),
-    //     self.bgRect.?.w - 12,
-    //     self.bgRect.?.h - 0.12 * self.bgRect.?.h,
-    // );
-    // self.scrollPanelContentRect = rl.Rectangle.init(
-    //     self.bgRect.?.x + 12,
-    //     self.bgRect.?.relH(0.12),
-    //     self.bgRect.?.w - 24,
-    //     self.bgRect.?.h + 150,
-    // );
 
     self.confirmButton = UI.Button().init("CONFIRM", 0, 0, 14, SiblingComponentUI.BUTTON_COLOR_VARIANTS);
 
@@ -69,6 +56,7 @@ pub fn init(self: *Self) void {
 }
 
 pub fn update(self: *Self) void {
+    // if (self.active) self.recalculateUi();
     if (self.devices.items.len < 1) return;
 
     for (self.devices.items) |*device| {
@@ -80,8 +68,8 @@ pub fn update(self: *Self) void {
 
 fn drawActive(self: *Self) void {
     // TODO: Does not need to be recalculated every frame
-    const xOffset: f32 = self.prevSiblingUI.?.bgRect.?.x + self.prevSiblingUI.?.bgRect.?.w;
-    self.bgRect = UI.Rectangle{ .x = xOffset + relW(0.02), .y = relH(0.2), .w = relW(0.35), .h = relH(0.7) };
+    // const xOffset: f32 = self.prevSiblingUI.?.bgRect.?.x + self.prevSiblingUI.?.bgRect.?.w;
+    self.bgRect.?.w = relW(0.35);
 
     rl.drawRectangleRounded(self.bgRect.?.toRaylibRectangle(), 0.04, 0, .{ .r = 49, .g = 85, .b = 100, .a = 255 });
     rl.drawRectangleRoundedLinesEx(self.bgRect.?.toRaylibRectangle(), 0.04, 0, 2, .white);
@@ -97,22 +85,13 @@ fn drawActive(self: *Self) void {
 
     if (self.devices.items.len < 1) return;
 
-    // _ = rg.guiScrollPanel(self.scrollPanelRect.?, null, self.scrollPanelContentRect.?, &self.scrollPanelScroll, &self.scrollPanelViewRect);
-
-    // rl.beginScissorMode(
-    //     @as(i32, @intFromFloat(self.scrollPanelViewRect.x)),
-    //     @as(i32, @intFromFloat(self.scrollPanelViewRect.y)),
-    //     @as(i32, @intFromFloat(self.scrollPanelViewRect.width)),
-    //     @as(i32, @intFromFloat(self.scrollPanelViewRect.height)),
-    // );
-    //
-    // rl.endScissorMode();
-
     for (self.devices.items) |*device| {
         device.checkbox.draw();
     }
 
-    if (self.confirmButton) |button| button.draw();
+    if (self.confirmButton) |button| {
+        button.draw();
+    }
 
     // rl.drawTextureEx(ResourceManager.getTexture(Texture.DISK_IMAGE), .{ .x = self.bgRect.?.relW(0.25), .y = self.bgRect.?.relH(0.3) }, 0, 1.0, .white);
 
@@ -120,8 +99,8 @@ fn drawActive(self: *Self) void {
 
 fn drawInactive(self: *Self) void {
     // TODO: Does not need to be recalculated every frame
-    const xOffset: f32 = self.prevSiblingUI.?.bgRect.?.x + self.prevSiblingUI.?.bgRect.?.w;
-    self.bgRect = UI.Rectangle{ .x = xOffset + relW(0.02), .y = relH(0.2), .w = relW(0.16), .h = relH(0.7) };
+    // const xOffset: f32 = self.prevSiblingUI.?.bgRect.?.x + self.prevSiblingUI.?.bgRect.?.w;
+    self.bgRect.?.w = relW(0.16);
 
     rl.drawRectangleRounded(self.bgRect.?.toRaylibRectangle(), 0.04, 0, rl.Color.init(49, 65, 84, 255));
     rl.drawRectangleRoundedLinesEx(self.bgRect.?.toRaylibRectangle(), 0.04, 0, 2, rl.Color.init(49, 85, 100, 255));

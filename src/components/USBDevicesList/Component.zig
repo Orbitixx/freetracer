@@ -61,6 +61,7 @@ pub fn init(allocator: std.mem.Allocator, appObserver: *const AppObserver) USBDe
 pub fn enable(self: *USBDevicesListComponent) void {
     self.componentActive = true;
     self.ui.active = true;
+    self.ui.recalculateUi();
 }
 
 pub fn update(self: *USBDevicesListComponent) void {

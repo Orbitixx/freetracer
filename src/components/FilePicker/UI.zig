@@ -49,8 +49,19 @@ pub fn update(self: *Self) void {
     }
 }
 
+pub fn setActive(self: *Self, flag: bool) void {
+    self.active = flag;
+
+    switch (flag) {
+        true => self.bgRect.?.w = relW(0.35),
+        false => self.bgRect.?.w = relW(0.16),
+    }
+}
+
 fn drawActive(self: *Self) void {
-    self.bgRect = UI.Rectangle{ .x = relW(0.08), .y = relH(0.2), .w = relW(0.35), .h = relH(0.7) };
+
+    // TODO: Does not need to be done every frame, refactor.
+    self.bgRect.?.w = relW(0.35);
 
     rl.drawRectangleRounded(self.bgRect.?.toRaylibRectangle(), 0.04, 0, .{ .r = 248, .g = 135, .b = 255, .a = 43 });
     rl.drawRectangleRoundedLinesEx(self.bgRect.?.toRaylibRectangle(), 0.04, 0, 2, .white);
@@ -70,7 +81,9 @@ fn drawActive(self: *Self) void {
 }
 
 fn drawInactive(self: *Self) void {
-    self.bgRect = UI.Rectangle{ .x = relW(0.08), .y = relH(0.2), .w = relW(0.16), .h = relH(0.7) };
+
+    // TODO: Does not need to be done every frame, refactor.
+    self.bgRect.?.w = relW(0.16);
 
     rl.drawRectangleRounded(self.bgRect.?.toRaylibRectangle(), 0.04, 0, rl.Color.init(248, 135, 255, 20));
     rl.drawRectangleRoundedLinesEx(self.bgRect.?.toRaylibRectangle(), 0.04, 0, 2, rl.Color.init(248, 135, 255, 43));

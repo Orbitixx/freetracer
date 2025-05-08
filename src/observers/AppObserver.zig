@@ -51,7 +51,7 @@ pub const AppObserver = struct {
 
     pub fn processISOFileSelected(self: AppObserver) void {
         const filePicker: *FilePickerComponent = self.getComponent(FilePickerComponent, ComponentID.ISOFilePicker);
-        filePicker.ui.active = false;
+        filePicker.setActive(false);
 
         const component: *USBDevicesListComponent = self.getComponent(USBDevicesListComponent, ComponentID.USBDevicesList);
         component.enable();

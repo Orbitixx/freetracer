@@ -38,7 +38,10 @@ pub const ResourceManagerSingleton = struct {
         defer allocator.free(jerseyFontFile);
 
         const robotoRegular = try rl.loadFontEx(robotoFontFile, 512, null);
+        rl.setTextureFilter(robotoRegular.texture, .trilinear);
+
         const jersey10Regular = try rl.loadFontEx(jerseyFontFile, 512, null);
+        rl.setTextureFilter(jersey10Regular.texture, .trilinear);
 
         //----------------------------------------//
         //-------- *** LOAD TEXTURES *** ---------//

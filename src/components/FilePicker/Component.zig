@@ -49,6 +49,11 @@ pub fn enable(self: *FilePickerComponent) void {
     self.componentActive = true;
 }
 
+pub fn setActive(self: *FilePickerComponent, flag: bool) void {
+    // self.componentActive = flag;
+    self.ui.setActive(flag);
+}
+
 pub fn update(self: *FilePickerComponent) void {
     if (!self.componentActive) return;
 

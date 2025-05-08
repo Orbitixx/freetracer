@@ -94,16 +94,14 @@ pub fn Button() type {
         hasShadow: bool = false,
 
         pub fn init(text: [:0]const u8, x: f32, y: f32, fontSize: f32, variants: ButtonColorVariants) Self {
-            // const textDimensions = rl.measureTextEx(ResourceManager.getFont(Font.ROBOTO_REGULAR), text, fontSize, 0);
-
-            const textWidth = rl.measureText(text, @as(i32, @intFromFloat(fontSize)));
+            const textDimensions = rl.measureTextEx(ResourceManager.getFont(Font.ROBOTO_REGULAR), text, fontSize, 0);
 
             const rect: UIRectangle = .{
                 .transform = .{
                     .x = x,
                     .y = y,
-                    .w = @as(f32, @floatFromInt(textWidth)) + BUTTON_PADDING * 2,
-                    .h = fontSize + BUTTON_PADDING,
+                    .w = textDimensions.x + BUTTON_PADDING * 2,
+                    .h = textDimensions.y + BUTTON_PADDING,
                 },
                 .color = .white,
             };
@@ -113,8 +111,8 @@ pub fn Button() type {
 
                 .text = .{
                     .value = text,
-                    .x = rect.transform.relW(0.5) - @as(f32, @floatFromInt(@divTrunc(textWidth, 2))),
-                    .y = rect.transform.relH(0.5) - @divTrunc(fontSize, 2),
+                    .x = x + (rect.transform.w / 2) - (textDimensions.x / 2),
+                    .y = y + (rect.transform.h / 2) - (textDimensions.y / 2),
                     .fontSize = fontSize,
                     .color = .black,
                 },
