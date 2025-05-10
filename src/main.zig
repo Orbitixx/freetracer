@@ -140,10 +140,12 @@ pub fn main() !void {
             rl.Color.init(78, 96, 121, 255),
         );
 
+        rl.drawRectangleRec(rl.Rectangle.init(0, relH(0.94), WindowManager.getWindowWidth(), relH(0.06)), rl.Color.init(0, 0, 0, 60));
+
         rl.drawTextEx(
             ResourceManager.getFont(Font.ROBOTO_REGULAR),
             Logger.getLatestLog(),
-            .{ .x = relW(0.02), .y = relH(0.95) },
+            .{ .x = relW(0.02), .y = relH(0.93) },
             14,
             0,
             .light_gray,
