@@ -4,7 +4,6 @@ const String = @import("../../lib/util/strings.zig");
 const MacOS = @import("../../modules/macos/MacOSTypes.zig");
 
 const rl = @import("raylib");
-const rg = @import("raygui");
 const UI = @import("../../lib/ui/ui.zig");
 const WindowManager = @import("../../managers/WindowManager.zig").WindowManagerSingleton;
 const ResourceManager = @import("../../managers/ResourceManager.zig").ResourceManagerSingleton;
@@ -25,7 +24,7 @@ const ComponentID = @import("../Registry.zig").ComponentID;
 const Checkbox = @import("../../lib/ui/Checkbox.zig").Checkbox();
 
 const FilePickerComponent = @import("../FilePicker/Component.zig");
-const USBDevicesListComponent = @import("Component.zig");
+const USBDevicesListComponent = @import("./Component.zig");
 
 const Self = @This();
 

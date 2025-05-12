@@ -30,6 +30,9 @@ const Font = @import("managers/ResourceManager.zig").FONT;
 const FilePickerComponent = @import("components/FilePicker/Component.zig");
 const USBDevicesListComponent = @import("components/USBDevicesList/Component.zig");
 
+const ComponentFramework = @import("./components/framework/import/index.zig");
+const TestFilePickerComponent = @import("./components/TestComponent/TestComponent.zig");
+
 const relH = WindowManager.relH;
 const relW = WindowManager.relW;
 
@@ -79,6 +82,20 @@ pub fn main() !void {
     );
 
     //----------------------------------------------------------------------------------
+    // --- New Component framework ---
+    //----------------------------------------------------------------------------------
+
+    var newRegistry = ComponentFramework.ComponentRegistry{
+        .allocator = allocator,
+        .components = std.ArrayList(ComponentFramework.GenericComponent).init(allocator),
+    };
+    defer newRegistry.deinit();
+
+    var testFilePickerComponent = TestFilePickerComponent.init(allocator);
+
+    try newRegistry.register(testFilePickerComponent.asGenericComponent());
+
+    //----------------------------------------------------------------------------------
     //--- @END COMPONENTS --------------------------------------------------------------
     //----------------------------------------------------------------------------------
 
@@ -97,6 +114,8 @@ pub fn main() !void {
         //----------------------------------------------------------------------------------
 
         componentRegistry.processUpdates();
+
+        try newRegistry.updateAll();
 
         //----------------------------------------------------------------------------------
         //--- @ENDUPDATE COMPONENTS --------------------------------------------------------
@@ -152,6 +171,8 @@ pub fn main() !void {
         );
 
         componentRegistry.processRendering();
+
+        try newRegistry.drawAll();
 
         defer rl.endDrawing();
 
