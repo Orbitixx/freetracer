@@ -110,6 +110,10 @@ pub fn main() !void {
     const tcomp: *TestFilePickerComponent = @ptrCast(@alignCast(newRegistry.components.get(newComponentID.ISOFilePicker).?.ptr));
     try tcomp.worker.?.start();
 
+    debug.print("\nMade it past threading...");
+
+    // defer tcomp.worker.?.join();
+
     // Main application GUI.loop
     while (!rl.windowShouldClose()) { // Detect window close button or ESC key
         //----------------------------------------------------------------------------------

@@ -19,35 +19,43 @@ pub const TestFilePickerComponent = struct {
     allocator: std.mem.Allocator,
     state: ComponentState,
     worker: ?ComponentWorker = null,
+    workerNeedsJoining: bool = false,
 
     // Component-specific function implementations
     pub fn init(allocator: std.mem.Allocator) TestFilePickerComponent {
         // Initialize file picker specific things
-        std.debug.print("FilePicker initialized\n", .{});
+        std.debug.print("\nTestFilePickerComponent: component initialized!", .{});
 
-        var componentInstance: TestFilePickerComponent = .{
+        return .{
             .allocator = allocator,
             .state = ComponentState.init(FilePickerState{}),
         };
+    }
 
-        componentInstance.worker = ComponentWorker.init(
-            &componentInstance.state,
+    fn initWorker(self: *Self) void {
+        self.worker = ComponentWorker.init(
+            &self.state,
             TestFilePickerComponent.runWorker,
             TestFilePickerComponent.workerCallback,
+            self,
         );
-
-        return componentInstance;
     }
 
     pub fn start(self: *Self) !void {
         std.debug.print("\nTestFilePickerComponent: start() function called!", .{});
-        _ = self;
+
+        self.initWorker();
     }
 
     pub fn update(self: *Self) !void {
         // Check for file selection changes
         const state = self.state.getDataLocked();
         defer self.state.unlock();
+
+        if (self.workerNeedsJoining) {
+            self.worker.?.join();
+            self.workerNeedsJoining = false;
+        }
 
         _ = state;
 
@@ -85,31 +93,32 @@ pub const TestFilePickerComponent = struct {
     fn runWorker(worker: *ComponentWorker) void {
         std.debug.print("\nTestFilePickerComponent: runWorker() started!", .{});
 
-        // Do background file system operations
         worker.state.withLock(struct {
-            fn callback(state: *FilePickerState) void {
+            fn lambda(state: *FilePickerState) void {
                 state.is_selecting = true;
             }
-        }.callback);
+        }.lambda);
 
-        // Do work...
-        // std.time.sleep(1_000_000_000); // Simulate work
-
-        const data: []u8 = @constCast(&[_]u8{ 0x48, 0x65, 0x6C, 0x6C, 0x6F, 0x20, 0x77, 0x6F, 0x72, 0x6C, 0x64, 0x20, 0x66, 0x72, 0x6F, 0x6D, 0x20, 0x72, 0x75, 0x6E, 0x57, 0x6F, 0x72, 0x6B, 0x65, 0x72, 0x21 });
+        const data: []u8 = @constCast(&[_]u8{ 0x7C, 0x7C, 0x7C, 0x7C });
 
         worker.state.withLock(struct {
-            fn callback(state: *FilePickerState) void {
+            fn lambda(state: *FilePickerState) void {
                 state.is_selecting = false;
                 state.selected_path = data;
             }
-        }.callback);
+        }.lambda);
 
         std.debug.print("\nTestFilePickerComponent: runWoker() finished executing!", .{});
     }
 
-    fn workerCallback(worker: *ComponentWorker) void {
+    fn workerCallback(worker: *ComponentWorker, context: *anyopaque) void {
         std.debug.print("\nTestFilePickerComponent: workerCallback() called!", .{});
+
+        const component: *TestFilePickerComponent = @ptrCast(@alignCast(context));
+        component.workerNeedsJoining = true;
         _ = worker;
+
+        std.debug.print("\nTestFilePickerComponent: workerCallback() joined!", .{});
     }
 
     pub fn asGenericComponent(self: *Self) GenericComponent {
