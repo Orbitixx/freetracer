@@ -9,6 +9,7 @@ const ComponentFramework = @import("../framework/import/index.zig");
 const ComponentState = ComponentFramework.ComponentState(FilePickerState);
 const ComponentWorker = ComponentFramework.Worker(FilePickerState);
 const GenericComponent = ComponentFramework.GenericComponent;
+const WorkerStatus = ComponentFramework.WorkerStatus;
 
 // pub const ComponentInstance = ComponentFramework.Component(FilePickerState);
 // pub const ComponentWorker = ComponentFramework.Worker(FilePickerState);
@@ -19,7 +20,6 @@ pub const TestFilePickerComponent = struct {
     allocator: std.mem.Allocator,
     state: ComponentState,
     worker: ?ComponentWorker = null,
-    workerNeedsJoining: bool = false,
 
     // Component-specific function implementations
     pub fn init(allocator: std.mem.Allocator) TestFilePickerComponent {
@@ -35,7 +35,8 @@ pub const TestFilePickerComponent = struct {
     fn initWorker(self: *Self) void {
         self.worker = ComponentWorker.init(
             &self.state,
-            TestFilePickerComponent.runWorker,
+            false,
+            TestFilePickerComponent.workerRun,
             TestFilePickerComponent.workerCallback,
             self,
         );
@@ -52,10 +53,7 @@ pub const TestFilePickerComponent = struct {
         const state = self.state.getDataLocked();
         defer self.state.unlock();
 
-        if (self.workerNeedsJoining) {
-            self.worker.?.join();
-            self.workerNeedsJoining = false;
-        }
+        self.checkAndJoinWorker();
 
         _ = state;
 
@@ -89,8 +87,16 @@ pub const TestFilePickerComponent = struct {
         }
     }
 
+    pub fn checkAndJoinWorker(self: *Self) void {
+        if (self.worker) |*worker| {
+            if (worker.status == WorkerStatus.NEEDS_JOINING) {
+                worker.join();
+            }
+        }
+    }
+
     // Worker implementation
-    fn runWorker(worker: *ComponentWorker) void {
+    fn workerRun(worker: *ComponentWorker) void {
         std.debug.print("\nTestFilePickerComponent: runWorker() started!", .{});
 
         worker.state.withLock(struct {
@@ -99,7 +105,7 @@ pub const TestFilePickerComponent = struct {
             }
         }.lambda);
 
-        const data: []u8 = @constCast(&[_]u8{ 0x7C, 0x7C, 0x7C, 0x7C });
+        const data: []u8 = @constCast(&[_]u8{ 0x7B, 0x7C, 0x7C, 0x7B });
 
         worker.state.withLock(struct {
             fn lambda(state: *FilePickerState) void {
@@ -108,15 +114,15 @@ pub const TestFilePickerComponent = struct {
             }
         }.lambda);
 
-        std.debug.print("\nTestFilePickerComponent: runWoker() finished executing!", .{});
+        std.debug.print("\nTestFilePickerComponent: runWorker() finished executing!", .{});
     }
 
     fn workerCallback(worker: *ComponentWorker, context: *anyopaque) void {
         std.debug.print("\nTestFilePickerComponent: workerCallback() called!", .{});
 
-        const component: *TestFilePickerComponent = @ptrCast(@alignCast(context));
-        component.workerNeedsJoining = true;
+        // const component: *TestFilePickerComponent = @ptrCast(@alignCast(context));
         _ = worker;
+        _ = context;
 
         std.debug.print("\nTestFilePickerComponent: workerCallback() joined!", .{});
     }
