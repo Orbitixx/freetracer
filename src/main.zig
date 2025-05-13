@@ -31,7 +31,8 @@ const FilePickerComponent = @import("components/FilePicker/Component.zig");
 const USBDevicesListComponent = @import("components/USBDevicesList/Component.zig");
 
 const ComponentFramework = @import("./components/framework/import/index.zig");
-const TestFilePickerComponent = @import("./components/TestComponent/TestComponent.zig");
+const TestFilePickerComponent = @import("./components/TestComponent/TestComponent.zig").TestFilePickerComponent;
+const newComponentID = ComponentFramework.ComponentID;
 
 const relH = WindowManager.relH;
 const relW = WindowManager.relW;
@@ -85,15 +86,12 @@ pub fn main() !void {
     // --- New Component framework ---
     //----------------------------------------------------------------------------------
 
-    var newRegistry = ComponentFramework.ComponentRegistry{
-        .allocator = allocator,
-        .components = std.ArrayList(ComponentFramework.GenericComponent).init(allocator),
-    };
+    var newRegistry = ComponentFramework.ComponentRegistry.init(allocator);
     defer newRegistry.deinit();
 
     var testFilePickerComponent = TestFilePickerComponent.init(allocator);
 
-    try newRegistry.register(testFilePickerComponent.asGenericComponent());
+    try newRegistry.register(newComponentID.ISOFilePicker, testFilePickerComponent.asGenericComponent());
 
     //----------------------------------------------------------------------------------
     //--- @END COMPONENTS --------------------------------------------------------------
@@ -106,6 +104,11 @@ pub fn main() !void {
     // } else helperResponse = true;
 
     const backgroundColor: rl.Color = .{ .r = 29, .g = 44, .b = 64, .a = 100 };
+
+    try newRegistry.initAll();
+
+    const tcomp: *TestFilePickerComponent = @ptrCast(@alignCast(newRegistry.components.get(newComponentID.ISOFilePicker).?.ptr));
+    try tcomp.worker.?.start();
 
     // Main application GUI.loop
     while (!rl.windowShouldClose()) { // Detect window close button or ESC key

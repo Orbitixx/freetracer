@@ -51,10 +51,10 @@ pub const GenericComponent = struct {
     vtable: *const VTable,
 
     pub const VTable = struct {
-        init_fn: fn (ptr: *anyopaque) anyerror!void,
-        deinit_fn: fn (ptr: *anyopaque) void,
-        update_fn: fn (ptr: *anyopaque) anyerror!void,
-        draw_fn: fn (ptr: *anyopaque) anyerror!void,
+        init_fn: *const fn (ptr: *anyopaque) anyerror!void,
+        deinit_fn: *const fn (ptr: *anyopaque) void,
+        update_fn: *const fn (ptr: *anyopaque) anyerror!void,
+        draw_fn: *const fn (ptr: *anyopaque) anyerror!void,
     };
 
     pub fn init(ptr: *anyopaque, vtable: *const VTable) GenericComponent {

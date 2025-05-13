@@ -1,6 +1,8 @@
 const std = @import("std");
 
-const ComponentState = @import("./import/index.zig").ComponentState;
+const ComponentFramework = @import("./import/index.zig");
+const ComponentState = ComponentFramework.ComponentState;
+const GenericComponent = ComponentFramework.GenericComponent;
 
 pub fn Worker(comptime StateType: type) type {
     return struct {
@@ -8,13 +10,15 @@ pub fn Worker(comptime StateType: type) type {
 
         state: *ComponentState(StateType),
         thread: ?std.Thread = null,
-        run_fn: fn (*Self) void,
+        run_fn: *const fn (*Self) void,
+        callback_fn: ?*const fn (*Self) void = null,
         running: bool = false,
 
-        pub fn init(state: *ComponentState(StateType), run_fn: fn (*Self) void) Self {
+        pub fn init(state: *ComponentState(StateType), run_fn: *const fn (*Self) void, callback_fn: ?*const fn (*Self) void) Self {
             return .{
                 .state = state,
                 .run_fn = run_fn,
+                .callback_fn = callback_fn orelse null,
             };
         }
 
@@ -35,6 +39,7 @@ pub fn Worker(comptime StateType: type) type {
 
         fn threadMain(self: *Self) void {
             self.run_fn(self);
+            if (self.callback_fn) |callback| callback(self);
         }
     };
 }
