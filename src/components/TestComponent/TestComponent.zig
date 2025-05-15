@@ -11,9 +11,6 @@ const ComponentWorker = ComponentFramework.Worker(FilePickerState);
 const GenericComponent = ComponentFramework.GenericComponent;
 const WorkerStatus = ComponentFramework.WorkerStatus;
 
-// pub const ComponentInstance = ComponentFramework.Component(FilePickerState);
-// pub const ComponentWorker = ComponentFramework.Worker(FilePickerState);
-// pub const Factory = ComponentFramework.ComponentFactory(FilePickerState);
 pub const TestFilePickerComponent = struct {
     const Self = @This();
 

@@ -112,8 +112,6 @@ pub fn main() !void {
 
     debug.print("\nMade it past threading...");
 
-    // defer tcomp.worker.?.join();
-
     // Main application GUI.loop
     while (!rl.windowShouldClose()) { // Detect window close button or ESC key
         //----------------------------------------------------------------------------------
