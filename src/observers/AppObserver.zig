@@ -13,17 +13,21 @@ const Component = @import("../components/Component.zig");
 const ComponentID = @import("../components/Registry.zig").ComponentID;
 const ComponentRegistry = @import("../components/Registry.zig").ComponentRegistry;
 
-pub const Event = enum {
-    SELECT_ISO_BTN_CLICKED,
-    ISO_FILE_SELECTED,
-    USB_DEVICES_DISCOVERED,
-    USB_DEVICE_SELECTED,
-};
+pub const Event = @import("ObserverEvents.zig").ObserverEvent;
+pub const Payload = @import("ObserverPayload.zig");
 
-pub const Payload = struct {
-    data: ?[]u8 = null,
-};
+// pub const Event = enum {
+//     SELECT_ISO_BTN_CLICKED,
+//     ISO_FILE_SELECTED,
+//     USB_DEVICES_DISCOVERED,
+//     USB_DEVICE_SELECTED,
+//     HELLO_KITTY,
+// };
 
+// pub const Payload = struct {
+//     data: ?[]u8 = null,
+// };
+//
 pub const AppObserver = struct {
     componentRegistry: *ComponentRegistry,
 
@@ -41,6 +45,7 @@ pub const AppObserver = struct {
                 debug.printf("\nAppObserver: USB_DEVICE_SELECTED signal received, data: {s}", .{payload.data.?});
                 // if (payload.data) |data| self.processUSBDeviceSelected(data) else debug.print("\nAppObserver: NULL payload data received.");
             },
+            else => debug.printf("\nAppObserver: received unrecognized event: {any}", .{event}),
         }
     }
 

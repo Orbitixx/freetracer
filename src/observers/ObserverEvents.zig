@@ -1,0 +1,7 @@
+pub const ObserverEvent = enum(u8) {
+    SELECT_ISO_BTN_CLICKED,
+    ISO_FILE_SELECTED,
+    USB_DEVICES_DISCOVERED,
+    USB_DEVICE_SELECTED,
+    HELLO_KITTY,
+};

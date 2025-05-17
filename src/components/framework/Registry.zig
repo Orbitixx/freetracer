@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const GenericComponent = @import("./import/index.zig").GenericComponent;
+const Component = @import("./import/index.zig").Component;
 
 pub const ComponentID = enum(usize) {
     ISOFilePicker = 0,
@@ -8,12 +8,12 @@ pub const ComponentID = enum(usize) {
 
 pub const ComponentRegistry = struct {
     allocator: std.mem.Allocator,
-    components: std.AutoHashMap(ComponentID, GenericComponent),
+    components: std.AutoHashMap(ComponentID, Component),
 
     pub fn init(allocator: std.mem.Allocator) ComponentRegistry {
         return .{
             .allocator = allocator,
-            .components = std.AutoHashMap(ComponentID, GenericComponent).init(allocator),
+            .components = std.AutoHashMap(ComponentID, Component).init(allocator),
         };
     }
 
@@ -27,7 +27,7 @@ pub const ComponentRegistry = struct {
         self.components.deinit();
     }
 
-    pub fn register(self: *ComponentRegistry, componentId: ComponentID, component: GenericComponent) !void {
+    pub fn register(self: *ComponentRegistry, componentId: ComponentID, component: Component) !void {
         try self.components.put(componentId, component);
     }
 

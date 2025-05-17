@@ -2,7 +2,7 @@ const std = @import("std");
 
 const ComponentFramework = @import("./import/index.zig");
 const ComponentState = ComponentFramework.ComponentState;
-const GenericComponent = ComponentFramework.GenericComponent;
+const Component = ComponentFramework.Component;
 
 pub const WorkerStatus = enum(u8) {
     IDLE,

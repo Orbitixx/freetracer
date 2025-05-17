@@ -33,7 +33,7 @@ pub const ResourceManagerSingleton = struct {
         //-------- *** LOAD FONTS *** ----------//
         //--------------------------------------//
 
-        debug.print("ResourceManager: preparing to load fonts...");
+        debug.print("\nResourceManager: preparing to load fonts...");
 
         const robotoFontFile = try getResourcePath(allocator, "Roboto-Regular.ttf");
         defer allocator.free(robotoFontFile);

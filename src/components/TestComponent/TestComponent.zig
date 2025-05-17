@@ -1,30 +1,37 @@
 const std = @import("std");
 
+const ComponentFramework = @import("../framework/import/index.zig");
+
+const AppObserver = @import("../../observers/AppObserver.zig").AppObserver;
+const ObserverEvent = @import("../../observers/ObserverEvents.zig").ObserverEvent;
+const ObserverPayload = @import("../../observers/ObserverPayload.zig");
+
 pub const FilePickerState = struct {
     selected_path: ?[]u8 = null,
     is_selecting: bool = false,
 };
 
-const ComponentFramework = @import("../framework/import/index.zig");
 const ComponentState = ComponentFramework.ComponentState(FilePickerState);
 const ComponentWorker = ComponentFramework.Worker(FilePickerState);
-const GenericComponent = ComponentFramework.GenericComponent;
+const Component = ComponentFramework.Component;
 const WorkerStatus = ComponentFramework.WorkerStatus;
 
-pub const TestFilePickerComponent = struct {
+pub const ISOFilePickerComponent = struct {
     const Self = @This();
 
     allocator: std.mem.Allocator,
+    appObserver: *const AppObserver,
     state: ComponentState,
     worker: ?ComponentWorker = null,
 
     // Component-specific function implementations
-    pub fn init(allocator: std.mem.Allocator) TestFilePickerComponent {
+    pub fn init(allocator: std.mem.Allocator, appObserver: *const AppObserver) ISOFilePickerComponent {
         // Initialize file picker specific things
-        std.debug.print("\nTestFilePickerComponent: component initialized!", .{});
+        std.debug.print("\nISOFilePickerComponent: component initialized!", .{});
 
         return .{
             .allocator = allocator,
+            .appObserver = appObserver,
             .state = ComponentState.init(FilePickerState{}),
         };
     }
@@ -33,15 +40,14 @@ pub const TestFilePickerComponent = struct {
         self.worker = ComponentWorker.init(
             &self.state,
             false,
-            TestFilePickerComponent.workerRun,
-            TestFilePickerComponent.workerCallback,
+            ISOFilePickerComponent.workerRun,
+            ISOFilePickerComponent.workerCallback,
             self,
         );
     }
 
     pub fn start(self: *Self) !void {
-        std.debug.print("\nTestFilePickerComponent: start() function called!", .{});
-
+        std.debug.print("\nISOFilePickerComponent: start() function called!", .{});
         self.initWorker();
     }
 
@@ -78,6 +84,10 @@ pub const TestFilePickerComponent = struct {
         }
     }
 
+    pub fn notify(self: *Self, event: ObserverEvent, payload: ObserverPayload) void {
+        self.appObserver.onNotify(event, payload);
+    }
+
     pub fn selectFile(self: *Self) !void {
         if (self.worker) |*worker| {
             try worker.start();
@@ -94,7 +104,7 @@ pub const TestFilePickerComponent = struct {
 
     // Worker implementation
     fn workerRun(worker: *ComponentWorker) void {
-        std.debug.print("\nTestFilePickerComponent: runWorker() started!", .{});
+        std.debug.print("\nISOFilePickerComponent: runWorker() started!", .{});
 
         worker.state.withLock(struct {
             fn lambda(state: *FilePickerState) void {
@@ -111,30 +121,31 @@ pub const TestFilePickerComponent = struct {
             }
         }.lambda);
 
-        std.debug.print("\nTestFilePickerComponent: runWorker() finished executing!", .{});
+        std.debug.print("\nISOFilePickerComponent: runWorker() finished executing!", .{});
     }
 
     fn workerCallback(worker: *ComponentWorker, context: *anyopaque) void {
-        std.debug.print("\nTestFilePickerComponent: workerCallback() called!", .{});
+        std.debug.print("\nISOFilePickerComponent: workerCallback() called!", .{});
 
-        // const component: *TestFilePickerComponent = @ptrCast(@alignCast(context));
+        // const component: *ISOFilePickerComponent = @ptrCast(@alignCast(context));
         _ = worker;
         _ = context;
 
-        std.debug.print("\nTestFilePickerComponent: workerCallback() joined!", .{});
+        std.debug.print("\nISOFilePickerComponent: workerCallback() joined!", .{});
     }
 
-    pub fn asGenericComponent(self: *Self) GenericComponent {
+    pub fn asComponent(self: *Self) Component {
         //
-        const vtable = &GenericComponent.VTable{
+        const vtable = &Component.VTable{
             //
-            .init_fn = TestFilePickerComponent.initWrapper,
-            .deinit_fn = TestFilePickerComponent.deinitWrapper,
-            .update_fn = TestFilePickerComponent.updateWrapper,
-            .draw_fn = TestFilePickerComponent.drawWrapper,
+            .init_fn = ISOFilePickerComponent.initWrapper,
+            .deinit_fn = ISOFilePickerComponent.deinitWrapper,
+            .update_fn = ISOFilePickerComponent.updateWrapper,
+            .draw_fn = ISOFilePickerComponent.drawWrapper,
+            .notify_fn = ISOFilePickerComponent.notifyWrapper,
         };
 
-        return ComponentFramework.GenericComponent.init(self, vtable);
+        return ComponentFramework.Component.init(self, vtable);
     }
 
     fn initWrapper(ptr: *anyopaque) anyerror!void {
@@ -156,9 +167,14 @@ pub const TestFilePickerComponent = struct {
         const component: *Self = @ptrCast(@alignCast(ptr));
         return component.draw();
     }
+
+    fn notifyWrapper(ptr: *anyopaque, event: ObserverEvent, payload: ObserverPayload) void {
+        const component: *Self = @ptrCast(@alignCast(ptr));
+        return component.notify(event, payload);
+    }
 };
 
-// Factory functions to create instances
+// Factory function to create instances
 // pub fn create(allocator: std.mem.Allocator) !struct { component: ComponentInstance, worker: ComponentWorker, state: State } {
 //     _ = allocator;
 //
@@ -175,6 +191,6 @@ pub const TestFilePickerComponent = struct {
 //     };
 // }
 //
-// pub fn asGenericComponent(component: *ComponentInstance) ComponentFramework.GenericComponent {
-//     return Factory.asGenericComponent(component);
+// pub fn asComponent(component: *ISOFilePickerComponent) Component {
+//     return Factory.asComponent(component);
 // }
