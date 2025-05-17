@@ -37,6 +37,7 @@ pub fn build(b: *std.Build) void {
     });
 
     exe.want_lto = false;
+    exe.link_gc_sections = false;
 
     exe.linkLibC();
     exe.linkFramework("CoreFoundation");
