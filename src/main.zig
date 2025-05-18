@@ -34,6 +34,8 @@ const ComponentFramework = @import("./components/framework/import/index.zig");
 const TestFilePickerComponent = @import("./components/TestComponent/TestComponent.zig").ISOFilePickerComponent;
 const newComponentID = ComponentFramework.ComponentID;
 
+const UI = @import("./components/ui/Primitives.zig");
+
 const relH = WindowManager.relH;
 const relW = WindowManager.relW;
 
@@ -112,6 +114,13 @@ pub fn main() !void {
 
     debug.print("\nMade it past threading...");
 
+    const LightGray = rl.Color.init(78, 96, 121, 255);
+
+    const logoText = UI.Text.init("freetracer", .{ .x = relW(0.08), .y = relH(0.035) }, .JERSEY10_REGULAR, 40, .white);
+    const subLogoText = UI.Text.init("free and open-source by orbitixx", .{ .x = relW(0.08), .y = relH(0.035) + 32 }, .JERSEY10_REGULAR, 18, LightGray);
+    const versionText = UI.Text.init(env.APP_VERSION, .{ .x = relW(0.92), .y = relH(0.05) }, .JERSEY10_REGULAR, 16, LightGray);
+    var logText = UI.Text.init("", .{ .x = relW(0.02), .y = relH(0.93) }, .ROBOTO_REGULAR, 14, .light_gray);
+
     // Main application GUI.loop
     while (!rl.windowShouldClose()) { // Detect window close button or ESC key
         //----------------------------------------------------------------------------------
@@ -134,46 +143,18 @@ pub fn main() !void {
 
         rl.clearBackground(backgroundColor);
 
-        rl.drawTextEx(
-            ResourceManager.getFont(Font.JERSEY10_REGULAR),
-            "freetracer",
-            .{ .x = relW(0.08), .y = relH(0.035) },
-            40,
-            0,
-            .white,
-        );
-
-        rl.drawTextEx(
-            ResourceManager.getFont(Font.JERSEY10_REGULAR),
-            "free and open-source by orbitixx",
-            .{ .x = relW(0.08), .y = relH(0.035) + 32 },
-            18,
-            0,
-            rl.Color.init(78, 96, 121, 255),
-        );
+        logoText.draw();
+        subLogoText.draw();
 
         rl.drawCircleV(.{ .x = relW(0.9), .y = relH(0.065) }, 4.5, if (helperResponse) .green else .red);
         rl.drawCircleLinesV(.{ .x = relW(0.9), .y = relH(0.065) }, 4.5, .white);
 
-        rl.drawTextEx(
-            ResourceManager.getFont(Font.JERSEY10_REGULAR),
-            env.APP_VERSION,
-            .{ .x = relW(0.92), .y = relH(0.05) },
-            16,
-            0,
-            rl.Color.init(78, 96, 121, 255),
-        );
+        versionText.draw();
 
         rl.drawRectangleRec(rl.Rectangle.init(0, relH(0.94), WindowManager.getWindowWidth(), relH(0.06)), rl.Color.init(0, 0, 0, 60));
 
-        rl.drawTextEx(
-            ResourceManager.getFont(Font.ROBOTO_REGULAR),
-            Logger.getLatestLog(),
-            .{ .x = relW(0.02), .y = relH(0.93) },
-            14,
-            0,
-            .light_gray,
-        );
+        logText.value = Logger.getLatestLog();
+        logText.draw();
 
         componentRegistry.processRendering();
 

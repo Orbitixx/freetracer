@@ -17,10 +17,9 @@ const Component = ComponentFramework.Component;
 const WorkerStatus = ComponentFramework.WorkerStatus;
 
 pub const ISOFilePickerComponent = struct {
-    const Self = @This();
-
     allocator: std.mem.Allocator,
     appObserver: *const AppObserver,
+    // componentObserver: ComponentObserver,
     state: ComponentState,
     worker: ?ComponentWorker = null,
 
@@ -36,7 +35,7 @@ pub const ISOFilePickerComponent = struct {
         };
     }
 
-    fn initWorker(self: *Self) void {
+    fn initWorker(self: *ISOFilePickerComponent) void {
         self.worker = ComponentWorker.init(
             &self.state,
             false,
@@ -46,12 +45,14 @@ pub const ISOFilePickerComponent = struct {
         );
     }
 
-    pub fn start(self: *Self) !void {
+    pub fn start(self: *ISOFilePickerComponent) !void {
         std.debug.print("\nISOFilePickerComponent: start() function called!", .{});
         self.initWorker();
+
+        // self.componentObserver = .{};
     }
 
-    pub fn update(self: *Self) !void {
+    pub fn update(self: *ISOFilePickerComponent) !void {
         // Check for file selection changes
         const state = self.state.getDataLocked();
         defer self.state.unlock();
@@ -63,17 +64,19 @@ pub const ISOFilePickerComponent = struct {
         // Update logic
     }
 
-    pub fn draw(self: *Self) !void {
+    pub fn draw(self: *ISOFilePickerComponent) !void {
         // Draw file picker UI
-        const state = self.state.getDataLocked();
-        defer self.state.unlock();
+        // const state = self.state.getDataLocked();
+        // defer self.state.unlock();
 
-        std.debug.print("\nDrawing file picker UI, selected: {s}", .{if (state.selected_path) |path| path else "none"});
+        // std.debug.print("\nDrawing file picker UI, selected: {s}", .{if (state.selected_path) |path| path else "none"});
 
         // Draw UI elements
+
+        _ = self;
     }
 
-    pub fn deinit(self: *Self) void {
+    pub fn deinit(self: *ISOFilePickerComponent) void {
         // Clean up resources
         const state = self.state.getDataLocked();
         defer self.state.unlock();
@@ -84,17 +87,17 @@ pub const ISOFilePickerComponent = struct {
         }
     }
 
-    pub fn notify(self: *Self, event: ObserverEvent, payload: ObserverPayload) void {
+    pub fn notify(self: *ISOFilePickerComponent, event: ObserverEvent, payload: ObserverPayload) void {
         self.appObserver.onNotify(event, payload);
     }
 
-    pub fn selectFile(self: *Self) !void {
+    pub fn selectFile(self: *ISOFilePickerComponent) !void {
         if (self.worker) |*worker| {
             try worker.start();
         }
     }
 
-    pub fn checkAndJoinWorker(self: *Self) void {
+    pub fn checkAndJoinWorker(self: *ISOFilePickerComponent) void {
         if (self.worker) |*worker| {
             if (worker.status == WorkerStatus.NEEDS_JOINING) {
                 worker.join();
@@ -134,11 +137,15 @@ pub const ISOFilePickerComponent = struct {
         std.debug.print("\nISOFilePickerComponent: workerCallback() joined!", .{});
     }
 
-    pub fn asComponent(self: *Self) Component {
+    pub fn asComponent(self: *ISOFilePickerComponent) Component {
         //
         const vtable = &Component.VTable{
             //
-            .init_fn = ISOFilePickerComponent.initWrapper,
+            .init_fn = struct {
+                fn call(ptr: *anyopaque) anyerror!void {
+                    return ISOFilePickerComponent.asInstance(ptr).start();
+                }
+            }.call,
             .deinit_fn = ISOFilePickerComponent.deinitWrapper,
             .update_fn = ISOFilePickerComponent.updateWrapper,
             .draw_fn = ISOFilePickerComponent.drawWrapper,
@@ -148,29 +155,28 @@ pub const ISOFilePickerComponent = struct {
         return ComponentFramework.Component.init(self, vtable);
     }
 
+    pub fn asInstance(ptr: *anyopaque) *ISOFilePickerComponent {
+        return @ptrCast(@alignCast(ptr));
+    }
+
     fn initWrapper(ptr: *anyopaque) anyerror!void {
-        const component: *Self = @ptrCast(@alignCast(ptr));
-        return component.start();
+        return ISOFilePickerComponent.asInstance(ptr).start();
     }
 
     fn updateWrapper(ptr: *anyopaque) anyerror!void {
-        const component: *Self = @ptrCast(@alignCast(ptr));
-        return component.update();
+        return ISOFilePickerComponent.asInstance(ptr).update();
     }
 
     fn deinitWrapper(ptr: *anyopaque) void {
-        const component: *Self = @ptrCast(@alignCast(ptr));
-        component.deinit();
+        return ISOFilePickerComponent.asInstance(ptr).deinit();
     }
 
     fn drawWrapper(ptr: *anyopaque) anyerror!void {
-        const component: *Self = @ptrCast(@alignCast(ptr));
-        return component.draw();
+        return ISOFilePickerComponent.asInstance(ptr).draw();
     }
 
     fn notifyWrapper(ptr: *anyopaque, event: ObserverEvent, payload: ObserverPayload) void {
-        const component: *Self = @ptrCast(@alignCast(ptr));
-        return component.notify(event, payload);
+        return ISOFilePickerComponent.asInstance(ptr).notify(event, payload);
     }
 };
 
