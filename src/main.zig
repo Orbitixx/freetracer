@@ -26,6 +26,7 @@ const ComponentID = @import("components/Registry.zig").ComponentID;
 const ComponentRegistry = @import("components/Registry.zig").ComponentRegistry;
 
 const Font = @import("managers/ResourceManager.zig").FONT;
+const Color = @import("components/ui/Styles.zig").Color;
 
 const FilePickerComponent = @import("components/FilePicker/Component.zig");
 const USBDevicesListComponent = @import("components/USBDevicesList/Component.zig");
@@ -114,12 +115,22 @@ pub fn main() !void {
 
     debug.print("\nMade it past threading...");
 
-    const LightGray = rl.Color.init(78, 96, 121, 255);
+    const logoText = UI.Text.init("freetracer", .{ .x = relW(0.08), .y = relH(0.035) }, .{ .font = .JERSEY10_REGULAR, .fontSize = 40, .textColor = Color.white });
+    const subLogoText = UI.Text.init("free and open-source by orbitixx", .{ .x = relW(0.08), .y = relH(0.035) + 32 }, .{ .font = .JERSEY10_REGULAR, .fontSize = 18, .textColor = Color.secondary });
+    const versionText = UI.Text.init(env.APP_VERSION, .{ .x = relW(0.92), .y = relH(0.05) }, .{ .font = .JERSEY10_REGULAR, .fontSize = 16, .textColor = Color.secondary });
+    var logText = UI.Text.init("", .{ .x = relW(0.02), .y = relH(0.93) }, .{ .font = .ROBOTO_REGULAR, .fontSize = 14, .textColor = Color.lightGray });
 
-    const logoText = UI.Text.init("freetracer", .{ .x = relW(0.08), .y = relH(0.035) }, .JERSEY10_REGULAR, 40, .white);
-    const subLogoText = UI.Text.init("free and open-source by orbitixx", .{ .x = relW(0.08), .y = relH(0.035) + 32 }, .JERSEY10_REGULAR, 18, LightGray);
-    const versionText = UI.Text.init(env.APP_VERSION, .{ .x = relW(0.92), .y = relH(0.05) }, .JERSEY10_REGULAR, 16, LightGray);
-    var logText = UI.Text.init("", .{ .x = relW(0.02), .y = relH(0.93) }, .ROBOTO_REGULAR, 14, .light_gray);
+    const logLineBgRect = UI.Rectangle{
+        .transform = .{
+            .x = 0,
+            .y = relH(0.94),
+            .w = WindowManager.getWindowWidth(),
+            .h = relH(0.06),
+        },
+        .style = .{
+            .color = Color.transparentDark,
+        },
+    };
 
     // Main application GUI.loop
     while (!rl.windowShouldClose()) { // Detect window close button or ESC key
@@ -151,7 +162,8 @@ pub fn main() !void {
 
         versionText.draw();
 
-        rl.drawRectangleRec(rl.Rectangle.init(0, relH(0.94), WindowManager.getWindowWidth(), relH(0.06)), rl.Color.init(0, 0, 0, 60));
+        // rl.drawRectangleRec(rl.Rectangle.init(0, relH(0.94), WindowManager.getWindowWidth(), relH(0.06)), rl.Color.init(0, 0, 0, 60));
+        logLineBgRect.draw();
 
         logText.value = Logger.getLatestLog();
         logText.draw();

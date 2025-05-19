@@ -116,12 +116,12 @@ pub const ResourceError = error{
     NoFontsLoadedError,
 };
 
-pub const FONT = enum(usize) {
+pub const FONT = enum(u8) {
     ROBOTO_REGULAR = 0,
     JERSEY10_REGULAR = 1,
 };
 
-pub const TEXTURE = enum(usize) {
+pub const TEXTURE = enum(u8) {
     DISK_IMAGE = 0,
 };
 

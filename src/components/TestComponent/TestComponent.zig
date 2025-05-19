@@ -19,13 +19,10 @@ const WorkerStatus = ComponentFramework.WorkerStatus;
 pub const ISOFilePickerComponent = struct {
     allocator: std.mem.Allocator,
     appObserver: *const AppObserver,
-    // componentObserver: ComponentObserver,
     state: ComponentState,
     worker: ?ComponentWorker = null,
 
-    // Component-specific function implementations
     pub fn init(allocator: std.mem.Allocator, appObserver: *const AppObserver) ISOFilePickerComponent {
-        // Initialize file picker specific things
         std.debug.print("\nISOFilePickerComponent: component initialized!", .{});
 
         return .{
@@ -48,8 +45,6 @@ pub const ISOFilePickerComponent = struct {
     pub fn start(self: *ISOFilePickerComponent) !void {
         std.debug.print("\nISOFilePickerComponent: start() function called!", .{});
         self.initWorker();
-
-        // self.componentObserver = .{};
     }
 
     pub fn update(self: *ISOFilePickerComponent) !void {

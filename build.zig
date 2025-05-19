@@ -62,20 +62,6 @@ pub fn build(b: *std.Build) void {
     exe.linkFramework("ServiceManagement");
     exe.linkFramework("Security");
     addPaths(exe);
-    //
-    // exe.linkFramework("CoreFoundation"); // Required for CF types and functions
-    // exe.linkFramework("IOKit"); // Required for CF types and functions
-    // exe.linkFramework("DiskArbitration"); // Required for DADisk functions
-    //
-    // addPaths(exe);
-
-    // exe.addSystemFrameworkPath(.{ .cwd_relative = b.pathJoin(&.{ b.sysroot.?, "/System/Library/Frameworks" }) });
-    // exe.addSystemIncludePath(.{ .cwd_relative = b.pathJoin(&.{ b.sysroot.?, "/usr/include" }) });
-    // exe.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ b.sysroot.?, "/usr/lib" }) });
-    //
-    // exe.addSystemFrameworkPath( .{ .path = b.pathJoin(&.{ b.sysroot.?, "/System/Library/Frameworks" }) });
-    // exe.addSystemIncludePath(.{ .path = b.pathJoin(&.{ b.sysroot.?, "/usr/include" }) });
-    // exe.addLibraryPath(.{ .path = b.pathJoin(&.{ b.sysroot.?, "/usr/lib" }) });
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
@@ -124,10 +110,10 @@ pub fn addPaths(step: *std.Build.Step.Compile) void {
     step.addLibraryPath(.{ .cwd_relative = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib" });
 }
 
-fn sdkPath(comptime suffix: []const u8) []const u8 {
-    if (suffix[0] != '/') @compileError("suffix must be an absolute path");
-    return comptime blk: {
-        const root_dir = std.fs.path.dirname(@src().file) orelse ".";
-        break :blk root_dir ++ suffix;
-    };
-}
+// fn sdkPath(comptime suffix: []const u8) []const u8 {
+//     if (suffix[0] != '/') @compileError("suffix must be an absolute path");
+//     return comptime blk: {
+//         const root_dir = std.fs.path.dirname(@src().file) orelse ".";
+//         break :blk root_dir ++ suffix;
+//     };
+// }

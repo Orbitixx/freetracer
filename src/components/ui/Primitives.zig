@@ -5,36 +5,41 @@ const rl = @import("raylib");
 const ResourceManagerImport = @import("../../managers/ResourceManager.zig");
 const ResourceManager = ResourceManagerImport.ResourceManagerSingleton;
 
-const Font = ResourceManagerImport.FONT;
+const Styles = @import("./Styles.zig");
+const TextStyle = Styles.TextStyle;
+const RectangleStyle = Styles.RectangleStyle;
 
-pub const Point = struct {
-    x: f32,
-    y: f32,
-};
+const AppFont = ResourceManagerImport.FONT;
 
-pub const Rectangle = struct {
+pub const Transform = struct {
     x: f32,
     y: f32,
     w: f32,
     h: f32,
-    rounded: bool = false,
-    color: rl.Color = .gray,
 
-    pub fn draw(self: Rectangle) void {
-        if (self.rounded) {
-            rl.drawRectangleRounded(self.asRaylibRectangle(), 0.2, 6, self.color);
-            return;
-        }
+    scale: f32 = 1.0,
+    rotation: f32 = 0.0,
 
-        rl.drawRectanglePro(self.asRaylibRectangle(), .{ .x = 0, .y = 0 }, 0, self.color);
+    pub fn getPosition(self: Transform) rl.Vector2 {
+        return .{ .x = self.x, .y = self.y };
     }
 
-    pub fn isPointWithinBounds(self: Rectangle, p: Point) bool {
+    pub fn isPointWithinBounds(self: Transform, p: rl.Vector2) bool {
         if ((p.x >= self.x and p.x <= 2 * self.x + self.w) and
             (p.y >= self.y and p.y <= 2 * self.y + self.w)) return true else return false;
     }
 
-    pub fn asRaylibRectangle(self: Rectangle) rl.Rectangle {
+    /// Returns absolute X coordinate relative to the Rectange's position and width
+    pub fn relX(self: Transform, x: f32) f32 {
+        return self.x + self.w * x;
+    }
+
+    /// Returns absolute X coordinate relative to the Rectange's position and width
+    pub fn relY(self: Transform, y: f32) f32 {
+        return self.y + self.h * y;
+    }
+
+    pub fn asRaylibRectangle(self: Transform) rl.Rectangle {
         return .{
             .x = self.x,
             .y = self.y,
@@ -42,40 +47,50 @@ pub const Rectangle = struct {
             .height = self.h,
         };
     }
+};
 
-    /// Returns absolute X coordinate relative to the Rectange's position and width
-    pub fn relW(self: Rectangle, x: f32) f32 {
-        return self.x + self.w * x;
-    }
+pub const Rectangle = struct {
+    transform: Transform,
+    rounded: bool = false,
+    style: RectangleStyle = .{},
 
-    /// Returns absolute X coordinate relative to the Rectange's position and width
-    pub fn relH(self: Rectangle, y: f32) f32 {
-        return self.y + self.h * y;
+    pub fn draw(self: Rectangle) void {
+        if (self.rounded) {
+            rl.drawRectangleRounded(self.transform.asRaylibRectangle(), 0.2, 6, self.style.color);
+            return;
+        }
+
+        rl.drawRectanglePro(self.transform.asRaylibRectangle(), .{ .x = 0, .y = 0 }, 0, self.style.color);
     }
 };
 
-pub const Text = struct {
-    bounds: Rectangle = .{ .x = 0, .y = 0, .w = 0, .h = 0 },
-    value: [:0]const u8,
-    font: rl.Font,
-    fontSize: f32,
-    color: rl.Color = .white,
+pub const TextDimensions = struct {
+    width: f32,
+    height: f32,
+};
 
-    pub fn init(value: [:0]const u8, position: rl.Vector2, font: Font, fontSize: f32, color: rl.Color) Text {
-        const _font: rl.Font = ResourceManager.getFont(font);
-        const textDims: rl.Vector2 = rl.measureTextEx(_font, value, fontSize, 0);
+pub const Text = struct {
+    transform: Transform = .{ .x = 0, .y = 0, .w = 0, .h = 0 },
+    value: [:0]const u8,
+    style: TextStyle,
+    font: rl.Font,
+
+    /// Static init() function; returns a new instance of Text
+    pub fn init(value: [:0]const u8, position: rl.Vector2, style: TextStyle) Text {
+        const _font: rl.Font = ResourceManager.getFont(style.font);
+
+        const textDims: rl.Vector2 = rl.measureTextEx(_font, value, style.fontSize, style.spacing);
 
         return .{
-            .bounds = .{
+            .transform = .{
                 .x = position.x,
                 .y = position.y,
                 .w = textDims.x,
                 .h = textDims.y,
             },
             .value = value,
+            .style = style,
             .font = _font,
-            .fontSize = fontSize,
-            .color = color,
         };
     }
 
@@ -83,14 +98,15 @@ pub const Text = struct {
         rl.drawTextEx(
             self.font,
             self.value,
-            self.getPosition(),
-            self.fontSize,
-            0,
-            self.color,
+            self.transform.getPosition(),
+            self.style.fontSize,
+            self.style.spacing,
+            self.style.textColor,
         );
     }
 
-    pub fn getPosition(self: Text) rl.Vector2 {
-        return .{ .x = self.bounds.x, .y = self.bounds.y };
+    pub fn getDimensions(self: Text) TextDimensions {
+        const dims = rl.measureTextEx(self.font, self.value, self.style.fontSize, self.style.spacing);
+        return .{ .width = dims.x, .height = dims.y };
     }
 };
