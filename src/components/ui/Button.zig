@@ -36,24 +36,13 @@ pub const ButtonState = enum {
 
 const ButtonComponent = @This();
 
-ptr: *anyopaque,
-vtable: *const VTable,
-
 rect: Rectangle,
 text: Text,
 styles: ButtonStyles,
 state: ButtonState = ButtonState.NORMAL,
 
-pub const VTable = struct {
-    init_fn: *const fn (ptr: *anyopaque) anyerror!void,
-    deinit_fn: *const fn (ptr: *anyopaque) void,
-    update_fn: *const fn (ptr: *anyopaque) anyerror!void,
-    draw_fn: *const fn (ptr: *anyopaque) anyerror!void,
-    notify_fn: *const fn (ptr: *anyopaque, event: ObserverEvent, payload: ObserverPayload) void,
-};
-
-pub fn init(text: [:0]const u8, position: rl.Vector2, styles: ButtonStyles) ButtonComponent {
-    const btnText = Text.init(text, position, styles.normal);
+pub fn init(text: [:0]const u8, position: rl.Vector2, variant: ButtonVariant) ButtonComponent {
+    const btnText = Text.init(text, position, variant.normal.textStyle);
 
     const textDimensions = btnText.getDimensions();
 
@@ -64,7 +53,7 @@ pub fn init(text: [:0]const u8, position: rl.Vector2, styles: ButtonStyles) Butt
             .w = textDimensions.width + BUTTON_PADDING * 2,
             .h = textDimensions.height + BUTTON_PADDING,
         },
-        .color = Color.white,
+        .style = variant.normal.bgStyle,
     };
 
     return .{
@@ -75,9 +64,9 @@ pub fn init(text: [:0]const u8, position: rl.Vector2, styles: ButtonStyles) Butt
                 .x = position.x + (rect.transform.w / 2) - (textDimensions.width / 2),
                 .y = position.y + (rect.transform.h / 2) - (textDimensions.height / 2),
             },
-            styles.normal.textStyle,
+            variant.normal.textStyle,
         ),
-        .styles = styles,
+        .styles = variant.asButtonStyles(),
     };
 }
 
@@ -92,7 +81,7 @@ pub fn update(self: *ButtonComponent) void {
     const isButtonHovered: bool = self.rect.transform.isPointWithinBounds(mousePos);
 
     // Don't bother updating if state change triggers are not present
-    if (self.state == ButtonState.NORMAL and (!isButtonHovered or !isButtonClicked)) return;
+    if (self.state == ButtonState.NORMAL and (!isButtonHovered and !isButtonClicked)) return;
     if (self.state == ButtonState.HOVER and (isButtonHovered and !isButtonClicked)) return;
 
     if (isButtonHovered and isButtonClicked) {
@@ -134,20 +123,106 @@ pub fn notify(self: *ButtonComponent, event: ObserverEvent, payload: ObserverPay
     _ = payload;
 }
 
-// pub fn asComponent(self: *ButtonComponent) Component {
-//     //
-//     const vtable = &Component.VTable{
-//         //
-//         .init_fn = ButtonComponent.start,
-//         .deinit_fn = ButtonComponent.deinitWrapper,
-//         .update_fn = ButtonComponent.updateWrapper,
-//         .draw_fn = ButtonComponent.drawWrapper,
-//         .notify_fn = ButtonComponent.notifyWrapper,
-//     };
-//
-//     return ComponentFramework.Component.init(self, vtable);
-// }
-//
-// pub fn asInstance(ptr: *anyopaque) *ButtonComponent {
-//     return @ptrCast(@alignCast(ptr));
-// }
+pub fn asInstance(ptr: *anyopaque) *ButtonComponent {
+    return @ptrCast(@alignCast(ptr));
+}
+
+pub fn asComponent(self: *ButtonComponent) Component {
+    const vtable = &Component.VTable{
+        .init_fn = struct {
+            fn lambda(ptr: *anyopaque) anyerror!void {
+                ButtonComponent.asInstance(ptr).start();
+            }
+        }.lambda,
+
+        .update_fn = struct {
+            fn lambda(ptr: *anyopaque) anyerror!void {
+                ButtonComponent.asInstance(ptr).update();
+            }
+        }.lambda,
+
+        .draw_fn = struct {
+            fn lambda(ptr: *anyopaque) anyerror!void {
+                ButtonComponent.asInstance(ptr).draw();
+            }
+        }.lambda,
+
+        .deinit_fn = struct {
+            fn lambda(ptr: *anyopaque) void {
+                ButtonComponent.asInstance(ptr).deinit();
+            }
+        }.lambda,
+
+        .notify_fn = struct {
+            fn lambda(ptr: *anyopaque, event: ObserverEvent, payload: ObserverPayload) void {
+                ButtonComponent.asInstance(ptr).notify(event, payload);
+            }
+        }.lambda,
+    };
+
+    return Component.init(self, vtable);
+}
+
+pub const ButtonVariant = struct {
+    normal: ButtonStyle = .{
+        .bgStyle = .{},
+        .textStyle = .{},
+    },
+
+    hover: ButtonStyle = .{
+        .bgStyle = .{},
+        .textStyle = .{},
+    },
+
+    active: ButtonStyle = .{
+        .bgStyle = .{},
+        .textStyle = .{},
+    },
+
+    pub const Primary: ButtonVariant = .{
+        .normal = .{
+            .bgStyle = .{
+                .borderStyle = .{},
+                .color = .{ .r = 115, .g = 102, .b = 162, .a = 255 },
+            },
+            .textStyle = .{
+                .font = .ROBOTO_REGULAR,
+                .fontSize = 14,
+                .spacing = 0,
+                .textColor = .white,
+            },
+        },
+        .hover = .{
+            .bgStyle = .{
+                .borderStyle = .{},
+                .color = .{ .r = 115, .g = 102, .b = 162, .a = 127 },
+            },
+            .textStyle = .{
+                .font = .ROBOTO_REGULAR,
+                .fontSize = 14,
+                .spacing = 0,
+                .textColor = .white,
+            },
+        },
+        .active = .{
+            .bgStyle = .{
+                .borderStyle = .{},
+                .color = .{ .r = 96, .g = 83, .b = 145, .a = 255 },
+            },
+            .textStyle = .{
+                .font = .ROBOTO_REGULAR,
+                .fontSize = 14,
+                .spacing = 0,
+                .textColor = .white,
+            },
+        },
+    };
+
+    fn asButtonStyles(self: ButtonVariant) ButtonStyles {
+        return ButtonStyles{
+            .normal = self.normal,
+            .hover = self.hover,
+            .active = self.active,
+        };
+    }
+};

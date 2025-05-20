@@ -25,8 +25,8 @@ pub const Transform = struct {
     }
 
     pub fn isPointWithinBounds(self: Transform, p: rl.Vector2) bool {
-        if ((p.x >= self.x and p.x <= 2 * self.x + self.w) and
-            (p.y >= self.y and p.y <= 2 * self.y + self.w)) return true else return false;
+        if ((p.x >= self.x and p.x <= self.x + self.w) and
+            (p.y >= self.y and p.y <= self.y + self.h)) return true else return false;
     }
 
     /// Returns absolute X coordinate relative to the Rectange's position and width

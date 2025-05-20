@@ -33,6 +33,7 @@ const USBDevicesListComponent = @import("components/USBDevicesList/Component.zig
 
 const ComponentFramework = @import("./components/framework/import/index.zig");
 const TestFilePickerComponent = @import("./components/TestComponent/TestComponent.zig").ISOFilePickerComponent;
+const Button = @import("components/ui/Button.zig");
 const newComponentID = ComponentFramework.ComponentID;
 
 const UI = @import("./components/ui/Primitives.zig");
@@ -93,8 +94,14 @@ pub fn main() !void {
     defer newRegistry.deinit();
 
     var testFilePickerComponent = TestFilePickerComponent.init(allocator, &appObserver);
-
     try newRegistry.register(newComponentID.ISOFilePicker, testFilePickerComponent.asComponent());
+
+    var testBtn = Button.init(
+        "Test btn",
+        .{ .x = 20, .y = 20 },
+        .Primary,
+    );
+    try newRegistry.register(newComponentID.TestBtn, testBtn.asComponent());
 
     //----------------------------------------------------------------------------------
     //--- @END COMPONENTS --------------------------------------------------------------

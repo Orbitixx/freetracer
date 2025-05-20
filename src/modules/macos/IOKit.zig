@@ -184,6 +184,8 @@ pub fn getIOMediaVolumesForDevice(device: c.io_service_t, allocator: std.mem.All
             };
         }
 
+        // TODO: Review options other than recursion. Could be theoretically dangeroues to walk through the IORegistry recursively.
+        // While the IORegirsty is a finite tree, a memory-safe alternative would be preferable.
         try getIOMediaVolumesForDevice(childService, allocator, pVolumesList);
     }
 
