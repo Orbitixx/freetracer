@@ -3,12 +3,12 @@ const debug = @import("../../lib/util/debug.zig");
 
 const rl = @import("raylib");
 
-const ISOFilePickerUIState = struct {};
+const ButtonComponentState = struct {};
 
 const ComponentFramework = @import("../framework/import/index.zig");
 const Component = ComponentFramework.Component;
-const ComponentState = ComponentFramework.ComponentState(ISOFilePickerUIState);
-const ComponentWorker = ComponentFramework.Worker(ISOFilePickerUIState);
+const ComponentState = ComponentFramework.ComponentState(ButtonComponentState);
+const ComponentWorker = ComponentFramework.Worker(ButtonComponentState);
 
 const AppObserver = @import("../../observers/AppObserver.zig").AppObserver;
 const ObserverEvent = @import("../../observers/ObserverEvents.zig").ObserverEvent;
@@ -34,14 +34,26 @@ pub const ButtonState = enum {
     ACTIVE,
 };
 
+pub const ButtonHandler = struct {
+    function: *const fn (ctx: *anyopaque) void,
+    context: *anyopaque,
+
+    fn handle(self: ButtonHandler) void {
+        return self.function(self.context);
+    }
+};
+
 const ButtonComponent = @This();
+
+// TODO: Recall, this is a Component implementation so ComponentState and ComponentWorkers are available, if needed.
 
 rect: Rectangle,
 text: Text,
 styles: ButtonStyles,
 state: ButtonState = ButtonState.NORMAL,
+clickHandler: ButtonHandler,
 
-pub fn init(text: [:0]const u8, position: rl.Vector2, variant: ButtonVariant) ButtonComponent {
+pub fn init(text: [:0]const u8, position: rl.Vector2, variant: ButtonVariant, clickHandler: ButtonHandler) ButtonComponent {
     const btnText = Text.init(text, position, variant.normal.textStyle);
 
     const textDimensions = btnText.getDimensions();
@@ -67,6 +79,7 @@ pub fn init(text: [:0]const u8, position: rl.Vector2, variant: ButtonVariant) Bu
             variant.normal.textStyle,
         ),
         .styles = variant.asButtonStyles(),
+        .clickHandler = clickHandler,
     };
 }
 
@@ -100,6 +113,7 @@ pub fn update(self: *ButtonComponent) void {
         .ACTIVE => {
             self.rect.style = self.styles.active.bgStyle;
             self.text.style = self.styles.active.textStyle;
+            self.clickHandler.handle();
         },
         .NORMAL => {
             self.rect.style = self.styles.normal.bgStyle;
