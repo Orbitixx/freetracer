@@ -11,26 +11,37 @@ pub const WorkerStatus = enum(u8) {
     FINISHED,
 };
 
+/// Configuration settings for a Component Worker, which alter its behavior.
+pub const WorkerConfig = struct {
+    /// Executes worker action on the same thread as the caller (most often the main process thread).
+    /// Useful to be able to still use the same Component and Component Worker architecture without
+    /// discrete multithreading/worker functionality.
+    onSameThreadAsCaller: bool = false,
+};
+
+/// A Component Worker object, which dispatches a discrete Component action and,
+/// upon completion, calls a specified callback.
 pub fn Worker(comptime StateType: type) type {
     return struct {
         const Self = @This();
 
-        state: *ComponentState(StateType),
-        status: WorkerStatus = .IDLE,
-        isOnSeparateThread: bool = true,
-        thread: ?std.Thread = null,
-        run_fn: *const fn (*Self) void,
-        callback_fn: *const fn (*Self, ctx: *anyopaque) void,
-        callback_ctx: *anyopaque,
-        running: bool = false,
+        const WorkerContext = struct {
+            run_fn: *const fn (*Self) void,
+            callback_fn: *const fn (*Self, context: *anyopaque) void,
+            callback_context: *anyopaque,
+        };
 
-        pub fn init(state: *ComponentState(StateType), isOnSeparateThread: bool, run_fn: *const fn (*Self) void, callback_fn: *const fn (*Self, ctx: *anyopaque) void, callback_ctx: *anyopaque) Self {
+        state: *ComponentState(StateType),
+        context: WorkerContext,
+        config: WorkerConfig,
+        status: WorkerStatus = .IDLE,
+        thread: ?std.Thread = null,
+
+        pub fn init(state: *ComponentState(StateType), context: WorkerContext, config: WorkerConfig) Self {
             return .{
                 .state = state,
-                .run_fn = run_fn,
-                .callback_fn = callback_fn,
-                .callback_ctx = callback_ctx,
-                .isOnSeparateThread = isOnSeparateThread,
+                .context = context,
+                .config = config,
             };
         }
 
@@ -38,9 +49,17 @@ pub fn Worker(comptime StateType: type) type {
             if (self.status == WorkerStatus.RUNNING) return error.WorkerAlreadyRunning;
             if (self.status == WorkerStatus.NEEDS_JOINING) return error.WorkerThreadNeedsJoining;
 
-            if (self.isOnSeparateThread) self.thread = try std.Thread.spawn(.{}, Self.threadMain, .{self}) else Self.threadMain(self);
+            if (!self.config.onSameThreadAsCaller) {
+                self.thread = try std.Thread.spawn(
+                    .{},
+                    Self.threadMain,
+                    .{self},
+                );
+            } else Self.threadMain(self);
         }
 
+        /// Called from another thread, from which the Worker thread was spawned.
+        /// Does nothing if called from same thread as the same thread can't join itself.
         pub fn join(self: *Self) void {
             if (self.thread) |thread| {
                 thread.join();
@@ -51,9 +70,9 @@ pub fn Worker(comptime StateType: type) type {
 
         fn threadMain(self: *Self) void {
             self.status = .RUNNING;
-            self.run_fn(self);
+            self.context.run_fn(self);
             self.status = .NEEDS_JOINING;
-            self.callback_fn(self, self.callback_ctx);
+            self.context.callback_fn(self, self.context.callback_context);
         }
     };
 }

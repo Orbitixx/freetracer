@@ -95,26 +95,27 @@ pub fn main() !void {
     var newRegistry = ComponentFramework.ComponentRegistry.init(allocator);
     defer newRegistry.deinit();
 
-    const filePickerActionWrapper = struct {
-        fn call(ctx: *anyopaque) void {
-            const filePicker: *FilePickerComponent = @ptrCast(@alignCast(ctx));
-            return FilePickerComponent.dispatchComponentAction(filePicker);
-        }
-    };
+    // const filePickerActionWrapper = struct {
+    //     fn call(ctx: *anyopaque) void {
+    //         const filePicker: *FilePickerComponent = @ptrCast(@alignCast(ctx));
+    //         return FilePickerComponent.dispatchComponentAction(filePicker);
+    //     }
+    // };
 
     var testFilePickerComponent = TestFilePickerComponent.init(allocator, &appObserver);
     try newRegistry.register(newComponentID.ISOFilePicker, testFilePickerComponent.asComponent());
 
-    var testBtn = Button.init(
-        "Test btn",
-        .{ .x = 20, .y = 20 },
-        .Primary,
-        .{
-            .context = &filePickerComponent,
-            .function = filePickerActionWrapper.call,
-        },
-    );
-    try newRegistry.register(newComponentID.TestBtn, testBtn.asComponent());
+    // var testBtn = Button.init(
+    //     "Test btn",
+    //     .{ .x = 20, .y = 20 },
+    //     .Primary,
+    //     .{
+    //         .context = &filePickerComponent,
+    //         .function = filePickerActionWrapper.call,
+    //     },
+    // );
+    // testBtn.rect.rounded = true;
+    // try newRegistry.register(newComponentID.TestBtn, testBtn.asComponent());
 
     //----------------------------------------------------------------------------------
     //--- @END COMPONENTS --------------------------------------------------------------

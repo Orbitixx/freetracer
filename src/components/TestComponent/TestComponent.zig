@@ -35,10 +35,14 @@ pub const ISOFilePickerComponent = struct {
     fn initWorker(self: *ISOFilePickerComponent) void {
         self.worker = ComponentWorker.init(
             &self.state,
-            false,
-            ISOFilePickerComponent.workerRun,
-            ISOFilePickerComponent.workerCallback,
-            self,
+            .{
+                .run_fn = ISOFilePickerComponent.workerRun,
+                .callback_fn = ISOFilePickerComponent.workerCallback,
+                .callback_context = self,
+            },
+            .{
+                .onSameThreadAsCaller = true,
+            },
         );
     }
 
