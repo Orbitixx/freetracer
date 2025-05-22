@@ -1,4 +1,5 @@
 const std = @import("std");
+const osd = @import("osdialog");
 
 const ComponentFramework = @import("../framework/import/index.zig");
 
@@ -7,7 +8,7 @@ const ObserverEvent = @import("../../observers/ObserverEvents.zig").ObserverEven
 const ObserverPayload = @import("../../observers/ObserverPayload.zig");
 
 pub const FilePickerState = struct {
-    selected_path: ?[]u8 = null,
+    selected_path: ?[:0]u8 = null,
     is_selecting: bool = false,
 };
 
@@ -34,9 +35,11 @@ pub const ISOFilePickerComponent = struct {
 
     fn initWorker(self: *ISOFilePickerComponent) void {
         self.worker = ComponentWorker.init(
+            self.allocator,
             &self.state,
             .{
                 .run_fn = ISOFilePickerComponent.workerRun,
+                .run_context = self,
                 .callback_fn = ISOFilePickerComponent.workerCallback,
                 .callback_context = self,
             },
@@ -81,8 +84,7 @@ pub const ISOFilePickerComponent = struct {
         defer self.state.unlock();
 
         if (state.selected_path) |path| {
-            _ = path;
-            // Free the path if it was allocated
+            self.allocator.free(path);
         }
     }
 
@@ -104,9 +106,10 @@ pub const ISOFilePickerComponent = struct {
         }
     }
 
-    // Worker implementation
-    fn workerRun(worker: *ComponentWorker) void {
+    pub fn workerRun(worker: *ComponentWorker, context: *anyopaque) void {
         std.debug.print("\nISOFilePickerComponent: runWorker() started!", .{});
+
+        _ = context;
 
         worker.state.withLock(struct {
             fn lambda(state: *FilePickerState) void {
@@ -114,22 +117,18 @@ pub const ISOFilePickerComponent = struct {
             }
         }.lambda);
 
-        const data: []u8 = @constCast(&[_]u8{ 0x7B, 0x7C, 0x7C, 0x7B });
+        worker.state.lock();
+        defer worker.state.unlock();
 
-        worker.state.withLock(struct {
-            fn lambda(state: *FilePickerState) void {
-                state.is_selecting = false;
-                state.selected_path = data;
-            }
-        }.lambda);
+        worker.state.data.selected_path = osd.path(worker.allocator, .open, .{});
+        worker.state.data.is_selecting = false;
 
         std.debug.print("\nISOFilePickerComponent: runWorker() finished executing!", .{});
     }
 
-    fn workerCallback(worker: *ComponentWorker, context: *anyopaque) void {
+    pub fn workerCallback(worker: *ComponentWorker, context: *anyopaque) void {
         std.debug.print("\nISOFilePickerComponent: workerCallback() called!", .{});
 
-        // const component: *ISOFilePickerComponent = @ptrCast(@alignCast(context));
         _ = worker;
         _ = context;
 

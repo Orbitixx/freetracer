@@ -26,19 +26,23 @@ pub fn Worker(comptime StateType: type) type {
         const Self = @This();
 
         const WorkerContext = struct {
-            run_fn: *const fn (*Self) void,
+            run_fn: *const fn (*Self, context: *anyopaque) void,
+            run_context: *anyopaque,
             callback_fn: *const fn (*Self, context: *anyopaque) void,
             callback_context: *anyopaque,
+            deinit_fn: ?*const fn (*Self) void = null,
         };
 
+        allocator: std.mem.Allocator,
         state: *ComponentState(StateType),
         context: WorkerContext,
         config: WorkerConfig,
         status: WorkerStatus = .IDLE,
         thread: ?std.Thread = null,
 
-        pub fn init(state: *ComponentState(StateType), context: WorkerContext, config: WorkerConfig) Self {
+        pub fn init(allocator: std.mem.Allocator, state: *ComponentState(StateType), context: WorkerContext, config: WorkerConfig) Self {
             return .{
+                .allocator = allocator,
                 .state = state,
                 .context = context,
                 .config = config,
@@ -70,9 +74,15 @@ pub fn Worker(comptime StateType: type) type {
 
         fn threadMain(self: *Self) void {
             self.status = .RUNNING;
-            self.context.run_fn(self);
+            self.context.run_fn(self, self.context.run_context);
             self.status = .NEEDS_JOINING;
             self.context.callback_fn(self, self.context.callback_context);
+        }
+
+        pub fn deinit(self: *Self) void {
+            if (self.context.deinit_fn) |deinit_fn| {
+                deinit_fn();
+            }
         }
     };
 }
