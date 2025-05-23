@@ -9,12 +9,12 @@ pub const ComponentID = enum(u8) {
 
 pub const ComponentRegistry = struct {
     allocator: std.mem.Allocator,
-    components: std.AutoHashMap(ComponentID, Component),
+    components: std.AutoHashMap(ComponentID, *Component),
 
     pub fn init(allocator: std.mem.Allocator) ComponentRegistry {
         return .{
             .allocator = allocator,
-            .components = std.AutoHashMap(ComponentID, Component).init(allocator),
+            .components = std.AutoHashMap(ComponentID, *Component).init(allocator),
         };
     }
 
@@ -22,13 +22,13 @@ pub const ComponentRegistry = struct {
         var iter = self.components.iterator();
 
         while (iter.next()) |component| {
-            component.value_ptr.deinit();
+            component.value_ptr.*.deinit();
         }
 
         self.components.deinit();
     }
 
-    pub fn register(self: *ComponentRegistry, componentId: ComponentID, component: Component) !void {
+    pub fn register(self: *ComponentRegistry, componentId: ComponentID, component: *Component) !void {
         try self.components.put(componentId, component);
     }
 
@@ -36,7 +36,7 @@ pub const ComponentRegistry = struct {
         var iter = self.components.iterator();
 
         while (iter.next()) |component| {
-            try component.value_ptr.start();
+            try component.value_ptr.*.start();
         }
     }
 
@@ -44,7 +44,7 @@ pub const ComponentRegistry = struct {
         var iter = self.components.iterator();
 
         while (iter.next()) |component| {
-            try component.value_ptr.update();
+            try component.value_ptr.*.update();
         }
     }
 
@@ -52,7 +52,7 @@ pub const ComponentRegistry = struct {
         var iter = self.components.iterator();
 
         while (iter.next()) |component| {
-            try component.value_ptr.draw();
+            try component.value_ptr.*.draw();
         }
     }
 };

@@ -16,18 +16,6 @@ const ComponentRegistry = @import("../components/Registry.zig").ComponentRegistr
 pub const Event = @import("ObserverEvents.zig").ObserverEvent;
 pub const Payload = @import("ObserverPayload.zig");
 
-// pub const Event = enum {
-//     SELECT_ISO_BTN_CLICKED,
-//     ISO_FILE_SELECTED,
-//     USB_DEVICES_DISCOVERED,
-//     USB_DEVICE_SELECTED,
-//     HELLO_KITTY,
-// };
-
-// pub const Payload = struct {
-//     data: ?[]u8 = null,
-// };
-//
 pub const AppObserver = struct {
     componentRegistry: *ComponentRegistry,
 

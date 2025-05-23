@@ -1,5 +1,6 @@
 const std = @import("std");
 const osd = @import("osdialog");
+const debug = @import("../../lib/util/debug.zig");
 
 const ComponentFramework = @import("../framework/import/index.zig");
 
@@ -18,10 +19,17 @@ const Component = ComponentFramework.Component;
 const WorkerStatus = ComponentFramework.WorkerStatus;
 
 pub const ISOFilePickerComponent = struct {
+    component: ?Component = null,
     allocator: std.mem.Allocator,
     appObserver: *const AppObserver,
     state: ComponentState,
     worker: ?ComponentWorker = null,
+
+    pub const Events = struct {
+        pub const UIWidthChangedEvent = struct {
+            newWidth: u8,
+        };
+    };
 
     pub fn init(allocator: std.mem.Allocator, appObserver: *const AppObserver) ISOFilePickerComponent {
         std.debug.print("\nISOFilePickerComponent: component initialized!", .{});
@@ -31,6 +39,18 @@ pub const ISOFilePickerComponent = struct {
             .appObserver = appObserver,
             .state = ComponentState.init(FilePickerState{}),
         };
+    }
+
+    fn initComponent(self: *ISOFilePickerComponent) void {
+        const vtable = &Component.VTable{
+            .start_fn = ISOFilePickerComponent.startWrapper,
+            .deinit_fn = ISOFilePickerComponent.deinitWrapper,
+            .update_fn = ISOFilePickerComponent.updateWrapper,
+            .draw_fn = ISOFilePickerComponent.drawWrapper,
+            .handle_event_fn = ISOFilePickerComponent.handleEventWrapper,
+        };
+
+        self.component = ComponentFramework.Component.init(self, vtable);
     }
 
     fn initWorker(self: *ISOFilePickerComponent) void {
@@ -51,7 +71,8 @@ pub const ISOFilePickerComponent = struct {
 
     pub fn start(self: *ISOFilePickerComponent) !void {
         std.debug.print("\nISOFilePickerComponent: start() function called!", .{});
-        self.initWorker();
+        if (self.component == null) self.initComponent();
+        if (self.worker == null) self.initWorker();
     }
 
     pub fn update(self: *ISOFilePickerComponent) !void {
@@ -76,6 +97,19 @@ pub const ISOFilePickerComponent = struct {
         // Draw UI elements
 
         _ = self;
+    }
+
+    pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentFramework.Event) !void {
+        _ = self;
+
+        debug.printf("\nISOFilePickerComponent: handleEvent() received an event: {any}", .{event.eventType});
+
+        switch (event.eventType) {
+            .UIWidthChanged => {
+                const pData: *ISOFilePickerComponent.Events.UIWidthChangedEvent = @ptrCast(@alignCast(event.data.?));
+                debug.printf("\nISOFilePickerComponent: handleEvent() new width: {d}", .{pData.newWidth});
+            },
+        }
     }
 
     pub fn deinit(self: *ISOFilePickerComponent) void {
@@ -135,18 +169,9 @@ pub const ISOFilePickerComponent = struct {
         std.debug.print("\nISOFilePickerComponent: workerCallback() joined!", .{});
     }
 
-    pub fn asComponent(self: *ISOFilePickerComponent) Component {
-        //
-        const vtable = &Component.VTable{
-            //
-            .start_fn = ISOFilePickerComponent.startWrapper,
-            .deinit_fn = ISOFilePickerComponent.deinitWrapper,
-            .update_fn = ISOFilePickerComponent.updateWrapper,
-            .draw_fn = ISOFilePickerComponent.drawWrapper,
-            .notify_fn = ISOFilePickerComponent.notifyWrapper,
-        };
-
-        return ComponentFramework.Component.init(self, vtable);
+    pub fn asComponent(self: *ISOFilePickerComponent) *Component {
+        if (self.component == null) self.initComponent();
+        return &self.component.?;
     }
 
     pub fn asInstance(ptr: *anyopaque) *ISOFilePickerComponent {
@@ -167,6 +192,10 @@ pub const ISOFilePickerComponent = struct {
 
     fn drawWrapper(ptr: *anyopaque) anyerror!void {
         return ISOFilePickerComponent.asInstance(ptr).draw();
+    }
+
+    fn handleEventWrapper(ptr: *anyopaque, event: ComponentFramework.Event) anyerror!void {
+        return ISOFilePickerComponent.asInstance(ptr).handleEvent(event);
     }
 
     fn notifyWrapper(ptr: *anyopaque, event: ObserverEvent, payload: ObserverPayload) void {
