@@ -139,11 +139,7 @@ pub const ISOFilePickerComponent = struct {
         //
         const vtable = &Component.VTable{
             //
-            .init_fn = struct {
-                fn call(ptr: *anyopaque) anyerror!void {
-                    return ISOFilePickerComponent.asInstance(ptr).start();
-                }
-            }.call,
+            .start_fn = ISOFilePickerComponent.startWrapper,
             .deinit_fn = ISOFilePickerComponent.deinitWrapper,
             .update_fn = ISOFilePickerComponent.updateWrapper,
             .draw_fn = ISOFilePickerComponent.drawWrapper,
@@ -157,7 +153,7 @@ pub const ISOFilePickerComponent = struct {
         return @ptrCast(@alignCast(ptr));
     }
 
-    fn initWrapper(ptr: *anyopaque) anyerror!void {
+    fn startWrapper(ptr: *anyopaque) anyerror!void {
         return ISOFilePickerComponent.asInstance(ptr).start();
     }
 

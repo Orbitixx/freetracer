@@ -8,7 +8,7 @@ pub const Component = struct {
     vtable: *const VTable,
 
     pub const VTable = struct {
-        init_fn: *const fn (ptr: *anyopaque) anyerror!void,
+        start_fn: *const fn (ptr: *anyopaque) anyerror!void,
         deinit_fn: *const fn (ptr: *anyopaque) void,
         update_fn: *const fn (ptr: *anyopaque) anyerror!void,
         draw_fn: *const fn (ptr: *anyopaque) anyerror!void,
@@ -19,8 +19,8 @@ pub const Component = struct {
         return .{ .ptr = ptr, .vtable = vtable };
     }
 
-    pub fn initComponent(self: Component) !void {
-        return self.vtable.init_fn(self.ptr);
+    pub fn start(self: Component) !void {
+        return self.vtable.start_fn(self.ptr);
     }
 
     pub fn deinit(self: Component) void {

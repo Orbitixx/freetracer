@@ -2,7 +2,7 @@ const std = @import("std");
 
 const Component = @import("./import/index.zig").Component;
 
-pub const ComponentID = enum(usize) {
+pub const ComponentID = enum(u8) {
     ISOFilePicker = 0,
     TestBtn = 1,
 };
@@ -32,11 +32,11 @@ pub const ComponentRegistry = struct {
         try self.components.put(componentId, component);
     }
 
-    pub fn initAll(self: *ComponentRegistry) !void {
+    pub fn startAll(self: *ComponentRegistry) !void {
         var iter = self.components.iterator();
 
         while (iter.next()) |component| {
-            try component.value_ptr.initComponent();
+            try component.value_ptr.start();
         }
     }
 

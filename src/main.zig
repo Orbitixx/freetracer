@@ -129,7 +129,7 @@ pub fn main() !void {
 
     const backgroundColor: rl.Color = .{ .r = 29, .g = 44, .b = 64, .a = 100 };
 
-    try newRegistry.initAll();
+    try newRegistry.startAll();
 
     const tcomp: *TestFilePickerComponent = @ptrCast(@alignCast(newRegistry.components.get(newComponentID.ISOFilePicker).?.ptr));
     try tcomp.worker.?.start();

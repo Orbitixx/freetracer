@@ -143,7 +143,7 @@ pub fn asInstance(ptr: *anyopaque) *ButtonComponent {
 
 pub fn asComponent(self: *ButtonComponent) Component {
     const vtable = &Component.VTable{
-        .init_fn = struct {
+        .start_fn = struct {
             fn lambda(ptr: *anyopaque) anyerror!void {
                 ButtonComponent.asInstance(ptr).start();
             }
