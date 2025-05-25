@@ -137,13 +137,15 @@ pub fn main() !void {
     debug.print("\nMade it past threading...");
 
     var data: TestFilePickerComponent.Events.UIWidthChangedEvent = .{ .newWidth = 95 };
-    const pData: *anyopaque = @ptrCast(@alignCast(&data));
 
-    try tcomp.handleEvent(.{
-        .eventType = .UIWidthChanged,
-        .data = pData,
-        .source = tcomp.asComponent(),
-    });
+    const event = ComponentFramework.Event.createWithData(
+        "ui width changed",
+        tcomp.asComponent(),
+        TestFilePickerComponent.Events.UIWidthChangedEvent,
+        &data,
+    );
+
+    try tcomp.handleEvent(event);
 
     const logoText = UI.Text.init("freetracer", .{ .x = relW(0.08), .y = relH(0.035) }, .{ .font = .JERSEY10_REGULAR, .fontSize = 40, .textColor = Color.white });
     const subLogoText = UI.Text.init("free and open-source by orbitixx", .{ .x = relW(0.08), .y = relH(0.035) + 32 }, .{ .font = .JERSEY10_REGULAR, .fontSize = 18, .textColor = Color.secondary });

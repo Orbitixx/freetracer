@@ -102,13 +102,18 @@ pub const ISOFilePickerComponent = struct {
     pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentFramework.Event) !void {
         _ = self;
 
-        debug.printf("\nISOFilePickerComponent: handleEvent() received an event: {any}", .{event.eventType});
+        debug.printf("\nISOFilePickerComponent: handleEvent() received an event: {any}", .{event.title});
 
-        switch (event.eventType) {
-            .UIWidthChanged => {
-                const pData: *ISOFilePickerComponent.Events.UIWidthChangedEvent = @ptrCast(@alignCast(event.data.?));
-                debug.printf("\nISOFilePickerComponent: handleEvent() new width: {d}", .{pData.newWidth});
-            },
+        // switch (event.eventType) {
+        //     .UIWidthChanged => {
+        //         const pData: *ISOFilePickerComponent.Events.UIWidthChangedEvent = @ptrCast(@alignCast(event.data.?));
+        //         debug.printf("\nISOFilePickerComponent: handleEvent() new width: {d}", .{pData.newWidth});
+        //     },
+        // }
+
+        if (std.mem.eql(u8, event.title, "ui width changed")) {
+            const data: *ISOFilePickerComponent.Events.UIWidthChangedEvent = @ptrCast(@alignCast(@constCast(event.data.?)));
+            debug.printf("\nISOFilePickerComponent: handleEvent() received: \"{s}\" event, data: newWidth = {d}", .{ event.title, data.newWidth });
         }
     }
 
