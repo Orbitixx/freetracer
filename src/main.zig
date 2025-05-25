@@ -136,14 +136,15 @@ pub fn main() !void {
 
     debug.print("\nMade it past threading...");
 
-    var data: TestFilePickerComponent.Events.UIWidthChangedEvent = .{ .newWidth = 95 };
+    const data: TestFilePickerComponent.Events.UIWidthChangedEvent.Data = .{ .newWidth = 95 };
+    const event = TestFilePickerComponent.Events.UIWidthChangedEvent.create(tcomp.asComponent(), &data);
 
-    const event = ComponentFramework.Event.createWithData(
-        "ui width changed",
-        tcomp.asComponent(),
-        TestFilePickerComponent.Events.UIWidthChangedEvent,
-        &data,
-    );
+    // const event = ComponentFramework.Event.createWithData(
+    //     "ui width changed",
+    //     tcomp.asComponent(),
+    //     TestFilePickerComponent.Events.UIWidthChangedEvent,
+    //     &data,
+    // );
 
     try tcomp.handleEvent(event);
 

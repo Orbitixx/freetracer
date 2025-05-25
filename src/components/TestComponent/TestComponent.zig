@@ -16,6 +16,8 @@ pub const FilePickerState = struct {
 const ComponentState = ComponentFramework.ComponentState(FilePickerState);
 const ComponentWorker = ComponentFramework.Worker(FilePickerState);
 const Component = ComponentFramework.Component;
+
+const ComponentEvent = ComponentFramework.Event;
 const WorkerStatus = ComponentFramework.WorkerStatus;
 
 pub const ISOFilePickerComponent = struct {
@@ -26,9 +28,7 @@ pub const ISOFilePickerComponent = struct {
     worker: ?ComponentWorker = null,
 
     pub const Events = struct {
-        pub const UIWidthChangedEvent = struct {
-            newWidth: u8,
-        };
+        pub const UIWidthChangedEvent = ComponentFramework.defineEvent("iso_file_picker.ui_width_changed", struct { newWidth: f32 });
     };
 
     pub fn init(allocator: std.mem.Allocator, appObserver: *const AppObserver) ISOFilePickerComponent {
@@ -99,21 +99,17 @@ pub const ISOFilePickerComponent = struct {
         _ = self;
     }
 
-    pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentFramework.Event) !void {
+    pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !void {
         _ = self;
+        debug.printf("\nISOFilePickerComponent: handleEvent() received an event: {any}", .{event.name});
 
-        debug.printf("\nISOFilePickerComponent: handleEvent() received an event: {any}", .{event.title});
-
-        // switch (event.eventType) {
-        //     .UIWidthChanged => {
-        //         const pData: *ISOFilePickerComponent.Events.UIWidthChangedEvent = @ptrCast(@alignCast(event.data.?));
-        //         debug.printf("\nISOFilePickerComponent: handleEvent() new width: {d}", .{pData.newWidth});
-        //     },
-        // }
-
-        if (std.mem.eql(u8, event.title, "ui width changed")) {
-            const data: *ISOFilePickerComponent.Events.UIWidthChangedEvent = @ptrCast(@alignCast(@constCast(event.data.?)));
-            debug.printf("\nISOFilePickerComponent: handleEvent() received: \"{s}\" event, data: newWidth = {d}", .{ event.title, data.newWidth });
+        switch (event.hash) {
+            Events.UIWidthChangedEvent.Hash => {
+                // TODO: handle null data gracefully
+                const data = Events.UIWidthChangedEvent.getData(&event).?;
+                debug.printf("\nISOFilePickerComponent: handleEvent() received: \"{s}\" event, data: newWidth = {d}", .{ event.name, data.newWidth });
+            },
+            else => {},
         }
     }
 

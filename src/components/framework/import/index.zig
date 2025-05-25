@@ -8,3 +8,4 @@ pub const Registry = @import("../Registry.zig").ComponentRegistry;
 pub const ComponentID = @import("../Registry.zig").ComponentID;
 
 pub const Event = @import("../Event.zig").ComponentEvent;
+pub const defineEvent = @import("../Event.zig").defineEvent;
