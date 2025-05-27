@@ -6,6 +6,7 @@ const ObserverPayload = @import("../../observers/ObserverPayload.zig");
 
 const EventFramework = @import("Event.zig");
 const ComponentEvent = EventFramework.ComponentEvent;
+const EventResult = EventFramework.EventResult;
 
 pub const Component = struct {
     ptr: *anyopaque,
@@ -18,7 +19,7 @@ pub const Component = struct {
         deinit_fn: *const fn (ptr: *anyopaque) void,
         update_fn: *const fn (ptr: *anyopaque) anyerror!void,
         draw_fn: *const fn (ptr: *anyopaque) anyerror!void,
-        handle_event_fn: *const fn (ptr: *anyopaque, event: ComponentEvent) anyerror!void,
+        handle_event_fn: *const fn (ptr: *anyopaque, event: ComponentEvent) anyerror!EventResult,
         // notify_fn: *const fn (ptr: *anyopaque, event: ObserverEvent, payload: ObserverPayload) void,
     };
 
@@ -59,7 +60,7 @@ pub const Component = struct {
         }
     }
 
-    pub fn handleEvent(self: Component, event: ComponentEvent) !void {
+    pub fn handleEvent(self: Component, event: ComponentEvent) !EventResult {
         return self.vtable.handle_event_fn(self.ptr, event);
     }
 

@@ -132,21 +132,15 @@ pub fn main() !void {
     try newRegistry.startAll();
 
     const tcomp: *TestFilePickerComponent = @ptrCast(@alignCast(newRegistry.components.get(newComponentID.ISOFilePicker).?.ptr));
-    try tcomp.worker.?.start();
+    // try tcomp.worker.?.start();
 
-    debug.print("\nMade it past threading...");
+    {
+        const data: TestFilePickerComponent.Events.UIWidthChangedEvent.Data = .{ .newWidth = 95 };
+        const event = TestFilePickerComponent.Events.UIWidthChangedEvent.create(tcomp.asComponent(), &data);
 
-    const data: TestFilePickerComponent.Events.UIWidthChangedEvent.Data = .{ .newWidth = 95 };
-    const event = TestFilePickerComponent.Events.UIWidthChangedEvent.create(tcomp.asComponent(), &data);
-
-    // const event = ComponentFramework.Event.createWithData(
-    //     "ui width changed",
-    //     tcomp.asComponent(),
-    //     TestFilePickerComponent.Events.UIWidthChangedEvent,
-    //     &data,
-    // );
-
-    try tcomp.handleEvent(event);
+        const r = try tcomp.handleEvent(event);
+        std.debug.assert(r.success == true and r.validation == 95);
+    }
 
     const logoText = UI.Text.init("freetracer", .{ .x = relW(0.08), .y = relH(0.035) }, .{ .font = .JERSEY10_REGULAR, .fontSize = 40, .textColor = Color.white });
     const subLogoText = UI.Text.init("free and open-source by orbitixx", .{ .x = relW(0.08), .y = relH(0.035) + 32 }, .{ .font = .JERSEY10_REGULAR, .fontSize = 18, .textColor = Color.secondary });

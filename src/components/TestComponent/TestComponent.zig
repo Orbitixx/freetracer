@@ -18,6 +18,7 @@ const ComponentWorker = ComponentFramework.Worker(FilePickerState);
 const Component = ComponentFramework.Component;
 
 const ComponentEvent = ComponentFramework.Event;
+const EventResult = ComponentFramework.EventResult;
 const WorkerStatus = ComponentFramework.WorkerStatus;
 
 pub const ISOFilePickerComponent = struct {
@@ -99,18 +100,29 @@ pub const ISOFilePickerComponent = struct {
         _ = self;
     }
 
-    pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !void {
+    pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventResult {
         _ = self;
-        debug.printf("\nISOFilePickerComponent: handleEvent() received an event: {any}", .{event.name});
+
+        debug.printf("\nISOFilePickerComponent: handleEvent() received an event: \"{s}\"", .{event.name});
+
+        var eventResult = EventResult{};
 
         switch (event.hash) {
             Events.UIWidthChangedEvent.Hash => {
                 // TODO: handle null data gracefully
                 const data = Events.UIWidthChangedEvent.getData(&event).?;
+
+                if (@TypeOf(data.*) == Events.UIWidthChangedEvent.Data) {
+                    eventResult.success = true;
+                    eventResult.validation = @intFromFloat(data.newWidth);
+                }
+
                 debug.printf("\nISOFilePickerComponent: handleEvent() received: \"{s}\" event, data: newWidth = {d}", .{ event.name, data.newWidth });
             },
             else => {},
         }
+
+        return eventResult;
     }
 
     pub fn deinit(self: *ISOFilePickerComponent) void {
@@ -195,7 +207,7 @@ pub const ISOFilePickerComponent = struct {
         return ISOFilePickerComponent.asInstance(ptr).draw();
     }
 
-    fn handleEventWrapper(ptr: *anyopaque, event: ComponentFramework.Event) anyerror!void {
+    fn handleEventWrapper(ptr: *anyopaque, event: ComponentFramework.Event) anyerror!EventResult {
         return ISOFilePickerComponent.asInstance(ptr).handleEvent(event);
     }
 
@@ -203,24 +215,3 @@ pub const ISOFilePickerComponent = struct {
         return ISOFilePickerComponent.asInstance(ptr).notify(event, payload);
     }
 };
-
-// Factory function to create instances
-// pub fn create(allocator: std.mem.Allocator) !struct { component: ComponentInstance, worker: ComponentWorker, state: State } {
-//     _ = allocator;
-//
-//     var state = State.init(FilePickerState{});
-//
-//     const component = Factory.create(&state, init, deinit, update, draw, null);
-//
-//     const worker = Factory.createWorker(&state, runWorker);
-//
-//     return .{
-//         .component = component,
-//         .worker = worker,
-//         .state = state,
-//     };
-// }
-//
-// pub fn asComponent(component: *ISOFilePickerComponent) Component {
-//     return Factory.asComponent(component);
-// }
