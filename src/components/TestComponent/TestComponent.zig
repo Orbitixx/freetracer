@@ -78,9 +78,10 @@ pub const ISOFilePickerComponent = struct {
         if (self.worker == null) self.initWorker();
 
         if (self.component) |*component| {
-            component.children = std.ArrayList(*Component).init(self.allocator);
+            component.children = std.ArrayList(Component).init(self.allocator);
             var uiComponent = ISOFilePickerUI.init(self);
-            try component.children.?.append(@constCast(&uiComponent.asComponent()));
+            try uiComponent.start();
+            try component.children.?.append(uiComponent.asComponent());
         }
     }
 
@@ -145,13 +146,18 @@ pub const ISOFilePickerComponent = struct {
         if (self.component) |*component| {
             if (component.children) |children| {
                 if (children.items.len > 0) {
-                    for (children.items) |child| {
+                    for (children.items) |*child| {
                         child.deinit();
-                        child.* = undefined;
                     }
                 }
+
+                children.deinit();
             }
+
+            component.children = null;
         }
+
+        self.component = null;
     }
 
     pub fn notify(self: *ISOFilePickerComponent, event: ObserverEvent, payload: ObserverPayload) void {

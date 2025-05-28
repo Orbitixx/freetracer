@@ -12,7 +12,8 @@ pub const Component = struct {
     ptr: *anyopaque,
     vtable: *const VTable,
     parent: ?*Component = null,
-    children: ?std.ArrayList(*Component) = null,
+    children: ?std.ArrayList(Component) = null,
+    // child: ?Component = null,
 
     pub const VTable = struct {
         start_fn: *const fn (ptr: *anyopaque) anyerror!void,
@@ -37,7 +38,7 @@ pub const Component = struct {
         if (self.children) |children| {
             if (children.items.len > 0) {
                 for (children.items) |*child| {
-                    try child.*.update();
+                    try child.update();
                 }
             }
         }
@@ -49,7 +50,7 @@ pub const Component = struct {
         if (self.children) |children| {
             if (children.items.len > 0) {
                 for (children.items) |*child| {
-                    try child.*.draw();
+                    try child.draw();
                 }
             }
         }
@@ -83,9 +84,9 @@ pub const Component = struct {
 
         if (self.children) |children| {
             if (children.items.len > 0) {
-                for (children.items) |child| {
-                    child.*.deinit();
-                    child.* = undefined;
+                for (children.items) |*child| {
+                    child.deinit();
+                    // child.* = undefined;
                 }
             }
 
