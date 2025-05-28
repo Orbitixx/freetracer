@@ -4,6 +4,7 @@ pub const Worker = @import("../Worker.zig").Worker;
 pub const WorkerStatus = @import("../Worker.zig").WorkerStatus;
 
 pub const Component = @import("../Component.zig").Component;
+pub const ImplementComponent = @import("../Component.zig").ImplementComponent;
 pub const Registry = @import("../Registry.zig").ComponentRegistry;
 pub const ComponentID = @import("../Registry.zig").ComponentID;
 

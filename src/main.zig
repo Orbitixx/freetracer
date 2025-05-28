@@ -93,7 +93,7 @@ pub fn main() !void {
     //----------------------------------------------------------------------------------
 
     var newRegistry = ComponentFramework.Registry.init(allocator);
-    defer newRegistry.deinit();
+    // defer newRegistry.deinit();
 
     // const filePickerActionWrapper = struct {
     //     fn call(ctx: *anyopaque) void {
@@ -103,7 +103,7 @@ pub fn main() !void {
     // };
 
     var testFilePickerComponent = TestFilePickerComponent.init(allocator, &appObserver);
-    try newRegistry.register(newComponentID.ISOFilePicker, testFilePickerComponent.asComponent());
+    try newRegistry.register(newComponentID.ISOFilePicker, @constCast(&testFilePickerComponent.asComponent()));
 
     // var testBtn = Button.init(
     //     "Test btn",
@@ -131,14 +131,14 @@ pub fn main() !void {
 
     try newRegistry.startAll();
 
-    const tcomp: *TestFilePickerComponent = @ptrCast(@alignCast(newRegistry.components.get(newComponentID.ISOFilePicker).?.ptr));
+    // const tcomp: *TestFilePickerComponent = @ptrCast(@alignCast(newRegistry.components.get(newComponentID.ISOFilePicker).?.ptr));
     // try tcomp.worker.?.start();
 
     {
         const data: TestFilePickerComponent.Events.UIWidthChangedEvent.Data = .{ .newWidth = 95 };
-        const event = TestFilePickerComponent.Events.UIWidthChangedEvent.create(tcomp.asComponent(), &data);
+        const event = TestFilePickerComponent.Events.UIWidthChangedEvent.create(@constCast(&testFilePickerComponent.asComponent()), &data);
 
-        const r = try tcomp.handleEvent(event);
+        const r = try testFilePickerComponent.handleEvent(event);
         std.debug.assert(r.success == true and r.validation == 95);
     }
 
@@ -206,6 +206,8 @@ pub fn main() !void {
         //----------------------------------------------------------------------------------
 
     }
+
+    newRegistry.deinit();
 
     // try IsoParser.parseIso(&allocator, path);
     // try IsoWriter.write(path, "/dev/sdb");

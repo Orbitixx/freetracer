@@ -21,6 +21,8 @@ const ComponentEvent = ComponentFramework.Event;
 const EventResult = ComponentFramework.EventResult;
 const WorkerStatus = ComponentFramework.WorkerStatus;
 
+const ISOFilePickerUI = @import("./FilePickerUI.zig");
+
 pub const ISOFilePickerComponent = struct {
     component: ?Component = null,
     allocator: std.mem.Allocator,
@@ -74,6 +76,12 @@ pub const ISOFilePickerComponent = struct {
         std.debug.print("\nISOFilePickerComponent: start() function called!", .{});
         if (self.component == null) self.initComponent();
         if (self.worker == null) self.initWorker();
+
+        if (self.component) |*component| {
+            component.children = std.ArrayList(*Component).init(self.allocator);
+            var uiComponent = ISOFilePickerUI.init(self);
+            try component.children.?.append(@constCast(&uiComponent.asComponent()));
+        }
     }
 
     pub fn update(self: *ISOFilePickerComponent) !void {
@@ -133,6 +141,17 @@ pub const ISOFilePickerComponent = struct {
         if (state.selected_path) |path| {
             self.allocator.free(path);
         }
+
+        if (self.component) |*component| {
+            if (component.children) |children| {
+                if (children.items.len > 0) {
+                    for (children.items) |child| {
+                        child.deinit();
+                        child.* = undefined;
+                    }
+                }
+            }
+        }
     }
 
     pub fn notify(self: *ISOFilePickerComponent, event: ObserverEvent, payload: ObserverPayload) void {
@@ -182,9 +201,9 @@ pub const ISOFilePickerComponent = struct {
         std.debug.print("\nISOFilePickerComponent: workerCallback() joined!", .{});
     }
 
-    pub fn asComponent(self: *ISOFilePickerComponent) *Component {
+    pub fn asComponent(self: *ISOFilePickerComponent) Component {
         if (self.component == null) self.initComponent();
-        return &self.component.?;
+        return self.component.?;
     }
 
     pub fn asInstance(ptr: *anyopaque) *ISOFilePickerComponent {

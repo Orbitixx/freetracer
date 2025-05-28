@@ -20,7 +20,6 @@ pub const Component = struct {
         update_fn: *const fn (ptr: *anyopaque) anyerror!void,
         draw_fn: *const fn (ptr: *anyopaque) anyerror!void,
         handle_event_fn: *const fn (ptr: *anyopaque, event: ComponentEvent) anyerror!EventResult,
-        // notify_fn: *const fn (ptr: *anyopaque, event: ObserverEvent, payload: ObserverPayload) void,
     };
 
     pub fn init(ptr: *anyopaque, vtable: *const VTable) Component {
@@ -35,10 +34,25 @@ pub const Component = struct {
     }
 
     pub fn update(self: Component) !void {
+        if (self.children) |children| {
+            if (children.items.len > 0) {
+                for (children.items) |*child| {
+                    try child.*.update();
+                }
+            }
+        }
+
         return self.vtable.update_fn(self.ptr);
     }
 
     pub fn draw(self: Component) !void {
+        if (self.children) |children| {
+            if (children.items.len > 0) {
+                for (children.items) |*child| {
+                    try child.*.draw();
+                }
+            }
+        }
         return self.vtable.draw_fn(self.ptr);
     }
 
@@ -70,7 +84,8 @@ pub const Component = struct {
         if (self.children) |children| {
             if (children.items.len > 0) {
                 for (children.items) |child| {
-                    child.deinit();
+                    child.*.deinit();
+                    child.* = undefined;
                 }
             }
 
@@ -81,8 +96,41 @@ pub const Component = struct {
 
         return self.vtable.deinit_fn(self.ptr);
     }
-
-    // pub fn notify(self: Component, event: ObserverEvent, payload: ObserverPayload) void {
-    //     return self.vtable.notify_fn(self.ptr, event, payload);
-    // }
 };
+
+pub fn ImplementComponent(comptime T: type) type {
+    return struct {
+        //
+        pub const vtable = Component.VTable{
+            .start_fn = startWrapper,
+            .update_fn = updateWrapper,
+            .deinit_fn = deinitWrapper,
+            .draw_fn = drawWrapper,
+            .handle_event_fn = handleEventWrapper,
+        };
+
+        pub fn asInstance(ptr: *anyopaque) *T {
+            return @ptrCast(@alignCast(ptr));
+        }
+
+        fn startWrapper(ptr: *anyopaque) anyerror!void {
+            return asInstance(ptr).start();
+        }
+
+        fn updateWrapper(ptr: *anyopaque) anyerror!void {
+            return asInstance(ptr).update();
+        }
+
+        fn deinitWrapper(ptr: *anyopaque) void {
+            return asInstance(ptr).deinit();
+        }
+
+        fn drawWrapper(ptr: *anyopaque) anyerror!void {
+            return asInstance(ptr).draw();
+        }
+
+        fn handleEventWrapper(ptr: *anyopaque, event: ComponentEvent) anyerror!EventResult {
+            return asInstance(ptr).handleEvent(event);
+        }
+    };
+}
