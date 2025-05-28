@@ -27,7 +27,7 @@ pub fn init(parent: *ISOFilePicker) ISOFilePickerUI {
 }
 
 pub fn initComponent(self: *ISOFilePickerUI) void {
-    self.component = Component.init(self, &Implementation.vtable);
+    self.component = Component.init(self, &ComponentImplementation.vtable);
 }
 
 pub fn start(self: *ISOFilePickerUI) !void {
@@ -60,12 +60,6 @@ pub fn deinit(self: *ISOFilePickerUI) void {
     _ = self;
 }
 
-pub fn asComponent(self: *ISOFilePickerUI) Component {
-    if (self.component == null) self.initComponent();
-    return self.component.?;
-}
-
-pub const Implementation = ComponentFramework.ImplementComponent(ISOFilePickerUI);
-
-// pub const asComponent = Implementation.asComponent;
-pub const asInstance = Implementation.asInstance;
+pub const ComponentImplementation = ComponentFramework.ImplementComponent(ISOFilePickerUI);
+pub const asComponent = ComponentImplementation.asComponent;
+pub const asInstance = ComponentImplementation.asInstance;

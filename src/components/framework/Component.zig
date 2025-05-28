@@ -110,6 +110,11 @@ pub fn ImplementComponent(comptime T: type) type {
             .handle_event_fn = handleEventWrapper,
         };
 
+        pub fn asComponent(self: *T) Component {
+            if (self.component == null) self.initComponent();
+            return self.component.?;
+        }
+
         pub fn asInstance(ptr: *anyopaque) *T {
             return @ptrCast(@alignCast(ptr));
         }

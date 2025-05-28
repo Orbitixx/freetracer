@@ -32,7 +32,7 @@ const FilePickerComponent = @import("components/FilePicker/Component.zig");
 const USBDevicesListComponent = @import("components/USBDevicesList/Component.zig");
 
 const ComponentFramework = @import("./components/framework/import/index.zig");
-const TestFilePickerComponent = @import("./components/TestComponent/TestComponent.zig").ISOFilePickerComponent;
+const TestFilePickerComponent = @import("./components/TestComponent/TestComponent.zig");
 const Button = @import("components/ui/Button.zig");
 const newComponentID = ComponentFramework.ComponentID;
 
@@ -93,7 +93,7 @@ pub fn main() !void {
     //----------------------------------------------------------------------------------
 
     var newRegistry = ComponentFramework.Registry.init(allocator);
-    // defer newRegistry.deinit();
+    defer newRegistry.deinit();
 
     // const filePickerActionWrapper = struct {
     //     fn call(ctx: *anyopaque) void {
@@ -206,8 +206,6 @@ pub fn main() !void {
         //----------------------------------------------------------------------------------
 
     }
-
-    newRegistry.deinit();
 
     // try IsoParser.parseIso(&allocator, path);
     // try IsoWriter.write(path, "/dev/sdb");
