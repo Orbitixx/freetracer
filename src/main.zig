@@ -102,8 +102,9 @@ pub fn main() !void {
     //     }
     // };
 
-    var testFilePickerComponent = TestFilePickerComponent.init(allocator, &appObserver);
-    try newRegistry.register(newComponentID.ISOFilePicker, @constCast(&testFilePickerComponent.asComponent()));
+    var testFilePickerComponent = try TestFilePickerComponent.init(allocator, &appObserver);
+    try testFilePickerComponent.initComponent(null);
+    try newRegistry.register(newComponentID.ISOFilePicker, @constCast(&testFilePickerComponent.component.?));
 
     // var testBtn = Button.init(
     //     "Test btn",

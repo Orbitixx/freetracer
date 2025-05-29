@@ -13,7 +13,6 @@ pub const Component = struct {
     vtable: *const VTable,
     parent: ?*Component = null,
     children: ?std.ArrayList(Component) = null,
-    // child: ?Component = null,
 
     pub const VTable = struct {
         start_fn: *const fn (ptr: *anyopaque) anyerror!void,
@@ -23,10 +22,11 @@ pub const Component = struct {
         handle_event_fn: *const fn (ptr: *anyopaque, event: ComponentEvent) anyerror!EventResult,
     };
 
-    pub fn init(ptr: *anyopaque, vtable: *const VTable) Component {
-        return .{
+    pub fn init(ptr: *anyopaque, vtable: *const VTable, parent: ?*Component) !Component {
+        return Component{
             .ptr = ptr,
             .vtable = vtable,
+            .parent = parent,
         };
     }
 
@@ -80,20 +80,21 @@ pub const Component = struct {
     }
 
     pub fn deinit(self: *Component) void {
-        self.parent = null;
+        std.debug.print("\nGeneric Component deinit() called!", .{});
 
         if (self.children) |children| {
-            if (children.items.len > 0) {
-                for (children.items) |*child| {
-                    child.deinit();
-                    // child.* = undefined;
-                }
-            }
+            std.debug.print("\nGeneric Component deinit(): component has children.", .{});
 
+            for (children.items) |*child| {
+                child.deinit();
+            }
             children.deinit();
+
+            std.debug.print("\nGeneric Component deinit(): children have been cleaned up.", .{});
         }
 
         self.children = null;
+        self.parent = null;
 
         return self.vtable.deinit_fn(self.ptr);
     }
@@ -111,8 +112,11 @@ pub fn ImplementComponent(comptime T: type) type {
         };
 
         pub fn asComponent(self: *T) Component {
-            if (self.component == null) self.initComponent();
             return self.component.?;
+        }
+
+        pub fn asComponentPtr(self: *T) *Component {
+            return &self.component.?;
         }
 
         pub fn asInstance(ptr: *anyopaque) *T {

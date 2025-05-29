@@ -16,24 +16,26 @@ pub const ComponentState = ComponentFramework.ComponentState(ISOFilePickerUIStat
 const ISOFilePickerUI = @This();
 
 component: ?Component = null,
-parent: *ISOFilePicker,
 state: ComponentState,
 
-pub fn init(parent: *ISOFilePicker) ISOFilePickerUI {
-    return .{
+pub fn init(parent: ?*Component) !ISOFilePickerUI {
+    debug.print("\nISOFilePickerUI: start() called.");
+    _ = parent;
+
+    return ISOFilePickerUI{
         .state = ComponentState.init(ISOFilePickerUIState{}),
-        .parent = parent,
     };
 }
 
-pub fn initComponent(self: *ISOFilePickerUI) void {
-    self.component = Component.init(self, &ComponentImplementation.vtable);
+pub fn initComponent(self: *ISOFilePickerUI, parent: ?*Component) !void {
+    if (self.component != null) return error.BaseComponentAlreadyInitialized;
+    self.component = try Component.init(self, &ComponentImplementation.vtable, parent);
 }
 
 pub fn start(self: *ISOFilePickerUI) !void {
-    if (self.component == null) self.initComponent();
+    try self.initComponent(null);
 
-    debug.print("\nHello from ISOFilePicker UI component start() method!");
+    debug.print("\nISOFilePickerUI: component start() called.");
 }
 
 pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
@@ -62,4 +64,5 @@ pub fn deinit(self: *ISOFilePickerUI) void {
 
 pub const ComponentImplementation = ComponentFramework.ImplementComponent(ISOFilePickerUI);
 pub const asComponent = ComponentImplementation.asComponent;
+pub const asComponentPtr = ComponentImplementation.asComponentPtr;
 pub const asInstance = ComponentImplementation.asInstance;

@@ -34,21 +34,27 @@ pub const Events = struct {
     pub const UIWidthChangedEvent = ComponentFramework.defineEvent("iso_file_picker.ui_width_changed", struct { newWidth: f32 });
 };
 
-pub fn init(allocator: std.mem.Allocator, appObserver: *const AppObserver) ISOFilePickerComponent {
+pub fn init(allocator: std.mem.Allocator, appObserver: *const AppObserver) !ISOFilePickerComponent {
     std.debug.print("\nISOFilePickerComponent: component initialized!", .{});
 
-    return .{
+    return ISOFilePickerComponent{
         .allocator = allocator,
         .appObserver = appObserver,
         .state = ComponentState.init(FilePickerState{}),
     };
+
+    // NOTE: Can't do initComponent in here, because parent (*Component) reference will refence
+    // address in the scope of this function instead of the struct.
 }
 
-pub fn initComponent(self: *ISOFilePickerComponent) void {
-    self.component = Component.init(self, &ComponentImplementation.vtable);
+pub fn initComponent(self: *ISOFilePickerComponent, parent: ?*Component) !void {
+    if (self.component != null) return error.BaseComponentAlreadyInitialized;
+    self.component = try Component.init(self, &ComponentImplementation.vtable, parent);
 }
 
-fn initWorker(self: *ISOFilePickerComponent) void {
+pub fn initWorker(self: *ISOFilePickerComponent) !void {
+    if (self.worker != null) return error.ComponentWorkerAlreadyInitialized;
+
     self.worker = ComponentWorker.init(
         self.allocator,
         &self.state,
@@ -66,14 +72,23 @@ fn initWorker(self: *ISOFilePickerComponent) void {
 
 pub fn start(self: *ISOFilePickerComponent) !void {
     std.debug.print("\nISOFilePickerComponent: start() function called!", .{});
-    if (self.component == null) self.initComponent();
-    if (self.worker == null) self.initWorker();
+
+    // try self.initComponent(null);
+    try self.initWorker();
 
     if (self.component) |*component| {
+        if (component.children != null) return error.ComponentAlreadyCalledStartBefore;
+
+        std.debug.print("\nISOFilePickerComponent: attempting to initialize children...", .{});
+
         component.children = std.ArrayList(Component).init(self.allocator);
-        var uiComponent = ISOFilePickerUI.init(self);
+
+        var uiComponent = try ISOFilePickerUI.init(null);
         try uiComponent.start();
-        try component.children.?.append(uiComponent.asComponent());
+
+        if (component.children) |*children| {
+            try children.append(uiComponent.asComponent());
+        }
     }
 }
 
@@ -134,22 +149,6 @@ pub fn deinit(self: *ISOFilePickerComponent) void {
     if (state.selected_path) |path| {
         self.allocator.free(path);
     }
-
-    if (self.component) |*component| {
-        if (component.children) |children| {
-            if (children.items.len > 0) {
-                for (children.items) |*child| {
-                    child.deinit();
-                }
-            }
-
-            children.deinit();
-        }
-
-        component.children = null;
-    }
-
-    self.component = null;
 }
 
 pub fn notify(self: *ISOFilePickerComponent, event: ObserverEvent, payload: ObserverPayload) void {
@@ -201,4 +200,5 @@ pub fn workerCallback(worker: *ComponentWorker, context: *anyopaque) void {
 
 pub const ComponentImplementation = ComponentFramework.ImplementComponent(ISOFilePickerComponent);
 pub const asComponent = ComponentImplementation.asComponent;
+pub const asComponentPtr = ComponentImplementation.asComponentPtr;
 pub const asInstance = ComponentImplementation.asInstance;
