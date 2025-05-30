@@ -38,8 +38,8 @@ const newComponentID = ComponentFramework.ComponentID;
 
 const UI = @import("./components/ui/Primitives.zig");
 
-const relH = WindowManager.relH;
-const relW = WindowManager.relW;
+const relY = WindowManager.relH;
+const relX = WindowManager.relW;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{ .thread_safe = true }){};
@@ -103,8 +103,7 @@ pub fn main() !void {
     // };
 
     var testFilePickerComponent = try TestFilePickerComponent.init(allocator, &appObserver);
-    try testFilePickerComponent.initComponent(null);
-    try newRegistry.register(newComponentID.ISOFilePicker, @constCast(&testFilePickerComponent.component.?));
+    try newRegistry.register(newComponentID.ISOFilePicker, @constCast(testFilePickerComponent.asComponentPtr()));
 
     // var testBtn = Button.init(
     //     "Test btn",
@@ -143,17 +142,17 @@ pub fn main() !void {
         std.debug.assert(r.success == true and r.validation == 95);
     }
 
-    const logoText = UI.Text.init("freetracer", .{ .x = relW(0.08), .y = relH(0.035) }, .{ .font = .JERSEY10_REGULAR, .fontSize = 40, .textColor = Color.white });
-    const subLogoText = UI.Text.init("free and open-source by orbitixx", .{ .x = relW(0.08), .y = relH(0.035) + 32 }, .{ .font = .JERSEY10_REGULAR, .fontSize = 18, .textColor = Color.secondary });
-    const versionText = UI.Text.init(env.APP_VERSION, .{ .x = relW(0.92), .y = relH(0.05) }, .{ .font = .JERSEY10_REGULAR, .fontSize = 16, .textColor = Color.secondary });
-    var logText = UI.Text.init("", .{ .x = relW(0.02), .y = relH(0.93) }, .{ .font = .ROBOTO_REGULAR, .fontSize = 14, .textColor = Color.lightGray });
+    const logoText = UI.Text.init("freetracer", .{ .x = relX(0.08), .y = relY(0.035) }, .{ .font = .JERSEY10_REGULAR, .fontSize = 40, .textColor = Color.white });
+    const subLogoText = UI.Text.init("free and open-source by orbitixx", .{ .x = relX(0.08), .y = relY(0.035) + 32 }, .{ .font = .JERSEY10_REGULAR, .fontSize = 18, .textColor = Color.secondary });
+    const versionText = UI.Text.init(env.APP_VERSION, .{ .x = relX(0.92), .y = relY(0.05) }, .{ .font = .JERSEY10_REGULAR, .fontSize = 16, .textColor = Color.secondary });
+    var logText = UI.Text.init("", .{ .x = relX(0.02), .y = relY(0.93) }, .{ .font = .ROBOTO_REGULAR, .fontSize = 14, .textColor = Color.lightGray });
 
     const logLineBgRect = UI.Rectangle{
         .transform = .{
             .x = 0,
-            .y = relH(0.94),
+            .y = relY(0.94),
             .w = WindowManager.getWindowWidth(),
-            .h = relH(0.06),
+            .h = relY(0.06),
         },
         .style = .{
             .color = Color.transparentDark,
@@ -185,12 +184,12 @@ pub fn main() !void {
         logoText.draw();
         subLogoText.draw();
 
-        rl.drawCircleV(.{ .x = relW(0.9), .y = relH(0.065) }, 4.5, if (helperResponse) .green else .red);
-        rl.drawCircleLinesV(.{ .x = relW(0.9), .y = relH(0.065) }, 4.5, .white);
+        rl.drawCircleV(.{ .x = relX(0.9), .y = relY(0.065) }, 4.5, if (helperResponse) .green else .red);
+        rl.drawCircleLinesV(.{ .x = relX(0.9), .y = relY(0.065) }, 4.5, .white);
 
         versionText.draw();
 
-        // rl.drawRectangleRec(rl.Rectangle.init(0, relH(0.94), WindowManager.getWindowWidth(), relH(0.06)), rl.Color.init(0, 0, 0, 60));
+        // rl.drawRectangleRec(rl.Rectangle.init(0, relY(0.94), WindowManager.getWindowWidth(), relH(0.06)), rl.Color.init(0, 0, 0, 60));
         logLineBgRect.draw();
 
         logText.value = Logger.getLatestLog();

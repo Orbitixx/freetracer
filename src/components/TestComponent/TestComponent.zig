@@ -43,7 +43,7 @@ pub fn init(allocator: std.mem.Allocator, appObserver: *const AppObserver) !ISOF
         .state = ComponentState.init(FilePickerState{}),
     };
 
-    // NOTE: Can't do initComponent in here, because parent (*Component) reference will refence
+    // WARNING: Can't call initComponent in here, because parent (*Component) reference will refence
     // address in the scope of this function instead of the struct.
 }
 
@@ -83,7 +83,7 @@ pub fn start(self: *ISOFilePickerComponent) !void {
 
         component.children = std.ArrayList(Component).init(self.allocator);
 
-        var uiComponent = try ISOFilePickerUI.init(null);
+        var uiComponent = try ISOFilePickerUI.init(self);
         try uiComponent.start();
 
         if (component.children) |*children| {
@@ -99,6 +99,10 @@ pub fn update(self: *ISOFilePickerComponent) !void {
 
     self.checkAndJoinWorker();
 
+    // if (self.component) |component| {
+    //     try component.update();
+    // }
+
     _ = state;
 
     // Update logic
@@ -112,6 +116,10 @@ pub fn draw(self: *ISOFilePickerComponent) !void {
     // std.debug.print("\nDrawing file picker UI, selected: {s}", .{if (state.selected_path) |path| path else "none"});
 
     // Draw UI elements
+
+    // if (self.component) |component| {
+    //     try component.draw();
+    // }
 
     _ = self;
 }
@@ -159,6 +167,20 @@ pub fn selectFile(self: *ISOFilePickerComponent) !void {
     if (self.worker) |*worker| {
         try worker.start();
     }
+}
+
+pub const dispatchComponentActionWrapper = struct {
+    pub fn call(ptr: *anyopaque) void {
+        ISOFilePickerComponent.asInstance(ptr).selectFile() catch |err| {
+            debug.printf("\nISOFilePickerComponent: Failed to dispatch component action. Error: {any}", .{err});
+        };
+    }
+};
+
+pub fn dispatchComponentAction(self: *ISOFilePickerComponent) void {
+    self.selectFile() catch |err| {
+        debug.printf("\nISOFilePickerComponent: Failed to dispatch component action. Error: {any}", .{err});
+    };
 }
 
 pub fn checkAndJoinWorker(self: *ISOFilePickerComponent) void {

@@ -20,6 +20,7 @@ pub const Component = struct {
         update_fn: *const fn (ptr: *anyopaque) anyerror!void,
         draw_fn: *const fn (ptr: *anyopaque) anyerror!void,
         handle_event_fn: *const fn (ptr: *anyopaque, event: ComponentEvent) anyerror!EventResult,
+        dispatch_action_fn: *const fn (ptr: *anyopaque) void,
     };
 
     pub fn init(ptr: *anyopaque, vtable: *const VTable, parent: ?*Component) !Component {
@@ -79,6 +80,10 @@ pub const Component = struct {
         return self.vtable.handle_event_fn(self.ptr, event);
     }
 
+    pub fn dispatchComponentAction(self: Component) void {
+        return self.vtable.dispatch_action_fn(self.ptr);
+    }
+
     pub fn deinit(self: *Component) void {
         std.debug.print("\nGeneric Component deinit() called!", .{});
 
@@ -109,6 +114,7 @@ pub fn ImplementComponent(comptime T: type) type {
             .deinit_fn = deinitWrapper,
             .draw_fn = drawWrapper,
             .handle_event_fn = handleEventWrapper,
+            .dispatch_action_fn = dispatchActionWrapper,
         };
 
         pub fn asComponent(self: *T) Component {
@@ -116,6 +122,9 @@ pub fn ImplementComponent(comptime T: type) type {
         }
 
         pub fn asComponentPtr(self: *T) *Component {
+            if (self.component == null) self.initComponent(null) catch |err| {
+                std.debug.print("\nError initializing Base Component for Component type: {any}, error: {any}", .{ T, err });
+            };
             return &self.component.?;
         }
 
@@ -141,6 +150,10 @@ pub fn ImplementComponent(comptime T: type) type {
 
         fn handleEventWrapper(ptr: *anyopaque, event: ComponentEvent) anyerror!EventResult {
             return asInstance(ptr).handleEvent(event);
+        }
+
+        fn dispatchActionWrapper(ptr: *anyopaque) void {
+            return asInstance(ptr).dispatchComponentAction();
         }
     };
 }
