@@ -1,5 +1,6 @@
 const std = @import("std");
 const debug = @import("../../lib/util/debug.zig");
+// const rl = @import("raylib");
 
 const WindowManager = @import("../../managers/WindowManager.zig").WindowManagerSingleton;
 const winRelX = WindowManager.relW;
@@ -44,17 +45,20 @@ pub fn initComponent(self: *ISOFilePickerUI, parent: ?*Component) !void {
 }
 
 pub fn start(self: *ISOFilePickerUI) !void {
+    debug.print("\nISOFilePickerUI: component start() called.");
+
     if (self.component == null) try self.initComponent(self.parent.asComponentPtr());
 
     self.bgRect = UIFramework.Primitives.Rectangle{
-        .transform = .{ .x = winRelX(0.08), .y = winRelY(0.2), .w = winRelX(0.35), .h = winRelY(0.7) },
+        // .transform = .{ .x = winRelX(0.08), .y = winRelY(0.2), .w = winRelX(0.35), .h = winRelY(0.7) },
+        .transform = .{ .x = 20.0, .y = 20.0, .w = 20.0, .h = 20.0 },
         .style = .{
             .color = Styles.Color.white,
             .borderStyle = .{
                 .color = Styles.Color.white,
             },
         },
-        .rounded = true,
+        .rounded = false,
     };
 
     if (self.bgRect) |bgRect| {
@@ -77,7 +81,7 @@ pub fn start(self: *ISOFilePickerUI) !void {
     // }
     // }
 
-    debug.print("\nISOFilePickerUI: component start() called.");
+    debug.print("\nISOFilePickerUI: component start() finished.");
 }
 
 pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
@@ -103,6 +107,8 @@ pub fn draw(self: *ISOFilePickerUI) !void {
     if (self.bgRect) |bgRect| {
         bgRect.draw();
     }
+
+    // rl.drawRectangle(200, 200, 200, 200, rl.Color.white);
 
     // if (self.button) |*button| {
     //     button.draw();

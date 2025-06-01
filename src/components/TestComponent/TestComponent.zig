@@ -73,7 +73,7 @@ pub fn initWorker(self: *ISOFilePickerComponent) !void {
 pub fn start(self: *ISOFilePickerComponent) !void {
     std.debug.print("\nISOFilePickerComponent: start() function called!", .{});
 
-    // try self.initComponent(null);
+    // if (self.component == null) try self.initComponent(null);
     try self.initWorker();
 
     if (self.component) |*component| {
@@ -89,6 +89,8 @@ pub fn start(self: *ISOFilePickerComponent) !void {
         if (component.children) |*children| {
             try children.append(uiComponent.asComponent());
         }
+
+        std.debug.print("\nISOFilePickerComponent: finished initializing children.", .{});
     }
 }
 

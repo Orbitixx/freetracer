@@ -73,20 +73,20 @@ pub fn main() !void {
 
     var componentRegistry: ComponentRegistry = .{ .components = std.AutoHashMap(ComponentID, Component).init(allocator) };
     defer componentRegistry.deinit();
-
+    //
     const appObserver: AppObserver = .{ .componentRegistry = &componentRegistry };
-
-    var filePickerComponent = FilePickerComponent.init(allocator, &appObserver);
-
-    componentRegistry.registerComponent(
-        ComponentID.ISOFilePicker,
-        filePickerComponent.asComponent(),
-    );
-
-    componentRegistry.registerComponent(
-        ComponentID.USBDevicesList,
-        USBDevicesListComponent.init(allocator, &appObserver).asComponent(),
-    );
+    //
+    // var filePickerComponent = FilePickerComponent.init(allocator, &appObserver);
+    //
+    // componentRegistry.registerComponent(
+    //     ComponentID.ISOFilePicker,
+    //     filePickerComponent.asComponent(),
+    // );
+    //
+    // componentRegistry.registerComponent(
+    //     ComponentID.USBDevicesList,
+    //     USBDevicesListComponent.init(allocator, &appObserver).asComponent(),
+    // );
 
     //----------------------------------------------------------------------------------
     // --- New Component framework ---

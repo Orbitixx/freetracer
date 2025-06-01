@@ -36,9 +36,13 @@ pub const Component = struct {
     }
 
     pub fn update(self: Component) !void {
+        // std.debug.print("\nBase Component.update() called.", .{});
+
         if (self.children) |children| {
+            // std.debug.print("\nBase Component.update(): found children, attempting to update children...", .{});
             if (children.items.len > 0) {
                 for (children.items) |*child| {
+                    // std.debug.print("\nBase Component.update(): updating a specific child...", .{});
                     try child.update();
                 }
             }
@@ -48,9 +52,13 @@ pub const Component = struct {
     }
 
     pub fn draw(self: Component) !void {
+        // std.debug.print("\nBase Component.draw() called.", .{});
+
         if (self.children) |children| {
+            // std.debug.print("\nBase Component.draw(): found children, attempting to draw children...", .{});
             if (children.items.len > 0) {
                 for (children.items) |*child| {
+                    // std.debug.print("\nBase Component.draw(): drawing a specific child...", .{});
                     try child.draw();
                 }
             }
