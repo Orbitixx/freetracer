@@ -1,6 +1,6 @@
 const std = @import("std");
 const debug = @import("../../lib/util/debug.zig");
-// const rl = @import("raylib");
+const rl = @import("raylib");
 
 const WindowManager = @import("../../managers/WindowManager.zig").WindowManagerSingleton;
 const winRelX = WindowManager.relW;
@@ -50,36 +50,34 @@ pub fn start(self: *ISOFilePickerUI) !void {
     if (self.component == null) try self.initComponent(self.parent.asComponentPtr());
 
     self.bgRect = UIFramework.Primitives.Rectangle{
-        // .transform = .{ .x = winRelX(0.08), .y = winRelY(0.2), .w = winRelX(0.35), .h = winRelY(0.7) },
-        .transform = .{ .x = 20.0, .y = 20.0, .w = 20.0, .h = 20.0 },
+        .transform = .{ .x = winRelX(0.08), .y = winRelY(0.2), .w = winRelX(0.35), .h = winRelY(0.7) },
         .style = .{
-            .color = Styles.Color.white,
+            .color = Styles.Color.transparentDark,
             .borderStyle = .{
                 .color = Styles.Color.white,
             },
         },
-        .rounded = false,
+        .rounded = true,
     };
 
     if (self.bgRect) |bgRect| {
         self.button = Button.init(
             "SELECT ISO",
-            .{ .x = bgRect.transform.relX(0.5), .y = 0 },
+            bgRect.transform.getPosition(),
             .Primary,
             .{
                 .context = self.parent,
                 .function = ISOFilePicker.dispatchComponentActionWrapper.call,
             },
         );
-    }
 
-    // if (self.bgRect) |bgRect| {
-    // if (self.button) |*button| {
-    //     // button.rect.transform.x = bgRect.transform.relX(0.5) - @divTrunc(button.rect.transform.w, 2);
-    //     // button.rect.transform.y = bgRect.transform.relX(0.9) - @divTrunc(button.rect.transform.h, 2);
-    //     button.rect.rounded = true;
-    // }
-    // }
+        if (self.button) |*button| {
+            try button.start();
+            button.rect.transform.x = bgRect.transform.relX(0.5) - @divTrunc(button.rect.transform.w, 2);
+            button.rect.transform.y = bgRect.transform.relX(0.9) - @divTrunc(button.rect.transform.h, 2);
+            button.rect.rounded = true;
+        }
+    }
 
     debug.print("\nISOFilePickerUI: component start() finished.");
 }
@@ -97,10 +95,9 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
 }
 
 pub fn update(self: *ISOFilePickerUI) !void {
-    _ = self;
-    // if (self.button) |*button| {
-    //     button.update();
-    // }
+    if (self.button) |*button| {
+        try button.update();
+    }
 }
 
 pub fn draw(self: *ISOFilePickerUI) !void {
@@ -108,11 +105,9 @@ pub fn draw(self: *ISOFilePickerUI) !void {
         bgRect.draw();
     }
 
-    // rl.drawRectangle(200, 200, 200, 200, rl.Color.white);
-
-    // if (self.button) |*button| {
-    //     button.draw();
-    // }
+    if (self.button) |*button| {
+        try button.draw();
+    }
 }
 
 pub fn deinit(self: *ISOFilePickerUI) void {

@@ -4,6 +4,8 @@ const debug = @import("../../lib/util/debug.zig");
 
 const ComponentFramework = @import("../framework/import/index.zig");
 
+const UIFramework = @import("../ui/import/index.zig");
+
 const AppObserver = @import("../../observers/AppObserver.zig").AppObserver;
 const ObserverEvent = @import("../../observers/ObserverEvents.zig").ObserverEvent;
 const ObserverPayload = @import("../../observers/ObserverPayload.zig");
@@ -30,8 +32,13 @@ appObserver: *const AppObserver,
 state: ComponentState,
 worker: ?ComponentWorker = null,
 
+uiComponent: ?ISOFilePickerUI = null,
+
 pub const Events = struct {
-    pub const UIWidthChangedEvent = ComponentFramework.defineEvent("iso_file_picker.ui_width_changed", struct { newWidth: f32 });
+    pub const UIWidthChangedEvent = ComponentFramework.defineEvent(
+        "iso_file_picker.ui_width_changed",
+        struct { newWidth: f32 },
+    );
 };
 
 pub fn init(allocator: std.mem.Allocator, appObserver: *const AppObserver) !ISOFilePickerComponent {
@@ -73,7 +80,6 @@ pub fn initWorker(self: *ISOFilePickerComponent) !void {
 pub fn start(self: *ISOFilePickerComponent) !void {
     std.debug.print("\nISOFilePickerComponent: start() function called!", .{});
 
-    // if (self.component == null) try self.initComponent(null);
     try self.initWorker();
 
     if (self.component) |*component| {
@@ -83,11 +89,13 @@ pub fn start(self: *ISOFilePickerComponent) !void {
 
         component.children = std.ArrayList(Component).init(self.allocator);
 
-        var uiComponent = try ISOFilePickerUI.init(self);
-        try uiComponent.start();
+        self.uiComponent = try ISOFilePickerUI.init(self);
 
         if (component.children) |*children| {
-            try children.append(uiComponent.asComponent());
+            if (self.uiComponent) |*uiComponent| {
+                try uiComponent.start();
+                try children.append(uiComponent.asComponent());
+            }
         }
 
         std.debug.print("\nISOFilePickerComponent: finished initializing children.", .{});
@@ -120,7 +128,11 @@ pub fn draw(self: *ISOFilePickerComponent) !void {
     // Draw UI elements
 
     // if (self.component) |component| {
-    //     try component.draw();
+    //     if (component.children) |children| {
+    //         for (children.items) |*child| {
+    //             try child.draw();
+    //         }
+    //     }
     // }
 
     _ = self;
@@ -143,7 +155,10 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
                 eventResult.validation = @intFromFloat(data.newWidth);
             }
 
-            debug.printf("\nISOFilePickerComponent: handleEvent() received: \"{s}\" event, data: newWidth = {d}", .{ event.name, data.newWidth });
+            debug.printf(
+                "\nISOFilePickerComponent: handleEvent() received: \"{s}\" event, data: newWidth = {d}",
+                .{ event.name, data.newWidth },
+            );
         },
         else => {},
     }

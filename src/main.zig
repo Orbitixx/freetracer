@@ -95,27 +95,8 @@ pub fn main() !void {
     var newRegistry = ComponentFramework.Registry.init(allocator);
     defer newRegistry.deinit();
 
-    // const filePickerActionWrapper = struct {
-    //     fn call(ctx: *anyopaque) void {
-    //         const filePicker: *FilePickerComponent = @ptrCast(@alignCast(ctx));
-    //         return FilePickerComponent.dispatchComponentAction(filePicker);
-    //     }
-    // };
-
     var testFilePickerComponent = try TestFilePickerComponent.init(allocator, &appObserver);
     try newRegistry.register(newComponentID.ISOFilePicker, @constCast(testFilePickerComponent.asComponentPtr()));
-
-    // var testBtn = Button.init(
-    //     "Test btn",
-    //     .{ .x = 20, .y = 20 },
-    //     .Primary,
-    //     .{
-    //         .context = &filePickerComponent,
-    //         .function = filePickerActionWrapper.call,
-    //     },
-    // );
-    // testBtn.rect.rounded = true;
-    // try newRegistry.register(newComponentID.TestBtn, testBtn.asComponent());
 
     //----------------------------------------------------------------------------------
     //--- @END COMPONENTS --------------------------------------------------------------
@@ -130,9 +111,6 @@ pub fn main() !void {
     const backgroundColor: rl.Color = .{ .r = 29, .g = 44, .b = 64, .a = 100 };
 
     try newRegistry.startAll();
-
-    // const tcomp: *TestFilePickerComponent = @ptrCast(@alignCast(newRegistry.components.get(newComponentID.ISOFilePicker).?.ptr));
-    // try tcomp.worker.?.start();
 
     {
         const data: TestFilePickerComponent.Events.UIWidthChangedEvent.Data = .{ .newWidth = 95 };

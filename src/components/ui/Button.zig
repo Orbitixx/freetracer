@@ -52,6 +52,7 @@ text: Text,
 styles: ButtonStyles,
 state: ButtonState = ButtonState.NORMAL,
 clickHandler: ButtonHandler,
+component: ?Component = null,
 
 pub fn init(text: [:0]const u8, position: rl.Vector2, variant: ButtonVariant, clickHandler: ButtonHandler) ButtonComponent {
     const btnText = Text.init(text, position, variant.normal.textStyle);
@@ -83,12 +84,17 @@ pub fn init(text: [:0]const u8, position: rl.Vector2, variant: ButtonVariant, cl
     };
 }
 
-/// Called once when Component is fully initialized
-pub fn start(self: *ButtonComponent) void {
-    _ = self;
+pub fn initComponent(self: *ButtonComponent, parent: ?*Component) !void {
+    if (self.component != null) return error.ButtonBaseComponentAlreadyInitialized;
+    self.component = try Component.init(self, &ComponentImplementation.vtable, parent);
 }
 
-pub fn update(self: *ButtonComponent) void {
+/// Called once when Component is fully initialized
+pub fn start(self: *ButtonComponent) !void {
+    if (self.component == null) try self.initComponent(null);
+}
+
+pub fn update(self: *ButtonComponent) !void {
     const mousePos: rl.Vector2 = rl.getMousePosition();
     const isButtonClicked: bool = rl.isMouseButtonPressed(.left);
     const isButtonHovered: bool = self.rect.transform.isPointWithinBounds(mousePos);
@@ -122,60 +128,41 @@ pub fn update(self: *ButtonComponent) void {
     }
 }
 
-pub fn draw(self: *ButtonComponent) void {
+pub fn draw(self: *ButtonComponent) !void {
     self.rect.draw();
     self.text.draw();
+}
+
+pub fn handleEvent(self: *ButtonComponent, event: ComponentFramework.Event) !ComponentFramework.EventResult {
+    _ = self;
+    _ = event;
+
+    const eventResult = ComponentFramework.EventResult{
+        .success = false,
+        .validation = 0,
+    };
+
+    return eventResult;
 }
 
 pub fn deinit(self: *ButtonComponent) void {
     _ = self;
 }
 
-pub fn notify(self: *ButtonComponent, event: ObserverEvent, payload: ObserverPayload) void {
+pub fn dispatchComponentAction(self: *ButtonComponent) void {
     _ = self;
-    _ = event;
-    _ = payload;
 }
 
-pub fn asInstance(ptr: *anyopaque) *ButtonComponent {
-    return @ptrCast(@alignCast(ptr));
-}
+// pub fn notify(self: *ButtonComponent, event: ObserverEvent, payload: ObserverPayload) void {
+//     _ = self;
+//     _ = event;
+//     _ = payload;
+// }
 
-pub fn asComponent(self: *ButtonComponent) Component {
-    const vtable = &Component.VTable{
-        .start_fn = struct {
-            fn lambda(ptr: *anyopaque) anyerror!void {
-                ButtonComponent.asInstance(ptr).start();
-            }
-        }.lambda,
-
-        .update_fn = struct {
-            fn lambda(ptr: *anyopaque) anyerror!void {
-                ButtonComponent.asInstance(ptr).update();
-            }
-        }.lambda,
-
-        .draw_fn = struct {
-            fn lambda(ptr: *anyopaque) anyerror!void {
-                ButtonComponent.asInstance(ptr).draw();
-            }
-        }.lambda,
-
-        .deinit_fn = struct {
-            fn lambda(ptr: *anyopaque) void {
-                ButtonComponent.asInstance(ptr).deinit();
-            }
-        }.lambda,
-
-        .notify_fn = struct {
-            fn lambda(ptr: *anyopaque, event: ObserverEvent, payload: ObserverPayload) void {
-                ButtonComponent.asInstance(ptr).notify(event, payload);
-            }
-        }.lambda,
-    };
-
-    return Component.init(self, vtable);
-}
+pub const ComponentImplementation = ComponentFramework.ImplementComponent(ButtonComponent);
+pub const asComponent = ComponentImplementation.asComponent;
+pub const asComponentPtr = ComponentImplementation.asComponentPtr;
+pub const asInstance = ComponentImplementation.asInstance;
 
 pub const ButtonVariant = struct {
     normal: ButtonStyle = .{
