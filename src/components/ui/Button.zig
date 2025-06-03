@@ -94,6 +94,13 @@ pub fn start(self: *ButtonComponent) !void {
     if (self.component == null) try self.initComponent(null);
 }
 
+pub fn setPosition(self: *ButtonComponent, position: rl.Vector2) void {
+    self.rect.transform.x = position.x;
+    self.rect.transform.y = position.y;
+    self.text.transform.x = position.x + (self.rect.transform.w / 2) - (self.text.getDimensions().width / 2);
+    self.text.transform.y = position.y + (self.rect.transform.h / 2) - (self.text.getDimensions().height / 2);
+}
+
 pub fn update(self: *ButtonComponent) !void {
     const mousePos: rl.Vector2 = rl.getMousePosition();
     const isButtonClicked: bool = rl.isMouseButtonPressed(.left);
@@ -185,6 +192,7 @@ pub const ButtonVariant = struct {
             .bgStyle = .{
                 .borderStyle = .{},
                 .color = .{ .r = 115, .g = 102, .b = 162, .a = 255 },
+                .roundness = 0.2,
             },
             .textStyle = .{
                 .font = .ROBOTO_REGULAR,
@@ -197,6 +205,7 @@ pub const ButtonVariant = struct {
             .bgStyle = .{
                 .borderStyle = .{},
                 .color = .{ .r = 115, .g = 102, .b = 162, .a = 127 },
+                .roundness = 0.2,
             },
             .textStyle = .{
                 .font = .ROBOTO_REGULAR,
@@ -209,6 +218,7 @@ pub const ButtonVariant = struct {
             .bgStyle = .{
                 .borderStyle = .{},
                 .color = .{ .r = 96, .g = 83, .b = 145, .a = 255 },
+                .roundness = 0.2,
             },
             .textStyle = .{
                 .font = .ROBOTO_REGULAR,

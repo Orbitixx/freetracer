@@ -4,6 +4,7 @@ const debug = @import("../../lib/util/debug.zig");
 const rl = @import("raylib");
 const ResourceManagerImport = @import("../../managers/ResourceManager.zig");
 const ResourceManager = ResourceManagerImport.ResourceManagerSingleton;
+const TextureResource = ResourceManagerImport.TEXTURE;
 
 const Styles = @import("./Styles.zig");
 const TextStyle = Styles.TextStyle;
@@ -52,15 +53,51 @@ pub const Transform = struct {
 pub const Rectangle = struct {
     transform: Transform,
     rounded: bool = false,
+    bordered: bool = false,
     style: RectangleStyle = .{},
 
     pub fn draw(self: Rectangle) void {
+        //
         if (self.rounded) {
-            rl.drawRectangleRounded(self.transform.asRaylibRectangle(), 0.2, 6, self.style.color);
+            self.drawRounded();
             return;
         }
 
-        rl.drawRectanglePro(self.transform.asRaylibRectangle(), .{ .x = 0, .y = 0 }, 0, self.style.color);
+        rl.drawRectanglePro(
+            self.transform.asRaylibRectangle(),
+            .{ .x = 0, .y = 0 },
+            0,
+            self.style.color,
+        );
+
+        if (self.bordered) {
+            rl.drawRectangleLinesEx(
+                self.transform.asRaylibRectangle(),
+                self.style.borderStyle.thickness,
+                self.style.borderStyle.color,
+            );
+        }
+    }
+
+    fn drawRounded(self: Rectangle) void {
+        rl.drawRectangleRounded(
+            self.transform.asRaylibRectangle(),
+            self.style.roundness,
+            self.style.segments,
+            self.style.color,
+        );
+
+        if (self.bordered) {
+            rl.drawRectangleRoundedLinesEx(
+                self.transform.asRaylibRectangle(),
+                self.style.roundness,
+                self.style.segments,
+                self.style.borderStyle.thickness,
+                self.style.borderStyle.color,
+            );
+        }
+
+        return;
     }
 };
 
@@ -108,5 +145,37 @@ pub const Text = struct {
     pub fn getDimensions(self: Text) TextDimensions {
         const dims = rl.measureTextEx(self.font, self.value, self.style.fontSize, self.style.spacing);
         return .{ .width = dims.x, .height = dims.y };
+    }
+};
+
+pub const Texture = struct {
+    transform: Transform,
+    resource: TextureResource,
+    texture: rl.Texture2D,
+    tint: rl.Color = Styles.Color.white,
+
+    pub fn init(resource: TextureResource, position: rl.Vector2) Texture {
+        const texture: rl.Texture2D = ResourceManager.getTexture(resource);
+
+        return .{
+            .transform = .{
+                .x = position.x,
+                .y = position.y,
+                .w = @floatFromInt(texture.width),
+                .h = @floatFromInt(texture.height),
+            },
+            .resource = resource,
+            .texture = texture,
+        };
+    }
+
+    pub fn draw(self: Texture) void {
+        rl.drawTextureEx(
+            self.texture,
+            .{ .x = self.transform.x, .y = self.transform.y },
+            self.transform.rotation,
+            self.transform.scale,
+            self.tint,
+        );
     }
 };

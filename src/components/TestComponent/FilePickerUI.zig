@@ -15,6 +15,9 @@ const EventResult = ComponentFramework.EventResult;
 
 const UIFramework = @import("../ui/import/index.zig");
 const Button = UIFramework.Button;
+const Rectangle = UIFramework.Primitives.Rectangle;
+const Text = UIFramework.Primitives.Text;
+const Texture = UIFramework.Primitives.Texture;
 const Styles = UIFramework.Styles;
 
 pub const ISOFilePickerUIState = struct {
@@ -27,7 +30,10 @@ const ISOFilePickerUI = @This();
 component: ?Component = null,
 state: ComponentState,
 parent: *ISOFilePicker,
-bgRect: ?UIFramework.Primitives.Rectangle = null,
+
+bgRect: ?Rectangle = null,
+headerText: ?Text = null,
+diskImg: ?Texture = null,
 button: ?Button = null,
 
 pub fn init(parent: *ISOFilePicker) !ISOFilePickerUI {
@@ -52,12 +58,13 @@ pub fn start(self: *ISOFilePickerUI) !void {
     self.bgRect = UIFramework.Primitives.Rectangle{
         .transform = .{ .x = winRelX(0.08), .y = winRelY(0.2), .w = winRelX(0.35), .h = winRelY(0.7) },
         .style = .{
-            .color = Styles.Color.transparentDark,
+            .color = Styles.Color.violet,
             .borderStyle = .{
                 .color = Styles.Color.white,
             },
         },
         .rounded = true,
+        .bordered = true,
     };
 
     if (self.bgRect) |bgRect| {
@@ -71,10 +78,31 @@ pub fn start(self: *ISOFilePickerUI) !void {
             },
         );
 
+        self.headerText = Text.init("image", .{
+            .x = bgRect.transform.x + 12,
+            .y = bgRect.transform.relY(0.01),
+        }, .{
+            .font = .JERSEY10_REGULAR,
+            .fontSize = 34,
+            .textColor = Styles.Color.white,
+        });
+
+        self.diskImg = Texture.init(.DISK_IMAGE, .{ .x = 0, .y = 0 });
+
+        if (self.diskImg) |*img| {
+            img.transform.x = bgRect.transform.relX(0.5) - img.transform.w / 2;
+            img.transform.y = bgRect.transform.relY(0.5) - img.transform.h / 2;
+            img.tint = .{ .r = 255, .g = 255, .b = 255, .a = 150 };
+        }
+
         if (self.button) |*button| {
             try button.start();
-            button.rect.transform.x = bgRect.transform.relX(0.5) - @divTrunc(button.rect.transform.w, 2);
-            button.rect.transform.y = bgRect.transform.relX(0.9) - @divTrunc(button.rect.transform.h, 2);
+
+            button.setPosition(.{
+                .x = bgRect.transform.relX(0.5) - @divTrunc(button.rect.transform.w, 2),
+                .y = bgRect.transform.relY(0.9) - @divTrunc(button.rect.transform.h, 2),
+            });
+
             button.rect.rounded = true;
         }
     }
@@ -103,6 +131,14 @@ pub fn update(self: *ISOFilePickerUI) !void {
 pub fn draw(self: *ISOFilePickerUI) !void {
     if (self.bgRect) |bgRect| {
         bgRect.draw();
+    }
+
+    if (self.headerText) |text| {
+        text.draw();
+    }
+
+    if (self.diskImg) |img| {
+        img.draw();
     }
 
     if (self.button) |*button| {
