@@ -173,6 +173,11 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
             const data = Events.ISOFileSelected.getData(&event).?;
             if (@TypeOf(data.*) != Events.ISOFileSelected.Data) break :block;
 
+            debug.printf(
+                "\nISOFilePickerComponent: handleEvent() received: \"{s}\" event, data: newPath = {s}",
+                .{ event.name, data.newPath.? },
+            );
+
             eventResult.success = true;
             eventResult.validation = 1;
 
@@ -180,10 +185,25 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
             state.selected_path = data.newPath;
             state.is_selecting = false;
 
-            debug.printf(
-                "\nISOFilePickerComponent: handleEvent() received: \"{s}\" event, data: newPath = {s}",
-                .{ event.name, data.newPath.? },
-            );
+            if (data.newPath) |newPath| {
+                const nameBuffer: [:0]u8 = try self.allocator.dupeZ(u8, newPath);
+
+                const eventData = ISOFilePickerUI.Events.ISOFileNameChanged.Data{ .newName = nameBuffer };
+                const newEvent = ISOFilePickerUI.Events.ISOFileNameChanged.create(&self.component.?, &eventData);
+
+                if (self.uiComponent) |*ui| {
+                    const result = try ui.handleEvent(newEvent);
+
+                    if (!result.success) {
+                        debug.print("\nERROR: FilePickerUI was not able to handle ISOFileNameChanged event.");
+                    }
+                }
+            }
+
+            const makeUIInactiveData = ISOFilePickerUI.Events.ISOFilePickerActiveStateChanged.Data{ .isActive = false };
+            const makeUIInactiveEvent = ISOFilePickerUI.Events.ISOFilePickerActiveStateChanged.create(&self.component.?, &makeUIInactiveData);
+
+            _ = try self.uiComponent.?.handleEvent(makeUIInactiveEvent);
         },
 
         else => {},

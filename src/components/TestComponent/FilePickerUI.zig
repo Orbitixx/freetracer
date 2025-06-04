@@ -43,9 +43,12 @@ isoTitle: ?Text = null,
 pub const Events = struct {
     pub const ISOFileNameChanged = ComponentFramework.defineEvent(
         "iso_file_picker_ui.iso_file_name_changed",
-        struct {
-            newName: [:0]u8,
-        },
+        struct { newName: [:0]u8 },
+    );
+
+    pub const ISOFilePickerActiveStateChanged = ComponentFramework.defineEvent(
+        "iso_file_picker_ui.active_state_changed",
+        struct { isActive: bool },
     );
 };
 
@@ -142,6 +145,38 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
 
             // TODO: contemplate ownership and release here
             state.isoName = data.newName;
+
+            if (self.bgRect) |bgRect| {
+                if (state.isoName) |isoName| {
+                    self.isoTitle = Text.init(isoName, .{
+                        .x = bgRect.transform.relX(0.5),
+                        .y = bgRect.transform.relY(0.5),
+                    }, .{
+                        .fontSize = 14,
+                    });
+                }
+            }
+        },
+
+        Events.ISOFilePickerActiveStateChanged.Hash => {
+            const data = Events.ISOFilePickerActiveStateChanged.getData(&event).?;
+            if (@TypeOf(data.*) != Events.ISOFilePickerActiveStateChanged.Data) break :block;
+
+            eventResult.success = true;
+            eventResult.validation = 1;
+
+            var state = self.state.getData();
+            state.active = data.isActive;
+
+            if (self.bgRect) |*bgRect| {
+                if (state.active) {
+                    bgRect.transform.w = winRelX(0.35);
+                    bgRect.style.color = Styles.Color.violet;
+                } else {
+                    bgRect.transform.w = winRelX(0.16);
+                    bgRect.style.color = Styles.Color.transparentDark;
+                }
+            }
         },
         else => {},
     }
@@ -187,7 +222,7 @@ fn drawInactive(self: *ISOFilePickerUI) !void {
 }
 
 pub fn deinit(self: *ISOFilePickerUI) void {
-    _ = self;
+    self.parent.allocator.free(self.state.data.isoName.?);
 }
 
 pub fn dispatchComponentAction(self: *ISOFilePickerUI) void {
