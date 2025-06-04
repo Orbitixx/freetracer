@@ -22,19 +22,32 @@ const Styles = UIFramework.Styles;
 
 pub const ISOFilePickerUIState = struct {
     active: bool = true,
+    isoName: ?[:0]u8 = null,
 };
 pub const ComponentState = ComponentFramework.ComponentState(ISOFilePickerUIState);
 
 const ISOFilePickerUI = @This();
 
-component: ?Component = null,
+// Component-agnostic props
 state: ComponentState,
 parent: *ISOFilePicker,
+component: ?Component = null,
 
+// Component-specific, unique props
 bgRect: ?Rectangle = null,
 headerText: ?Text = null,
 diskImg: ?Texture = null,
 button: ?Button = null,
+isoTitle: ?Text = null,
+
+pub const Events = struct {
+    pub const ISOFileNameChanged = ComponentFramework.defineEvent(
+        "iso_file_picker_ui.iso_file_name_changed",
+        struct {
+            newName: [:0]u8,
+        },
+    );
+};
 
 pub fn init(parent: *ISOFilePicker) !ISOFilePickerUI {
     debug.print("\nISOFilePickerUI: start() called.");
@@ -55,7 +68,7 @@ pub fn start(self: *ISOFilePickerUI) !void {
 
     if (self.component == null) try self.initComponent(self.parent.asComponentPtr());
 
-    self.bgRect = UIFramework.Primitives.Rectangle{
+    self.bgRect = Rectangle{
         .transform = .{ .x = winRelX(0.08), .y = winRelY(0.2), .w = winRelX(0.35), .h = winRelY(0.7) },
         .style = .{
             .color = Styles.Color.violet,
@@ -111,13 +124,27 @@ pub fn start(self: *ISOFilePickerUI) !void {
 }
 
 pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
-    _ = self;
-    _ = event;
-
-    const eventResult = EventResult{
+    var eventResult = EventResult{
         .success = false,
         .validation = 0,
     };
+
+    block: switch (event.hash) {
+        Events.ISOFileNameChanged.Hash => {
+            // TODO: handle null data gracefully
+            const data = Events.ISOFileNameChanged.getData(&event).?;
+            if (@TypeOf(data.*) != Events.ISOFileNameChanged.Data) break :block;
+
+            eventResult.success = true;
+            eventResult.validation = 1;
+
+            var state = self.state.getData();
+
+            // TODO: contemplate ownership and release here
+            state.isoName = data.newName;
+        },
+        else => {},
+    }
 
     return eventResult;
 }
@@ -129,6 +156,9 @@ pub fn update(self: *ISOFilePickerUI) !void {
 }
 
 pub fn draw(self: *ISOFilePickerUI) !void {
+    const state = self.state.getDataLocked();
+    defer self.state.unlock();
+
     if (self.bgRect) |bgRect| {
         bgRect.draw();
     }
@@ -137,12 +167,22 @@ pub fn draw(self: *ISOFilePickerUI) !void {
         text.draw();
     }
 
+    if (state.active) try self.drawActive() else try self.drawInactive();
+}
+
+fn drawActive(self: *ISOFilePickerUI) !void {
     if (self.diskImg) |img| {
         img.draw();
     }
 
     if (self.button) |*button| {
         try button.draw();
+    }
+}
+
+fn drawInactive(self: *ISOFilePickerUI) !void {
+    if (self.isoTitle) |isoTitle| {
+        isoTitle.draw();
     }
 }
 

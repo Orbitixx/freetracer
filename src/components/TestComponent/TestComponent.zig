@@ -26,18 +26,27 @@ const WorkerStatus = ComponentFramework.WorkerStatus;
 const ISOFilePickerUI = @import("./FilePickerUI.zig");
 
 pub const ISOFilePickerComponent = @This();
-component: ?Component = null,
-allocator: std.mem.Allocator,
-appObserver: *const AppObserver,
+
+// Component-agnostic props
 state: ComponentState,
 worker: ?ComponentWorker = null,
+component: ?Component = null,
 
+// Component-specific, unique props
+appObserver: *const AppObserver,
+allocator: std.mem.Allocator,
 uiComponent: ?ISOFilePickerUI = null,
 
 pub const Events = struct {
+    //
     pub const UIWidthChangedEvent = ComponentFramework.defineEvent(
         "iso_file_picker.ui_width_changed",
         struct { newWidth: f32 },
+    );
+
+    pub const ISOFileSelected = ComponentFramework.defineEvent(
+        "iso_file_picker.iso_file_selected",
+        struct { newPath: ?[:0]u8 = null },
     );
 };
 
@@ -139,27 +148,44 @@ pub fn draw(self: *ISOFilePickerComponent) !void {
 }
 
 pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventResult {
-    _ = self;
-
     debug.printf("\nISOFilePickerComponent: handleEvent() received an event: \"{s}\"", .{event.name});
 
     var eventResult = EventResult{};
 
-    switch (event.hash) {
+    block: switch (event.hash) {
+        //
         Events.UIWidthChangedEvent.Hash => {
             // TODO: handle null data gracefully
             const data = Events.UIWidthChangedEvent.getData(&event).?;
+            if (@TypeOf(data.*) != Events.UIWidthChangedEvent.Data) break :block;
 
-            if (@TypeOf(data.*) == Events.UIWidthChangedEvent.Data) {
-                eventResult.success = true;
-                eventResult.validation = @intFromFloat(data.newWidth);
-            }
+            eventResult.success = true;
+            eventResult.validation = @intFromFloat(data.newWidth);
 
             debug.printf(
                 "\nISOFilePickerComponent: handleEvent() received: \"{s}\" event, data: newWidth = {d}",
                 .{ event.name, data.newWidth },
             );
         },
+
+        Events.ISOFileSelected.Hash => {
+            // TODO: handle null data gracefully
+            const data = Events.ISOFileSelected.getData(&event).?;
+            if (@TypeOf(data.*) != Events.ISOFileSelected.Data) break :block;
+
+            eventResult.success = true;
+            eventResult.validation = 1;
+
+            var state = self.state.getData();
+            state.selected_path = data.newPath;
+            state.is_selecting = false;
+
+            debug.printf(
+                "\nISOFilePickerComponent: handleEvent() received: \"{s}\" event, data: newPath = {s}",
+                .{ event.name, data.newPath.? },
+            );
+        },
+
         else => {},
     }
 
@@ -222,8 +248,24 @@ pub fn workerRun(worker: *ComponentWorker, context: *anyopaque) void {
     worker.state.lock();
     defer worker.state.unlock();
 
-    worker.state.data.selected_path = osd.path(worker.allocator, .open, .{});
-    worker.state.data.is_selecting = false;
+    // NOTE: It is important that this memory address / contents are released in component's deinit().
+    // Currently, the ownership change occurs inside of handleEvent(), which assigns state as owner.
+    const selectedPath = osd.path(worker.allocator, .open, .{});
+
+    const data = ISOFilePickerComponent.Events.ISOFileSelected.Data{ .newPath = selectedPath };
+
+    const event = ISOFilePickerComponent.Events.ISOFileSelected.create(
+        &ISOFilePickerComponent.asInstance(worker.context.run_context).component.?,
+        &data,
+    );
+
+    _ = ISOFilePickerComponent.asInstance(worker.context.run_context).handleEvent(event) catch |err| {
+        debug.printf("ISOFilePickerComponent Worker caught error: {any}", .{err});
+    };
+
+    // NOTE: It is also possible to modify the Component State directly like below. Similar ownership disclaimer applies.
+    // worker.state.data.selected_path = osd.path(worker.allocator, .open, .{});
+    // worker.state.data.is_selecting = false;
 
     std.debug.print("\nISOFilePickerComponent: runWorker() finished executing!", .{});
 }
