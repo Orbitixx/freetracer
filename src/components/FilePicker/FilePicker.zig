@@ -186,10 +186,10 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
             state.is_selecting = false;
 
             if (data.newPath) |newPath| {
-                const nameBuffer: [:0]u8 = try self.allocator.dupeZ(u8, newPath);
+                const pathBuffer: [:0]u8 = try self.allocator.dupeZ(u8, newPath);
 
-                const eventData = ISOFilePickerUI.Events.ISOFileNameChanged.Data{ .newName = nameBuffer };
-                const newEvent = ISOFilePickerUI.Events.ISOFileNameChanged.create(&self.component.?, &eventData);
+                const eventData = ISOFilePickerUI.Events.ISOFilePathChanged.Data{ .newPath = pathBuffer };
+                const newEvent = ISOFilePickerUI.Events.ISOFilePathChanged.create(&self.component.?, &eventData);
 
                 if (self.uiComponent) |*ui| {
                     const result = try ui.handleEvent(newEvent);
@@ -204,6 +204,8 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
             const makeUIInactiveEvent = ISOFilePickerUI.Events.ISOFilePickerActiveStateChanged.create(&self.component.?, &makeUIInactiveData);
 
             _ = try self.uiComponent.?.handleEvent(makeUIInactiveEvent);
+
+            self.notify(.ISO_FILE_SELECTED, .{});
         },
 
         else => {},

@@ -5,7 +5,7 @@ const MacOS = @import("../modules/macos/MacOSTypes.zig");
 const DiskArbitration = @import("../modules/macos/DiskArbitration.zig");
 const PrivilegedHelper = @import("../modules/macos/PrivilegedHelper.zig");
 
-const FilePickerComponent = @import("../components/FilePicker/Component.zig");
+// const FilePickerComponent = @import("../components/FilePicker/Component.zig");
 const USBDevicesListComponent = @import("../components/USBDevicesList/Component.zig");
 
 const comp = @import("../components/Component.zig");
@@ -26,7 +26,7 @@ pub const AppObserver = struct {
 
     pub fn onNotify(self: AppObserver, event: Event, payload: Payload) void {
         switch (event) {
-            .SELECT_ISO_BTN_CLICKED => self.processSelectISOBtnClicked(),
+            // .SELECT_ISO_BTN_CLICKED => self.processSelectISOBtnClicked(),
             .ISO_FILE_SELECTED => self.processISOFileSelected(),
             .USB_DEVICES_DISCOVERED => debug.print("\nAppObserver: USB_DEVICES_DISCOVERED signal received."),
             .USB_DEVICE_SELECTED => {
@@ -37,18 +37,21 @@ pub const AppObserver = struct {
         }
     }
 
-    pub fn processSelectISOBtnClicked(self: AppObserver) void {
-        const isoFilePickerComp: *FilePickerComponent = @ptrCast(@alignCast(self.componentRegistry.getComponent(ComponentID.ISOFilePicker).?.ptr));
-        isoFilePickerComp.dispatchComponentAction();
-    }
+    // pub fn processSelectISOBtnClicked(self: AppObserver) void {
+    //     const isoFilePickerComp: *FilePickerComponent = @ptrCast(@alignCast(self.componentRegistry.getComponent(ComponentID.ISOFilePicker).?.ptr));
+    //     isoFilePickerComp.dispatchComponentAction();
+    // }
 
     pub fn processISOFileSelected(self: AppObserver) void {
-        const filePicker: *FilePickerComponent = self.getComponent(FilePickerComponent, ComponentID.ISOFilePicker);
-        filePicker.setActive(false);
+        _ = self;
 
-        const component: *USBDevicesListComponent = self.getComponent(USBDevicesListComponent, ComponentID.USBDevicesList);
-        component.enable();
-        component.dispatchComponentAction();
+        debug.print("\nAppObserver: Received ISO_FILE_SELECTED signal.");
+        // const filePicker: *FilePickerComponent = self.getComponent(FilePickerComponent, ComponentID.ISOFilePicker);
+        // filePicker.setActive(false);
+
+        // const component: *USBDevicesListComponent = self.getComponent(USBDevicesListComponent, ComponentID.USBDevicesList);
+        // component.enable();
+        // component.dispatchComponentAction();
     }
 
     pub fn processUSBDeviceSelected(self: AppObserver, bsdName: []u8) void {

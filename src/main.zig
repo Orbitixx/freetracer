@@ -28,11 +28,12 @@ const ComponentRegistry = @import("components/Registry.zig").ComponentRegistry;
 const Font = @import("managers/ResourceManager.zig").FONT;
 const Color = @import("components/ui/Styles.zig").Color;
 
-const FilePickerComponent = @import("components/FilePicker/Component.zig");
+// const FilePickerComponent = @import("components/FilePicker/Component.zig");
 const USBDevicesListComponent = @import("components/USBDevicesList/Component.zig");
 
 const ComponentFramework = @import("./components/framework/import/index.zig");
-const TestFilePickerComponent = @import("./components/TestComponent/TestComponent.zig");
+const ISOFilePicker = @import("./components/FilePicker/FilePicker.zig");
+
 const Button = @import("components/ui/Button.zig");
 const newComponentID = ComponentFramework.ComponentID;
 
@@ -95,8 +96,8 @@ pub fn main() !void {
     var newRegistry = ComponentFramework.Registry.init(allocator);
     defer newRegistry.deinit();
 
-    var testFilePickerComponent = try TestFilePickerComponent.init(allocator, &appObserver);
-    try newRegistry.register(newComponentID.ISOFilePicker, @constCast(testFilePickerComponent.asComponentPtr()));
+    var isoFilePicker = try ISOFilePicker.init(allocator, &appObserver);
+    try newRegistry.register(newComponentID.ISOFilePicker, @constCast(isoFilePicker.asComponentPtr()));
 
     //----------------------------------------------------------------------------------
     //--- @END COMPONENTS --------------------------------------------------------------
@@ -113,10 +114,10 @@ pub fn main() !void {
     try newRegistry.startAll();
 
     {
-        const data: TestFilePickerComponent.Events.UIWidthChangedEvent.Data = .{ .newWidth = 95 };
-        const event = TestFilePickerComponent.Events.UIWidthChangedEvent.create(@constCast(&testFilePickerComponent.asComponent()), &data);
+        const data: ISOFilePicker.Events.UIWidthChangedEvent.Data = .{ .newWidth = 95 };
+        const event = ISOFilePicker.Events.UIWidthChangedEvent.create(@constCast(&isoFilePicker.asComponent()), &data);
 
-        const r = try testFilePickerComponent.handleEvent(event);
+        const r = try isoFilePicker.handleEvent(event);
         std.debug.assert(r.success == true and r.validation == 95);
     }
 

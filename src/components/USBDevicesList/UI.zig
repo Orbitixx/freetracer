@@ -11,7 +11,7 @@ const ResourceManager = @import("../../managers/ResourceManager.zig").ResourceMa
 const AppObserver = @import("../../observers/AppObserver.zig").AppObserver;
 const AppObserverEvent = @import("../../observers/AppObserver.zig").Event;
 
-const SiblingComponentUI = @import("../FilePicker/UI.zig");
+const SiblingComponentUI = @import("../FilePicker/FilePickerUI.zig");
 
 const relW = WindowManager.relW;
 const relH = WindowManager.relH;
@@ -23,7 +23,7 @@ const ComponentID = @import("../Registry.zig").ComponentID;
 
 const Checkbox = @import("../../lib/ui/Checkbox.zig").Checkbox();
 
-const FilePickerComponent = @import("../FilePicker/Component.zig");
+const FilePickerComponent = @import("../FilePicker/FilePicker.zig");
 const USBDevicesListComponent = @import("./Component.zig");
 
 const Self = @This();
