@@ -4,7 +4,8 @@ const Component = @import("./import/index.zig").Component;
 
 pub const ComponentID = enum(u8) {
     ISOFilePicker = 0,
-    TestBtn = 1,
+    DeviceList = 1,
+    TestBtn = 99,
 };
 
 pub const ComponentRegistry = struct {

@@ -152,12 +152,12 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
 
     var eventResult = EventResult{};
 
-    block: switch (event.hash) {
+    eventLoop: switch (event.hash) {
         //
         Events.UIWidthChangedEvent.Hash => {
             // TODO: handle null data gracefully
             const data = Events.UIWidthChangedEvent.getData(&event).?;
-            if (@TypeOf(data.*) != Events.UIWidthChangedEvent.Data) break :block;
+            if (@TypeOf(data.*) != Events.UIWidthChangedEvent.Data) break :eventLoop;
 
             eventResult.success = true;
             eventResult.validation = @intFromFloat(data.newWidth);
@@ -171,7 +171,7 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
         Events.ISOFileSelected.Hash => {
             // TODO: handle null data gracefully
             const data = Events.ISOFileSelected.getData(&event).?;
-            if (@TypeOf(data.*) != Events.ISOFileSelected.Data) break :block;
+            if (@TypeOf(data.*) != Events.ISOFileSelected.Data) break :eventLoop;
 
             debug.printf(
                 "\nISOFilePickerComponent: handleEvent() received: \"{s}\" event, data: newPath = {s}",

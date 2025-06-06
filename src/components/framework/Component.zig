@@ -130,9 +130,12 @@ pub fn ImplementComponent(comptime T: type) type {
         }
 
         pub fn asComponentPtr(self: *T) *Component {
+            // TODO: contemplate the impact of null here.
+
             if (self.component == null) self.initComponent(null) catch |err| {
                 std.debug.print("\nError initializing Base Component for Component type: {any}, error: {any}", .{ T, err });
             };
+
             return &self.component.?;
         }
 

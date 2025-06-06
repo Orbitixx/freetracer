@@ -188,6 +188,7 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
                     if (self.bgRect) |*bgRect| {
                         bgRect.transform.w = winRelX(0.35);
                         bgRect.style.color = Styles.Color.violet;
+                        bgRect.style.borderStyle.color = Styles.Color.white;
 
                         if (self.isoTitle) |*isoTitle| {
                             isoTitle.transform.x = bgRect.transform.relX(0.5) - isoTitle.getDimensions().width / 2;
@@ -199,6 +200,7 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
                     if (self.bgRect) |*bgRect| {
                         bgRect.transform.w = winRelX(0.16);
                         bgRect.style.color = Styles.Color.transparentDark;
+                        bgRect.style.borderStyle.color = Styles.Color.transparentDark;
 
                         if (self.isoTitle) |*isoTitle| {
                             isoTitle.transform.x = bgRect.transform.relX(0.5) - isoTitle.getDimensions().width / 2;
