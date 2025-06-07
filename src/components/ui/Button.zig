@@ -3,16 +3,8 @@ const debug = @import("../../lib/util/debug.zig");
 
 const rl = @import("raylib");
 
-const ButtonComponentState = struct {};
-
 const ComponentFramework = @import("../framework/import/index.zig");
 const Component = ComponentFramework.Component;
-const ComponentState = ComponentFramework.ComponentState(ButtonComponentState);
-const ComponentWorker = ComponentFramework.Worker(ButtonComponentState);
-
-const AppObserver = @import("../../observers/AppObserver.zig").AppObserver;
-const ObserverEvent = @import("../../observers/ObserverEvents.zig").ObserverEvent;
-const ObserverPayload = @import("../../observers/ObserverPayload.zig");
 
 const Primitives = @import("Primitives.zig");
 const Text = Primitives.Text;
@@ -45,14 +37,15 @@ pub const ButtonHandler = struct {
 
 const ButtonComponent = @This();
 
-// TODO: Recall, this is a Component implementation so ComponentState and ComponentWorkers are available, if needed.
+// Component-agnostic props
+component: ?Component = null,
 
+// Component-specific, unique props
 rect: Rectangle,
 text: Text,
 styles: ButtonStyles,
 state: ButtonState = ButtonState.NORMAL,
 clickHandler: ButtonHandler,
-component: ?Component = null,
 
 pub fn init(text: [:0]const u8, position: rl.Vector2, variant: ButtonVariant, clickHandler: ButtonHandler) ButtonComponent {
     const btnText = Text.init(text, position, variant.normal.textStyle);
@@ -159,12 +152,6 @@ pub fn deinit(self: *ButtonComponent) void {
 pub fn dispatchComponentAction(self: *ButtonComponent) void {
     _ = self;
 }
-
-// pub fn notify(self: *ButtonComponent, event: ObserverEvent, payload: ObserverPayload) void {
-//     _ = self;
-//     _ = event;
-//     _ = payload;
-// }
 
 pub const ComponentImplementation = ComponentFramework.ImplementComponent(ButtonComponent);
 pub const asComponent = ComponentImplementation.asComponent;

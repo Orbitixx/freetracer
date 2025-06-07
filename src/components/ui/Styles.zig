@@ -40,3 +40,15 @@ pub const ButtonStyles = struct {
     hover: ButtonStyle,
     active: ButtonStyle,
 };
+
+pub const CheckboxStyle = struct {
+    outerRectStyle: RectangleStyle = .{},
+    innerRectStyle: RectangleStyle = .{},
+    textStyle: TextStyle = .{},
+};
+
+pub const CheckboxStyles = struct {
+    normal: CheckboxStyle,
+    hover: CheckboxStyle,
+    checked: CheckboxStyle,
+};
