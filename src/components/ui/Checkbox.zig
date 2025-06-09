@@ -51,10 +51,6 @@ styles: CheckboxVariant,
 clickHandler: CheckboxHandler,
 
 pub fn init(text: [:0]const u8, position: rl.Vector2, size: f32, variant: CheckboxVariant, clickHandler: CheckboxHandler) Checkbox {
-    const _text = Text.init(text, position, variant.normal.textStyle);
-
-    const textDimensions = _text.getDimensions();
-
     const outerRect = Rectangle{
         .transform = .{
             .x = position.x,
@@ -75,11 +71,18 @@ pub fn init(text: [:0]const u8, position: rl.Vector2, size: f32, variant: Checkb
         },
     };
 
+    var _text = Text.init(text, position, variant.normal.textStyle);
+
+    const textDimensions = _text.getDimensions();
+
+    _text.transform.x = position.x + outerRect.transform.w + CHECKBOX_TEXT_MARGIN;
+    _text.transform.y = position.y + outerRect.transform.h / 2 - textDimensions.height / 2;
+
     return .{
         .transform = .{
             .x = position.x,
             .y = position.y,
-            .w = outerRect + CHECKBOX_TEXT_MARGIN + textDimensions.width,
+            .w = outerRect.transform.w + CHECKBOX_TEXT_MARGIN + textDimensions.width,
             .h = if (size > textDimensions.height) size else textDimensions.height,
         },
         .outerRect = outerRect,
@@ -109,8 +112,8 @@ pub fn update(self: *Checkbox) !void {
     if (self.state == CheckboxState.HOVER and (isCheckboxHovered and !isCheckboxClicked)) return;
 
     if (isCheckboxHovered and isCheckboxClicked) {
-        self.state = CheckboxState.CHECKED;
-    } else if (isCheckboxHovered) {
+        if (self.state == CheckboxState.CHECKED) self.state = CheckboxState.NORMAL else self.state = CheckboxState.CHECKED;
+    } else if (isCheckboxHovered and !isCheckboxClicked) {
         self.state = CheckboxState.HOVER;
     } else {
         self.state = CheckboxState.NORMAL;
@@ -156,7 +159,7 @@ pub fn deinit(self: *Checkbox) void {
     _ = self;
 }
 
-pub fn dispatchComponentAction(self: *Checkbox) !void {
+pub fn dispatchComponentAction(self: *Checkbox) void {
     _ = self;
 }
 
@@ -173,14 +176,14 @@ pub const CheckboxVariant = struct {
     pub const Primary: CheckboxVariant = .{
         .normal = .{
             .outerRectStyle = .{
-                .color = .transparent,
+                .color = .red,
                 .borderStyle = .{
                     .color = .white,
-                    .thickness = 1.5,
+                    .thickness = 2,
                 },
             },
             .innerRectStyle = .{
-                .color = .transparent,
+                .color = .black,
                 .borderStyle = .{},
             },
             .textStyle = .{
@@ -193,21 +196,21 @@ pub const CheckboxVariant = struct {
 
         .hover = .{
             .outerRectStyle = .{
-                .color = .transparent,
+                .color = Color.transparent,
                 .borderStyle = .{
                     .color = .white,
                     .thickness = 1.5,
                 },
             },
             .innerRectStyle = .{
-                .color = .secondary,
+                .color = Color.secondary,
                 .borderStyle = .{},
             },
             .textStyle = .{
                 .font = .ROBOTO_REGULAR,
                 .fontSize = 14,
                 .spacing = 0,
-                .textColor = .secondary,
+                .textColor = Color.secondary,
             },
         },
 

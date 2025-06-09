@@ -36,6 +36,7 @@ const ISOFilePicker = @import("./components/FilePicker/FilePicker.zig");
 const DeviceList = @import("./components/DeviceList/DeviceList.zig");
 
 const Button = @import("components/ui/Button.zig");
+const Checkbox = @import("components/ui/Checkbox.zig");
 const newComponentID = ComponentFramework.ComponentID;
 
 const UI = @import("./components/ui/Primitives.zig");
@@ -103,6 +104,30 @@ pub fn main() !void {
     var deviceList = try DeviceList.init(allocator);
     try newRegistry.register(newComponentID.DeviceList, @constCast(deviceList.asComponentPtr()));
 
+    try deviceList.initWorker();
+    deviceList.dispatchComponentAction();
+
+    const dispatchCheckboxActionWrapper = struct {
+        pub fn call(ptr: *anyopaque) void {
+            _ = ptr;
+            debug.print("\nCheckbox action called!");
+        }
+    };
+
+    var testCheckbox = Checkbox.init(
+        "Test checkbox",
+        .{ .x = 500, .y = 200 },
+        20,
+        .Primary,
+        .{
+            .function = dispatchCheckboxActionWrapper.call,
+            .context = &isoFilePicker,
+        },
+    );
+    testCheckbox.outerRect.rounded = true;
+    testCheckbox.outerRect.bordered = true;
+    try newRegistry.register(.TestBtn, @constCast(testCheckbox.asComponentPtr()));
+
     //----------------------------------------------------------------------------------
     //--- @END COMPONENTS --------------------------------------------------------------
     //----------------------------------------------------------------------------------
@@ -124,10 +149,6 @@ pub fn main() !void {
         const r = try isoFilePicker.handleEvent(event);
         std.debug.assert(r.success == true and r.validation == 95);
     }
-
-    // try deviceList.initComponent(null);
-    try deviceList.initWorker();
-    deviceList.dispatchComponentAction();
 
     const logoText = UI.Text.init("freetracer", .{ .x = relX(0.08), .y = relY(0.035) }, .{ .font = .JERSEY10_REGULAR, .fontSize = 40, .textColor = Color.white });
     const subLogoText = UI.Text.init("free and open-source by orbitixx", .{ .x = relX(0.08), .y = relY(0.035) + 32 }, .{ .font = .JERSEY10_REGULAR, .fontSize = 18, .textColor = Color.secondary });
