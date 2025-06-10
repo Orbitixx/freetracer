@@ -8,7 +8,9 @@ const winRelY = WindowManager.relH;
 
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
 
-const ISOFilePicker = @import("./FilePicker.zig");
+const DeviceList = @import("./DeviceList.zig");
+const ISOFilePicker = @import("../FilePicker/FilePicker.zig");
+const ISOFilePickerUI = @import("../FilePicker/FilePickerUI.zig");
 
 const ComponentFramework = @import("../framework/import/index.zig");
 const Component = ComponentFramework.Component;
@@ -22,17 +24,19 @@ const Text = UIFramework.Primitives.Text;
 const Texture = UIFramework.Primitives.Texture;
 const Styles = UIFramework.Styles;
 
-pub const ISOFilePickerUIState = struct {
-    active: bool = true,
-    isoPath: ?[:0]u8 = null,
+pub const DeviceListUIState = struct {
+    active: bool = false,
+    deviceName: ?[:0]u8 = null,
 };
-pub const ComponentState = ComponentFramework.ComponentState(ISOFilePickerUIState);
+pub const ComponentState = ComponentFramework.ComponentState(DeviceListUIState);
 
-const ISOFilePickerUI = @This();
+const DeviceListUI = @This();
+
+const COMPONENT_UI_GAP: f32 = 20;
 
 // Component-agnostic props
 state: ComponentState,
-parent: *ISOFilePicker,
+parent: *DeviceList,
 component: ?Component = null,
 
 // Component-specific, unique props
@@ -40,41 +44,38 @@ bgRect: ?Rectangle = null,
 headerText: ?Text = null,
 diskImg: ?Texture = null,
 button: ?Button = null,
-isoTitle: ?Text = null,
+deviceName: ?Text = null,
 
 pub const Events = struct {
-    pub const ISOFilePathChanged = ComponentFramework.defineEvent(
-        "iso_file_picker_ui.iso_file_path_changed",
-        struct { newPath: [:0]u8 },
-    );
-
-    pub const ISOFilePickerActiveStateChanged = ComponentFramework.defineEvent(
-        "iso_file_picker_ui.active_state_changed",
+    pub const DeviceListActiveStateChanged = ComponentFramework.defineEvent(
+        "device_list_ui.active_state_changed",
         struct { isActive: bool },
     );
 
-    pub const ISOFilePickerUIGetUIWidth = ComponentFramework.defineEvent(
-        "iso_file_picker_ui.get_ui_width",
-        struct { width: f32 },
+    pub const DeviceListDeviceNameChanged = ComponentFramework.defineEvent(
+        "device_list_ui.device_name_changed",
+        struct {
+            newDeviceName: [:0]u8,
+        },
     );
 };
 
-pub fn init(parent: *ISOFilePicker) !ISOFilePickerUI {
-    debug.print("\nISOFilePickerUI: start() called.");
+pub fn init(parent: *DeviceList) !DeviceListUI {
+    debug.print("\nDeviceListUI: start() called.");
 
-    return ISOFilePickerUI{
-        .state = ComponentState.init(ISOFilePickerUIState{}),
+    return DeviceListUI{
+        .state = ComponentState.init(DeviceListUIState{}),
         .parent = parent,
     };
 }
 
-pub fn initComponent(self: *ISOFilePickerUI, parent: ?*Component) !void {
+pub fn initComponent(self: *DeviceListUI, parent: ?*Component) !void {
     if (self.component != null) return error.BaseComponentAlreadyInitialized;
     self.component = try Component.init(self, &ComponentImplementation.vtable, parent);
 }
 
-pub fn start(self: *ISOFilePickerUI) !void {
-    debug.print("\nISOFilePickerUI: component start() called.");
+pub fn start(self: *DeviceListUI) !void {
+    debug.print("\nDeviceListUI: component start() called.");
 
     if (self.component == null) try self.initComponent(self.parent.asComponentPtr());
 
@@ -82,8 +83,14 @@ pub fn start(self: *ISOFilePickerUI) !void {
         if (!EventManager.subscribe(component)) return error.UnableToSubscribeToEventManager;
     } else return error.UnableToSubscribeToEventManager;
 
+    // const fpUI: *ISOFilePickerUI = &self.isoFilePicker.uiComponent.?;
+    // const fpUI_bgRect: *Rectangle = &fpUI.bgRect.?;
+    //
+    // const offsetX = fpUI_bgRect.transform.x + fpUI_bgRect.transform.w + COMPONENT_UI_GAP;
+    // const offsetY = fpUI_bgRect.transform.y;
+
     self.bgRect = Rectangle{
-        .transform = .{ .x = winRelX(0.08), .y = winRelY(0.2), .w = winRelX(0.35), .h = winRelY(0.7) },
+        .transform = .{ .x = winRelX(0.5), .y = winRelY(0.2), .w = winRelX(0.35), .h = winRelY(0.7) },
         .style = .{
             .color = Styles.Color.violet,
             .borderStyle = .{
@@ -94,18 +101,23 @@ pub fn start(self: *ISOFilePickerUI) !void {
         .bordered = true,
     };
 
+    // Get initial width of the preceding UI element
+    const data = ISOFilePickerUI.Events.ISOFilePickerUIGetUIWidth.Data{ .width = 0 };
+    const event = ISOFilePickerUI.Events.ISOFilePickerUIGetUIWidth.create(&self.component.?, &data);
+    EventManager.broadcast(&self.component.?, event);
+
     if (self.bgRect) |bgRect| {
         self.button = Button.init(
-            "SELECT ISO",
+            "Next",
             bgRect.transform.getPosition(),
             .Primary,
             .{
                 .context = self.parent,
-                .function = ISOFilePicker.dispatchComponentActionWrapper.call,
+                .function = DeviceList.dispatchComponentActionWrapper.call,
             },
         );
 
-        self.headerText = Text.init("image", .{
+        self.headerText = Text.init("device", .{
             .x = bgRect.transform.x + 12,
             .y = bgRect.transform.relY(0.01),
         }, .{
@@ -133,49 +145,33 @@ pub fn start(self: *ISOFilePickerUI) !void {
             button.rect.rounded = true;
         }
 
-        self.isoTitle = Text.init("No ISO selected...", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
+        self.deviceName = Text.init("No device selected...", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
     }
 
-    debug.print("\nISOFilePickerUI: component start() finished.");
+    debug.print("\nDeviceListUI: component start() finished.");
 }
 
-pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
+pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
     var eventResult = EventResult{
         .success = false,
         .validation = 0,
     };
 
     eventLoop: switch (event.hash) {
-        Events.ISOFilePathChanged.Hash => {
+        Events.DeviceListDeviceNameChanged.Hash => {
             // TODO: handle null data gracefully
-            const data = Events.ISOFilePathChanged.getData(&event).?;
-            if (@TypeOf(data.*) != Events.ISOFilePathChanged.Data) break :eventLoop;
+            const data = Events.DeviceListDeviceNameChanged.getData(&event).?;
+            if (@TypeOf(data.*) != Events.DeviceListDeviceNameChanged.Data) break :eventLoop;
 
             eventResult.success = true;
             eventResult.validation = 1;
 
             var state = self.state.getData();
 
-            state.isoPath = data.newPath;
-
-            var newName: [:0]const u8 = @ptrCast("No ISO selected...");
-
-            if (state.isoPath) |path| {
-
-                // const path: [:0]const u8 = data.newPath orelse "No ISO selected...";
-                var lastSlash: usize = 0;
-
-                for (0..path.len) |i| {
-                    // Find the last forward slash in the path (0x2f)
-                    if (path[i] == 0x2f) lastSlash = i;
-                }
-
-                // TODO: must be released in deinit()
-                newName = path[lastSlash + 1 .. path.len :0];
-            }
+            state.deviceName = data.newDeviceName;
 
             if (self.bgRect) |bgRect| {
-                self.isoTitle = Text.init(newName, .{
+                self.deviceName = Text.init(state.deviceName.?, .{
                     .x = bgRect.transform.relX(0.5),
                     .y = bgRect.transform.relY(0.5),
                 }, .{
@@ -184,16 +180,37 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
             }
         },
 
-        Events.ISOFilePickerUIGetUIWidth.Hash => {
-            const data = Events.ISOFilePickerUIGetUIWidth.Data{ .width = self.bgRect.?.transform.w };
-            const responseEvent = Events.ISOFilePickerUIGetUIWidth.create(&self.component.?, &data);
+        // NOTE: ISOFilePickerUI emits this event in response to receiving the same event
+        ISOFilePickerUI.Events.ISOFilePickerUIGetUIWidth.Hash => {
+            const data = ISOFilePickerUI.Events.ISOFilePickerUIGetUIWidth.getData(&event).?;
+            if (@TypeOf(data.*) != ISOFilePickerUI.Events.ISOFilePickerUIGetUIWidth.Data) break :eventLoop;
 
-            EventManager.broadcast(&self.component.?, responseEvent);
+            eventResult.success = true;
+            eventResult.validation = 1;
+
+            self.bgRect.?.transform.x = winRelX(0.08) + data.width + 20;
         },
 
-        Events.ISOFilePickerActiveStateChanged.Hash => {
-            const data = Events.ISOFilePickerActiveStateChanged.getData(&event).?;
-            if (@TypeOf(data.*) != Events.ISOFilePickerActiveStateChanged.Data) break :eventLoop;
+        ISOFilePicker.Events.UIWidthChangedEvent.Hash => {
+            const data = ISOFilePicker.Events.UIWidthChangedEvent.getData(&event).?;
+            if (@TypeOf(data.*) != ISOFilePicker.Events.UIWidthChangedEvent.Data) break :eventLoop;
+
+            eventResult.success = true;
+            eventResult.validation = 1;
+
+            self.bgRect.?.transform.x = winRelX(0.08) + data.newWidth + 20;
+
+            // const fpUI: *ISOFilePickerUI = &self.isoFilePicker.uiComponent.?;
+            // const fpUI_bgRect: *Rectangle = &fpUI.bgRect.?;
+            //
+            // if (self.bgRect) |*bgRect| {
+            //     bgRect.transform.x = fpUI_bgRect.transform.x;
+            // }
+        },
+
+        Events.DeviceListActiveStateChanged.Hash => {
+            const data = Events.DeviceListActiveStateChanged.getData(&event).?;
+            if (@TypeOf(data.*) != Events.DeviceListActiveStateChanged.Data) break :eventLoop;
 
             eventResult.success = true;
             eventResult.validation = 1;
@@ -208,9 +225,9 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
                         bgRect.style.color = Styles.Color.violet;
                         bgRect.style.borderStyle.color = Styles.Color.white;
 
-                        if (self.isoTitle) |*isoTitle| {
-                            isoTitle.transform.x = bgRect.transform.relX(0.5) - isoTitle.getDimensions().width / 2;
-                            isoTitle.transform.y = bgRect.transform.relY(0.5) - isoTitle.getDimensions().height / 2;
+                        if (self.deviceName) |*deviceName| {
+                            deviceName.transform.x = bgRect.transform.relX(0.5) - deviceName.getDimensions().width / 2;
+                            deviceName.transform.y = bgRect.transform.relY(0.5) - deviceName.getDimensions().height / 2;
                         }
                     }
                 },
@@ -220,17 +237,13 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
                         bgRect.style.color = Styles.Color.transparentDark;
                         bgRect.style.borderStyle.color = Styles.Color.transparentDark;
 
-                        if (self.isoTitle) |*isoTitle| {
-                            isoTitle.transform.x = bgRect.transform.relX(0.5) - isoTitle.getDimensions().width / 2;
-                            isoTitle.transform.y = bgRect.transform.relY(0.5) - isoTitle.getDimensions().height / 2;
+                        if (self.deviceName) |*deviceName| {
+                            deviceName.transform.x = bgRect.transform.relX(0.5) - deviceName.getDimensions().width / 2;
+                            deviceName.transform.y = bgRect.transform.relY(0.5) - deviceName.getDimensions().height / 2;
                         }
                     }
                 },
             }
-            const responseData = ISOFilePicker.Events.UIWidthChangedEvent.Data{ .newWidth = self.bgRect.?.transform.w };
-            const responseEvent = ISOFilePicker.Events.UIWidthChangedEvent.create(&self.component.?, &responseData);
-
-            EventManager.broadcast(&self.component.?, responseEvent);
         },
         else => {},
     }
@@ -238,13 +251,13 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
     return eventResult;
 }
 
-pub fn update(self: *ISOFilePickerUI) !void {
+pub fn update(self: *DeviceListUI) !void {
     if (self.button) |*button| {
         try button.update();
     }
 }
 
-pub fn draw(self: *ISOFilePickerUI) !void {
+pub fn draw(self: *DeviceListUI) !void {
     const state = self.state.getDataLocked();
     defer self.state.unlock();
 
@@ -259,7 +272,7 @@ pub fn draw(self: *ISOFilePickerUI) !void {
     if (state.active) try self.drawActive() else try self.drawInactive();
 }
 
-fn drawActive(self: *ISOFilePickerUI) !void {
+fn drawActive(self: *DeviceListUI) !void {
     if (self.diskImg) |img| {
         img.draw();
     }
@@ -269,23 +282,23 @@ fn drawActive(self: *ISOFilePickerUI) !void {
     }
 }
 
-fn drawInactive(self: *ISOFilePickerUI) !void {
-    if (self.isoTitle) |isoTitle| {
-        isoTitle.draw();
+fn drawInactive(self: *DeviceListUI) !void {
+    if (self.deviceName) |deviceName| {
+        deviceName.draw();
     }
 }
 
-pub fn deinit(self: *ISOFilePickerUI) void {
-    if (self.state.data.isoPath) |isoPath| {
-        self.parent.allocator.free(isoPath);
+pub fn deinit(self: *DeviceListUI) void {
+    if (self.state.data.deviceName) |deviceName| {
+        self.parent.allocator.free(deviceName);
     }
 }
 
-pub fn dispatchComponentAction(self: *ISOFilePickerUI) void {
+pub fn dispatchComponentAction(self: *DeviceListUI) void {
     _ = self;
 }
 
-pub const ComponentImplementation = ComponentFramework.ImplementComponent(ISOFilePickerUI);
+pub const ComponentImplementation = ComponentFramework.ImplementComponent(DeviceListUI);
 pub const asComponent = ComponentImplementation.asComponent;
 pub const asComponentPtr = ComponentImplementation.asComponentPtr;
 pub const asInstance = ComponentImplementation.asInstance;

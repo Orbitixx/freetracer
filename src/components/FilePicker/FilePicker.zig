@@ -2,6 +2,7 @@ const std = @import("std");
 const osd = @import("osdialog");
 const debug = @import("../../lib/util/debug.zig");
 
+const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
 const ComponentFramework = @import("../framework/import/index.zig");
 
 const UIFramework = @import("../ui/import/index.zig");
@@ -94,6 +95,8 @@ pub fn start(self: *ISOFilePickerComponent) !void {
     if (self.component) |*component| {
         if (component.children != null) return error.ComponentAlreadyCalledStartBefore;
 
+        if (!EventManager.subscribe(component)) return error.UnableToSubscribeToEventManager;
+
         std.debug.print("\nISOFilePickerComponent: attempting to initialize children...", .{});
 
         component.children = std.ArrayList(Component).init(self.allocator);
@@ -153,6 +156,10 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
     var eventResult = EventResult{};
 
     eventLoop: switch (event.hash) {
+        //
+        // Events.ISOFilePickerGetUIWidth.Hash => {
+        //     Event
+        // },
         //
         Events.UIWidthChangedEvent.Hash => {
             // TODO: handle null data gracefully

@@ -1,8 +1,11 @@
 const std = @import("std");
 const debug = @import("../../lib/util/debug.zig");
 
+const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
+
 const ComponentFramework = @import("../framework/import/index.zig");
 const WorkerContext = @import("./WorkerContext.zig");
+const DeviceListUI = @import("./DeviceListUI.zig");
 
 const DeviceListState = struct {
     devices: ?u8 = null,
@@ -23,6 +26,7 @@ worker: ?ComponentWorker = null,
 
 // Component-specific, unique props
 allocator: std.mem.Allocator,
+uiComponent: ?DeviceListUI = null,
 
 pub const Events = struct {
     pub const EventName = ComponentFramework.defineEvent("device_list.", struct {});
@@ -59,8 +63,28 @@ pub fn initWorker(self: *DeviceListComponent) !void {
 }
 
 pub fn start(self: *DeviceListComponent) !void {
-    // try self.initWorker();
-    _ = self;
+    try self.initWorker();
+
+    if (self.component) |*component| {
+        if (component.children != null) return error.ComponentAlreadyCalledStartBefore;
+
+        if (!EventManager.subscribe(component)) return error.UnableToSubscribeToEventManager;
+
+        std.debug.print("\nDeviceList: attempting to initialize children...", .{});
+
+        component.children = std.ArrayList(Component).init(self.allocator);
+
+        self.uiComponent = try DeviceListUI.init(self);
+
+        if (component.children) |*children| {
+            if (self.uiComponent) |*uiComponent| {
+                try uiComponent.start();
+                try children.append(uiComponent.asComponent());
+            }
+        }
+
+        std.debug.print("\nDeviceList: finished initializing children.", .{});
+    }
 }
 
 pub fn update(self: *DeviceListComponent) !void {
@@ -103,6 +127,13 @@ fn discoverDevices(self: *DeviceListComponent) !void {
         try worker.start();
     }
 }
+
+pub const dispatchComponentActionWrapper = struct {
+    pub fn call(ptr: *anyopaque) void {
+        _ = ptr;
+        debug.print("\nDeviceList: component action wrapper dispatch.");
+    }
+};
 
 pub fn dispatchComponentAction(self: *DeviceListComponent) void {
     debug.print("\nDeviceList: dispatched component action...");

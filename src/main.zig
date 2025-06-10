@@ -8,6 +8,7 @@ const env = @import("env.zig");
 const Logger = @import("managers/GlobalLogger.zig").LoggerSingleton;
 const ResourceManager = @import("managers/ResourceManager.zig").ResourceManagerSingleton;
 const WindowManager = @import("managers/WindowManager.zig").WindowManagerSingleton;
+const EventManager = @import("managers/EventManager.zig").EventManagerSingleton;
 
 const debug = @import("lib/util/debug.zig");
 const strings = @import("lib/util/strings.zig");
@@ -66,6 +67,9 @@ pub fn main() !void {
     try ResourceManager.init(allocator);
     defer ResourceManager.deinit();
 
+    try EventManager.init(allocator);
+    defer EventManager.deinit();
+
     //----------------------------------------------------------------------------------
     //--- @END MANAGERS ----------------------------------------------------------------
     //----------------------------------------------------------------------------------
@@ -104,31 +108,31 @@ pub fn main() !void {
     var deviceList = try DeviceList.init(allocator);
     try newRegistry.register(newComponentID.DeviceList, @constCast(deviceList.asComponentPtr()));
 
-    try deviceList.initWorker();
-    deviceList.dispatchComponentAction();
+    // try deviceList.initWorker();
+    // deviceList.dispatchComponentAction();
 
-    const dispatchCheckboxActionWrapper = struct {
-        pub fn call(ptr: *anyopaque) void {
-            _ = ptr;
-            debug.print("\nCheckbox action called!");
-        }
-    };
+    // const dispatchCheckboxActionWrapper = struct {
+    //     pub fn call(ptr: *anyopaque) void {
+    //         _ = ptr;
+    //         debug.print("\nCheckbox action called!");
+    //     }
+    // };
 
-    var testCheckbox = Checkbox.init(
-        "Test checkbox",
-        .{ .x = 500, .y = 200 },
-        20,
-        .Primary,
-        .{
-            .function = dispatchCheckboxActionWrapper.call,
-            .context = &isoFilePicker,
-        },
-    );
-    testCheckbox.outerRect.rounded = true;
-    testCheckbox.outerRect.bordered = true;
-    testCheckbox.innerRect.bordered = false;
-    testCheckbox.innerRect.rounded = true;
-    try newRegistry.register(.TestBtn, @constCast(testCheckbox.asComponentPtr()));
+    // var testCheckbox = Checkbox.init(
+    //     "Test checkbox",
+    //     .{ .x = 500, .y = 200 },
+    //     20,
+    //     .Primary,
+    //     .{
+    //         .function = dispatchCheckboxActionWrapper.call,
+    //         .context = &isoFilePicker,
+    //     },
+    // );
+    // testCheckbox.outerRect.rounded = true;
+    // testCheckbox.outerRect.bordered = true;
+    // testCheckbox.innerRect.bordered = false;
+    // testCheckbox.innerRect.rounded = true;
+    // try newRegistry.register(.TestBtn, @constCast(testCheckbox.asComponentPtr()));
 
     //----------------------------------------------------------------------------------
     //--- @END COMPONENTS --------------------------------------------------------------
