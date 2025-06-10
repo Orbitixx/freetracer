@@ -25,7 +25,7 @@ pub const CheckboxState = enum {
     CHECKED,
 };
 
-const CHECKBOX_TEXT_MARGIN: f32 = 16;
+const CHECKBOX_TEXT_MARGIN: f32 = 12;
 
 pub const CheckboxHandler = struct {
     function: *const fn (ctx: *anyopaque) void,
@@ -64,10 +64,10 @@ pub fn init(text: [:0]const u8, position: rl.Vector2, size: f32, variant: Checkb
 
     const innerRect = Rectangle{
         .transform = .{
-            .x = position.x + 2,
-            .y = position.y + 2,
-            .w = size - 2,
-            .h = size - 2,
+            .x = position.x + 3,
+            .y = position.y + 3,
+            .w = size - 6,
+            .h = size - 6,
         },
     };
 
@@ -94,7 +94,9 @@ pub fn init(text: [:0]const u8, position: rl.Vector2, size: f32, variant: Checkb
 }
 
 pub fn start(self: *Checkbox) !void {
-    _ = self;
+    self.outerRect.style = self.styles.normal.outerRectStyle;
+    self.innerRect.style = self.styles.normal.innerRectStyle;
+    self.text.style = self.styles.normal.textStyle;
 }
 
 pub fn initComponent(self: *Checkbox, parent: ?*Component) !void {
@@ -112,11 +114,16 @@ pub fn update(self: *Checkbox) !void {
     if (self.state == CheckboxState.HOVER and (isCheckboxHovered and !isCheckboxClicked)) return;
 
     if (isCheckboxHovered and isCheckboxClicked) {
-        if (self.state == CheckboxState.CHECKED) self.state = CheckboxState.NORMAL else self.state = CheckboxState.CHECKED;
+        if (self.state == .CHECKED) {
+            self.state = CheckboxState.NORMAL;
+        } else {
+            self.state = CheckboxState.CHECKED;
+            self.clickHandler.handle();
+        }
     } else if (isCheckboxHovered and !isCheckboxClicked) {
-        self.state = CheckboxState.HOVER;
+        if (self.state != .CHECKED) self.state = CheckboxState.HOVER;
     } else {
-        self.state = CheckboxState.NORMAL;
+        if (self.state != .CHECKED) self.state = CheckboxState.NORMAL;
     }
 
     switch (self.state) {
@@ -129,7 +136,6 @@ pub fn update(self: *Checkbox) !void {
             self.outerRect.style = self.styles.checked.outerRectStyle;
             self.innerRect.style = self.styles.checked.innerRectStyle;
             self.text.style = self.styles.checked.textStyle;
-            self.clickHandler.handle();
         },
         .NORMAL => {
             self.outerRect.style = self.styles.normal.outerRectStyle;
@@ -176,14 +182,14 @@ pub const CheckboxVariant = struct {
     pub const Primary: CheckboxVariant = .{
         .normal = .{
             .outerRectStyle = .{
-                .color = .red,
+                .color = Color.transparent,
                 .borderStyle = .{
                     .color = .white,
                     .thickness = 2,
                 },
             },
             .innerRectStyle = .{
-                .color = .black,
+                .color = Color.transparent,
                 .borderStyle = .{},
             },
             .textStyle = .{
@@ -216,7 +222,7 @@ pub const CheckboxVariant = struct {
 
         .checked = .{
             .outerRectStyle = .{
-                .color = .white,
+                .color = Color.transparent,
                 .borderStyle = .{
                     .color = .white,
                     .thickness = 1.5,
@@ -224,7 +230,9 @@ pub const CheckboxVariant = struct {
             },
             .innerRectStyle = .{
                 .color = .white,
-                .borderStyle = .{},
+                .borderStyle = .{
+                    .color = Color.transparent,
+                },
             },
             .textStyle = .{
                 .font = .ROBOTO_REGULAR,

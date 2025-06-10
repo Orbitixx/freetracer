@@ -126,6 +126,8 @@ pub fn main() !void {
     );
     testCheckbox.outerRect.rounded = true;
     testCheckbox.outerRect.bordered = true;
+    testCheckbox.innerRect.bordered = false;
+    testCheckbox.innerRect.rounded = true;
     try newRegistry.register(.TestBtn, @constCast(testCheckbox.asComponentPtr()));
 
     //----------------------------------------------------------------------------------
