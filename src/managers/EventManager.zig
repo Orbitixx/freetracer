@@ -16,33 +16,18 @@ pub const EventManagerSingleton = struct {
         allocator: std.mem.Allocator,
         subscribers: std.ArrayList(*Component),
 
-        pub fn broadcast(self: *EventManager, caller: ?*Component, event: Event) void {
+        pub fn broadcast(self: *EventManager, event: Event) void {
             for (self.subscribers.items) |component| {
-                if (caller) |_caller| {
-                    if (component == _caller) continue;
-                }
+                if (component == event.source) continue;
 
                 _ = component.handleEvent(event) catch |err| {
-                    debug.printf("\nEventManager: error on broadcasting ({any}) event to ({any}) component. {any}.", .{
-                        event,
-                        component,
-                        err,
-                    });
+                    debug.printf(
+                        "\nEventManager: error on broadcasting ({any}) event to ({any}) component. {any}.",
+                        .{ event, component, err },
+                    );
                 };
             }
         }
-
-        // pub fn broadcastAndGetFirst(self: *EventManager, event: Event) *anyopaque {
-        //     for (self.subscribers.items) |component| {
-        //         _ = component.handleEvent(event) catch |err| {
-        //             debug.printf("\nEventManager: error on broadcasting ({any}) event to ({any}) component. {any}.", .{
-        //                 event,
-        //                 component,
-        //                 err,
-        //             });
-        //         };
-        //     }
-        // }
 
         pub fn subscribe(self: *EventManager, subscriber: *Component) bool {
             self.subscribers.append(subscriber) catch |err| {
@@ -69,9 +54,9 @@ pub const EventManagerSingleton = struct {
         };
     }
 
-    pub fn broadcast(caller: ?*Component, event: Event) void {
+    pub fn broadcast(event: Event) void {
         if (instance != null) {
-            instance.?.broadcast(caller, event);
+            instance.?.broadcast(event);
         } else debug.print("Error: Attempted to call EventManager.broadcast() before EventManager is initialized!");
     }
 

@@ -46,12 +46,12 @@ pub fn defineEvent(comptime name: []const u8, comptime DataType: type) type {
         pub const Name = name;
         pub const Result: EventResult = .{};
 
-        pub fn create(source: *Component, data: *const Data) ComponentEvent {
+        pub fn create(source: *Component, data: ?*const Data) ComponentEvent {
             return ComponentEvent.create(.{
                 .name = Name,
                 .hash = Hash,
                 .source = source,
-                .data = @ptrCast(@alignCast(data)),
+                .data = if (data != null) @ptrCast(@alignCast(data)) else null,
             });
         }
 

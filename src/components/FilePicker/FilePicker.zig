@@ -121,10 +121,6 @@ pub fn update(self: *ISOFilePickerComponent) !void {
 
     self.checkAndJoinWorker();
 
-    // if (self.component) |component| {
-    //     try component.update();
-    // }
-
     _ = state;
 
     // Update logic
@@ -139,14 +135,6 @@ pub fn draw(self: *ISOFilePickerComponent) !void {
 
     // Draw UI elements
 
-    // if (self.component) |component| {
-    //     if (component.children) |children| {
-    //         for (children.items) |*child| {
-    //             try child.draw();
-    //         }
-    //     }
-    // }
-
     _ = self;
 }
 
@@ -156,29 +144,28 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
     var eventResult = EventResult{};
 
     eventLoop: switch (event.hash) {
-        //
-        // Events.ISOFilePickerGetUIWidth.Hash => {
-        //     Event
-        // },
-        //
-        Events.UIWidthChangedEvent.Hash => {
-            // TODO: handle null data gracefully
-            const data = Events.UIWidthChangedEvent.getData(&event).?;
-            if (@TypeOf(data.*) != Events.UIWidthChangedEvent.Data) break :eventLoop;
+
+        // NOTE: On UI Dimensions Changed
+        ISOFilePickerUI.Events.ISOFilePickerUIGetUIDimensions.Hash => {
+            //
+            const maybe_data = ISOFilePickerUI.Events.ISOFilePickerUIGetUIDimensions.getData(&event);
+            var data: *ISOFilePickerUI.Events.ISOFilePickerUIGetUIDimensions.Data = undefined;
+            if (maybe_data != null) data = @constCast(maybe_data.?) else break :eventLoop;
 
             eventResult.success = true;
-            eventResult.validation = @intFromFloat(data.newWidth);
+            eventResult.validation = 95;
 
             debug.printf(
                 "\nISOFilePickerComponent: handleEvent() received: \"{s}\" event, data: newWidth = {d}",
-                .{ event.name, data.newWidth },
+                .{ event.name, data.transform.w },
             );
         },
 
         Events.ISOFileSelected.Hash => {
-            // TODO: handle null data gracefully
-            const data = Events.ISOFileSelected.getData(&event).?;
-            if (@TypeOf(data.*) != Events.ISOFileSelected.Data) break :eventLoop;
+            //
+            const maybe_data = Events.ISOFileSelected.getData(&event);
+            var data: *Events.ISOFileSelected.Data = undefined;
+            if (maybe_data != null) data = @constCast(maybe_data.?) else break :eventLoop;
 
             debug.printf(
                 "\nISOFilePickerComponent: handleEvent() received: \"{s}\" event, data: newPath = {s}",

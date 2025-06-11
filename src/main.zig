@@ -148,14 +148,6 @@ pub fn main() !void {
 
     try newRegistry.startAll();
 
-    {
-        const data: ISOFilePicker.Events.UIWidthChangedEvent.Data = .{ .newWidth = 95 };
-        const event = ISOFilePicker.Events.UIWidthChangedEvent.create(@constCast(&isoFilePicker.asComponent()), &data);
-
-        const r = try isoFilePicker.handleEvent(event);
-        std.debug.assert(r.success == true and r.validation == 95);
-    }
-
     const logoText = UI.Text.init("freetracer", .{ .x = relX(0.08), .y = relY(0.035) }, .{ .font = .JERSEY10_REGULAR, .fontSize = 40, .textColor = Color.white });
     const subLogoText = UI.Text.init("free and open-source by orbitixx", .{ .x = relX(0.08), .y = relY(0.035) + 32 }, .{ .font = .JERSEY10_REGULAR, .fontSize = 18, .textColor = Color.secondary });
     const versionText = UI.Text.init(env.APP_VERSION, .{ .x = relX(0.92), .y = relY(0.05) }, .{ .font = .JERSEY10_REGULAR, .fontSize = 16, .textColor = Color.secondary });

@@ -22,7 +22,9 @@ const Button = UIFramework.Button;
 const Rectangle = UIFramework.Primitives.Rectangle;
 const Text = UIFramework.Primitives.Text;
 const Texture = UIFramework.Primitives.Texture;
+
 const Styles = UIFramework.Styles;
+const Color = UIFramework.Styles.Color;
 
 pub const DeviceListUIState = struct {
     active: bool = false,
@@ -41,10 +43,10 @@ component: ?Component = null,
 
 // Component-specific, unique props
 bgRect: ?Rectangle = null,
-headerText: ?Text = null,
+headerLabel: ?Text = null,
 diskImg: ?Texture = null,
 button: ?Button = null,
-deviceName: ?Text = null,
+deviceNameLabel: ?Text = null,
 
 pub const Events = struct {
     pub const DeviceListActiveStateChanged = ComponentFramework.defineEvent(
@@ -83,18 +85,12 @@ pub fn start(self: *DeviceListUI) !void {
         if (!EventManager.subscribe(component)) return error.UnableToSubscribeToEventManager;
     } else return error.UnableToSubscribeToEventManager;
 
-    // const fpUI: *ISOFilePickerUI = &self.isoFilePicker.uiComponent.?;
-    // const fpUI_bgRect: *Rectangle = &fpUI.bgRect.?;
-    //
-    // const offsetX = fpUI_bgRect.transform.x + fpUI_bgRect.transform.w + COMPONENT_UI_GAP;
-    // const offsetY = fpUI_bgRect.transform.y;
-
     self.bgRect = Rectangle{
-        .transform = .{ .x = winRelX(0.5), .y = winRelY(0.2), .w = winRelX(0.35), .h = winRelY(0.7) },
+        .transform = .{ .x = winRelX(0.5), .y = winRelY(0.2), .w = winRelX(0.16), .h = winRelY(0.7) },
         .style = .{
-            .color = Styles.Color.violet,
+            .color = Styles.Color.transparentDark,
             .borderStyle = .{
-                .color = Styles.Color.white,
+                .color = Styles.Color.transparentDark,
             },
         },
         .rounded = true,
@@ -102,9 +98,8 @@ pub fn start(self: *DeviceListUI) !void {
     };
 
     // Get initial width of the preceding UI element
-    const data = ISOFilePickerUI.Events.ISOFilePickerUIGetUIWidth.Data{ .width = 0 };
-    const event = ISOFilePickerUI.Events.ISOFilePickerUIGetUIWidth.create(&self.component.?, &data);
-    EventManager.broadcast(&self.component.?, event);
+    const event = ISOFilePickerUI.Events.ISOFilePickerUIGetUIDimensions.create(&self.component.?, null);
+    EventManager.broadcast(event);
 
     if (self.bgRect) |bgRect| {
         self.button = Button.init(
@@ -117,7 +112,7 @@ pub fn start(self: *DeviceListUI) !void {
             },
         );
 
-        self.headerText = Text.init("device", .{
+        self.headerLabel = Text.init("device", .{
             .x = bgRect.transform.x + 12,
             .y = bgRect.transform.relY(0.01),
         }, .{
@@ -145,7 +140,7 @@ pub fn start(self: *DeviceListUI) !void {
             button.rect.rounded = true;
         }
 
-        self.deviceName = Text.init("No device selected...", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
+        self.deviceNameLabel = Text.init("No device selected...", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
     }
 
     debug.print("\nDeviceListUI: component start() finished.");
@@ -159,9 +154,10 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
 
     eventLoop: switch (event.hash) {
         Events.DeviceListDeviceNameChanged.Hash => {
-            // TODO: handle null data gracefully
-            const data = Events.DeviceListDeviceNameChanged.getData(&event).?;
-            if (@TypeOf(data.*) != Events.DeviceListDeviceNameChanged.Data) break :eventLoop;
+            //
+            const maybe_data = Events.DeviceListDeviceNameChanged.getData(&event);
+            var data: *const Events.DeviceListDeviceNameChanged.Data = undefined;
+            if (maybe_data != null) data = maybe_data.? else break :eventLoop;
 
             eventResult.success = true;
             eventResult.validation = 1;
@@ -171,7 +167,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
             state.deviceName = data.newDeviceName;
 
             if (self.bgRect) |bgRect| {
-                self.deviceName = Text.init(state.deviceName.?, .{
+                self.deviceNameLabel = Text.init(state.deviceName.?, .{
                     .x = bgRect.transform.relX(0.5),
                     .y = bgRect.transform.relY(0.5),
                 }, .{
@@ -181,36 +177,25 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
         },
 
         // NOTE: ISOFilePickerUI emits this event in response to receiving the same event
-        ISOFilePickerUI.Events.ISOFilePickerUIGetUIWidth.Hash => {
-            const data = ISOFilePickerUI.Events.ISOFilePickerUIGetUIWidth.getData(&event).?;
-            if (@TypeOf(data.*) != ISOFilePickerUI.Events.ISOFilePickerUIGetUIWidth.Data) break :eventLoop;
-
-            eventResult.success = true;
-            eventResult.validation = 1;
-
-            self.bgRect.?.transform.x = winRelX(0.08) + data.width + 20;
-        },
-
-        ISOFilePicker.Events.UIWidthChangedEvent.Hash => {
-            const data = ISOFilePicker.Events.UIWidthChangedEvent.getData(&event).?;
-            if (@TypeOf(data.*) != ISOFilePicker.Events.UIWidthChangedEvent.Data) break :eventLoop;
-
-            eventResult.success = true;
-            eventResult.validation = 1;
-
-            self.bgRect.?.transform.x = winRelX(0.08) + data.newWidth + 20;
-
-            // const fpUI: *ISOFilePickerUI = &self.isoFilePicker.uiComponent.?;
-            // const fpUI_bgRect: *Rectangle = &fpUI.bgRect.?;
+        ISOFilePickerUI.Events.ISOFilePickerUIGetUIDimensions.Hash => {
             //
-            // if (self.bgRect) |*bgRect| {
-            //     bgRect.transform.x = fpUI_bgRect.transform.x;
-            // }
+            const maybe_data = ISOFilePickerUI.Events.ISOFilePickerUIGetUIDimensions.getData(&event);
+            var data: *ISOFilePickerUI.Events.ISOFilePickerUIGetUIDimensions.Data = undefined;
+            if (maybe_data != null) data = @constCast(maybe_data.?) else break :eventLoop;
+
+            eventResult.success = true;
+            eventResult.validation = 1;
+
+            if (self.bgRect) |*bgRect| {
+                bgRect.transform.x = data.transform.x + data.transform.w + 20;
+            }
         },
 
         Events.DeviceListActiveStateChanged.Hash => {
-            const data = Events.DeviceListActiveStateChanged.getData(&event).?;
-            if (@TypeOf(data.*) != Events.DeviceListActiveStateChanged.Data) break :eventLoop;
+            //
+            const maybe_data = Events.DeviceListActiveStateChanged.getData(&event);
+            var data: *Events.DeviceListActiveStateChanged.Data = undefined;
+            if (maybe_data != null) data = @constCast(maybe_data.?) else break :eventLoop;
 
             eventResult.success = true;
             eventResult.validation = 1;
@@ -221,25 +206,21 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
             switch (state.active) {
                 true => {
                     if (self.bgRect) |*bgRect| {
-                        bgRect.transform.w = winRelX(0.35);
-                        bgRect.style.color = Styles.Color.violet;
-                        bgRect.style.borderStyle.color = Styles.Color.white;
+                        self.update_bgRect(winRelX(0.35), Color.violet, Color.white);
 
-                        if (self.deviceName) |*deviceName| {
-                            deviceName.transform.x = bgRect.transform.relX(0.5) - deviceName.getDimensions().width / 2;
-                            deviceName.transform.y = bgRect.transform.relY(0.5) - deviceName.getDimensions().height / 2;
+                        if (self.deviceNameLabel) |*deviceNameLabel| {
+                            deviceNameLabel.transform.x = bgRect.transform.relX(0.5) - deviceNameLabel.getDimensions().width / 2;
+                            deviceNameLabel.transform.y = bgRect.transform.relY(0.5) - deviceNameLabel.getDimensions().height / 2;
                         }
                     }
                 },
                 false => {
                     if (self.bgRect) |*bgRect| {
-                        bgRect.transform.w = winRelX(0.16);
-                        bgRect.style.color = Styles.Color.transparentDark;
-                        bgRect.style.borderStyle.color = Styles.Color.transparentDark;
+                        self.update_bgRect(winRelX(0.16), Color.transparentDark, Color.transparentDark);
 
-                        if (self.deviceName) |*deviceName| {
-                            deviceName.transform.x = bgRect.transform.relX(0.5) - deviceName.getDimensions().width / 2;
-                            deviceName.transform.y = bgRect.transform.relY(0.5) - deviceName.getDimensions().height / 2;
+                        if (self.deviceNameLabel) |*deviceNameLabel| {
+                            deviceNameLabel.transform.x = bgRect.transform.relX(0.5) - deviceNameLabel.getDimensions().width / 2;
+                            deviceNameLabel.transform.y = bgRect.transform.relY(0.5) - deviceNameLabel.getDimensions().height / 2;
                         }
                     }
                 },
@@ -249,6 +230,14 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
     }
 
     return eventResult;
+}
+
+fn update_bgRect(self: *DeviceListUI, width: f32, color: rl.Color, borderColor: rl.Color) void {
+    if (self.bgRect) |*bgRect| {
+        bgRect.transform.w = width;
+        bgRect.style.color = color;
+        bgRect.style.borderStyle.color = borderColor;
+    }
 }
 
 pub fn update(self: *DeviceListUI) !void {
@@ -265,8 +254,8 @@ pub fn draw(self: *DeviceListUI) !void {
         bgRect.draw();
     }
 
-    if (self.headerText) |text| {
-        text.draw();
+    if (self.headerLabel) |label| {
+        label.draw();
     }
 
     if (state.active) try self.drawActive() else try self.drawInactive();
@@ -283,8 +272,8 @@ fn drawActive(self: *DeviceListUI) !void {
 }
 
 fn drawInactive(self: *DeviceListUI) !void {
-    if (self.deviceName) |deviceName| {
-        deviceName.draw();
+    if (self.deviceNameLabel) |label| {
+        label.draw();
     }
 }
 
