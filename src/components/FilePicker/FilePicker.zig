@@ -197,7 +197,9 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
             const makeUIInactiveData = ISOFilePickerUI.Events.ISOFilePickerActiveStateChanged.Data{ .isActive = false };
             const makeUIInactiveEvent = ISOFilePickerUI.Events.ISOFilePickerActiveStateChanged.create(&self.component.?, &makeUIInactiveData);
 
-            _ = try self.uiComponent.?.handleEvent(makeUIInactiveEvent);
+            // _ = try self.uiComponent.?.handleEvent(makeUIInactiveEvent);
+
+            EventManager.broadcast(makeUIInactiveEvent);
 
             self.notify(.ISO_FILE_SELECTED, .{});
         },

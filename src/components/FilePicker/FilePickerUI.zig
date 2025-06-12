@@ -233,7 +233,6 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
                 },
             }
 
-            // const responseData = Events.ISOFilePickerUIGetUIDimensions.Data{ .transform = self.bgRect.?.transform };
             const responseEvent = Events.ISOFilePickerUIGetUIDimensions.create(
                 &self.component.?,
                 &.{ .transform = self.bgRect.?.transform },
