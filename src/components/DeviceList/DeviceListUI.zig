@@ -118,6 +118,10 @@ pub fn start(self: *DeviceListUI) !void {
             },
         );
 
+        if (self.button) |*btn| {
+            btn.state = .DISABLED;
+        }
+
         self.headerLabel = Text.init("device", .{
             .x = bgRect.transform.x + 12,
             .y = bgRect.transform.relY(0.01),

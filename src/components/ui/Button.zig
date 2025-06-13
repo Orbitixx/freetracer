@@ -6,6 +6,10 @@ const rl = @import("raylib");
 const ComponentFramework = @import("../framework/import/index.zig");
 const Component = ComponentFramework.Component;
 
+const Event = ComponentFramework.Event;
+const EventResult = ComponentFramework.EventResult;
+const defineEvent = ComponentFramework.defineEvent;
+
 const Primitives = @import("Primitives.zig");
 const Text = Primitives.Text;
 const Rectangle = Primitives.Rectangle;
@@ -24,6 +28,7 @@ pub const ButtonState = enum {
     NORMAL,
     HOVER,
     ACTIVE,
+    DISABLED,
 };
 
 pub const ButtonHandler = struct {
@@ -46,6 +51,12 @@ text: Text,
 styles: ButtonStyles,
 state: ButtonState = ButtonState.NORMAL,
 clickHandler: ButtonHandler,
+
+pub const Events = struct {
+    pub const onButtonToggleEnabled = defineEvent("button.on_toggle_enabled", struct {
+        isEnabled: bool,
+    });
+};
 
 pub fn init(text: [:0]const u8, position: rl.Vector2, variant: ButtonVariant, clickHandler: ButtonHandler) ButtonComponent {
     const btnText = Text.init(text, position, variant.normal.textStyle);
@@ -95,6 +106,8 @@ pub fn setPosition(self: *ButtonComponent, position: rl.Vector2) void {
 }
 
 pub fn update(self: *ButtonComponent) !void {
+    if (self.state == ButtonState.DISABLED) return;
+
     const mousePos: rl.Vector2 = rl.getMousePosition();
     const isButtonClicked: bool = rl.isMouseButtonPressed(.left);
     const isButtonHovered: bool = self.rect.transform.isPointWithinBounds(mousePos);
@@ -125,6 +138,10 @@ pub fn update(self: *ButtonComponent) !void {
             self.rect.style = self.styles.normal.bgStyle;
             self.text.style = self.styles.normal.textStyle;
         },
+        .DISABLED => {
+            self.rect.style = self.styles.active.bgStyle;
+            self.text.style = self.styles.active.textStyle;
+        },
     }
 }
 
@@ -133,14 +150,26 @@ pub fn draw(self: *ButtonComponent) !void {
     self.text.draw();
 }
 
-pub fn handleEvent(self: *ButtonComponent, event: ComponentFramework.Event) !ComponentFramework.EventResult {
-    _ = self;
-    _ = event;
-
-    const eventResult = ComponentFramework.EventResult{
+pub fn handleEvent(self: *ButtonComponent, event: Event) !EventResult {
+    var eventResult = ComponentFramework.EventResult{
         .success = false,
         .validation = 0,
     };
+
+    eventLoop: switch (event.hash) {
+        Events.onButtonToggleEnabled.Hash => {
+            //
+            const maybe_data = Events.onButtonToggleEnabled.getData(&event);
+            var data: *Events.onButtonToggleEnabled.Data = undefined;
+            if (maybe_data != null) data = @constCast(maybe_data.?) else break :eventLoop;
+
+            eventResult.success = true;
+            eventResult.validation = 1;
+
+            if (data.isEnabled) self.state = .NORMAL else self.state = .DISABLED;
+        },
+        else => {},
+    }
 
     return eventResult;
 }
