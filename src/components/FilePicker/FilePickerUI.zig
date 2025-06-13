@@ -21,7 +21,9 @@ const Rectangle = UIFramework.Primitives.Rectangle;
 const Transform = UIFramework.Primitives.Transform;
 const Text = UIFramework.Primitives.Text;
 const Texture = UIFramework.Primitives.Texture;
+
 const Styles = UIFramework.Styles;
+const Color = Styles.Color;
 
 pub const ISOFilePickerUIState = struct {
     active: bool = true,
@@ -38,10 +40,16 @@ component: ?Component = null,
 
 // Component-specific, unique props
 bgRect: ?Rectangle = null,
-headerText: ?Text = null,
+headerLabel: ?Text = null,
 diskImg: ?Texture = null,
 button: ?Button = null,
 isoTitle: ?Text = null,
+
+const BgRectParams = struct {
+    width: f32,
+    color: rl.Color,
+    borderColor: rl.Color,
+};
 
 pub const Events = struct {
     pub const ISOFilePathChanged = ComponentFramework.defineEvent(
@@ -86,9 +94,9 @@ pub fn start(self: *ISOFilePickerUI) !void {
     self.bgRect = Rectangle{
         .transform = .{ .x = winRelX(0.08), .y = winRelY(0.2), .w = winRelX(0.35), .h = winRelY(0.7) },
         .style = .{
-            .color = Styles.Color.violet,
+            .color = Color.violet,
             .borderStyle = .{
-                .color = Styles.Color.white,
+                .color = Color.white,
             },
         },
         .rounded = true,
@@ -106,13 +114,13 @@ pub fn start(self: *ISOFilePickerUI) !void {
             },
         );
 
-        self.headerText = Text.init("image", .{
+        self.headerLabel = Text.init("image", .{
             .x = bgRect.transform.x + 12,
             .y = bgRect.transform.relY(0.01),
         }, .{
             .font = .JERSEY10_REGULAR,
             .fontSize = 34,
-            .textColor = Styles.Color.white,
+            .textColor = Color.white,
         });
 
         self.diskImg = Texture.init(.DISK_IMAGE, .{ .x = 0, .y = 0 });
@@ -208,28 +216,34 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
 
             switch (state.active) {
                 true => {
-                    if (self.bgRect) |*bgRect| {
-                        bgRect.transform.w = winRelX(0.35);
-                        bgRect.style.color = Styles.Color.violet;
-                        bgRect.style.borderStyle.color = Styles.Color.white;
-
-                        if (self.isoTitle) |*isoTitle| {
-                            isoTitle.transform.x = bgRect.transform.relX(0.5) - isoTitle.getDimensions().width / 2;
-                            isoTitle.transform.y = bgRect.transform.relY(0.5) - isoTitle.getDimensions().height / 2;
-                        }
+                    if (self.headerLabel) |*header| {
+                        header.style.textColor = Color.white;
                     }
+
+                    if (self.diskImg) |*img| {
+                        img.transform.scale = 1.0;
+                    }
+                    self.recalculateUI(.{
+                        .width = winRelX(0.35),
+                        .color = Color.violet,
+                        .borderColor = Color.white,
+                    });
                 },
-                false => {
-                    if (self.bgRect) |*bgRect| {
-                        bgRect.transform.w = winRelX(0.16);
-                        bgRect.style.color = Styles.Color.transparentDark;
-                        bgRect.style.borderStyle.color = Styles.Color.transparentDark;
 
-                        if (self.isoTitle) |*isoTitle| {
-                            isoTitle.transform.x = bgRect.transform.relX(0.5) - isoTitle.getDimensions().width / 2;
-                            isoTitle.transform.y = bgRect.transform.relY(0.5) - isoTitle.getDimensions().height / 2;
-                        }
+                false => {
+                    if (self.headerLabel) |*header| {
+                        header.style.textColor = Color.offWhite;
                     }
+
+                    if (self.diskImg) |*img| {
+                        img.transform.scale = 0.7;
+                    }
+
+                    self.recalculateUI(.{
+                        .width = winRelX(0.16),
+                        .color = Color.darkViolet,
+                        .borderColor = Color.transparentDark,
+                    });
                 },
             }
 
@@ -246,6 +260,35 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
     return eventResult;
 }
 
+fn recalculateUI(self: *ISOFilePickerUI, bgRectParams: BgRectParams) void {
+    debug.print("\nIsoFilePickerUI: recalculating UI...");
+
+    if (self.bgRect) |*bgRect| {
+        bgRect.transform.w = bgRectParams.width;
+        bgRect.style.color = bgRectParams.color;
+        bgRect.style.borderStyle.color = bgRectParams.borderColor;
+
+        if (self.headerLabel) |*headerLabel| {
+            headerLabel.transform.x = bgRect.transform.x + 12;
+            headerLabel.transform.y = bgRect.transform.relY(0.01);
+        }
+
+        if (self.diskImg) |*img| {
+            img.transform.x = bgRect.transform.relX(0.5) - img.transform.getWidth() / 2;
+            img.transform.y = bgRect.transform.relY(0.5) - img.transform.getHeight() / 2;
+
+            if (self.isoTitle) |*isoTitle| {
+                isoTitle.transform.x = bgRect.transform.relX(0.5) - isoTitle.getDimensions().width / 2;
+                isoTitle.transform.y = img.transform.y + img.transform.getHeight() + winRelY(0.02);
+            }
+        }
+
+        if (self.button) |*btn| {
+            btn.setPosition(.{ .x = bgRect.transform.relX(0.5) - btn.rect.transform.getWidth() / 2, .y = btn.rect.transform.y });
+        }
+    }
+}
+
 pub fn update(self: *ISOFilePickerUI) !void {
     if (self.button) |*button| {
         try button.update();
@@ -260,18 +303,18 @@ pub fn draw(self: *ISOFilePickerUI) !void {
         bgRect.draw();
     }
 
-    if (self.headerText) |text| {
-        text.draw();
+    if (self.headerLabel) |label| {
+        label.draw();
+    }
+
+    if (self.diskImg) |img| {
+        img.draw();
     }
 
     if (state.active) try self.drawActive() else try self.drawInactive();
 }
 
 fn drawActive(self: *ISOFilePickerUI) !void {
-    if (self.diskImg) |img| {
-        img.draw();
-    }
-
     if (self.button) |*button| {
         try button.draw();
     }

@@ -40,6 +40,16 @@ pub const Transform = struct {
         return self.y + self.h * y;
     }
 
+    /// Returns effective width of the element, accounting for scale
+    pub fn getWidth(self: Transform) f32 {
+        return self.w * self.scale;
+    }
+
+    /// Returns effective width of the element, accounting for scale
+    pub fn getHeight(self: Transform) f32 {
+        return self.h * self.scale;
+    }
+
     pub fn asRaylibRectangle(self: Transform) rl.Rectangle {
         return .{
             .x = self.x,

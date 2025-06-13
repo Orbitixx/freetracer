@@ -3,8 +3,12 @@ const AppFont = @import("../../managers/ResourceManager.zig").FONT;
 
 pub const Color = struct {
     pub const white = rl.Color.white;
+    pub const offWhite = rl.Color{ .r = 190, .g = 190, .b = 190, .a = 255 };
     pub const black = rl.Color.black;
     pub const violet = rl.Color{ .r = 248, .g = 135, .b = 255, .a = 43 };
+    pub const darkViolet = rl.Color{ .r = 248, .g = 135, .b = 255, .a = 20 };
+    pub const blueGray = rl.Color{ .r = 49, .g = 85, .b = 100, .a = 255 };
+    pub const darkBlueGray = rl.Color{ .r = 49, .g = 65, .b = 84, .a = 255 };
     pub const secondary = rl.Color{ .r = 78, .g = 96, .b = 121, .a = 255 };
     pub const transparent = rl.Color{ .r = 0, .g = 0, .b = 0, .a = 0 };
     pub const transparentDark = rl.Color{ .r = 0, .g = 0, .b = 0, .a = 60 };

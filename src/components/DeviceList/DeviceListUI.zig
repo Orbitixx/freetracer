@@ -47,7 +47,12 @@ headerLabel: ?Text = null,
 diskImg: ?Texture = null,
 button: ?Button = null,
 deviceNameLabel: ?Text = null,
-fRecalculateUI: bool = false,
+
+const BgRectParams = struct {
+    width: f32,
+    color: rl.Color,
+    borderColor: rl.Color,
+};
 
 pub const Events = struct {
     pub const DeviceListActiveStateChanged = ComponentFramework.defineEvent(
@@ -125,8 +130,9 @@ pub fn start(self: *DeviceListUI) !void {
         self.diskImg = Texture.init(.DISK_IMAGE, .{ .x = 0, .y = 0 });
 
         if (self.diskImg) |*img| {
-            img.transform.x = bgRect.transform.relX(0.5) - img.transform.w / 2;
-            img.transform.y = bgRect.transform.relY(0.5) - img.transform.h / 2;
+            img.transform.scale = 0.7;
+            img.transform.x = bgRect.transform.relX(0.5) - img.transform.getWidth() / 2;
+            img.transform.y = bgRect.transform.relY(0.5) - img.transform.getHeight() / 2;
             img.tint = .{ .r = 255, .g = 255, .b = 255, .a = 150 };
         }
 
@@ -134,14 +140,21 @@ pub fn start(self: *DeviceListUI) !void {
             try button.start();
 
             button.setPosition(.{
-                .x = bgRect.transform.relX(0.5) - @divTrunc(button.rect.transform.w, 2),
-                .y = bgRect.transform.relY(0.9) - @divTrunc(button.rect.transform.h, 2),
+                .x = bgRect.transform.relX(0.5) - @divTrunc(button.rect.transform.getWidth(), 2),
+                .y = bgRect.transform.relY(0.9) - @divTrunc(button.rect.transform.getHeight(), 2),
             });
 
             button.rect.rounded = true;
         }
 
         self.deviceNameLabel = Text.init("No device selected...", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
+
+        if (self.deviceNameLabel) |*label| {
+            if (self.diskImg) |img| {
+                label.transform.x = bgRect.transform.relX(0.5) - label.getDimensions().width / 2;
+                label.transform.y = img.transform.y + img.transform.getHeight() + winRelY(0.02);
+            }
+        }
     }
 
     debug.print("\nDeviceListUI: component start() finished.");
@@ -219,27 +232,21 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
 
             switch (state.active) {
                 true => {
-                    if (self.bgRect) |*bgRect| {
-                        debug.print("\nDeviceListUI: setting UI to ACTIVE.");
-                        self.fRecalculateUI = true;
-                        self.recalculateUI(winRelX(0.35), Styles.Color.violet, Styles.Color.white);
-
-                        if (self.deviceNameLabel) |*deviceNameLabel| {
-                            deviceNameLabel.transform.x = bgRect.transform.relX(0.5) - deviceNameLabel.getDimensions().width / 2;
-                            deviceNameLabel.transform.y = bgRect.transform.relY(0.5) - deviceNameLabel.getDimensions().height / 2;
-                        }
-                    }
+                    debug.print("\nDeviceListUI: setting UI to ACTIVE.");
+                    self.recalculateUI(.{
+                        .width = winRelX(0.35),
+                        .color = Color.blueGray,
+                        .borderColor = Color.white,
+                    });
                 },
-                false => {
-                    if (self.bgRect) |*bgRect| {
-                        debug.print("\nDeviceListUI: setting UI to INACTIVE.");
-                        self.recalculateUI(winRelX(0.16), Color.transparentDark, Color.transparentDark);
 
-                        if (self.deviceNameLabel) |*deviceNameLabel| {
-                            deviceNameLabel.transform.x = bgRect.transform.relX(0.5) - deviceNameLabel.getDimensions().width / 2;
-                            deviceNameLabel.transform.y = bgRect.transform.relY(0.5) - deviceNameLabel.getDimensions().height / 2;
-                        }
-                    }
+                false => {
+                    debug.print("\nDeviceListUI: setting UI to INACTIVE.");
+                    self.recalculateUI(.{
+                        .width = winRelX(0.16),
+                        .color = Color.darkBlueGray,
+                        .borderColor = Color.transparentDark,
+                    });
                 },
             }
         },
@@ -249,17 +256,29 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
     return eventResult;
 }
 
-fn recalculateUI(self: *DeviceListUI, width: f32, color: rl.Color, borderColor: rl.Color) void {
+fn recalculateUI(self: *DeviceListUI, bgRectParams: BgRectParams) void {
     debug.print("\nDeviceListUI: updating bgRect properties!");
 
     if (self.bgRect) |*bgRect| {
-        bgRect.transform.w = width;
-        bgRect.style.color = color;
-        bgRect.style.borderStyle.color = borderColor;
+        bgRect.transform.w = bgRectParams.width;
+        bgRect.style.color = bgRectParams.color;
+        bgRect.style.borderStyle.color = bgRectParams.borderColor;
 
         if (self.headerLabel) |*headerLabel| {
             headerLabel.transform.x = bgRect.transform.x + 12;
             headerLabel.transform.y = bgRect.transform.relY(0.01);
+        }
+
+        if (self.deviceNameLabel) |*deviceNameLabel| {
+            deviceNameLabel.transform.x = bgRect.transform.relX(0.5) - deviceNameLabel.getDimensions().width / 2;
+            deviceNameLabel.transform.y = bgRect.transform.relY(0.5) - deviceNameLabel.getDimensions().height / 2;
+        }
+
+        if (self.button) |*btn| {
+            btn.setPosition(.{
+                .x = bgRect.transform.relX(0.5) - btn.rect.transform.getWidth() / 2,
+                .y = btn.rect.transform.y,
+            });
         }
     }
 }
@@ -268,10 +287,6 @@ pub fn update(self: *DeviceListUI) !void {
     if (self.button) |*button| {
         try button.update();
     }
-
-    if (self.fRecalculateUI) {}
-
-    self.fRecalculateUI = false;
 }
 
 pub fn draw(self: *DeviceListUI) !void {
@@ -290,10 +305,6 @@ pub fn draw(self: *DeviceListUI) !void {
 }
 
 fn drawActive(self: *DeviceListUI) !void {
-    if (self.diskImg) |img| {
-        img.draw();
-    }
-
     if (self.button) |*button| {
         try button.draw();
     }
@@ -302,6 +313,10 @@ fn drawActive(self: *DeviceListUI) !void {
 fn drawInactive(self: *DeviceListUI) !void {
     if (self.deviceNameLabel) |label| {
         label.draw();
+    }
+
+    if (self.diskImg) |img| {
+        img.draw();
     }
 }
 
