@@ -104,35 +104,23 @@ pub fn draw(self: *DeviceListComponent) !void {
     _ = self;
 }
 
-pub fn getEventData(self: *DeviceListComponent, comptime EventType: type, event: ComponentEvent) ?*const EventType.Data {
-    _ = self;
-    return EventType.getData(&event);
-}
-
 pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResult {
     debug.printf("\nDeviceList: handleEvent() received an event: \"{s}\"", .{event.name});
 
-    var eventResult = EventResult{
-        .success = false,
-        .validation = 0,
-    };
+    var eventResult = EventResult.init();
 
     eventLoop: switch (event.hash) {
         //
         ISOFilePickerUI.Events.ISOFilePickerActiveStateChanged.Hash => {
-            const data = ISOFilePickerUI.Events.ISOFilePickerActiveStateChanged.getDataRaw(event) orelse break :eventLoop;
-
-            eventResult.success = true;
-            eventResult.validation = 1;
+            const data = ISOFilePickerUI.Events.ISOFilePickerActiveStateChanged.getData(event) orelse break :eventLoop;
+            eventResult.validate(1);
 
             if (!data.isActive) self.dispatchComponentAction();
         },
 
         Events.onDiscoverDevicesEnd.Hash => {
-            const data = Events.onDiscoverDevicesEnd.getDataRaw(event) orelse break :eventLoop;
-
-            eventResult.success = true;
-            eventResult.validation = 1;
+            const data = Events.onDiscoverDevicesEnd.getData(event) orelse break :eventLoop;
+            eventResult.validate(1);
 
             var state = self.state.getData();
             state.devices = data.devices;

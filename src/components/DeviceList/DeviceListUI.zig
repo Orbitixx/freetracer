@@ -167,23 +167,16 @@ pub fn start(self: *DeviceListUI) !void {
 pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
     debug.printf("\nDeviceListUI: handleEvent() received an event: \"{s}\"", .{event.name});
 
-    var eventResult = EventResult{
-        .success = false,
-        .validation = 0,
-    };
+    var eventResult = EventResult.init();
 
     eventLoop: switch (event.hash) {
+        //
         Events.DeviceListDeviceNameChanged.Hash => {
             //
-            const maybe_data = Events.DeviceListDeviceNameChanged.getData(&event);
-            var data: *const Events.DeviceListDeviceNameChanged.Data = undefined;
-            if (maybe_data != null) data = maybe_data.? else break :eventLoop;
-
-            eventResult.success = true;
-            eventResult.validation = 1;
+            const data = Events.DeviceListDeviceNameChanged.getData(event) orelse break :eventLoop;
+            eventResult.validate(1);
 
             var state = self.state.getData();
-
             state.deviceName = data.newDeviceName;
 
             if (self.bgRect) |bgRect| {
@@ -199,12 +192,8 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
         // NOTE: ISOFilePickerUI emits this event in response to receiving the same event
         ISOFilePickerUI.Events.ISOFilePickerUIGetUIDimensions.Hash => {
             //
-            const maybe_data = ISOFilePickerUI.Events.ISOFilePickerUIGetUIDimensions.getData(&event);
-            var data: *ISOFilePickerUI.Events.ISOFilePickerUIGetUIDimensions.Data = undefined;
-            if (maybe_data != null) data = @constCast(maybe_data.?) else break :eventLoop;
-
-            eventResult.success = true;
-            eventResult.validation = 1;
+            const data = ISOFilePickerUI.Events.ISOFilePickerUIGetUIDimensions.getData(event) orelse break :eventLoop;
+            eventResult.validate(1);
 
             if (self.bgRect) |*bgRect| {
                 bgRect.transform.x = data.transform.x + data.transform.w + 20;
@@ -213,9 +202,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
 
         ISOFilePickerUI.Events.ISOFilePickerActiveStateChanged.Hash => {
             //
-            const maybe_data = ISOFilePickerUI.Events.ISOFilePickerActiveStateChanged.getData(&event);
-            var data: *ISOFilePickerUI.Events.ISOFilePickerActiveStateChanged.Data = undefined;
-            if (maybe_data != null) data = @constCast(maybe_data.?) else break :eventLoop;
+            const data = ISOFilePickerUI.Events.ISOFilePickerActiveStateChanged.getData(event) orelse break :eventLoop;
 
             return try self.handleEvent(Events.DeviceListActiveStateChanged.create(
                 &self.component.?,
@@ -226,12 +213,8 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
 
         Events.DeviceListActiveStateChanged.Hash => {
             //
-            const maybe_data = Events.DeviceListActiveStateChanged.getData(&event);
-            var data: *Events.DeviceListActiveStateChanged.Data = undefined;
-            if (maybe_data != null) data = @constCast(maybe_data.?) else break :eventLoop;
-
-            eventResult.success = true;
-            eventResult.validation = 1;
+            const data = Events.DeviceListActiveStateChanged.getData(event) orelse break :eventLoop;
+            eventResult.validate(1);
 
             var state = self.state.getData();
             state.active = data.isActive;

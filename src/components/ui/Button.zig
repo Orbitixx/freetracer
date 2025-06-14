@@ -151,20 +151,14 @@ pub fn draw(self: *ButtonComponent) !void {
 }
 
 pub fn handleEvent(self: *ButtonComponent, event: Event) !EventResult {
-    var eventResult = ComponentFramework.EventResult{
-        .success = false,
-        .validation = 0,
-    };
+    //
+    var eventResult = ComponentFramework.EventResult.init();
 
     eventLoop: switch (event.hash) {
         Events.onButtonToggleEnabled.Hash => {
             //
-            const maybe_data = Events.onButtonToggleEnabled.getData(&event);
-            var data: *Events.onButtonToggleEnabled.Data = undefined;
-            if (maybe_data != null) data = @constCast(maybe_data.?) else break :eventLoop;
-
-            eventResult.success = true;
-            eventResult.validation = 1;
+            const data = Events.onButtonToggleEnabled.getData(event) orelse break :eventLoop;
+            eventResult.validate(1);
 
             if (data.isEnabled) self.state = .NORMAL else self.state = .DISABLED;
         },

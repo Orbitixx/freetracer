@@ -38,6 +38,15 @@ pub const EventHash = u64;
 pub const EventResult = struct {
     success: bool = false,
     validation: u8 = 0,
+
+    pub fn init() EventResult {
+        return EventResult{};
+    }
+
+    pub fn validate(self: *EventResult, validation: u8) void {
+        self.success = true;
+        self.validation = validation;
+    }
 };
 
 pub fn hashEvent(comptime event_name: []const u8) EventHash {
@@ -64,14 +73,14 @@ pub fn defineEvent(comptime name: []const u8, comptime DataType: type) type {
             return event.hash == Hash;
         }
 
-        pub fn getData(event: *const ComponentEvent) ?*const Data {
-            if (event.hash == Hash and event.data != null) {
-                return @ptrCast(@alignCast(event.data.?));
-            }
-            return null;
-        }
+        // pub fn getData(event: *const ComponentEvent) ?*const Data {
+        //     if (event.hash == Hash and event.data != null) {
+        //         return @ptrCast(@alignCast(event.data.?));
+        //     }
+        //     return null;
+        // }
 
-        pub fn getDataRaw(event: ComponentEvent) ?*const Data {
+        pub fn getData(event: ComponentEvent) ?*const Data {
             if (event.hash == Hash and event.data != null) {
                 return @ptrCast(@alignCast(event.data.?));
             }

@@ -141,19 +141,15 @@ pub fn draw(self: *ISOFilePickerComponent) !void {
 pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventResult {
     debug.printf("\nISOFilePickerComponent: handleEvent() received an event: \"{s}\"", .{event.name});
 
-    var eventResult = EventResult{};
+    var eventResult = EventResult.init();
 
     eventLoop: switch (event.hash) {
 
         // NOTE: On UI Dimensions Changed
         ISOFilePickerUI.Events.ISOFilePickerUIGetUIDimensions.Hash => {
             //
-            const maybe_data = ISOFilePickerUI.Events.ISOFilePickerUIGetUIDimensions.getData(&event);
-            var data: *ISOFilePickerUI.Events.ISOFilePickerUIGetUIDimensions.Data = undefined;
-            if (maybe_data != null) data = @constCast(maybe_data.?) else break :eventLoop;
-
-            eventResult.success = true;
-            eventResult.validation = 95;
+            const data = ISOFilePickerUI.Events.ISOFilePickerUIGetUIDimensions.getData(event) orelse break :eventLoop;
+            eventResult.validate(1);
 
             debug.printf(
                 "\nISOFilePickerComponent: handleEvent() received: \"{s}\" event, data: newWidth = {d}",
@@ -163,17 +159,13 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
 
         Events.ISOFileSelected.Hash => {
             //
-            const maybe_data = Events.ISOFileSelected.getData(&event);
-            var data: *Events.ISOFileSelected.Data = undefined;
-            if (maybe_data != null) data = @constCast(maybe_data.?) else break :eventLoop;
+            const data = Events.ISOFileSelected.getData(event) orelse break :eventLoop;
+            eventResult.validate(1);
 
             debug.printf(
                 "\nISOFilePickerComponent: handleEvent() received: \"{s}\" event, data: newPath = {s}",
                 .{ event.name, data.newPath.? },
             );
-
-            eventResult.success = true;
-            eventResult.validation = 1;
 
             var state = self.state.getData();
             state.selected_path = data.newPath;
@@ -196,8 +188,6 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
 
             const makeUIInactiveData = ISOFilePickerUI.Events.ISOFilePickerActiveStateChanged.Data{ .isActive = false };
             const makeUIInactiveEvent = ISOFilePickerUI.Events.ISOFilePickerActiveStateChanged.create(&self.component.?, &makeUIInactiveData);
-
-            // _ = try self.uiComponent.?.handleEvent(makeUIInactiveEvent);
 
             EventManager.broadcast(makeUIInactiveEvent);
 

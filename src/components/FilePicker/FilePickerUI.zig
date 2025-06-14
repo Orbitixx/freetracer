@@ -151,20 +151,14 @@ pub fn start(self: *ISOFilePickerUI) !void {
 pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
     debug.printf("\nISOFilePickerUI: handleEvent() received an event: \"{s}\"", .{event.name});
 
-    var eventResult = EventResult{
-        .success = false,
-        .validation = 0,
-    };
+    var eventResult = EventResult.init();
 
     eventLoop: switch (event.hash) {
+        //
         Events.ISOFilePathChanged.Hash => {
             //
-            const maybe_data = Events.ISOFilePathChanged.getData(&event);
-            var data: *Events.ISOFilePathChanged.Data = undefined;
-            if (maybe_data != null) data = @constCast(maybe_data.?) else break :eventLoop;
-
-            eventResult.success = true;
-            eventResult.validation = 1;
+            const data = Events.ISOFilePathChanged.getData(event) orelse break :eventLoop;
+            eventResult.validate(1);
 
             var state = self.state.getData();
 
@@ -196,6 +190,7 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
             }
         },
 
+        // NOTE: ISOFilePickerUI emits this event in response to receiving the same event
         Events.ISOFilePickerUIGetUIDimensions.Hash => {
             //
             const data = Events.ISOFilePickerUIGetUIDimensions.Data{ .transform = self.bgRect.?.transform };
@@ -206,12 +201,8 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
 
         Events.ISOFilePickerActiveStateChanged.Hash => {
             //
-            const maybe_data = Events.ISOFilePickerActiveStateChanged.getData(&event);
-            var data: *Events.ISOFilePickerActiveStateChanged.Data = undefined;
-            if (maybe_data != null) data = @constCast(maybe_data.?) else break :eventLoop;
-
-            eventResult.success = true;
-            eventResult.validation = 1;
+            const data = Events.ISOFilePickerActiveStateChanged.getData(event) orelse break :eventLoop;
+            eventResult.validate(1);
 
             var state = self.state.getData();
             state.active = data.isActive;
@@ -256,6 +247,7 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
 
             EventManager.broadcast(responseEvent);
         },
+
         else => {},
     }
 
