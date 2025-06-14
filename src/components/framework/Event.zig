@@ -9,6 +9,10 @@ pub const EventCreationParams = struct {
     data: ?*const anyopaque = null,
 };
 
+pub const EventFlags = struct {
+    overrideNotifySelfOnSelfOrigin: bool = false,
+};
+
 pub const ComponentEvent = struct {
     name: []const u8,
     hash: EventHash,
@@ -16,6 +20,7 @@ pub const ComponentEvent = struct {
     target: ?*Component = null,
     data: ?*const anyopaque = null,
     handled: bool = false,
+    flags: EventFlags = .{},
 
     pub fn create(params: EventCreationParams) ComponentEvent {
         return ComponentEvent{
@@ -60,6 +65,13 @@ pub fn defineEvent(comptime name: []const u8, comptime DataType: type) type {
         }
 
         pub fn getData(event: *const ComponentEvent) ?*const Data {
+            if (event.hash == Hash and event.data != null) {
+                return @ptrCast(@alignCast(event.data.?));
+            }
+            return null;
+        }
+
+        pub fn getDataRaw(event: ComponentEvent) ?*const Data {
             if (event.hash == Hash and event.data != null) {
                 return @ptrCast(@alignCast(event.data.?));
             }

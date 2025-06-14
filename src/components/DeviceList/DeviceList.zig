@@ -1,16 +1,21 @@
 const std = @import("std");
 const debug = @import("../../lib/util/debug.zig");
 
+const MacOS = @import("../../modules/macos/MacOSTypes.zig");
+
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
 
 const ComponentFramework = @import("../framework/import/index.zig");
 const WorkerContext = @import("./WorkerContext.zig");
+
 const DeviceListUI = @import("./DeviceListUI.zig");
 
 const DeviceListState = struct {
-    devices: ?u8 = null,
+    devices: std.ArrayList(MacOS.USBStorageDevice),
 };
+
 const DeviceListComponent = @This();
+const ISOFilePickerUI = @import("../FilePicker/FilePickerUI.zig");
 
 const Component = ComponentFramework.Component;
 const ComponentState = ComponentFramework.ComponentState(DeviceListState);
@@ -29,12 +34,16 @@ allocator: std.mem.Allocator,
 uiComponent: ?DeviceListUI = null,
 
 pub const Events = struct {
-    pub const EventName = ComponentFramework.defineEvent("device_list.", struct {});
+    pub const onDiscoverDevicesEnd = ComponentFramework.defineEvent("device_list.on_discover_devices_end", struct {
+        devices: std.ArrayList(MacOS.USBStorageDevice),
+    });
 };
 
 pub fn init(allocator: std.mem.Allocator) !DeviceListComponent {
     return .{
-        .state = ComponentState.init(DeviceListState{}),
+        .state = ComponentState.init(DeviceListState{
+            .devices = std.ArrayList(MacOS.USBStorageDevice).init(allocator),
+        }),
         .allocator = allocator,
     };
 }
@@ -95,18 +104,40 @@ pub fn draw(self: *DeviceListComponent) !void {
     _ = self;
 }
 
-pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResult {
+pub fn getEventData(self: *DeviceListComponent, comptime EventType: type, event: ComponentEvent) ?*const EventType.Data {
     _ = self;
+    return EventType.getData(&event);
+}
 
-    const eventResult = EventResult{
+pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResult {
+    debug.printf("\nDeviceList: handleEvent() received an event: \"{s}\"", .{event.name});
+
+    var eventResult = EventResult{
         .success = false,
         .validation = 0,
     };
 
     eventLoop: switch (event.hash) {
         //
-        Events.EventName.Hash => {
-            break :eventLoop;
+        ISOFilePickerUI.Events.ISOFilePickerActiveStateChanged.Hash => {
+            const data = ISOFilePickerUI.Events.ISOFilePickerActiveStateChanged.getDataRaw(event) orelse break :eventLoop;
+
+            eventResult.success = true;
+            eventResult.validation = 1;
+
+            if (!data.isActive) self.dispatchComponentAction();
+        },
+
+        Events.onDiscoverDevicesEnd.Hash => {
+            const data = Events.onDiscoverDevicesEnd.getDataRaw(event) orelse break :eventLoop;
+
+            eventResult.success = true;
+            eventResult.validation = 1;
+
+            var state = self.state.getData();
+            state.devices = data.devices;
+
+            debug.print("\nDeviceList: Component processed USBStorageDevices from Worker");
         },
 
         else => {},
@@ -116,7 +147,14 @@ pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResu
 }
 
 pub fn deinit(self: *DeviceListComponent) void {
-    _ = self;
+    self.state.lock();
+    defer self.state.unlock();
+
+    for (self.state.data.devices.items) |*device| {
+        device.deinit();
+    }
+
+    self.state.data.devices.deinit();
 }
 
 fn discoverDevices(self: *DeviceListComponent) !void {

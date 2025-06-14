@@ -149,6 +149,8 @@ pub fn start(self: *ISOFilePickerUI) !void {
 }
 
 pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
+    debug.printf("\nISOFilePickerUI: handleEvent() received an event: \"{s}\"", .{event.name});
+
     var eventResult = EventResult{
         .success = false,
         .validation = 0,

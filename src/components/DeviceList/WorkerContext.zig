@@ -4,6 +4,8 @@ const debug = @import("../../lib/util/debug.zig");
 const MacOS = @import("../../modules/macos/MacOSTypes.zig");
 const IOKit = @import("../../modules/macos/IOKit.zig");
 
+const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
+
 const DeviceListComponent = @import("./DeviceList.zig");
 const DeviceListComponentWorker = @import("./DeviceList.zig").ComponentWorker;
 
@@ -22,9 +24,14 @@ pub fn workerRun(worker: *DeviceListComponentWorker, context: *anyopaque) void {
 
     debug.printf("\nDeviceList Worker: finished finding USB Storage devices, found: {d}", .{devices.items.len});
 
-    // _ = try deviceList.handleEvent(event: ComponentEvent)
+    var event = DeviceListComponent.Events.onDiscoverDevicesEnd.create(@ptrCast(@alignCast(worker.context.run_context)), &.{
+        .devices = devices,
+    });
 
-    // debug.print("\nUSBDevcesList Worker: Updated shared state. Done.\n");
+    // Important to toggle flag for self-notify override
+    event.flags.overrideNotifySelfOnSelfOrigin = true;
+
+    EventManager.broadcast(event);
 }
 
 pub fn workerCallback(worker: *DeviceListComponentWorker, context: *anyopaque) void {

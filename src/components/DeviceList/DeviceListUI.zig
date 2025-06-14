@@ -165,6 +165,8 @@ pub fn start(self: *DeviceListUI) !void {
 }
 
 pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
+    debug.printf("\nDeviceListUI: handleEvent() received an event: \"{s}\"", .{event.name});
+
     var eventResult = EventResult{
         .success = false,
         .validation = 0,

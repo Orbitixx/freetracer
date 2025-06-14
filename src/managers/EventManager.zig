@@ -18,7 +18,7 @@ pub const EventManagerSingleton = struct {
 
         pub fn broadcast(self: *EventManager, event: Event) void {
             for (self.subscribers.items) |component| {
-                if (component == event.source) continue;
+                if (component == event.source and event.flags.overrideNotifySelfOnSelfOrigin == false) continue;
 
                 _ = component.handleEvent(event) catch |err| {
                     debug.printf(
