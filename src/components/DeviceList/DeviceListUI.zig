@@ -2,6 +2,8 @@ const std = @import("std");
 const debug = @import("../../lib/util/debug.zig");
 const rl = @import("raylib");
 
+const MacOS = @import("../../modules/macos/MacOSTypes.zig");
+
 const WindowManager = @import("../../managers/WindowManager.zig").WindowManagerSingleton;
 const winRelX = WindowManager.relW;
 const winRelY = WindowManager.relH;
@@ -19,6 +21,7 @@ const EventResult = ComponentFramework.EventResult;
 
 const UIFramework = @import("../ui/import/index.zig");
 const Button = UIFramework.Button;
+const Checkbox = UIFramework.Checkbox;
 const Rectangle = UIFramework.Primitives.Rectangle;
 const Text = UIFramework.Primitives.Text;
 const Texture = UIFramework.Primitives.Texture;
@@ -28,8 +31,10 @@ const Color = UIFramework.Styles.Color;
 
 pub const DeviceListUIState = struct {
     active: bool = false,
-    deviceName: ?[:0]u8 = null,
+    devices: *std.ArrayList(MacOS.USBStorageDevice),
+    selectedDeviceName: ?[:0]u8 = null,
 };
+
 pub const ComponentState = ComponentFramework.ComponentState(DeviceListUIState);
 
 const DeviceListUI = @This();
@@ -42,11 +47,13 @@ parent: *DeviceList,
 component: ?Component = null,
 
 // Component-specific, unique props
+allocator: std.mem.Allocator,
 bgRect: ?Rectangle = null,
 headerLabel: ?Text = null,
 diskImg: ?Texture = null,
 button: ?Button = null,
 deviceNameLabel: ?Text = null,
+deviceCheckboxes: std.ArrayList(Checkbox),
 
 const BgRectParams = struct {
     width: f32,
@@ -55,9 +62,12 @@ const BgRectParams = struct {
 };
 
 pub const Events = struct {
+    //
     pub const DeviceListActiveStateChanged = ComponentFramework.defineEvent(
         "device_list_ui.active_state_changed",
-        struct { isActive: bool },
+        struct {
+            isActive: bool,
+        },
     );
 
     pub const DeviceListDeviceNameChanged = ComponentFramework.defineEvent(
@@ -66,14 +76,26 @@ pub const Events = struct {
             newDeviceName: [:0]u8,
         },
     );
+
+    pub const onDevicesReadyToRender = ComponentFramework.defineEvent(
+        "device_list_ui.on_devices_ready_to_render",
+        struct {},
+    );
 };
 
-pub fn init(parent: *DeviceList) !DeviceListUI {
+pub fn init(allocator: std.mem.Allocator, parent: *DeviceList) !DeviceListUI {
     debug.print("\nDeviceListUI: start() called.");
 
+    parent.state.lock();
+    defer parent.state.unlock();
+
     return DeviceListUI{
-        .state = ComponentState.init(DeviceListUIState{}),
+        .allocator = allocator,
+        .state = ComponentState.init(DeviceListUIState{
+            .devices = &parent.state.data.devices,
+        }),
         .parent = parent,
+        .deviceCheckboxes = std.ArrayList(Checkbox).init(allocator),
     };
 }
 
@@ -170,26 +192,8 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
     var eventResult = EventResult.init();
 
     eventLoop: switch (event.hash) {
-        //
-        Events.DeviceListDeviceNameChanged.Hash => {
-            //
-            const data = Events.DeviceListDeviceNameChanged.getData(event) orelse break :eventLoop;
-            eventResult.validate(1);
 
-            var state = self.state.getData();
-            state.deviceName = data.newDeviceName;
-
-            if (self.bgRect) |bgRect| {
-                self.deviceNameLabel = Text.init(state.deviceName.?, .{
-                    .x = bgRect.transform.relX(0.5),
-                    .y = bgRect.transform.relY(0.5),
-                }, .{
-                    .fontSize = 14,
-                });
-            }
-        },
-
-        // NOTE: ISOFilePickerUI emits this event in response to receiving the same event
+        // ISOFilePickerUI emits this event in response to receiving the same event
         ISOFilePickerUI.Events.ISOFilePickerUIGetUIDimensions.Hash => {
             //
             const data = ISOFilePickerUI.Events.ISOFilePickerUIGetUIDimensions.getData(event) orelse break :eventLoop;
@@ -206,9 +210,69 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
 
             return try self.handleEvent(Events.DeviceListActiveStateChanged.create(
                 &self.component.?,
-                // Return the __opposite__ of the ISOFilePicker active state.
+                // Set the __opposite__ of the ISOFilePicker active state.
                 &.{ .isActive = !data.isActive },
             ));
+        },
+
+        Events.onDevicesReadyToRender.Hash => {
+            //
+            //
+            debug.print("\nDeviceListUI: onDevicesReadyToRender() start.");
+
+            // self.state.lock();
+            // defer self.state.unlock();
+
+            if (self.state.data.devices.items.len < 1) {
+                debug.print("\nDeviceListUI: onDevicesReadyToRender(): no devices discovered, breaking the event loop.");
+                break :eventLoop;
+            }
+
+            debug.printf("\nDeviceListUI: onDevicesReadyToRender(): processing checkboxes for {d} devices.", .{self.state.data.devices.items.len});
+
+            for (self.state.data.devices.items, 0..) |device, i| {
+                //
+                const selectDeviceContext = try self.allocator.create(DeviceList.SelectDeviceCallbackContext);
+
+                selectDeviceContext.* = DeviceList.SelectDeviceCallbackContext{
+                    .component = self.parent,
+                    .selectedDevice = device,
+                };
+
+                try self.deviceCheckboxes.append(Checkbox.init(
+                    @ptrCast(@alignCast(device.deviceName)),
+                    .{
+                        .x = self.bgRect.?.transform.relX(0.2),
+                        .y = self.bgRect.?.transform.relY(0.12) + @as(f32, @floatFromInt(i)) * 25,
+                    },
+                    20,
+                    .Primary,
+                    .{
+                        .context = selectDeviceContext,
+                        .function = DeviceList.selectDeviceActionWrapper.call,
+                    },
+                ));
+            }
+
+            debug.print("\nDeviceListUI: onDevicesReadyToRender() end.");
+        },
+
+        Events.DeviceListDeviceNameChanged.Hash => {
+            //
+            const data = Events.DeviceListDeviceNameChanged.getData(event) orelse break :eventLoop;
+            eventResult.validate(1);
+
+            var state = self.state.getData();
+            state.selectedDeviceName = data.newDeviceName;
+
+            if (self.bgRect) |bgRect| {
+                self.deviceNameLabel = Text.init(state.selectedDeviceName.?, .{
+                    .x = bgRect.transform.relX(0.5),
+                    .y = bgRect.transform.relY(0.5),
+                }, .{
+                    .fontSize = 14,
+                });
+            }
         },
 
         Events.DeviceListActiveStateChanged.Hash => {
@@ -276,6 +340,10 @@ pub fn update(self: *DeviceListUI) !void {
     if (self.button) |*button| {
         try button.update();
     }
+
+    for (self.deviceCheckboxes.items) |*checkbox| {
+        try checkbox.update();
+    }
 }
 
 pub fn draw(self: *DeviceListUI) !void {
@@ -294,6 +362,15 @@ pub fn draw(self: *DeviceListUI) !void {
 }
 
 fn drawActive(self: *DeviceListUI) !void {
+    self.parent.state.lock();
+    defer self.parent.state.unlock();
+
+    if (self.deviceCheckboxes.items.len > 0) {
+        for (self.deviceCheckboxes.items) |*checkbox| {
+            try checkbox.draw();
+        }
+    }
+
     if (self.button) |*button| {
         try button.draw();
     }
@@ -310,9 +387,16 @@ fn drawInactive(self: *DeviceListUI) !void {
 }
 
 pub fn deinit(self: *DeviceListUI) void {
-    if (self.state.data.deviceName) |deviceName| {
+    if (self.state.data.selectedDeviceName) |deviceName| {
         self.parent.allocator.free(deviceName);
     }
+
+    for (self.deviceCheckboxes.items) |checkbox| {
+        const ctx: *DeviceList.SelectDeviceCallbackContext = @ptrCast(@alignCast(checkbox.clickHandler.context));
+        self.allocator.destroy(ctx);
+    }
+
+    self.deviceCheckboxes.deinit();
 }
 
 pub fn dispatchComponentAction(self: *DeviceListUI) void {

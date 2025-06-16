@@ -12,6 +12,7 @@ const DeviceListUI = @import("./DeviceListUI.zig");
 
 const DeviceListState = struct {
     devices: std.ArrayList(MacOS.USBStorageDevice),
+    selectedDevice: ?MacOS.USBStorageDevice = null,
 };
 
 const DeviceListComponent = @This();
@@ -83,7 +84,7 @@ pub fn start(self: *DeviceListComponent) !void {
 
         component.children = std.ArrayList(Component).init(self.allocator);
 
-        self.uiComponent = try DeviceListUI.init(self);
+        self.uiComponent = try DeviceListUI.init(self.allocator, self);
 
         if (component.children) |*children| {
             if (self.uiComponent) |*uiComponent| {
@@ -125,6 +126,10 @@ pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResu
             var state = self.state.getData();
             state.devices = data.devices;
 
+            const responseEvent = DeviceListUI.Events.onDevicesReadyToRender.create(&self.component.?, null);
+
+            EventManager.broadcast(responseEvent);
+
             debug.print("\nDeviceList: Component processed USBStorageDevices from Worker");
         },
 
@@ -155,9 +160,25 @@ fn discoverDevices(self: *DeviceListComponent) !void {
 }
 
 pub const dispatchComponentActionWrapper = struct {
-    pub fn call(ptr: *anyopaque) void {
-        _ = ptr;
+    pub fn call(ctx: *anyopaque) void {
+        _ = ctx;
         debug.print("\nDeviceList: component action wrapper dispatch.");
+    }
+};
+
+pub const SelectDeviceCallbackContext = struct {
+    component: *DeviceListComponent,
+    selectedDevice: MacOS.USBStorageDevice,
+};
+
+pub const selectDeviceActionWrapper = struct {
+    pub fn call(ctx: *anyopaque) void {
+        const context: *SelectDeviceCallbackContext = @ptrCast(@alignCast(ctx));
+
+        context.component.state.lock();
+        defer context.component.state.unlock();
+
+        context.component.state.data.selectedDevice = context.selectedDevice;
     }
 };
 
