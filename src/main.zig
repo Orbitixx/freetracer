@@ -46,7 +46,7 @@ const relY = WindowManager.relH;
 const relX = WindowManager.relW;
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{ .thread_safe = true }){};
+    var gpa = std.heap.DebugAllocator(.{ .thread_safe = true }).init;
     const allocator = gpa.allocator();
 
     defer {
