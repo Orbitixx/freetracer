@@ -242,7 +242,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
                 try self.deviceCheckboxes.append(Checkbox.init(
                     @ptrCast(@alignCast(device.deviceName)),
                     .{
-                        .x = self.bgRect.?.transform.relX(0.2),
+                        .x = self.bgRect.?.transform.relX(0.05),
                         .y = self.bgRect.?.transform.relY(0.12) + @as(f32, @floatFromInt(i)) * 25,
                     },
                     20,
@@ -252,6 +252,13 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
                         .function = DeviceList.selectDeviceActionWrapper.call,
                     },
                 ));
+
+                for (self.deviceCheckboxes.items) |*checkbox| {
+                    checkbox.outerRect.bordered = true;
+                    checkbox.outerRect.rounded = true;
+                    checkbox.innerRect.rounded = true;
+                    try checkbox.start();
+                }
             }
 
             debug.print("\nDeviceListUI: onDevicesReadyToRender() end.");
@@ -337,12 +344,12 @@ fn recalculateUI(self: *DeviceListUI, bgRectParams: BgRectParams) void {
 }
 
 pub fn update(self: *DeviceListUI) !void {
-    if (self.button) |*button| {
-        try button.update();
-    }
-
     for (self.deviceCheckboxes.items) |*checkbox| {
         try checkbox.update();
+    }
+
+    if (self.button) |*button| {
+        try button.update();
     }
 }
 
@@ -362,13 +369,11 @@ pub fn draw(self: *DeviceListUI) !void {
 }
 
 fn drawActive(self: *DeviceListUI) !void {
-    self.parent.state.lock();
-    defer self.parent.state.unlock();
+    // self.parent.state.lock();
+    // defer self.parent.state.unlock();
 
-    if (self.deviceCheckboxes.items.len > 0) {
-        for (self.deviceCheckboxes.items) |*checkbox| {
-            try checkbox.draw();
-        }
+    for (self.deviceCheckboxes.items) |*checkbox| {
+        try checkbox.draw();
     }
 
     if (self.button) |*button| {

@@ -85,6 +85,7 @@ pub fn init(text: [:0]const u8, position: rl.Vector2, size: f32, variant: Checkb
             .w = outerRect.transform.w + CHECKBOX_TEXT_MARGIN + textDimensions.width,
             .h = if (size > textDimensions.height) size else textDimensions.height,
         },
+        .state = .NORMAL,
         .outerRect = outerRect,
         .innerRect = innerRect,
         .text = _text,
