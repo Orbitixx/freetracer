@@ -44,11 +44,11 @@ const COMPONENT_UI_GAP: f32 = 20;
 
 // Component-agnostic props
 state: ComponentState,
-parent: *DeviceList,
 component: ?Component = null,
 
 // Component-specific, unique props
 allocator: std.mem.Allocator,
+parent: *DeviceList,
 bgRect: ?Rectangle = null,
 headerLabel: ?Text = null,
 moduleImg: ?Texture = null,
@@ -85,6 +85,7 @@ pub const Events = struct {
     );
 };
 
+// Creates and returns an instance of DeviceListUI component
 pub fn init(allocator: std.mem.Allocator, parent: *DeviceList) !DeviceListUI {
     debug.print("\nDeviceListUI: start() called.");
 
@@ -101,11 +102,14 @@ pub fn init(allocator: std.mem.Allocator, parent: *DeviceList) !DeviceListUI {
     };
 }
 
+// Parent param is technically not required here, since the component already stores it as a property,
+// however, the param is preserved for convention's sake.
 pub fn initComponent(self: *DeviceListUI, parent: ?*Component) !void {
     if (self.component != null) return error.BaseComponentAlreadyInitialized;
     self.component = try Component.init(self, &ComponentImplementation.vtable, parent);
 }
 
+// Called once upon component initialization.
 pub fn start(self: *DeviceListUI) !void {
     debug.print("\nDeviceListUI: component start() called.");
 
