@@ -51,7 +51,7 @@ component: ?Component = null,
 allocator: std.mem.Allocator,
 bgRect: ?Rectangle = null,
 headerLabel: ?Text = null,
-diskImg: ?Texture = null,
+moduleImg: ?Texture = null,
 button: ?Button = null,
 deviceNameLabel: ?Text = null,
 deviceCheckboxes: std.ArrayList(Checkbox),
@@ -64,24 +64,24 @@ const BgRectParams = struct {
 
 pub const Events = struct {
     //
-    pub const DeviceListActiveStateChanged = ComponentFramework.defineEvent(
-        "device_list_ui.active_state_changed",
+    pub const onDeviceListActiveStateChanged = ComponentFramework.defineEvent(
+        "device_list_ui.on_active_state_changed",
         struct {
             isActive: bool,
-        },
-    );
-
-    pub const onSelectedDeviceNameChanged = ComponentFramework.defineEvent(
-        "device_list_ui.on_device_name_changed",
-        struct {
-            // newDeviceName: ?[:0]u8,
-            selectedDevice: ?MacOS.USBStorageDevice,
         },
     );
 
     pub const onDevicesReadyToRender = ComponentFramework.defineEvent(
         "device_list_ui.on_devices_ready_to_render",
         struct {},
+    );
+
+    pub const onSelectedDeviceNameChanged = ComponentFramework.defineEvent(
+        "device_list_ui.on_device_name_changed",
+        struct {
+            // Not authoritative data; copy only -- use parent.
+            selectedDevice: ?MacOS.USBStorageDevice,
+        },
     );
 };
 
@@ -138,7 +138,7 @@ pub fn start(self: *DeviceListUI) !void {
             .Primary,
             .{
                 .context = self.parent,
-                .function = DeviceList.dispatchComponentActionWrapper.call,
+                .function = DeviceList.dispatchComponentFinishedAction.call,
             },
         );
 
@@ -155,10 +155,10 @@ pub fn start(self: *DeviceListUI) !void {
             .textColor = Styles.Color.white,
         });
 
-        self.diskImg = Texture.init(.DISK_IMAGE, .{ .x = 0, .y = 0 });
+        self.moduleImg = Texture.init(.USB_IMAGE, .{ .x = 0, .y = 0 });
 
-        if (self.diskImg) |*img| {
-            img.transform.scale = 0.7;
+        if (self.moduleImg) |*img| {
+            img.transform.scale = 0.5;
             img.transform.x = bgRect.transform.relX(0.5) - img.transform.getWidth() / 2;
             img.transform.y = bgRect.transform.relY(0.5) - img.transform.getHeight() / 2;
             img.tint = .{ .r = 255, .g = 255, .b = 255, .a = 150 };
@@ -178,7 +178,7 @@ pub fn start(self: *DeviceListUI) !void {
         self.deviceNameLabel = Text.init("No device selected...", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
 
         if (self.deviceNameLabel) |*label| {
-            if (self.diskImg) |img| {
+            if (self.moduleImg) |img| {
                 label.transform.x = bgRect.transform.relX(0.5) - label.getDimensions().width / 2;
                 label.transform.y = img.transform.y + img.transform.getHeight() + winRelY(0.02);
             }
@@ -210,7 +210,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
             //
             const data = ISOFilePickerUI.Events.ISOFilePickerActiveStateChanged.getData(event) orelse break :eventLoop;
 
-            return try self.handleEvent(Events.DeviceListActiveStateChanged.create(
+            return try self.handleEvent(Events.onDeviceListActiveStateChanged.create(
                 &self.component.?,
                 // Set the __opposite__ of the ISOFilePicker active state.
                 &.{ .isActive = !data.isActive },
@@ -312,9 +312,9 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
             }
         },
 
-        Events.DeviceListActiveStateChanged.Hash => {
+        Events.onDeviceListActiveStateChanged.Hash => {
             //
-            const data = Events.DeviceListActiveStateChanged.getData(event) orelse break :eventLoop;
+            const data = Events.onDeviceListActiveStateChanged.getData(event) orelse break :eventLoop;
             eventResult.validate(1);
 
             var state = self.state.getData();
@@ -323,6 +323,11 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
             switch (state.active) {
                 true => {
                     debug.print("\nDeviceListUI: setting UI to ACTIVE.");
+
+                    if (self.headerLabel) |*header| {
+                        header.style.textColor = Color.white;
+                    }
+
                     self.recalculateUI(.{
                         .width = winRelX(0.35),
                         .color = Color.blueGray,
@@ -332,6 +337,11 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
 
                 false => {
                     debug.print("\nDeviceListUI: setting UI to INACTIVE.");
+
+                    if (self.headerLabel) |*header| {
+                        header.style.textColor = Color.lightGray;
+                    }
+
                     self.recalculateUI(.{
                         .width = winRelX(0.16),
                         .color = Color.darkBlueGray,
@@ -359,9 +369,14 @@ fn recalculateUI(self: *DeviceListUI, bgRectParams: BgRectParams) void {
             headerLabel.transform.y = bgRect.transform.relY(0.01);
         }
 
-        if (self.deviceNameLabel) |*deviceNameLabel| {
-            deviceNameLabel.transform.x = bgRect.transform.relX(0.5) - deviceNameLabel.getDimensions().width / 2;
-            deviceNameLabel.transform.y = bgRect.transform.relY(0.5) - deviceNameLabel.getDimensions().height / 2;
+        if (self.moduleImg) |*image| {
+            image.transform.x = bgRect.transform.relX(0.5) - image.transform.getWidth() / 2;
+            image.transform.y = bgRect.transform.relY(0.5) - image.transform.getHeight() / 2;
+
+            if (self.deviceNameLabel) |*deviceNameLabel| {
+                deviceNameLabel.transform.x = bgRect.transform.relX(0.5) - deviceNameLabel.getDimensions().width / 2;
+                deviceNameLabel.transform.y = image.transform.y + image.transform.getHeight() + winRelY(0.02);
+            }
         }
 
         if (self.button) |*btn| {
@@ -374,6 +389,11 @@ fn recalculateUI(self: *DeviceListUI, bgRectParams: BgRectParams) void {
 }
 
 pub fn update(self: *DeviceListUI) !void {
+    const state = self.state.getDataLocked();
+    defer self.state.unlock();
+
+    if (!state.active) return;
+
     for (self.deviceCheckboxes.items) |*checkbox| {
         try checkbox.update();
     }
@@ -413,7 +433,7 @@ fn drawInactive(self: *DeviceListUI) !void {
         label.draw();
     }
 
-    if (self.diskImg) |img| {
+    if (self.moduleImg) |img| {
         img.draw();
     }
 }

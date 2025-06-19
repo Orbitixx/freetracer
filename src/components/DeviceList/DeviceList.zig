@@ -38,6 +38,8 @@ pub const Events = struct {
     pub const onDiscoverDevicesEnd = ComponentFramework.defineEvent("device_list.on_discover_devices_end", struct {
         devices: std.ArrayList(MacOS.USBStorageDevice),
     });
+
+    pub const onSelectedDeviceConfirmed = ComponentFramework.defineEvent("device_list.on_selected_device_confirmed", struct {});
 };
 
 pub fn init(allocator: std.mem.Allocator) !DeviceListComponent {
@@ -159,9 +161,13 @@ fn discoverDevices(self: *DeviceListComponent) !void {
     }
 }
 
-pub const dispatchComponentActionWrapper = struct {
+pub const dispatchComponentFinishedAction = struct {
     pub fn call(ctx: *anyopaque) void {
-        _ = ctx;
+        const self = DeviceListComponent.asInstance(ctx);
+
+        const event = DeviceListUI.Events.onDeviceListActiveStateChanged.create(&self.component.?, &.{ .isActive = false });
+        EventManager.broadcast(event);
+
         debug.print("\nDeviceList: component action wrapper dispatch.");
     }
 };
@@ -194,7 +200,6 @@ pub const selectDeviceActionWrapper = struct {
             },
         );
 
-        // const newDeviceName: ?[]u8 = if (context.component.state.data.selectedDevice != null) context.component.state.data.selectedDevice.?.bsdName else null;
         const event = DeviceListUI.Events.onSelectedDeviceNameChanged.create(&context.component.component.?, &.{ .selectedDevice = context.component.state.data.selectedDevice });
         EventManager.broadcast(event);
     }

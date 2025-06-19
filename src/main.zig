@@ -29,9 +29,6 @@ const ComponentRegistry = @import("components/Registry.zig").ComponentRegistry;
 const Font = @import("managers/ResourceManager.zig").FONT;
 const Color = @import("components/ui/Styles.zig").Color;
 
-// const FilePickerComponent = @import("components/FilePicker/Component.zig");
-const USBDevicesListComponent = @import("components/USBDevicesList/Component.zig");
-
 const ComponentFramework = @import("./components/framework/import/index.zig");
 const ISOFilePicker = @import("./components/FilePicker/FilePicker.zig");
 const DeviceList = @import("./components/DeviceList/DeviceList.zig");
@@ -78,10 +75,10 @@ pub fn main() !void {
     //--- @COMPONENTS ------------------------------------------------------------------
     //----------------------------------------------------------------------------------
 
-    var componentRegistry: ComponentRegistry = .{ .components = std.AutoHashMap(ComponentID, Component).init(allocator) };
-    defer componentRegistry.deinit();
-    //
-    const appObserver: AppObserver = .{ .componentRegistry = &componentRegistry };
+    // var componentRegistry: ComponentRegistry = .{ .components = std.AutoHashMap(ComponentID, Component).init(allocator) };
+    // defer componentRegistry.deinit();
+    // //
+    // const appObserver: AppObserver = .{ .componentRegistry = &componentRegistry };
     //
     // var filePickerComponent = FilePickerComponent.init(allocator, &appObserver);
     //
@@ -102,7 +99,7 @@ pub fn main() !void {
     var newRegistry = ComponentFramework.Registry.init(allocator);
     defer newRegistry.deinit();
 
-    var isoFilePicker = try ISOFilePicker.init(allocator, &appObserver);
+    var isoFilePicker = try ISOFilePicker.init(allocator);
     try newRegistry.register(newComponentID.ISOFilePicker, @constCast(isoFilePicker.asComponentPtr()));
 
     var deviceList = try DeviceList.init(allocator);
@@ -171,7 +168,7 @@ pub fn main() !void {
         //--- @UPDATE COMPONENTS -----------------------------------------------------------
         //----------------------------------------------------------------------------------
 
-        componentRegistry.processUpdates();
+        // componentRegistry.processUpdates();
 
         try newRegistry.updateAll();
 
@@ -201,7 +198,7 @@ pub fn main() !void {
         logText.value = Logger.getLatestLog();
         logText.draw();
 
-        componentRegistry.processRendering();
+        // componentRegistry.processRendering();
 
         try newRegistry.drawAll();
 

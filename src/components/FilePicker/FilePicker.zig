@@ -7,7 +7,7 @@ const ComponentFramework = @import("../framework/import/index.zig");
 
 const UIFramework = @import("../ui/import/index.zig");
 
-const AppObserver = @import("../../observers/AppObserver.zig").AppObserver;
+// const AppObserver = @import("../../observers/AppObserver.zig").AppObserver;
 const ObserverEvent = @import("../../observers/ObserverEvents.zig").ObserverEvent;
 const ObserverPayload = @import("../../observers/ObserverPayload.zig");
 
@@ -34,7 +34,6 @@ worker: ?ComponentWorker = null,
 component: ?Component = null,
 
 // Component-specific, unique props
-appObserver: *const AppObserver,
 allocator: std.mem.Allocator,
 uiComponent: ?ISOFilePickerUI = null,
 
@@ -51,12 +50,11 @@ pub const Events = struct {
     );
 };
 
-pub fn init(allocator: std.mem.Allocator, appObserver: *const AppObserver) !ISOFilePickerComponent {
+pub fn init(allocator: std.mem.Allocator) !ISOFilePickerComponent {
     std.debug.print("\nISOFilePickerComponent: component initialized!", .{});
 
     return ISOFilePickerComponent{
         .allocator = allocator,
-        .appObserver = appObserver,
         .state = ComponentState.init(FilePickerState{}),
     };
 
@@ -210,8 +208,11 @@ pub fn deinit(self: *ISOFilePickerComponent) void {
     }
 }
 
+/// Deprecated; use EventManager instead;
 pub fn notify(self: *ISOFilePickerComponent, event: ObserverEvent, payload: ObserverPayload) void {
-    self.appObserver.onNotify(event, payload);
+    _ = self;
+    _ = event;
+    _ = payload;
 }
 
 pub fn selectFile(self: *ISOFilePickerComponent) !void {
