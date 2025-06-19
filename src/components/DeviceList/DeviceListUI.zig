@@ -33,6 +33,7 @@ pub const DeviceListUIState = struct {
     active: bool = false,
     devices: *std.ArrayList(MacOS.USBStorageDevice),
     selectedDeviceName: ?[:0]u8 = null,
+    selectedDevice: ?MacOS.USBStorageDevice = null,
 };
 
 pub const ComponentState = ComponentFramework.ComponentState(DeviceListUIState);
@@ -70,10 +71,11 @@ pub const Events = struct {
         },
     );
 
-    pub const DeviceListDeviceNameChanged = ComponentFramework.defineEvent(
-        "device_list_ui.device_name_changed",
+    pub const onSelectedDeviceNameChanged = ComponentFramework.defineEvent(
+        "device_list_ui.on_device_name_changed",
         struct {
-            newDeviceName: [:0]u8,
+            // newDeviceName: ?[:0]u8,
+            selectedDevice: ?MacOS.USBStorageDevice,
         },
     );
 
@@ -233,13 +235,33 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
                 //
                 const selectDeviceContext = try self.allocator.create(DeviceList.SelectDeviceCallbackContext);
 
+                // Define context for the checkbox's on-click behavior/callback
                 selectDeviceContext.* = DeviceList.SelectDeviceCallbackContext{
                     .component = self.parent,
                     .selectedDevice = device,
                 };
 
+                // Buffered display string in a predefined format
+                const deviceStringBuffer = self.allocator.allocSentinel(u8, 254, 0x00) catch |err| {
+                    std.debug.panic("\n{any}", .{err});
+                };
+
+                _ = std.fmt.bufPrintZ(
+                    deviceStringBuffer,
+                    "{s} - {s} ({d:.0}GB)",
+                    .{
+                        device.deviceName,
+                        std.mem.sliceTo(device.bsdName, 0x00),
+                        @divTrunc(device.size, 1_000_000_000),
+                    },
+                ) catch |err| {
+                    std.debug.panic("\n{any}", .{err});
+                };
+
+                debug.printf("\nComponentUI: formatted string is: {s}", .{deviceStringBuffer});
+
                 try self.deviceCheckboxes.append(Checkbox.init(
-                    @ptrCast(@alignCast(device.deviceName)),
+                    @ptrCast(@alignCast(deviceStringBuffer)),
                     .{
                         .x = self.bgRect.?.transform.relX(0.05),
                         .y = self.bgRect.?.transform.relY(0.12) + @as(f32, @floatFromInt(i)) * 25,
@@ -264,20 +286,19 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
         },
 
         // Fired when a device is selected, e.g. selectedDevice != null
-        Events.DeviceListDeviceNameChanged.Hash => {
+        Events.onSelectedDeviceNameChanged.Hash => {
             //
-            const data = Events.DeviceListDeviceNameChanged.getData(event) orelse break :eventLoop;
+            const data = Events.onSelectedDeviceNameChanged.getData(event) orelse break :eventLoop;
             eventResult.validate(1);
 
             var state = self.state.getData();
 
-            // WARNING: Debug assertion
-            std.debug.assert(data.newDeviceName.len > 1);
+            state.selectedDevice = data.selectedDevice;
 
-            state.selectedDeviceName = data.newDeviceName;
+            const labelDisplayName: [:0]const u8 = if (data.selectedDevice) |device| @ptrCast(@alignCast(device.deviceName)) else "NULL";
 
             if (self.bgRect) |bgRect| {
-                self.deviceNameLabel = Text.init(state.selectedDeviceName.?, .{
+                self.deviceNameLabel = Text.init(labelDisplayName, .{
                     .x = bgRect.transform.relX(0.5),
                     .y = bgRect.transform.relY(0.5),
                 }, .{
@@ -285,9 +306,9 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
                 });
             }
 
-            // Activate the "Next" button after a device is selected
+            // Toggle the "Next" button based on whether or not a device is selected
             if (self.button) |*button| {
-                button.setEnabled(true);
+                button.setEnabled(data.selectedDevice != null);
             }
         },
 
@@ -384,7 +405,6 @@ fn drawActive(self: *DeviceListUI) !void {
 
     if (self.button) |*button| {
         try button.draw();
-        debug.printf("\nButton state: {any} ", .{button.state});
     }
 }
 
@@ -399,11 +419,15 @@ fn drawInactive(self: *DeviceListUI) !void {
 }
 
 pub fn deinit(self: *DeviceListUI) void {
-    if (self.state.data.selectedDeviceName) |deviceName| {
-        self.parent.allocator.free(deviceName);
-    }
+    // if (self.state.data.selectedDeviceName) |deviceName| {
+    //     self.parent.allocator.free(deviceName);
+    // }
 
     for (self.deviceCheckboxes.items) |checkbox| {
+        // Free the buffered display name (allocated via std.mem.buffPrintZ)
+        self.allocator.free(checkbox.text.value);
+
+        // Destroy the heap-based pointer to the checkbox's on-click context
         const ctx: *DeviceList.SelectDeviceCallbackContext = @ptrCast(@alignCast(checkbox.clickHandler.context));
         self.allocator.destroy(ctx);
     }

@@ -194,8 +194,8 @@ pub const selectDeviceActionWrapper = struct {
             },
         );
 
-        // WARNING: Problematic assignment (invalid free + ignores null option)
-        const event = DeviceListUI.Events.DeviceListDeviceNameChanged.create(&context.component.component.?, &.{ .newDeviceName = @ptrCast(@alignCast(context.selectedDevice.bsdName)) });
+        // const newDeviceName: ?[]u8 = if (context.component.state.data.selectedDevice != null) context.component.state.data.selectedDevice.?.bsdName else null;
+        const event = DeviceListUI.Events.onSelectedDeviceNameChanged.create(&context.component.component.?, &.{ .selectedDevice = context.component.state.data.selectedDevice });
         EventManager.broadcast(event);
     }
 };
