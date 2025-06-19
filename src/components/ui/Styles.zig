@@ -43,6 +43,7 @@ pub const ButtonStyles = struct {
     normal: ButtonStyle,
     hover: ButtonStyle,
     active: ButtonStyle,
+    disabled: ButtonStyle,
 };
 
 pub const CheckboxStyle = struct {

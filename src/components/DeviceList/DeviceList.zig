@@ -178,7 +178,25 @@ pub const selectDeviceActionWrapper = struct {
         context.component.state.lock();
         defer context.component.state.unlock();
 
-        context.component.state.data.selectedDevice = context.selectedDevice;
+        // TODO: ugly block, refactor
+        if (context.component.state.data.selectedDevice) |currentlySelectedDevice| {
+            // If the same device is already selected -- then unselect it
+            context.component.state.data.selectedDevice = if (currentlySelectedDevice.serviceId == context.selectedDevice.serviceId) null else context.selectedDevice;
+        } else {
+            // Otherwise, assign a device
+            context.component.state.data.selectedDevice = context.selectedDevice;
+        }
+
+        debug.printf(
+            "\nDeviceList: selected device set to: {s}",
+            .{
+                if (context.component.state.data.selectedDevice != null) std.mem.sliceTo(context.selectedDevice.bsdName, 0x00) else "NULL",
+            },
+        );
+
+        // WARNING: Problematic assignment (invalid free + ignores null option)
+        const event = DeviceListUI.Events.DeviceListDeviceNameChanged.create(&context.component.component.?, &.{ .newDeviceName = @ptrCast(@alignCast(context.selectedDevice.bsdName)) });
+        EventManager.broadcast(event);
     }
 };
 

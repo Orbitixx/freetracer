@@ -118,6 +118,7 @@ pub fn update(self: *ButtonComponent) !void {
 
     if (isButtonHovered and isButtonClicked) {
         self.state = ButtonState.ACTIVE;
+        self.clickHandler.handle();
     } else if (isButtonHovered) {
         self.state = ButtonState.HOVER;
     } else {
@@ -132,15 +133,14 @@ pub fn update(self: *ButtonComponent) !void {
         .ACTIVE => {
             self.rect.style = self.styles.active.bgStyle;
             self.text.style = self.styles.active.textStyle;
-            self.clickHandler.handle();
         },
         .NORMAL => {
             self.rect.style = self.styles.normal.bgStyle;
             self.text.style = self.styles.normal.textStyle;
         },
         .DISABLED => {
-            self.rect.style = self.styles.active.bgStyle;
-            self.text.style = self.styles.active.textStyle;
+            self.rect.style = self.styles.disabled.bgStyle;
+            self.text.style = self.styles.disabled.textStyle;
         },
     }
 }
@@ -168,6 +168,21 @@ pub fn handleEvent(self: *ButtonComponent, event: Event) !EventResult {
     return eventResult;
 }
 
+pub fn setEnabled(self: *ButtonComponent, flag: bool) void {
+    switch (flag) {
+        true => {
+            self.state = .NORMAL;
+            self.rect.style = self.styles.normal.bgStyle;
+            self.text.style = self.styles.normal.textStyle;
+        },
+        false => {
+            self.state = .DISABLED;
+            self.rect.style = self.styles.disabled.bgStyle;
+            self.text.style = self.styles.disabled.textStyle;
+        },
+    }
+}
+
 pub fn deinit(self: *ButtonComponent) void {
     _ = self;
 }
@@ -193,6 +208,11 @@ pub const ButtonVariant = struct {
     },
 
     active: ButtonStyle = .{
+        .bgStyle = .{},
+        .textStyle = .{},
+    },
+
+    disabled: ButtonStyle = .{
         .bgStyle = .{},
         .textStyle = .{},
     },
@@ -237,6 +257,19 @@ pub const ButtonVariant = struct {
                 .textColor = .white,
             },
         },
+        .disabled = .{
+            .bgStyle = .{
+                .borderStyle = .{},
+                .color = Color.transparentDark,
+                .roundness = 0.2,
+            },
+            .textStyle = .{
+                .font = .ROBOTO_REGULAR,
+                .fontSize = 14,
+                .spacing = 0,
+                .textColor = Color.lightGray,
+            },
+        },
     };
 
     fn asButtonStyles(self: ButtonVariant) ButtonStyles {
@@ -244,6 +277,7 @@ pub const ButtonVariant = struct {
             .normal = self.normal,
             .hover = self.hover,
             .active = self.active,
+            .disabled = self.disabled,
         };
     }
 };

@@ -140,8 +140,8 @@ pub fn start(self: *DeviceListUI) !void {
             },
         );
 
-        if (self.button) |*btn| {
-            btn.state = .DISABLED;
+        if (self.button) |*button| {
+            button.setEnabled(false);
         }
 
         self.headerLabel = Text.init("device", .{
@@ -217,7 +217,6 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
 
         Events.onDevicesReadyToRender.Hash => {
             //
-            //
             debug.print("\nDeviceListUI: onDevicesReadyToRender() start.");
 
             // self.state.lock();
@@ -264,12 +263,17 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
             debug.print("\nDeviceListUI: onDevicesReadyToRender() end.");
         },
 
+        // Fired when a device is selected, e.g. selectedDevice != null
         Events.DeviceListDeviceNameChanged.Hash => {
             //
             const data = Events.DeviceListDeviceNameChanged.getData(event) orelse break :eventLoop;
             eventResult.validate(1);
 
             var state = self.state.getData();
+
+            // WARNING: Debug assertion
+            std.debug.assert(data.newDeviceName.len > 1);
+
             state.selectedDeviceName = data.newDeviceName;
 
             if (self.bgRect) |bgRect| {
@@ -279,6 +283,11 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
                 }, .{
                     .fontSize = 14,
                 });
+            }
+
+            // Activate the "Next" button after a device is selected
+            if (self.button) |*button| {
+                button.setEnabled(true);
             }
         },
 
@@ -369,15 +378,13 @@ pub fn draw(self: *DeviceListUI) !void {
 }
 
 fn drawActive(self: *DeviceListUI) !void {
-    // self.parent.state.lock();
-    // defer self.parent.state.unlock();
-
     for (self.deviceCheckboxes.items) |*checkbox| {
         try checkbox.draw();
     }
 
     if (self.button) |*button| {
         try button.draw();
+        debug.printf("\nButton state: {any} ", .{button.state});
     }
 }
 

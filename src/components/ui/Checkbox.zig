@@ -116,8 +116,11 @@ pub fn update(self: *Checkbox) !void {
 
     if (isCheckboxHovered and isCheckboxClicked) {
         if (self.state == .CHECKED) {
+            // Handle state transition from CHECKED to NORMAL
             self.state = CheckboxState.NORMAL;
+            self.clickHandler.handle();
         } else {
+            // Handle State transition from NORMAL to CHECKED
             self.state = CheckboxState.CHECKED;
             self.clickHandler.handle();
         }
