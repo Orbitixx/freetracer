@@ -20,35 +20,29 @@ const IOKit = @import("modules/macos/IOKit.zig");
 const DiskArbitration = @import("modules/macos/DiskArbitration.zig");
 const PrivilegedHelper = @import("modules/macos/PrivilegedHelper.zig");
 
-const AppObserver = @import("observers/AppObserver.zig").AppObserver;
-
-const Component = @import("components/Component.zig");
-const ComponentID = @import("components/Registry.zig").ComponentID;
-const ComponentRegistry = @import("components/Registry.zig").ComponentRegistry;
-
 const Font = @import("managers/ResourceManager.zig").FONT;
 const Color = @import("components/ui/Styles.zig").Color;
 
 const ComponentFramework = @import("./components/framework/import/index.zig");
+const ComponentID = ComponentFramework.ComponentID;
+
 const ISOFilePicker = @import("./components/FilePicker/FilePicker.zig");
 const DeviceList = @import("./components/DeviceList/DeviceList.zig");
 
+const UI = @import("./components/ui/Primitives.zig");
 const Button = @import("components/ui/Button.zig");
 const Checkbox = @import("components/ui/Checkbox.zig");
-const newComponentID = ComponentFramework.ComponentID;
-
-const UI = @import("./components/ui/Primitives.zig");
 
 const relY = WindowManager.relH;
 const relX = WindowManager.relW;
 
 pub fn main() !void {
-    var gpa = std.heap.DebugAllocator(.{ .thread_safe = true }).init;
-    const allocator = gpa.allocator();
+    var debugAllocator = std.heap.DebugAllocator(.{ .thread_safe = true }).init;
+    const allocator = debugAllocator.allocator();
 
     defer {
-        _ = gpa.detectLeaks();
-        _ = gpa.deinit();
+        _ = debugAllocator.detectLeaks();
+        _ = debugAllocator.deinit();
     }
 
     //----------------------------------------------------------------------------------
@@ -75,75 +69,36 @@ pub fn main() !void {
     //--- @COMPONENTS ------------------------------------------------------------------
     //----------------------------------------------------------------------------------
 
-    // var componentRegistry: ComponentRegistry = .{ .components = std.AutoHashMap(ComponentID, Component).init(allocator) };
-    // defer componentRegistry.deinit();
-    // //
-    // const appObserver: AppObserver = .{ .componentRegistry = &componentRegistry };
-    //
-    // var filePickerComponent = FilePickerComponent.init(allocator, &appObserver);
-    //
-    // componentRegistry.registerComponent(
-    //     ComponentID.ISOFilePicker,
-    //     filePickerComponent.asComponent(),
-    // );
-    //
-    // componentRegistry.registerComponent(
-    //     ComponentID.USBDevicesList,
-    //     USBDevicesListComponent.init(allocator, &appObserver).asComponent(),
-    // );
-
-    //----------------------------------------------------------------------------------
-    // --- New Component framework ---
-    //----------------------------------------------------------------------------------
-
-    var newRegistry = ComponentFramework.Registry.init(allocator);
-    defer newRegistry.deinit();
+    var componentRegistry = ComponentFramework.Registry.init(allocator);
+    defer componentRegistry.deinit();
 
     var isoFilePicker = try ISOFilePicker.init(allocator);
-    try newRegistry.register(newComponentID.ISOFilePicker, @constCast(isoFilePicker.asComponentPtr()));
+    try componentRegistry.register(ComponentID.ISOFilePicker, @constCast(isoFilePicker.asComponentPtr()));
 
     var deviceList = try DeviceList.init(allocator);
-    try newRegistry.register(newComponentID.DeviceList, @constCast(deviceList.asComponentPtr()));
-
-    // try deviceList.initWorker();
-    // deviceList.dispatchComponentAction();
-
-    // const dispatchCheckboxActionWrapper = struct {
-    //     pub fn call(ptr: *anyopaque) void {
-    //         _ = ptr;
-    //         debug.print("\nCheckbox action called!");
-    //     }
-    // };
-
-    // var testCheckbox = Checkbox.init(
-    //     "Test checkbox",
-    //     .{ .x = 500, .y = 200 },
-    //     20,
-    //     .Primary,
-    //     .{
-    //         .function = dispatchCheckboxActionWrapper.call,
-    //         .context = &isoFilePicker,
-    //     },
-    // );
-    // testCheckbox.outerRect.rounded = true;
-    // testCheckbox.outerRect.bordered = true;
-    // testCheckbox.innerRect.bordered = false;
-    // testCheckbox.innerRect.rounded = true;
-    // try newRegistry.register(.TestBtn, @constCast(testCheckbox.asComponentPtr()));
+    try componentRegistry.register(ComponentID.DeviceList, @constCast(deviceList.asComponentPtr()));
 
     //----------------------------------------------------------------------------------
     //--- @END COMPONENTS --------------------------------------------------------------
     //----------------------------------------------------------------------------------
 
+    //----------------------------------------------------------------------------------
+    //--- @MACOS: PRIVILEGED HELPER TOOL  ----------------------------------------------
+    //----------------------------------------------------------------------------------
     var helperResponse: bool = false;
     helperResponse = true;
+
     // if (!PrivilegedHelper.isHelperToolInstalled()) {
     // helperResponse = PrivilegedHelper.installPrivilegedHelperTool();
     // } else helperResponse = true;
 
+    //----------------------------------------------------------------------------------
+    //--- @END MACOS: PRIVILEGED HELPER TOOL -------------------------------------------
+    //----------------------------------------------------------------------------------
+
     const backgroundColor: rl.Color = .{ .r = 29, .g = 44, .b = 64, .a = 100 };
 
-    try newRegistry.startAll();
+    try componentRegistry.startAll();
 
     const logoText = UI.Text.init("freetracer", .{ .x = relX(0.08), .y = relY(0.035) }, .{ .font = .JERSEY10_REGULAR, .fontSize = 40, .textColor = Color.white });
     const subLogoText = UI.Text.init("free and open-source by orbitixx", .{ .x = relX(0.08), .y = relY(0.035) + 32 }, .{ .font = .JERSEY10_REGULAR, .fontSize = 18, .textColor = Color.secondary });
@@ -168,9 +123,7 @@ pub fn main() !void {
         //--- @UPDATE COMPONENTS -----------------------------------------------------------
         //----------------------------------------------------------------------------------
 
-        // componentRegistry.processUpdates();
-
-        try newRegistry.updateAll();
+        try componentRegistry.updateAll();
 
         //----------------------------------------------------------------------------------
         //--- @ENDUPDATE COMPONENTS --------------------------------------------------------
@@ -192,15 +145,12 @@ pub fn main() !void {
 
         versionText.draw();
 
-        // rl.drawRectangleRec(rl.Rectangle.init(0, relY(0.94), WindowManager.getWindowWidth(), relH(0.06)), rl.Color.init(0, 0, 0, 60));
         logLineBgRect.draw();
 
         logText.value = Logger.getLatestLog();
         logText.draw();
 
-        // componentRegistry.processRendering();
-
-        try newRegistry.drawAll();
+        try componentRegistry.drawAll();
 
         defer rl.endDrawing();
 

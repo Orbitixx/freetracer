@@ -1,9 +1,6 @@
 const std = @import("std");
 const ComponentState = @import("./import/index.zig").ComponentState;
 
-const ObserverEvent = @import("../../observers/ObserverEvents.zig").ObserverEvent;
-const ObserverPayload = @import("../../observers/ObserverPayload.zig");
-
 const EventFramework = @import("Event.zig");
 const ComponentEvent = EventFramework.ComponentEvent;
 const EventResult = EventFramework.EventResult;

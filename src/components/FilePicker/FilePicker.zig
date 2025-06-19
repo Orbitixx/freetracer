@@ -7,10 +7,6 @@ const ComponentFramework = @import("../framework/import/index.zig");
 
 const UIFramework = @import("../ui/import/index.zig");
 
-// const AppObserver = @import("../../observers/AppObserver.zig").AppObserver;
-const ObserverEvent = @import("../../observers/ObserverEvents.zig").ObserverEvent;
-const ObserverPayload = @import("../../observers/ObserverPayload.zig");
-
 pub const FilePickerState = struct {
     selected_path: ?[:0]u8 = null,
     is_selecting: bool = false,
@@ -188,8 +184,6 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
             const makeUIInactiveEvent = ISOFilePickerUI.Events.ISOFilePickerActiveStateChanged.create(&self.component.?, &makeUIInactiveData);
 
             EventManager.broadcast(makeUIInactiveEvent);
-
-            self.notify(.ISO_FILE_SELECTED, .{});
         },
 
         else => {},
@@ -206,13 +200,6 @@ pub fn deinit(self: *ISOFilePickerComponent) void {
     if (state.selected_path) |path| {
         self.allocator.free(path);
     }
-}
-
-/// Deprecated; use EventManager instead;
-pub fn notify(self: *ISOFilePickerComponent, event: ObserverEvent, payload: ObserverPayload) void {
-    _ = self;
-    _ = event;
-    _ = payload;
 }
 
 pub fn selectFile(self: *ISOFilePickerComponent) !void {

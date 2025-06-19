@@ -26,7 +26,3 @@ pub fn truncToNull(string: []u8) []u8 {
 
     return string[0..nullPosition];
 }
-
-// pub fn toNullTerminated(string: []u8) [:0]const u8 {
-//
-// }
