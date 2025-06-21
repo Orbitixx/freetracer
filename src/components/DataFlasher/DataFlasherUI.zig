@@ -108,6 +108,15 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
 
     eventLoop: switch (event.hash) {
         //
+        DeviceList.onDeviceListActiveStateChanged.Hash => {
+            const data = Events.onSomething.getData(event) orelse break :eventLoop;
+            _ = data;
+
+            if (data.isActive == true) {} else {}
+
+            eventResult.validate(1);
+        },
+
         Events.onSomething.Hash => {
             //
             const data = Events.onSomething.getData(event) orelse break :eventLoop;
