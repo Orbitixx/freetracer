@@ -9,6 +9,7 @@ const ComponentFramework = @import("../framework/import/index.zig");
 // const WorkerContext = @import("./WorkerContext.zig");
 
 const DataFlasher = @import("./DataFlasher.zig");
+const DeviceList = @import("../DeviceList/DeviceList.zig");
 
 const DataFlasherUIState = struct {
     device: ?MacOS.USBStorageDevice = null,
@@ -108,9 +109,9 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
 
     eventLoop: switch (event.hash) {
         //
-        DeviceList.onDeviceListActiveStateChanged.Hash => {
-            const data = Events.onSomething.getData(event) orelse break :eventLoop;
-            _ = data;
+        DeviceList.Events.onDeviceListActiveStateChanged.Hash => {
+            //
+            const data = DeviceList.Events.onDeviceListActiveStateChanged.getData(event) orelse break :eventLoop;
 
             if (data.isActive == true) {} else {}
 

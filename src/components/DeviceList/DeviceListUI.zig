@@ -64,7 +64,7 @@ const BgRectParams = struct {
 
 pub const Events = struct {
     //
-    pub const onDeviceListActiveStateChanged = ComponentFramework.defineEvent(
+    pub const onDeviceListUIActiveStateChanged = ComponentFramework.defineEvent(
         "device_list_ui.on_active_state_changed",
         struct {
             isActive: bool,
@@ -214,11 +214,50 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
             //
             const data = ISOFilePickerUI.Events.ISOFilePickerActiveStateChanged.getData(event) orelse break :eventLoop;
 
-            return try self.handleEvent(Events.onDeviceListActiveStateChanged.create(
+            return try self.handleEvent(DeviceList.Events.onDeviceListActiveStateChanged.create(
                 &self.component.?,
                 // Set the __opposite__ of the ISOFilePicker active state.
                 &.{ .isActive = !data.isActive },
             ));
+        },
+
+        DeviceList.Events.onDeviceListActiveStateChanged.Hash => {
+            //
+            const data = DeviceList.Events.onDeviceListActiveStateChanged.getData(event) orelse break :eventLoop;
+            eventResult.validate(1);
+
+            var state = self.state.getData();
+            state.active = data.isActive;
+
+            switch (state.active) {
+                true => {
+                    debug.print("\nDeviceListUI: setting UI to ACTIVE.");
+
+                    if (self.headerLabel) |*header| {
+                        header.style.textColor = Color.white;
+                    }
+
+                    self.recalculateUI(.{
+                        .width = winRelX(0.35),
+                        .color = Color.blueGray,
+                        .borderColor = Color.white,
+                    });
+                },
+
+                false => {
+                    debug.print("\nDeviceListUI: setting UI to INACTIVE.");
+
+                    if (self.headerLabel) |*header| {
+                        header.style.textColor = Color.lightGray;
+                    }
+
+                    self.recalculateUI(.{
+                        .width = winRelX(0.16),
+                        .color = Color.darkBlueGray,
+                        .borderColor = Color.transparentDark,
+                    });
+                },
+            }
         },
 
         Events.onDevicesReadyToRender.Hash => {
@@ -313,45 +352,6 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
             // Toggle the "Next" button based on whether or not a device is selected
             if (self.button) |*button| {
                 button.setEnabled(data.selectedDevice != null);
-            }
-        },
-
-        Events.onDeviceListActiveStateChanged.Hash => {
-            //
-            const data = Events.onDeviceListActiveStateChanged.getData(event) orelse break :eventLoop;
-            eventResult.validate(1);
-
-            var state = self.state.getData();
-            state.active = data.isActive;
-
-            switch (state.active) {
-                true => {
-                    debug.print("\nDeviceListUI: setting UI to ACTIVE.");
-
-                    if (self.headerLabel) |*header| {
-                        header.style.textColor = Color.white;
-                    }
-
-                    self.recalculateUI(.{
-                        .width = winRelX(0.35),
-                        .color = Color.blueGray,
-                        .borderColor = Color.white,
-                    });
-                },
-
-                false => {
-                    debug.print("\nDeviceListUI: setting UI to INACTIVE.");
-
-                    if (self.headerLabel) |*header| {
-                        header.style.textColor = Color.lightGray;
-                    }
-
-                    self.recalculateUI(.{
-                        .width = winRelX(0.16),
-                        .color = Color.darkBlueGray,
-                        .borderColor = Color.transparentDark,
-                    });
-                },
             }
         },
         else => {},

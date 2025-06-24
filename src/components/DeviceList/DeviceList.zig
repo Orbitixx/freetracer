@@ -35,6 +35,10 @@ allocator: std.mem.Allocator,
 uiComponent: ?DeviceListUI = null,
 
 pub const Events = struct {
+    pub const onDeviceListActiveStateChanged = ComponentFramework.defineEvent("device_list.on_active_state_changed", struct {
+        isActive: bool,
+    });
+
     pub const onDiscoverDevicesEnd = ComponentFramework.defineEvent("device_list.on_discover_devices_end", struct {
         devices: std.ArrayList(MacOS.USBStorageDevice),
     });
@@ -165,7 +169,7 @@ pub const dispatchComponentFinishedAction = struct {
     pub fn call(ctx: *anyopaque) void {
         const self = DeviceListComponent.asInstance(ctx);
 
-        const event = DeviceListUI.Events.onDeviceListActiveStateChanged.create(&self.component.?, &.{ .isActive = false });
+        const event = Events.onDeviceListActiveStateChanged.create(&self.component.?, &.{ .isActive = false });
         EventManager.broadcast(event);
 
         debug.print("\nDeviceList: component action wrapper dispatch.");
