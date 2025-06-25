@@ -132,7 +132,7 @@ pub fn start(self: *DeviceListUI) !void {
     };
 
     // Get initial width of the preceding UI element
-    const event = ISOFilePickerUI.Events.ISOFilePickerUIGetUIDimensions.create(&self.component.?, null);
+    const event = ISOFilePickerUI.Events.onGetUIDimensions.create(&self.component.?, null);
     EventManager.broadcast(event);
 
     if (self.bgRect) |bgRect| {
@@ -200,9 +200,9 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
     eventLoop: switch (event.hash) {
 
         // ISOFilePickerUI emits this event in response to receiving the same event
-        ISOFilePickerUI.Events.ISOFilePickerUIGetUIDimensions.Hash => {
+        ISOFilePickerUI.Events.onGetUIDimensions.Hash => {
             //
-            const data = ISOFilePickerUI.Events.ISOFilePickerUIGetUIDimensions.getData(event) orelse break :eventLoop;
+            const data = ISOFilePickerUI.Events.onGetUIDimensions.getData(event) orelse break :eventLoop;
             eventResult.validate(1);
 
             if (self.bgRect) |*bgRect| {
@@ -210,9 +210,9 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
             }
         },
 
-        ISOFilePickerUI.Events.ISOFilePickerActiveStateChanged.Hash => {
+        ISOFilePickerUI.Events.onActiveStateChanged.Hash => {
             //
-            const data = ISOFilePickerUI.Events.ISOFilePickerActiveStateChanged.getData(event) orelse break :eventLoop;
+            const data = ISOFilePickerUI.Events.onActiveStateChanged.getData(event) orelse break :eventLoop;
 
             return try self.handleEvent(DeviceList.Events.onDeviceListActiveStateChanged.create(
                 &self.component.?,

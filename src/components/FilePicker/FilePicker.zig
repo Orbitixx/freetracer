@@ -35,12 +35,12 @@ uiComponent: ?ISOFilePickerUI = null,
 
 pub const Events = struct {
     //
-    pub const UIWidthChangedEvent = ComponentFramework.defineEvent(
+    pub const onUIWidthChanged = ComponentFramework.defineEvent(
         "iso_file_picker.ui_width_changed",
         struct { newWidth: f32 },
     );
 
-    pub const ISOFileSelected = ComponentFramework.defineEvent(
+    pub const onISOFileSelected = ComponentFramework.defineEvent(
         "iso_file_picker.iso_file_selected",
         struct { newPath: ?[:0]u8 = null },
     );
@@ -140,9 +140,9 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
     eventLoop: switch (event.hash) {
 
         // NOTE: On UI Dimensions Changed
-        ISOFilePickerUI.Events.ISOFilePickerUIGetUIDimensions.Hash => {
+        ISOFilePickerUI.Events.onGetUIDimensions.Hash => {
             //
-            const data = ISOFilePickerUI.Events.ISOFilePickerUIGetUIDimensions.getData(event) orelse break :eventLoop;
+            const data = ISOFilePickerUI.Events.onGetUIDimensions.getData(event) orelse break :eventLoop;
             eventResult.validate(1);
 
             debug.printf(
@@ -151,9 +151,9 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
             );
         },
 
-        Events.ISOFileSelected.Hash => {
+        Events.onISOFileSelected.Hash => {
             //
-            const data = Events.ISOFileSelected.getData(event) orelse break :eventLoop;
+            const data = Events.onISOFileSelected.getData(event) orelse break :eventLoop;
             eventResult.validate(1);
 
             debug.printf(
@@ -168,8 +168,8 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
             if (data.newPath) |newPath| {
                 const pathBuffer: [:0]u8 = try self.allocator.dupeZ(u8, newPath);
 
-                const eventData = ISOFilePickerUI.Events.ISOFilePathChanged.Data{ .newPath = pathBuffer };
-                const newEvent = ISOFilePickerUI.Events.ISOFilePathChanged.create(&self.component.?, &eventData);
+                const eventData = ISOFilePickerUI.Events.onISOFilePathChanged.Data{ .newPath = pathBuffer };
+                const newEvent = ISOFilePickerUI.Events.onISOFilePathChanged.create(&self.component.?, &eventData);
 
                 if (self.uiComponent) |*ui| {
                     const result = try ui.handleEvent(newEvent);
@@ -180,8 +180,8 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
                 }
             }
 
-            const makeUIInactiveData = ISOFilePickerUI.Events.ISOFilePickerActiveStateChanged.Data{ .isActive = false };
-            const makeUIInactiveEvent = ISOFilePickerUI.Events.ISOFilePickerActiveStateChanged.create(&self.component.?, &makeUIInactiveData);
+            const makeUIInactiveData = ISOFilePickerUI.Events.onActiveStateChanged.Data{ .isActive = false };
+            const makeUIInactiveEvent = ISOFilePickerUI.Events.onActiveStateChanged.create(&self.component.?, &makeUIInactiveData);
 
             EventManager.broadcast(makeUIInactiveEvent);
         },
@@ -248,11 +248,9 @@ pub fn workerRun(worker: *ComponentWorker, context: *anyopaque) void {
     // Currently, the ownership change occurs inside of handleEvent(), which assigns state as owner.
     const selectedPath = osd.path(worker.allocator, .open, .{});
 
-    const data = ISOFilePickerComponent.Events.ISOFileSelected.Data{ .newPath = selectedPath };
-
-    const event = ISOFilePickerComponent.Events.ISOFileSelected.create(
+    const event = ISOFilePickerComponent.Events.onISOFileSelected.create(
         &ISOFilePickerComponent.asInstance(worker.context.run_context).component.?,
-        &data,
+        &.{ .newPath = selectedPath },
     );
 
     _ = ISOFilePickerComponent.asInstance(worker.context.run_context).handleEvent(event) catch |err| {

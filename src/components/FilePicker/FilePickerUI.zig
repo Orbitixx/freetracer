@@ -52,17 +52,17 @@ const BgRectParams = struct {
 };
 
 pub const Events = struct {
-    pub const ISOFilePathChanged = ComponentFramework.defineEvent(
+    pub const onISOFilePathChanged = ComponentFramework.defineEvent(
         "iso_file_picker_ui.iso_file_path_changed",
         struct { newPath: [:0]u8 },
     );
 
-    pub const ISOFilePickerActiveStateChanged = ComponentFramework.defineEvent(
+    pub const onActiveStateChanged = ComponentFramework.defineEvent(
         "iso_file_picker_ui.active_state_changed",
         struct { isActive: bool },
     );
 
-    pub const ISOFilePickerUIGetUIDimensions = ComponentFramework.defineEvent(
+    pub const onGetUIDimensions = ComponentFramework.defineEvent(
         "iso_file_picker_ui.get_ui_width",
         struct { transform: Transform },
     );
@@ -155,9 +155,9 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
 
     eventLoop: switch (event.hash) {
         //
-        Events.ISOFilePathChanged.Hash => {
+        Events.onISOFilePathChanged.Hash => {
             //
-            const data = Events.ISOFilePathChanged.getData(event) orelse break :eventLoop;
+            const data = Events.onISOFilePathChanged.getData(event) orelse break :eventLoop;
             eventResult.validate(1);
 
             var state = self.state.getData();
@@ -191,17 +191,17 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
         },
 
         // NOTE: ISOFilePickerUI emits this event in response to receiving the same event
-        Events.ISOFilePickerUIGetUIDimensions.Hash => {
+        Events.onGetUIDimensions.Hash => {
             //
-            const data = Events.ISOFilePickerUIGetUIDimensions.Data{ .transform = self.bgRect.?.transform };
-            const responseEvent = Events.ISOFilePickerUIGetUIDimensions.create(&self.component.?, &data);
+            const data = Events.onGetUIDimensions.Data{ .transform = self.bgRect.?.transform };
+            const responseEvent = Events.onGetUIDimensions.create(&self.component.?, &data);
 
             EventManager.broadcast(responseEvent);
         },
 
-        Events.ISOFilePickerActiveStateChanged.Hash => {
+        Events.onActiveStateChanged.Hash => {
             //
-            const data = Events.ISOFilePickerActiveStateChanged.getData(event) orelse break :eventLoop;
+            const data = Events.onActiveStateChanged.getData(event) orelse break :eventLoop;
             eventResult.validate(1);
 
             var state = self.state.getData();
@@ -240,7 +240,7 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
                 },
             }
 
-            const responseEvent = Events.ISOFilePickerUIGetUIDimensions.create(
+            const responseEvent = Events.onGetUIDimensions.create(
                 &self.component.?,
                 &.{ .transform = self.bgRect.?.transform },
             );

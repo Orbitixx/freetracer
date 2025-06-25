@@ -118,8 +118,8 @@ pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResu
 
     eventLoop: switch (event.hash) {
         //
-        ISOFilePickerUI.Events.ISOFilePickerActiveStateChanged.Hash => {
-            const data = ISOFilePickerUI.Events.ISOFilePickerActiveStateChanged.getData(event) orelse break :eventLoop;
+        ISOFilePickerUI.Events.onActiveStateChanged.Hash => {
+            const data = ISOFilePickerUI.Events.onActiveStateChanged.getData(event) orelse break :eventLoop;
             eventResult.validate(1);
 
             if (!data.isActive) self.dispatchComponentAction();
