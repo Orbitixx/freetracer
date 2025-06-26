@@ -26,7 +26,7 @@ const Styles = UIFramework.Styles;
 const Color = Styles.Color;
 
 pub const ISOFilePickerUIState = struct {
-    active: bool = true,
+    isActive: bool = true,
     isoPath: ?[:0]u8 = null,
 };
 pub const ComponentState = ComponentFramework.ComponentState(ISOFilePickerUIState);
@@ -160,24 +160,26 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
             const data = Events.onISOFilePathChanged.getData(event) orelse break :eventLoop;
             eventResult.validate(1);
 
-            var state = self.state.getData();
-
-            state.isoPath = data.newPath;
+            // WARNING: Defer unlock() is OK as long as no other event is being broadcast here
+            // or any other call which involves a state lock race condition
+            self.state.lock();
+            defer self.state.unlock();
 
             var newName: [:0]const u8 = @ptrCast("No ISO selected...");
 
-            if (state.isoPath) |path| {
+            if (data.newPath.len > 0) {
+                //
+                self.state.data.isoPath = data.newPath;
 
-                // const path: [:0]const u8 = data.newPath orelse "No ISO selected...";
                 var lastSlash: usize = 0;
 
-                for (0..path.len) |i| {
+                for (0..data.newPath.len) |i| {
                     // Find the last forward slash in the path (0x2f)
-                    if (path[i] == 0x2f) lastSlash = i;
+                    if (data.newPath[i] == 0x2f) lastSlash = i;
                 }
 
                 // TODO: must be released in deinit()
-                newName = path[lastSlash + 1 .. path.len :0];
+                newName = data.newPath[lastSlash + 1 .. data.newPath.len :0];
             }
 
             if (self.bgRect) |bgRect| {
@@ -199,15 +201,15 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
             EventManager.broadcast(responseEvent);
         },
 
-        Events.onActiveStateChanged.Hash => {
+        ISOFilePicker.Events.onActiveStateChanged.Hash => {
             //
-            const data = Events.onActiveStateChanged.getData(event) orelse break :eventLoop;
+            const data = ISOFilePicker.Events.onActiveStateChanged.getData(event) orelse break :eventLoop;
             eventResult.validate(1);
 
             var state = self.state.getData();
-            state.active = data.isActive;
+            state.isActive = data.isActive;
 
-            switch (state.active) {
+            switch (state.isActive) {
                 true => {
                     if (self.headerLabel) |*header| {
                         header.style.textColor = Color.white;
@@ -290,8 +292,9 @@ pub fn update(self: *ISOFilePickerUI) !void {
 }
 
 pub fn draw(self: *ISOFilePickerUI) !void {
-    const state = self.state.getDataLocked();
-    defer self.state.unlock();
+    self.state.lock();
+    const isActive = self.state.data.isActive;
+    self.state.unlock();
 
     if (self.bgRect) |bgRect| {
         bgRect.draw();
@@ -305,7 +308,7 @@ pub fn draw(self: *ISOFilePickerUI) !void {
         img.draw();
     }
 
-    if (state.active) try self.drawActive() else try self.drawInactive();
+    if (isActive) try self.drawActive() else try self.drawInactive();
 }
 
 fn drawActive(self: *ISOFilePickerUI) !void {

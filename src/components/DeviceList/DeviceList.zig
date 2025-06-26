@@ -11,12 +11,13 @@ const WorkerContext = @import("./WorkerContext.zig");
 const DeviceListUI = @import("./DeviceListUI.zig");
 
 const DeviceListState = struct {
+    isActive: bool = false,
     devices: std.ArrayList(MacOS.USBStorageDevice),
     selectedDevice: ?MacOS.USBStorageDevice = null,
 };
 
 const DeviceListComponent = @This();
-const ISOFilePickerUI = @import("../FilePicker/FilePickerUI.zig");
+const ISOFilePicker = @import("../FilePicker/FilePicker.zig");
 
 const Component = ComponentFramework.Component;
 const ComponentState = ComponentFramework.ComponentState(DeviceListState);
@@ -35,15 +36,34 @@ allocator: std.mem.Allocator,
 uiComponent: ?DeviceListUI = null,
 
 pub const Events = struct {
-    pub const onDeviceListActiveStateChanged = ComponentFramework.defineEvent("device_list.on_active_state_changed", struct {
-        isActive: bool,
-    });
+    //
+    // Event: state.data.isActive property changed
+    pub const onDeviceListActiveStateChanged = ComponentFramework.defineEvent(
+        "device_list.on_active_state_changed",
+        struct {
+            isActive: bool,
+        },
+    );
 
-    pub const onDiscoverDevicesEnd = ComponentFramework.defineEvent("device_list.on_discover_devices_end", struct {
-        devices: std.ArrayList(MacOS.USBStorageDevice),
-    });
+    // Event: Worker finished discovering storage devices
+    pub const onDiscoverDevicesEnd = ComponentFramework.defineEvent(
+        "device_list.on_discover_devices_end",
+        struct {
+            devices: std.ArrayList(MacOS.USBStorageDevice),
+        },
+    );
 
-    pub const onSelectedDeviceConfirmed = ComponentFramework.defineEvent("device_list.on_selected_device_confirmed", struct {});
+    // Event: User selected a target storage device to be written
+    pub const onSelectedDeviceConfirmed = ComponentFramework.defineEvent(
+        "device_list.on_selected_device_confirmed",
+        struct {},
+    );
+
+    // Event: User completed interacting with this component (e.g. clicked "Next")
+    pub const onFinishedComponentInteraction = ComponentFramework.defineEvent(
+        "device_list.on_finished_component_interaction",
+        struct {},
+    );
 };
 
 pub fn init(allocator: std.mem.Allocator) !DeviceListComponent {
@@ -118,13 +138,28 @@ pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResu
 
     eventLoop: switch (event.hash) {
         //
-        ISOFilePickerUI.Events.onActiveStateChanged.Hash => {
-            const data = ISOFilePickerUI.Events.onActiveStateChanged.getData(event) orelse break :eventLoop;
+        // Event: Preceding component's state changed
+        // TODO: change this over to ISOFilePicker instead of its UI child
+        ISOFilePicker.Events.onActiveStateChanged.Hash => {
+            //
+            const data = ISOFilePicker.Events.onActiveStateChanged.getData(event) orelse break :eventLoop;
             eventResult.validate(1);
 
-            if (!data.isActive) self.dispatchComponentAction();
+            // If the preceding component is still active - ignore event;
+            if (data.isActive) break :eventLoop;
+
+            // Update state data in a block with shorter lifespan
+            {
+                self.state.lock();
+                errdefer self.state.unlock();
+                self.state.data.isActive = true;
+                self.state.unlock();
+            }
+
+            self.dispatchComponentAction();
         },
 
+        // Event: Worker finished discovering storage devices
         Events.onDiscoverDevicesEnd.Hash => {
             const data = Events.onDiscoverDevicesEnd.getData(event) orelse break :eventLoop;
             eventResult.validate(1);
@@ -137,6 +172,37 @@ pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResu
             EventManager.broadcast(responseEvent);
 
             debug.print("\nDeviceList: Component processed USBStorageDevices from Worker");
+        },
+
+        // Event: User has selected a target storage device
+        Events.onSelectedDeviceConfirmed.Hash => {
+            const data = Events.onDiscoverDevicesEnd.getData(event) orelse break :eventLoop;
+            eventResult.validate(1);
+
+            var state = self.state.getData();
+            state.devices = data.devices;
+        },
+
+        // Event: User is finished interacting with DeviceList component
+        Events.onFinishedComponentInteraction.Hash => {
+            self.state.unlock();
+            defer self.state.lock();
+
+            // Quality control check: OK to move on from component?
+            if (self.state.data.selectedDevice == null) {
+                debug.print("\nDeviceList.handleEvent.onFinishedComponentInteraction: WARNING - selectedDevice is NULL.");
+                break :eventLoop;
+            }
+
+            self.state.data.isActive = false;
+
+            // Prepare and broacast component state changed event
+            const responseEvent = Events.onDeviceListActiveStateChanged.create(
+                &self.component.?,
+                &.{ .isActive = false },
+            );
+
+            EventManager.broadcast(responseEvent);
         },
 
         else => {},

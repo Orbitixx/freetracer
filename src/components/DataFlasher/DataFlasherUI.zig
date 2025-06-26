@@ -51,6 +51,10 @@ headerLabel: ?Text = null,
 moduleImg: ?Texture = null,
 
 pub const Events = struct {
+    pub const onActiveStateChanged = ComponentFramework.defineEvent("data_flasher.on_active_state_changed", struct {
+        isActive: bool,
+    });
+
     pub const onSomething = ComponentFramework.defineEvent("data_flasher.on_", struct {});
 };
 
@@ -109,11 +113,13 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
 
     eventLoop: switch (event.hash) {
         //
-        DeviceList.Events.onDeviceListActiveStateChanged.Hash => {
+        Events.onActiveStateChanged.Hash => {
             //
-            const data = DeviceList.Events.onDeviceListActiveStateChanged.getData(event) orelse break :eventLoop;
+            const data = Events.onActiveStateChanged.getData(event) orelse break :eventLoop;
 
-            if (data.isActive == true) {} else {}
+            if (data.isActive == true) {
+                debug.printf("DataFlasherUI is now active");
+            } else {}
 
             eventResult.validate(1);
         },

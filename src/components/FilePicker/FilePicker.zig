@@ -35,6 +35,11 @@ uiComponent: ?ISOFilePickerUI = null,
 
 pub const Events = struct {
     //
+    pub const onActiveStateChanged = ComponentFramework.defineEvent(
+        "iso_file_picker.on_active_state_changed",
+        struct { isActive: bool },
+    );
+
     pub const onUIWidthChanged = ComponentFramework.defineEvent(
         "iso_file_picker.ui_width_changed",
         struct { newWidth: f32 },
@@ -153,23 +158,33 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
 
         Events.onISOFileSelected.Hash => {
             //
-            const data = Events.onISOFileSelected.getData(event) orelse break :eventLoop;
+            // const data = Events.onISOFileSelected.getData(event) orelse break :eventLoop;
+
+            self.state.lock();
+            defer self.state.unlock();
+
+            if (self.state.data.is_selecting or self.state.data.selected_path == null) {
+                debug.print("\nISOFilePicker.handleEvent.onISOFileSelected: WARNING - State reflects file is still being selected or path is NULL. Aborting event processing.");
+                break :eventLoop;
+            }
+
             eventResult.validate(1);
+
+            const path = self.state.data.selected_path;
 
             debug.printf(
                 "\nISOFilePickerComponent: handleEvent() received: \"{s}\" event, data: newPath = {s}",
-                .{ event.name, data.newPath.? },
+                .{ event.name, if (path) |newPath| newPath else "NULL" },
             );
 
-            var state = self.state.getData();
-            state.selected_path = data.newPath;
-            state.is_selecting = false;
-
-            if (data.newPath) |newPath| {
+            if (self.state.data.selected_path) |newPath| {
+                //
+                // TODO: Review this block again, this seems a bit crazy on the second look to dispatch another event with similar payload.
                 const pathBuffer: [:0]u8 = try self.allocator.dupeZ(u8, newPath);
 
-                const eventData = ISOFilePickerUI.Events.onISOFilePathChanged.Data{ .newPath = pathBuffer };
-                const newEvent = ISOFilePickerUI.Events.onISOFilePathChanged.create(&self.component.?, &eventData);
+                const newEvent = ISOFilePickerUI.Events.onISOFilePathChanged.create(&self.component.?, &.{
+                    .newPath = pathBuffer,
+                });
 
                 if (self.uiComponent) |*ui| {
                     const result = try ui.handleEvent(newEvent);
@@ -180,10 +195,9 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
                 }
             }
 
-            const makeUIInactiveData = ISOFilePickerUI.Events.onActiveStateChanged.Data{ .isActive = false };
-            const makeUIInactiveEvent = ISOFilePickerUI.Events.onActiveStateChanged.create(&self.component.?, &makeUIInactiveData);
+            const inactivateComponentEvent = Events.onActiveStateChanged.create(&self.component.?, &.{ .isActive = false });
 
-            EventManager.broadcast(makeUIInactiveEvent);
+            EventManager.broadcast(inactivateComponentEvent);
         },
 
         else => {},
@@ -235,22 +249,28 @@ pub fn workerRun(worker: *ComponentWorker, context: *anyopaque) void {
 
     _ = context;
 
-    worker.state.withLock(struct {
-        fn lambda(state: *FilePickerState) void {
-            state.is_selecting = true;
-        }
-    }.lambda);
-
-    worker.state.lock();
-    defer worker.state.unlock();
+    // Update state in a block with shorter lifecycle (handles unlock on error too)
+    {
+        worker.state.lock();
+        defer worker.state.unlock();
+        worker.state.data.is_selecting = true;
+    }
 
     // NOTE: It is important that this memory address / contents are released in component's deinit().
     // Currently, the ownership change occurs inside of handleEvent(), which assigns state as owner.
     const selectedPath = osd.path(worker.allocator, .open, .{});
 
+    // Update state in a block with shorter lifecycle (handles unlock on error too)
+    {
+        worker.state.lock();
+        defer worker.state.unlock();
+        worker.state.data.is_selecting = false;
+        worker.state.data.selected_path = selectedPath;
+    }
+
     const event = ISOFilePickerComponent.Events.onISOFileSelected.create(
         &ISOFilePickerComponent.asInstance(worker.context.run_context).component.?,
-        &.{ .newPath = selectedPath },
+        &.{},
     );
 
     _ = ISOFilePickerComponent.asInstance(worker.context.run_context).handleEvent(event) catch |err| {

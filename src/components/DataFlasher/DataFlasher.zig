@@ -15,6 +15,7 @@ const DataFlasherState = struct {
 };
 
 const DataFlasher = @This();
+const DeviceList = @import("../DeviceList/DeviceList.zig");
 
 const Component = ComponentFramework.Component;
 const ComponentState = ComponentFramework.ComponentState(DataFlasherState);
@@ -32,9 +33,7 @@ worker: ?ComponentWorker = null,
 allocator: std.mem.Allocator,
 ui: ?DataFlasherUI = null,
 
-pub const Events = struct {
-    pub const onSomething = ComponentFramework.defineEvent("data_flasher.on_", struct {});
-};
+pub const Events = struct {};
 
 pub fn init(allocator: std.mem.Allocator) DataFlasher {
     return DataFlasher{
@@ -58,8 +57,7 @@ pub fn draw(self: *DataFlasher) !void {
     _ = self;
 }
 pub fn handleEvent(self: *DataFlasher, event: ComponentEvent) !EventResult {
-    _ = self;
-
+    //
     var eventResult = EventResult{
         .success = false,
         .validation = 0,
@@ -67,12 +65,18 @@ pub fn handleEvent(self: *DataFlasher, event: ComponentEvent) !EventResult {
 
     eventLoop: switch (event.hash) {
         //
-        Events.onSomething.Hash => {
-            //
-            const data = Events.onSomething.getData(event) orelse break :eventLoop;
-            _ = data;
+        DeviceList.Events.onDeviceListActiveStateChanged.Hash => {
+            const data = DeviceList.Events.onDeviceListActiveStateChanged.getData(event) orelse break :eventLoop;
 
             eventResult.validate(1);
+
+            if (data.isActive == true) break :eventLoop;
+
+            const setUIActiveEvent = DataFlasherUI.Events.onActiveStateChanged.create(&self.component.?, &.{
+                .isActive = data.isActive == false,
+            });
+
+            EventManager.broadcast(setUIActiveEvent);
         },
 
         else => {},

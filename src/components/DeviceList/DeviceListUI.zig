@@ -30,7 +30,7 @@ const Styles = UIFramework.Styles;
 const Color = UIFramework.Styles.Color;
 
 pub const DeviceListUIState = struct {
-    active: bool = false,
+    isActive: bool = false,
     devices: *std.ArrayList(MacOS.USBStorageDevice),
     selectedDeviceName: ?[:0]u8 = null,
     selectedDevice: ?MacOS.USBStorageDevice = null,
@@ -210,10 +210,11 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
             }
         },
 
-        ISOFilePickerUI.Events.onActiveStateChanged.Hash => {
+        ISOFilePicker.Events.onActiveStateChanged.Hash => {
             //
-            const data = ISOFilePickerUI.Events.onActiveStateChanged.getData(event) orelse break :eventLoop;
+            const data = ISOFilePicker.Events.onActiveStateChanged.getData(event) orelse break :eventLoop;
 
+            // Dispatch a parent event that the current component already listens to (for simplicity)
             return try self.handleEvent(DeviceList.Events.onDeviceListActiveStateChanged.create(
                 &self.component.?,
                 // Set the __opposite__ of the ISOFilePicker active state.
@@ -226,10 +227,14 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
             const data = DeviceList.Events.onDeviceListActiveStateChanged.getData(event) orelse break :eventLoop;
             eventResult.validate(1);
 
-            var state = self.state.getData();
-            state.active = data.isActive;
+            // Update state in a block with a shorter lifecycle
+            {
+                self.state.lock();
+                defer self.state.unlock();
+                self.state.data.isActive = data.isActive;
+            }
 
-            switch (state.active) {
+            switch (data.isActive) {
                 true => {
                     debug.print("\nDeviceListUI: setting UI to ACTIVE.");
 
@@ -396,7 +401,7 @@ pub fn update(self: *DeviceListUI) !void {
     const state = self.state.getDataLocked();
     defer self.state.unlock();
 
-    if (!state.active) return;
+    if (!state.isActive) return;
 
     for (self.deviceCheckboxes.items) |*checkbox| {
         try checkbox.update();
@@ -419,7 +424,7 @@ pub fn draw(self: *DeviceListUI) !void {
         label.draw();
     }
 
-    if (state.active) try self.drawActive() else try self.drawInactive();
+    if (state.isActive) try self.drawActive() else try self.drawInactive();
 }
 
 fn drawActive(self: *DeviceListUI) !void {
