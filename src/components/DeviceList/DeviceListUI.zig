@@ -269,8 +269,9 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
             //
             debug.print("\nDeviceListUI: onDevicesReadyToRender() start.");
 
-            // self.state.lock();
-            // defer self.state.unlock();
+            // WARNING: Genereal defer is OK here because no other call is coupled here where mutex lock would propagate.
+            self.state.lock();
+            defer self.state.unlock();
 
             if (self.state.data.devices.items.len < 1) {
                 debug.print("\nDeviceListUI: onDevicesReadyToRender(): no devices discovered, breaking the event loop.");
@@ -339,9 +340,11 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
             const data = Events.onSelectedDeviceNameChanged.getData(event) orelse break :eventLoop;
             eventResult.validate(1);
 
-            var state = self.state.getData();
-
-            state.selectedDevice = data.selectedDevice;
+            {
+                self.state.lock();
+                defer self.state.unlock();
+                self.state.data.selectedDevice = data.selectedDevice;
+            }
 
             const labelDisplayName: [:0]const u8 = if (data.selectedDevice) |device| @ptrCast(@alignCast(device.deviceName)) else "NULL";
 
@@ -398,10 +401,11 @@ fn recalculateUI(self: *DeviceListUI, bgRectParams: BgRectParams) void {
 }
 
 pub fn update(self: *DeviceListUI) !void {
-    const state = self.state.getDataLocked();
-    defer self.state.unlock();
+    self.state.lock();
+    const isActive = self.state.data.isActive;
+    self.state.unlock();
 
-    if (!state.isActive) return;
+    if (!isActive) return;
 
     for (self.deviceCheckboxes.items) |*checkbox| {
         try checkbox.update();
@@ -413,8 +417,9 @@ pub fn update(self: *DeviceListUI) !void {
 }
 
 pub fn draw(self: *DeviceListUI) !void {
-    const state = self.state.getDataLocked();
-    defer self.state.unlock();
+    self.state.lock();
+    const isActive = self.state.data.isActive;
+    self.state.unlock();
 
     if (self.bgRect) |bgRect| {
         bgRect.draw();
@@ -424,7 +429,7 @@ pub fn draw(self: *DeviceListUI) !void {
         label.draw();
     }
 
-    if (state.isActive) try self.drawActive() else try self.drawInactive();
+    if (isActive) try self.drawActive() else try self.drawInactive();
 }
 
 fn drawActive(self: *DeviceListUI) !void {

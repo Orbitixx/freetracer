@@ -14,8 +14,8 @@ pub fn workerRun(worker: *DeviceListComponentWorker, context: *anyopaque) void {
 
     const deviceList = DeviceListComponent.asInstance(context);
 
-    worker.state.lock();
-    defer worker.state.unlock();
+    // worker.state.lock();
+    //  worker.state.unlock();
 
     const devices = IOKit.getUSBStorageDevices(deviceList.allocator) catch blk: {
         debug.print("\nWARNING: Unable to capture USB devices. Please make sure a USB flash drive is plugged in.");

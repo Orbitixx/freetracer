@@ -115,12 +115,10 @@ pub fn start(self: *ISOFilePickerComponent) !void {
 
 pub fn update(self: *ISOFilePickerComponent) !void {
     // Check for file selection changes
-    const state = self.state.getDataLocked();
-    defer self.state.unlock();
+    // const state = self.state.getDataLocked();
+    // defer self.state.unlock();
 
     self.checkAndJoinWorker();
-
-    _ = state;
 
     // Update logic
 }
@@ -129,8 +127,6 @@ pub fn draw(self: *ISOFilePickerComponent) !void {
     // Draw file picker UI
     // const state = self.state.getDataLocked();
     // defer self.state.unlock();
-
-    // std.debug.print("\nDrawing file picker UI, selected: {s}", .{if (state.selected_path) |path| path else "none"});
 
     // Draw UI elements
 
@@ -161,23 +157,23 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
             // const data = Events.onISOFileSelected.getData(event) orelse break :eventLoop;
 
             self.state.lock();
-            defer self.state.unlock();
+            const isSelecting = self.state.data.is_selecting;
+            const selectedPath = self.state.data.selected_path;
+            self.state.unlock();
 
-            if (self.state.data.is_selecting or self.state.data.selected_path == null) {
+            if (isSelecting or selectedPath == null) {
                 debug.print("\nISOFilePicker.handleEvent.onISOFileSelected: WARNING - State reflects file is still being selected or path is NULL. Aborting event processing.");
                 break :eventLoop;
             }
 
             eventResult.validate(1);
 
-            const path = self.state.data.selected_path;
-
             debug.printf(
                 "\nISOFilePickerComponent: handleEvent() received: \"{s}\" event, data: newPath = {s}",
-                .{ event.name, if (path) |newPath| newPath else "NULL" },
+                .{ event.name, if (selectedPath) |newPath| newPath else "NULL" },
             );
 
-            if (self.state.data.selected_path) |newPath| {
+            if (selectedPath) |newPath| {
                 //
                 // TODO: Review this block again, this seems a bit crazy on the second look to dispatch another event with similar payload.
                 const pathBuffer: [:0]u8 = try self.allocator.dupeZ(u8, newPath);
@@ -276,10 +272,6 @@ pub fn workerRun(worker: *ComponentWorker, context: *anyopaque) void {
     _ = ISOFilePickerComponent.asInstance(worker.context.run_context).handleEvent(event) catch |err| {
         debug.printf("ISOFilePickerComponent Worker caught error: {any}", .{err});
     };
-
-    // NOTE: It is also possible to modify the Component State directly like below. Similar ownership disclaimer applies.
-    // worker.state.data.selected_path = osd.path(worker.allocator, .open, .{});
-    // worker.state.data.is_selecting = false;
 
     std.debug.print("\nISOFilePickerComponent: runWorker() finished executing!", .{});
 }

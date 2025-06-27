@@ -151,9 +151,8 @@ pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResu
             // Update state data in a block with shorter lifespan
             {
                 self.state.lock();
-                errdefer self.state.unlock();
+                defer self.state.unlock();
                 self.state.data.isActive = true;
-                self.state.unlock();
             }
 
             self.dispatchComponentAction();
@@ -164,8 +163,11 @@ pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResu
             const data = Events.onDiscoverDevicesEnd.getData(event) orelse break :eventLoop;
             eventResult.validate(1);
 
-            var state = self.state.getData();
-            state.devices = data.devices;
+            {
+                self.state.lock();
+                defer self.state.unlock();
+                self.state.data.devices = data.devices;
+            }
 
             const responseEvent = DeviceListUI.Events.onDevicesReadyToRender.create(&self.component.?, null);
 
@@ -175,18 +177,20 @@ pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResu
         },
 
         // Event: User has selected a target storage device
-        Events.onSelectedDeviceConfirmed.Hash => {
-            const data = Events.onDiscoverDevicesEnd.getData(event) orelse break :eventLoop;
-            eventResult.validate(1);
-
-            var state = self.state.getData();
-            state.devices = data.devices;
-        },
+        // Events.onSelectedDeviceConfirmed.Hash => {
+        //     const data = Events.onSelectedDeviceConfirmed.getData(event) orelse break :eventLoop;
+        //     eventResult.validate(1);
+        //
+        //     {
+        //         self.state.lock();
+        //         defer self.state.unlock();
+        //         self.state.data.selectedDevice = data.*;
+        //     }
+        // },
 
         // Event: User is finished interacting with DeviceList component
         Events.onFinishedComponentInteraction.Hash => {
-            self.state.unlock();
-            defer self.state.lock();
+            self.state.lock();
 
             // Quality control check: OK to move on from component?
             if (self.state.data.selectedDevice == null) {
@@ -195,6 +199,8 @@ pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResu
             }
 
             self.state.data.isActive = false;
+
+            self.state.unlock();
 
             // Prepare and broacast component state changed event
             const responseEvent = Events.onDeviceListActiveStateChanged.create(
@@ -252,7 +258,6 @@ pub const selectDeviceActionWrapper = struct {
         const context: *SelectDeviceCallbackContext = @ptrCast(@alignCast(ctx));
 
         context.component.state.lock();
-        defer context.component.state.unlock();
 
         // TODO: ugly block, refactor
         if (context.component.state.data.selectedDevice) |currentlySelectedDevice| {
@@ -270,7 +275,10 @@ pub const selectDeviceActionWrapper = struct {
             },
         );
 
-        const event = DeviceListUI.Events.onSelectedDeviceNameChanged.create(&context.component.component.?, &.{ .selectedDevice = context.component.state.data.selectedDevice });
+        context.component.state.unlock();
+
+        // TODO: CHECK: changed context.state.data.selectedDevice to context.selectedDevice -- probably not right but fixing another issue
+        const event = DeviceListUI.Events.onSelectedDeviceNameChanged.create(&context.component.component.?, &.{ .selectedDevice = context.selectedDevice });
         EventManager.broadcast(event);
     }
 };

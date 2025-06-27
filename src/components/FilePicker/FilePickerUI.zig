@@ -160,16 +160,15 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
             const data = Events.onISOFilePathChanged.getData(event) orelse break :eventLoop;
             eventResult.validate(1);
 
-            // WARNING: Defer unlock() is OK as long as no other event is being broadcast here
-            // or any other call which involves a state lock race condition
-            self.state.lock();
-            defer self.state.unlock();
-
             var newName: [:0]const u8 = @ptrCast("No ISO selected...");
 
             if (data.newPath.len > 0) {
                 //
-                self.state.data.isoPath = data.newPath;
+                {
+                    self.state.lock();
+                    defer self.state.unlock();
+                    self.state.data.isoPath = data.newPath;
+                }
 
                 var lastSlash: usize = 0;
 
@@ -206,10 +205,13 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
             const data = ISOFilePicker.Events.onActiveStateChanged.getData(event) orelse break :eventLoop;
             eventResult.validate(1);
 
-            var state = self.state.getData();
-            state.isActive = data.isActive;
+            {
+                self.state.lock();
+                defer self.state.unlock();
+                self.state.data.isActive = data.isActive;
+            }
 
-            switch (state.isActive) {
+            switch (data.isActive) {
                 true => {
                     if (self.headerLabel) |*header| {
                         header.style.textColor = Color.white;
