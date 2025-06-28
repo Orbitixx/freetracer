@@ -31,7 +31,7 @@ pub fn workerRun(worker: *DeviceListComponentWorker, context: *anyopaque) void {
     // Important to toggle flag for self-notify override
     event.flags.overrideNotifySelfOnSelfOrigin = true;
 
-    EventManager.broadcast(event);
+    _ = EventManager.broadcast(event);
 }
 
 pub fn workerCallback(worker: *DeviceListComponentWorker, context: *anyopaque) void {

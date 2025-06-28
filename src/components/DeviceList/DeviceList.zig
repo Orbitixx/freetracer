@@ -43,6 +43,7 @@ pub const Events = struct {
         struct {
             isActive: bool,
         },
+        struct {},
     );
 
     // Event: Worker finished discovering storage devices
@@ -51,17 +52,20 @@ pub const Events = struct {
         struct {
             devices: std.ArrayList(MacOS.USBStorageDevice),
         },
+        struct {},
     );
 
     // Event: User selected a target storage device to be written
     pub const onSelectedDeviceConfirmed = ComponentFramework.defineEvent(
         "device_list.on_selected_device_confirmed",
         struct {},
+        struct {},
     );
 
     // Event: User completed interacting with this component (e.g. clicked "Next")
     pub const onFinishedComponentInteraction = ComponentFramework.defineEvent(
         "device_list.on_finished_component_interaction",
+        struct {},
         struct {},
     );
 };
@@ -104,7 +108,7 @@ pub fn start(self: *DeviceListComponent) !void {
     if (self.component) |*component| {
         if (component.children != null) return error.ComponentAlreadyCalledStartBefore;
 
-        if (!EventManager.subscribe(component)) return error.UnableToSubscribeToEventManager;
+        if (!EventManager.subscribe("device_list", component)) return error.UnableToSubscribeToEventManager;
 
         std.debug.print("\nDeviceList: attempting to initialize children...", .{});
 
@@ -175,18 +179,6 @@ pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResu
 
             debug.print("\nDeviceList: Component processed USBStorageDevices from Worker");
         },
-
-        // Event: User has selected a target storage device
-        // Events.onSelectedDeviceConfirmed.Hash => {
-        //     const data = Events.onSelectedDeviceConfirmed.getData(event) orelse break :eventLoop;
-        //     eventResult.validate(1);
-        //
-        //     {
-        //         self.state.lock();
-        //         defer self.state.unlock();
-        //         self.state.data.selectedDevice = data.*;
-        //     }
-        // },
 
         // Event: User is finished interacting with DeviceList component
         Events.onFinishedComponentInteraction.Hash => {
@@ -285,7 +277,7 @@ pub const selectDeviceActionWrapper = struct {
 
         // TODO: CHECK: changed context.state.data.selectedDevice to context.selectedDevice -- probably not right but fixing another issue
         const event = DeviceListUI.Events.onSelectedDeviceNameChanged.create(&context.component.component.?, &.{ .selectedDevice = context.selectedDevice });
-        EventManager.broadcast(event);
+        _ = EventManager.broadcast(event);
     }
 };
 

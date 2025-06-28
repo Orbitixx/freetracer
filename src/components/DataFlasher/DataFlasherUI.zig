@@ -12,6 +12,7 @@ const DataFlasher = @import("./DataFlasher.zig");
 const DeviceList = @import("../DeviceList/DeviceList.zig");
 
 const DataFlasherUIState = struct {
+    isActive: bool = false,
     device: ?MacOS.USBStorageDevice = null,
 };
 
@@ -51,11 +52,19 @@ headerLabel: ?Text = null,
 moduleImg: ?Texture = null,
 
 pub const Events = struct {
-    pub const onActiveStateChanged = ComponentFramework.defineEvent("data_flasher.on_active_state_changed", struct {
-        isActive: bool,
-    });
+    pub const onActiveStateChanged = ComponentFramework.defineEvent(
+        "data_flasher.on_active_state_changed",
+        struct {
+            isActive: bool,
+        },
+        struct {},
+    );
 
-    pub const onSomething = ComponentFramework.defineEvent("data_flasher.on_", struct {});
+    pub const onSomething = ComponentFramework.defineEvent(
+        "data_flasher.on_",
+        struct {},
+        struct {},
+    );
 };
 
 pub fn init(allocator: std.mem.Allocator, parent: *DataFlasher) !DataFlasherUI {
@@ -75,7 +84,7 @@ pub fn start(self: *DataFlasherUI) !void {
     if (self.component == null) try self.initComponent(self.parent.asComponentPtr());
 
     if (self.component) |*component| {
-        if (!EventManager.subscribe(component)) return error.UnableToSubscribeToEventManager;
+        if (!EventManager.subscribe("data_flasher_ui", component)) return error.UnableToSubscribeToEventManager;
     } else return error.UnableToSubscribeToEventManager;
 
     self.bgRect = Rectangle{
@@ -104,8 +113,6 @@ pub fn draw(self: *DataFlasherUI) !void {
 }
 
 pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
-    _ = self;
-
     var eventResult = EventResult{
         .success = false,
         .validation = 0,
@@ -113,15 +120,27 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
 
     eventLoop: switch (event.hash) {
         //
-        Events.onActiveStateChanged.Hash => {
+        // Event: parent's authoritative state signal
+        DataFlasher.Events.onActiveStateChanged.Hash => {
             //
-            const data = Events.onActiveStateChanged.getData(event) orelse break :eventLoop;
-
-            if (data.isActive == true) {
-                debug.print("\nDataFlasherUI is now active");
-            } else {}
+            const data = DataFlasher.Events.onActiveStateChanged.getData(event) orelse break :eventLoop;
 
             eventResult.validate(1);
+
+            {
+                self.state.lock();
+                defer self.state.unlock();
+                self.state.data.isActive = data.isActive;
+            }
+
+            switch (data.isActive) {
+                //
+                true => {
+                    debug.print("\nDataFlasherUI is now active");
+                },
+
+                false => {},
+            }
         },
 
         Events.onSomething.Hash => {

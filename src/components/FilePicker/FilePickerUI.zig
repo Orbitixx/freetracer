@@ -55,16 +55,19 @@ pub const Events = struct {
     pub const onISOFilePathChanged = ComponentFramework.defineEvent(
         "iso_file_picker_ui.iso_file_path_changed",
         struct { newPath: [:0]u8 },
+        struct {},
     );
 
     pub const onActiveStateChanged = ComponentFramework.defineEvent(
         "iso_file_picker_ui.active_state_changed",
         struct { isActive: bool },
+        struct {},
     );
 
     pub const onGetUIDimensions = ComponentFramework.defineEvent(
         "iso_file_picker_ui.get_ui_width",
         struct { transform: Transform },
+        struct {},
     );
 };
 
@@ -88,7 +91,7 @@ pub fn start(self: *ISOFilePickerUI) !void {
     if (self.component == null) try self.initComponent(self.parent.asComponentPtr());
 
     if (self.component) |*component| {
-        if (!EventManager.subscribe(component)) return error.UnableToSubscribeToEventManager;
+        if (!EventManager.subscribe("iso_file_picker_ui", component)) return error.UnableToSubscribeToEventManager;
     } else return error.UnableToSubscribeToEventManager;
 
     self.bgRect = Rectangle{

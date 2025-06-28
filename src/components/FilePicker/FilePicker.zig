@@ -37,17 +37,34 @@ pub const Events = struct {
     //
     pub const onActiveStateChanged = ComponentFramework.defineEvent(
         "iso_file_picker.on_active_state_changed",
-        struct { isActive: bool },
+        struct {
+            isActive: bool,
+        },
+        struct {},
     );
 
     pub const onUIWidthChanged = ComponentFramework.defineEvent(
-        "iso_file_picker.ui_width_changed",
-        struct { newWidth: f32 },
+        "iso_file_picker.on_ui_width_changed",
+        struct {
+            newWidth: f32,
+        },
+        struct {},
     );
 
     pub const onISOFileSelected = ComponentFramework.defineEvent(
-        "iso_file_picker.iso_file_selected",
-        struct { newPath: ?[:0]u8 = null },
+        "iso_file_picker.on_iso_file_selected",
+        struct {
+            newPath: ?[:0]u8 = null,
+        },
+        struct {},
+    );
+
+    pub const onISOFilePathQueried = ComponentFramework.defineEvent(
+        "iso_file_picker.on_iso_file_path_queried",
+        struct {},
+        struct {
+            isoPath: [:0]u8,
+        },
     );
 };
 
@@ -94,7 +111,7 @@ pub fn start(self: *ISOFilePickerComponent) !void {
     if (self.component) |*component| {
         if (component.children != null) return error.ComponentAlreadyCalledStartBefore;
 
-        if (!EventManager.subscribe(component)) return error.UnableToSubscribeToEventManager;
+        if (!EventManager.subscribe("iso_file_picker", component)) return error.UnableToSubscribeToEventManager;
 
         std.debug.print("\nISOFilePickerComponent: attempting to initialize children...", .{});
 
@@ -153,16 +170,18 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
         },
 
         Events.onISOFileSelected.Hash => {
-            //
-            // const data = Events.onISOFileSelected.getData(event) orelse break :eventLoop;
-
             self.state.lock();
+            errdefer self.state.unlock();
             const isSelecting = self.state.data.is_selecting;
             const selectedPath = self.state.data.selected_path;
             self.state.unlock();
 
             if (isSelecting or selectedPath == null) {
-                debug.print("\nISOFilePicker.handleEvent.onISOFileSelected: WARNING - State reflects file is still being selected or path is NULL. Aborting event processing.");
+                debug.print(
+                    \\"\nISOFilePicker.handleEvent.onISOFileSelected: 
+                    \\WARNING - State reflects file is still being selected or path is NULL. Aborting event processing."
+                    ,
+                );
                 break :eventLoop;
             }
 
@@ -191,9 +210,45 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
                 }
             }
 
-            const inactivateComponentEvent = Events.onActiveStateChanged.create(&self.component.?, &.{ .isActive = false });
+            const inactivateComponentEvent = Events.onActiveStateChanged.create(
+                &self.component.?,
+                &.{ .isActive = false },
+            );
 
             EventManager.broadcast(inactivateComponentEvent);
+        },
+
+        Events.onISOFilePathQueried.Hash => {
+            //
+            self.state.lock();
+            errdefer self.state.unlock();
+            const path = self.state.data.selected_path;
+            const isSelecting = self.state.data.is_selecting;
+            self.state.unlock();
+
+            // WARNING: Debug assertion
+            std.debug.assert(path != null and isSelecting == false);
+
+            if (path == null or isSelecting == true) {
+                eventResult.success = false;
+                eventResult.validation = 0;
+                eventResult.data = null;
+
+                debug.printf(
+                    \\"\nWARNING: ISOFilePicker.handleEvent.onISOFilePathQueried: the ISO path is either NULL 
+                    \\ or is still being selected. Path: {any}, isSelecting: {any}\n"
+                ,
+                    .{ path, isSelecting },
+                );
+
+                break :eventLoop;
+            }
+
+            const responseData: Events.onISOFilePathQueried.Response = .{
+                .isoPath = path.?,
+            };
+
+            eventResult.data = @ptrCast(@constCast(&responseData));
         },
 
         else => {},

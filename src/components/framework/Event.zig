@@ -38,6 +38,7 @@ pub const EventHash = u64;
 pub const EventResult = struct {
     success: bool = false,
     validation: u8 = 0,
+    data: ?*anyopaque = null,
 
     pub fn init() EventResult {
         return EventResult{};
@@ -53,12 +54,13 @@ pub fn hashEvent(comptime event_name: []const u8) EventHash {
     return comptime @as(EventHash, std.hash_map.hashString(event_name));
 }
 
-pub fn defineEvent(comptime name: []const u8, comptime DataType: type) type {
+pub fn defineEvent(comptime name: []const u8, comptime DataType: type, comptime ResponseType: type) type {
     return struct {
         pub const Hash = hashEvent(name);
         pub const Data = DataType;
+        pub const Response = ResponseType;
         pub const Name = name;
-        pub const Result: EventResult = .{};
+        // pub const Result: EventResult = .{};
 
         pub fn create(source: *Component, data: ?*const Data) ComponentEvent {
             return ComponentEvent.create(.{

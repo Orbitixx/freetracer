@@ -53,9 +53,13 @@ state: ButtonState = ButtonState.NORMAL,
 clickHandler: ButtonHandler,
 
 pub const Events = struct {
-    pub const onButtonToggleEnabled = defineEvent("button.on_toggle_enabled", struct {
-        isEnabled: bool,
-    });
+    pub const onButtonToggleEnabled = defineEvent(
+        "button.on_toggle_enabled",
+        struct {
+            isEnabled: bool,
+        },
+        struct {},
+    );
 };
 
 pub fn init(text: [:0]const u8, position: rl.Vector2, variant: ButtonVariant, clickHandler: ButtonHandler) ButtonComponent {

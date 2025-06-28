@@ -69,10 +69,12 @@ pub const Events = struct {
         struct {
             isActive: bool,
         },
+        struct {},
     );
 
     pub const onDevicesReadyToRender = ComponentFramework.defineEvent(
         "device_list_ui.on_devices_ready_to_render",
+        struct {},
         struct {},
     );
 
@@ -82,6 +84,7 @@ pub const Events = struct {
             // Not authoritative data; copy only -- use parent.
             selectedDevice: ?MacOS.USBStorageDevice,
         },
+        struct {},
     );
 };
 
@@ -116,7 +119,7 @@ pub fn start(self: *DeviceListUI) !void {
     if (self.component == null) try self.initComponent(self.parent.asComponentPtr());
 
     if (self.component) |*component| {
-        if (!EventManager.subscribe(component)) return error.UnableToSubscribeToEventManager;
+        if (!EventManager.subscribe("device_list_ui", component)) return error.UnableToSubscribeToEventManager;
     } else return error.UnableToSubscribeToEventManager;
 
     self.bgRect = Rectangle{
@@ -132,8 +135,11 @@ pub fn start(self: *DeviceListUI) !void {
     };
 
     // Get initial width of the preceding UI element
-    const event = ISOFilePickerUI.Events.onGetUIDimensions.create(&self.component.?, null);
-    EventManager.broadcast(event);
+    const initialPositionEvent = ISOFilePickerUI.Events.onGetUIDimensions.create(self.asComponentPtr(), null);
+    EventManager.broadcast(initialPositionEvent);
+
+    // const response = try EventManager.signal("iso_file_picker", event);
+    // const data: *ISOFilePickerUI.Events.onGetUIDimensions.Response = response.data
 
     if (self.bgRect) |bgRect| {
         self.button = Button.init(

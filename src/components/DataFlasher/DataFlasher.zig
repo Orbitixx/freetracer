@@ -17,6 +17,7 @@ const DataFlasherState = struct {
 
 const DataFlasher = @This();
 const DeviceList = @import("../DeviceList/DeviceList.zig");
+const ISOFilePicker = @import("../FilePicker/FilePicker.zig");
 
 const Component = ComponentFramework.Component;
 const ComponentState = ComponentFramework.ComponentState(DataFlasherState);
@@ -34,7 +35,17 @@ worker: ?ComponentWorker = null,
 allocator: std.mem.Allocator,
 ui: ?DataFlasherUI = null,
 
-pub const Events = struct {};
+pub const Events = struct {
+    //
+    // Event: component's active state changed
+    pub const onActiveStateChanged = ComponentFramework.defineEvent(
+        "data_flasher.on_active_state_changed",
+        struct {
+            isActive: bool,
+        },
+        struct {},
+    );
+};
 
 pub fn init(allocator: std.mem.Allocator) !DataFlasher {
     return DataFlasher{
@@ -52,7 +63,7 @@ pub fn start(self: *DataFlasher) !void {
     if (self.component) |*component| {
         if (component.children != null) return error.ComponentAlreadyCalledStartBefore;
 
-        if (!EventManager.subscribe(component)) return error.UnableToSubscribeToEventManager;
+        if (!EventManager.subscribe("data_flasher", component)) return error.UnableToSubscribeToEventManager;
 
         std.debug.print("\nDataFlasher: attempting to initialize children...", .{});
 
@@ -99,9 +110,17 @@ pub fn handleEvent(self: *DataFlasher, event: ComponentEvent) !EventResult {
                 self.state.data.isActive = true;
             }
 
-            const setUIActiveEvent = DataFlasherUI.Events.onActiveStateChanged.create(&self.component.?, &.{
-                .isActive = data.isActive == false,
-            });
+            EventManager.broadcast(ISOFilePicker.Events.onISOFilePathQueried.create(
+                self.asComponentPtr(),
+                null,
+            ));
+
+            // const stateParamsData: ISOFilePicker.Events.onISOFilePathQueried.Response = stateParams.data;
+
+            const setUIActiveEvent = Events.onActiveStateChanged.create(
+                self.asComponentPtr(),
+                &.{ .isActive = data.isActive == false },
+            );
 
             EventManager.broadcast(setUIActiveEvent);
         },
