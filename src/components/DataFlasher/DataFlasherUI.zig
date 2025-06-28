@@ -58,15 +58,15 @@ pub const Events = struct {
     pub const onSomething = ComponentFramework.defineEvent("data_flasher.on_", struct {});
 };
 
-pub fn init(allocator: std.mem.Allocator, parent: *DataFlasher) DataFlasherUI {
+pub fn init(allocator: std.mem.Allocator, parent: *DataFlasher) !DataFlasherUI {
     return DataFlasherUI{
-        .state = DataFlasherUIState{},
+        .state = ComponentState.init(DataFlasherUIState{}),
         .allocator = allocator,
         .parent = parent,
     };
 }
 
-pub fn initComponent(self: *DataFlasherUI, parent: *DataFlasher) !void {
+pub fn initComponent(self: *DataFlasherUI, parent: *Component) !void {
     if (self.component != null) return error.BaseComponentAlreadyInitialized;
     self.component = try Component.init(self, &ComponentImplementation.vtable, parent);
 }
@@ -118,7 +118,7 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
             const data = Events.onActiveStateChanged.getData(event) orelse break :eventLoop;
 
             if (data.isActive == true) {
-                debug.printf("DataFlasherUI is now active");
+                debug.print("\nDataFlasherUI is now active");
             } else {}
 
             eventResult.validate(1);
@@ -137,14 +137,14 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
 
     return eventResult;
 }
-pub fn dispatchComponentAction(self: *DataFlasherUI) !void {
+pub fn dispatchComponentAction(self: *DataFlasherUI) void {
     _ = self;
 }
 pub fn deinit(self: *DataFlasherUI) void {
     _ = self;
 }
 
-pub const ComponentImplementation = ComponentFramework.ImplementComponent(DataFlasher);
+pub const ComponentImplementation = ComponentFramework.ImplementComponent(DataFlasherUI);
 pub const asComponent = ComponentImplementation.asComponent;
 pub const asComponentPtr = ComponentImplementation.asComponentPtr;
 pub const asInstance = ComponentImplementation.asInstance;

@@ -5,6 +5,7 @@ const Component = @import("./import/index.zig").Component;
 pub const ComponentID = enum(u8) {
     ISOFilePicker = 0,
     DeviceList = 1,
+    DataFlasher = 2,
     TestBtn = 99,
 };
 

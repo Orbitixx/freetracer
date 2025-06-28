@@ -28,6 +28,7 @@ const ComponentID = ComponentFramework.ComponentID;
 
 const ISOFilePicker = @import("./components/FilePicker/FilePicker.zig");
 const DeviceList = @import("./components/DeviceList/DeviceList.zig");
+const DataFlasher = @import("./components/DataFlasher/DataFlasher.zig");
 
 const UI = @import("./components/ui/Primitives.zig");
 const Button = @import("components/ui/Button.zig");
@@ -77,6 +78,9 @@ pub fn main() !void {
 
     var deviceList = try DeviceList.init(allocator);
     try componentRegistry.register(ComponentID.DeviceList, @constCast(deviceList.asComponentPtr()));
+
+    var dataFlasher = try DataFlasher.init(allocator);
+    try componentRegistry.register(ComponentID.DataFlasher, @constCast(dataFlasher.asComponentPtr()));
 
     //----------------------------------------------------------------------------------
     //--- @END COMPONENTS --------------------------------------------------------------

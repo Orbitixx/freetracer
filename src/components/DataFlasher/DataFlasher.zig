@@ -11,6 +11,7 @@ const ComponentFramework = @import("../framework/import/index.zig");
 const DataFlasherUI = @import("./DataFlasherUI.zig");
 
 const DataFlasherState = struct {
+    isActive: bool = false,
     device: ?MacOS.USBStorageDevice = null,
 };
 
@@ -35,20 +36,39 @@ ui: ?DataFlasherUI = null,
 
 pub const Events = struct {};
 
-pub fn init(allocator: std.mem.Allocator) DataFlasher {
+pub fn init(allocator: std.mem.Allocator) !DataFlasher {
     return DataFlasher{
-        .state = DataFlasherState{},
+        .state = ComponentState.init(DataFlasherState{}),
         .allocator = allocator,
     };
 }
 
-pub fn initComponent(self: *DataFlasher) !void {
+pub fn initComponent(self: *DataFlasher, parent: ?*Component) !void {
     if (self.component != null) return error.BaseComponentAlreadyInitialized;
-    self.component = try Component.init(self, &ComponentImplementation.vtable, null);
+    self.component = try Component.init(self, &ComponentImplementation.vtable, parent);
 }
 
 pub fn start(self: *DataFlasher) !void {
-    _ = self;
+    if (self.component) |*component| {
+        if (component.children != null) return error.ComponentAlreadyCalledStartBefore;
+
+        if (!EventManager.subscribe(component)) return error.UnableToSubscribeToEventManager;
+
+        std.debug.print("\nDataFlasher: attempting to initialize children...", .{});
+
+        component.children = std.ArrayList(Component).init(self.allocator);
+
+        self.ui = try DataFlasherUI.init(self.allocator, self);
+
+        if (component.children) |*children| {
+            if (self.ui) |*ui| {
+                try ui.start();
+                try children.append(ui.asComponent());
+            }
+        }
+
+        std.debug.print("\nDataFlasher: finished initializing children.", .{});
+    }
 }
 pub fn update(self: *DataFlasher) !void {
     _ = self;
@@ -68,9 +88,16 @@ pub fn handleEvent(self: *DataFlasher, event: ComponentEvent) !EventResult {
         DeviceList.Events.onDeviceListActiveStateChanged.Hash => {
             const data = DeviceList.Events.onDeviceListActiveStateChanged.getData(event) orelse break :eventLoop;
 
+            if (data.isActive == true) break :eventLoop;
+
             eventResult.validate(1);
 
-            if (data.isActive == true) break :eventLoop;
+            // Update state in a block with shorter lifycycle
+            {
+                self.state.lock();
+                defer self.state.unlock();
+                self.state.data.isActive = true;
+            }
 
             const setUIActiveEvent = DataFlasherUI.Events.onActiveStateChanged.create(&self.component.?, &.{
                 .isActive = data.isActive == false,
@@ -84,7 +111,7 @@ pub fn handleEvent(self: *DataFlasher, event: ComponentEvent) !EventResult {
 
     return eventResult;
 }
-pub fn dispatchComponentAction(self: *DataFlasher) !void {
+pub fn dispatchComponentAction(self: *DataFlasher) void {
     _ = self;
 }
 pub fn deinit(self: *DataFlasher) void {

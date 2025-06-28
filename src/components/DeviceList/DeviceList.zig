@@ -203,10 +203,14 @@ pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResu
             self.state.unlock();
 
             // Prepare and broacast component state changed event
-            const responseEvent = Events.onDeviceListActiveStateChanged.create(
+            var responseEvent = Events.onDeviceListActiveStateChanged.create(
                 &self.component.?,
                 &.{ .isActive = false },
             );
+
+            responseEvent.flags.overrideNotifySelfOnSelfOrigin = true;
+
+            debug.print("\nDeviceList: broadcasting state changed to INACTIVE.");
 
             EventManager.broadcast(responseEvent);
         },
@@ -241,10 +245,12 @@ pub const dispatchComponentFinishedAction = struct {
     pub fn call(ctx: *anyopaque) void {
         const self = DeviceListComponent.asInstance(ctx);
 
-        const event = Events.onDeviceListActiveStateChanged.create(&self.component.?, &.{ .isActive = false });
-        EventManager.broadcast(event);
-
         debug.print("\nDeviceList: component action wrapper dispatch.");
+
+        _ = try self.handleEvent(Events.onFinishedComponentInteraction.create(&self.component.?, null));
+
+        // const event = Events.onFinishedComponentInteraction.create(&self.component.?, null);
+        // EventManager.broadcast(event);
     }
 };
 
