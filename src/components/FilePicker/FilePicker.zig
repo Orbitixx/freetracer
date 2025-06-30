@@ -197,7 +197,7 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
                 // TODO: Review this block again, this seems a bit crazy on the second look to dispatch another event with similar payload.
                 const pathBuffer: [:0]u8 = try self.allocator.dupeZ(u8, newPath);
 
-                const newEvent = ISOFilePickerUI.Events.onISOFilePathChanged.create(&self.component.?, &.{
+                const newEvent = ISOFilePickerUI.Events.onISOFilePathChanged.create(self.asComponentPtr(), &.{
                     .newPath = pathBuffer,
                 });
 
@@ -211,7 +211,7 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
             }
 
             const inactivateComponentEvent = Events.onActiveStateChanged.create(
-                &self.component.?,
+                self.asComponentPtr(),
                 &.{ .isActive = false },
             );
 

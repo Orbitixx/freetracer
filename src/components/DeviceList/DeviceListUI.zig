@@ -233,6 +233,8 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
             const data = DeviceList.Events.onDeviceListActiveStateChanged.getData(event) orelse break :eventLoop;
             eventResult.validate(1);
 
+            // debug.print("")
+
             // Update state in a block with a shorter lifecycle
             {
                 self.state.lock();

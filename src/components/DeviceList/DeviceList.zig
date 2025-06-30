@@ -159,6 +159,8 @@ pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResu
                 self.state.data.isActive = true;
             }
 
+            EventManager.broadcast(Events.onDeviceListActiveStateChanged.create(self.asComponentPtr(), &.{ .isActive = true }));
+
             self.dispatchComponentAction();
         },
 
