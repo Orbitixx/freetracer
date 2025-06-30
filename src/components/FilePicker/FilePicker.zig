@@ -226,6 +226,10 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
             const isSelecting = self.state.data.is_selecting;
             self.state.unlock();
 
+            debug.print("\nISOFilePicker.handleEvent.onISOFilePathQueried: processing event...");
+
+            debug.printf("\n\tpath: {s}\n\tisSelecting: {any}", .{ path.?, isSelecting });
+
             // WARNING: Debug assertion
             std.debug.assert(path != null and isSelecting == false);
 
@@ -244,11 +248,16 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
                 break :eventLoop;
             }
 
-            const responseData: Events.onISOFilePathQueried.Response = .{
+            // TODO: Need to allocate space on the heap. Doesn't feel clean. Rethink this.
+            // WARNING: Heap allocation
+            const responseDataPtr = try self.allocator.create(Events.onISOFilePathQueried.Response);
+
+            responseDataPtr.* = Events.onISOFilePathQueried.Response{
                 .isoPath = path.?,
             };
 
-            eventResult.data = @ptrCast(@constCast(&responseData));
+            eventResult.validate(1);
+            eventResult.data = @ptrCast(@constCast(responseDataPtr));
         },
 
         else => {},

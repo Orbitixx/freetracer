@@ -12,6 +12,7 @@ const DataFlasherUI = @import("./DataFlasherUI.zig");
 
 const DataFlasherState = struct {
     isActive: bool = false,
+    isoPath: ?[:0]const u8 = null,
     device: ?MacOS.USBStorageDevice = null,
 };
 
@@ -89,33 +90,81 @@ pub fn draw(self: *DataFlasher) !void {
 }
 pub fn handleEvent(self: *DataFlasher, event: ComponentEvent) !EventResult {
     //
-    var eventResult = EventResult{
-        .success = false,
-        .validation = 0,
-    };
+    var eventResult = EventResult.init();
 
     eventLoop: switch (event.hash) {
         //
         DeviceList.Events.onDeviceListActiveStateChanged.Hash => {
             const data = DeviceList.Events.onDeviceListActiveStateChanged.getData(event) orelse break :eventLoop;
 
+            // If DeviceList Component is still active -- break out early.
             if (data.isActive == true) break :eventLoop;
 
             eventResult.validate(1);
+
+            const isoResult = try EventManager.signal(
+                "iso_file_picker",
+                ISOFilePicker.Events.onISOFilePathQueried.create(self.asComponentPtr(), null),
+            );
+
+            if (!isoResult.success) return error.DataFlasherFailedToQueryISOPath;
+
+            const deviceResult = try EventManager.signal(
+                "device_list",
+                DeviceList.Events.onSelectedDeviceQueried.create(self.asComponentPtr(), null),
+            );
+
+            if (!deviceResult.success) return error.DataFlasherFailedToQuerySelectedDevice;
+
+            debug.print("\nDataFlasher.handleEvent.onDeviceListActiveStateChanged: successfully obtained path and devices responses.");
 
             // Update state in a block with shorter lifycycle
             {
                 self.state.lock();
                 defer self.state.unlock();
-                self.state.data.isActive = true;
+                self.state.data.isActive = data.isActive == false;
+
+                if (isoResult.data) |isoData| {
+                    const isoResponse: ISOFilePicker.Events.onISOFilePathQueried.Response = @as(
+                        *ISOFilePicker.Events.onISOFilePathQueried.Response,
+                        @ptrCast(@alignCast(isoData)),
+                    ).*;
+
+                    // const intermediatePath: [*:0]const u8 = @ptrCast(@alignCast(isoData));
+                    // const len = std.mem.len(intermediatePath);
+                    self.state.data.isoPath = isoResponse.isoPath;
+
+                    // WARNING: cleaning up a pointer created on the heap by ISOFilePicker.handleEvent.onISOFilePathQueried.
+                    self.allocator.destroy(@as(
+                        *ISOFilePicker.Events.onISOFilePathQueried.Response,
+                        @ptrCast(@alignCast(isoData)),
+                    ));
+                    //
+                } else return error.DataFlasherReceivedNullISOPath;
+
+                if (deviceResult.data) |deviceData| {
+                    const deviceResponse: DeviceList.Events.onSelectedDeviceQueried.Response = @as(
+                        *DeviceList.Events.onSelectedDeviceQueried.Response,
+                        @ptrCast(@alignCast(deviceData)),
+                    ).*;
+
+                    self.state.data.device = deviceResponse.device;
+
+                    // self.state.data.device = @as(*MacOS.USBStorageDevice, @ptrCast(@alignCast(deviceData))).*;
+
+                    // WARNING: cleaning up a pointer created on the heap by DeviceList.handleEvent.onSelectedDeviceQueried.
+                    self.allocator.destroy(@as(
+                        *DeviceList.Events.onSelectedDeviceQueried.Response,
+                        @ptrCast(@alignCast(deviceData)),
+                    ));
+                    //
+                } else return error.DataFlasherReceivedNullDevice;
+
+                debug.printf("\n\n\nDataFlasher received:\n\tisoPath: {s}\n\tdevice: {s}\n\n\n", .{
+                    self.state.data.isoPath.?,
+                    self.state.data.device.?.bsdName,
+                });
             }
-
-            EventManager.broadcast(ISOFilePicker.Events.onISOFilePathQueried.create(
-                self.asComponentPtr(),
-                null,
-            ));
-
-            // const stateParamsData: ISOFilePicker.Events.onISOFilePathQueried.Response = stateParams.data;
 
             const setUIActiveEvent = Events.onActiveStateChanged.create(
                 self.asComponentPtr(),

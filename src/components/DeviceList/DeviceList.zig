@@ -35,8 +35,8 @@ worker: ?ComponentWorker = null,
 allocator: std.mem.Allocator,
 uiComponent: ?DeviceListUI = null,
 
+// Events belonging to this component
 pub const Events = struct {
-    //
     // Event: state.data.isActive property changed
     pub const onDeviceListActiveStateChanged = ComponentFramework.defineEvent(
         "device_list.on_active_state_changed",
@@ -67,6 +67,15 @@ pub const Events = struct {
         "device_list.on_finished_component_interaction",
         struct {},
         struct {},
+    );
+
+    // Event: Another component requested info about selected device
+    pub const onSelectedDeviceQueried = ComponentFramework.defineEvent(
+        "device_list.on_selected_device_queried",
+        struct {},
+        struct {
+            device: MacOS.USBStorageDevice,
+        },
     );
 };
 
@@ -209,6 +218,24 @@ pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResu
             EventManager.broadcast(responseEvent);
         },
 
+        Events.onSelectedDeviceQueried.Hash => {
+            self.state.lock();
+            defer self.state.unlock();
+
+            // WARNING: Debug assertion
+            std.debug.assert(self.state.data.selectedDevice != null);
+
+            if (self.state.data.selectedDevice == null) return error.DeviceListSelectedDeviceIsNull;
+
+            // TODO: rethink this approach
+            // WARNING: Heap allocation
+            const responseDataPtr = try self.allocator.create(Events.onSelectedDeviceQueried.Response);
+            responseDataPtr.* = Events.onSelectedDeviceQueried.Response{ .device = self.state.data.selectedDevice.? };
+
+            eventResult.validate(1);
+            eventResult.data = @ptrCast(@alignCast(responseDataPtr));
+        },
+
         else => {},
     }
 
@@ -241,10 +268,10 @@ pub const dispatchComponentFinishedAction = struct {
 
         debug.print("\nDeviceList: component action wrapper dispatch.");
 
-        _ = try self.handleEvent(Events.onFinishedComponentInteraction.create(&self.component.?, null));
-
-        // const event = Events.onFinishedComponentInteraction.create(&self.component.?, null);
-        // EventManager.broadcast(event);
+        _ = self.handleEvent(Events.onFinishedComponentInteraction.create(&self.component.?, null)) catch |err| {
+            debug.printf("\nDeviceList.dispatchComponentAction: ERROR - {any}", .{err});
+            std.debug.panic("\nDeviceList.dispatchComponentAction failed. May result in unpredictable behavior, please report. Error: {any}", .{err});
+        };
     }
 };
 

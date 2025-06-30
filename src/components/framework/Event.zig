@@ -60,7 +60,6 @@ pub fn defineEvent(comptime name: []const u8, comptime DataType: type, comptime 
         pub const Data = DataType;
         pub const Response = ResponseType;
         pub const Name = name;
-        // pub const Result: EventResult = .{};
 
         pub fn create(source: *Component, data: ?*const Data) ComponentEvent {
             return ComponentEvent.create(.{
@@ -74,13 +73,6 @@ pub fn defineEvent(comptime name: []const u8, comptime DataType: type, comptime 
         pub fn matches(event: *const ComponentEvent) bool {
             return event.hash == Hash;
         }
-
-        // pub fn getData(event: *const ComponentEvent) ?*const Data {
-        //     if (event.hash == Hash and event.data != null) {
-        //         return @ptrCast(@alignCast(event.data.?));
-        //     }
-        //     return null;
-        // }
 
         pub fn getData(event: ComponentEvent) ?*const Data {
             if (event.hash == Hash and event.data != null) {

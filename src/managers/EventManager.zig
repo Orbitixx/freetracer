@@ -35,7 +35,7 @@ pub const EventManagerSingleton = struct {
         pub fn signal(self: *EventManager, comptime receipientName: []const u8, event: Event) !EventResult {
             const target = self.subscribers.get(hashComponentName(receipientName));
 
-            if (target) |*component| {
+            if (target) |component| {
                 return component.handleEvent(event);
             } else {
                 return error.EventManagerDidNotLocateCalledSubscriber;
@@ -50,8 +50,8 @@ pub const EventManagerSingleton = struct {
 
                 _ = component.value_ptr.*.handleEvent(event) catch |err| {
                     debug.printf(
-                        "\nEventManager: error on broadcasting ({any}) event to ({any}) component. {any}.",
-                        .{ event, component.value_ptr, err },
+                        "\nEventManager: error on broadcasting ({s}) event to ({any}) component. {any}.",
+                        .{ event.name, @TypeOf(component.value_ptr.*.parent), err },
                     );
                 };
             }
