@@ -1,10 +1,11 @@
 const std = @import("std");
 const debug = @import("../../lib/util/debug.zig");
+const rl = @import("raylib");
+
+const AppConfig = @import("../../config.zig");
 
 const System = @import("../../lib/sys/system.zig");
 const USBStorageDevice = System.USBStorageDevice;
-
-const MacOS = @import("../../modules/macos/MacOSTypes.zig");
 
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
 
@@ -54,6 +55,13 @@ parent: *DataFlasher,
 bgRect: ?Rectangle = null,
 headerLabel: ?Text = null,
 moduleImg: ?Texture = null,
+button: ?Button = null,
+
+const BgRectParams = struct {
+    width: f32,
+    color: rl.Color,
+    borderColor: rl.Color,
+};
 
 pub const Events = struct {
     pub const onActiveStateChanged = ComponentFramework.defineEvent(
@@ -92,7 +100,12 @@ pub fn start(self: *DataFlasherUI) !void {
     } else return error.UnableToSubscribeToEventManager;
 
     self.bgRect = Rectangle{
-        .transform = .{ .x = winRelX(0.5), .y = winRelY(0.2), .w = winRelX(0.16), .h = winRelY(0.7) },
+        .transform = .{
+            .x = winRelX(0.5),
+            .y = winRelY(0.2),
+            .w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
+            .h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
+        },
         .style = .{
             .color = Styles.Color.transparentDark,
             .borderStyle = .{
@@ -104,19 +117,51 @@ pub fn start(self: *DataFlasherUI) !void {
     };
 
     // Get initial width of the preceding UI element
-    const initialDimensionsEvent = DeviceListUI.Events.onUITransformQueried.create(self.asComponentPtr(), null);
-    const eventResult = try EventManager.signal("device_list_ui", initialDimensionsEvent);
+    try self.queryDeviceListUIDimensions();
 
-    if (!eventResult.success or eventResult.data == null) return error.DataFlasherUICouldNotObtainInitialUIDimensions;
+    if (self.bgRect) |bgRect| {
+        self.button = Button.init(
+            "Flash ⚡️",
+            bgRect.transform.getPosition(),
+            .Primary,
+            .{
+                .context = self.parent,
+                .function = DeviceList.dispatchComponentFinishedAction.call,
+            },
+        );
 
-    if (eventResult.data) |dimensionsData| {
-        const deviceListUIData: *DeviceListUI.Events.onUITransformQueried.Response = @ptrCast(@alignCast(dimensionsData));
-
-        if (self.bgRect) |*bgRect| {
-            bgRect.transform.x = deviceListUIData.transform.x + deviceListUIData.transform.getWidth() + 20;
+        if (self.button) |*button| {
+            button.setEnabled(false);
         }
 
-        self.allocator.destroy(deviceListUIData);
+        self.headerLabel = Text.init("flash", .{
+            .x = bgRect.transform.x + 12,
+            .y = bgRect.transform.relY(0.01),
+        }, .{
+            .font = .JERSEY10_REGULAR,
+            .fontSize = 34,
+            .textColor = Styles.Color.white,
+        });
+
+        self.moduleImg = Texture.init(.DISK_IMAGE, .{ .x = 0, .y = 0 });
+
+        if (self.moduleImg) |*img| {
+            img.transform.scale = 0.5;
+            img.transform.x = bgRect.transform.relX(0.5) - img.transform.getWidth() / 2;
+            img.transform.y = bgRect.transform.relY(0.5) - img.transform.getHeight() / 2;
+            img.tint = .{ .r = 255, .g = 255, .b = 255, .a = 150 };
+        }
+
+        if (self.button) |*button| {
+            try button.start();
+
+            button.setPosition(.{
+                .x = bgRect.transform.relX(0.5) - @divTrunc(button.rect.transform.getWidth(), 2),
+                .y = bgRect.transform.relY(0.9) - @divTrunc(button.rect.transform.getHeight(), 2),
+            });
+
+            button.rect.rounded = true;
+        }
     }
 }
 
@@ -125,8 +170,30 @@ pub fn update(self: *DataFlasherUI) !void {
 }
 
 pub fn draw(self: *DataFlasherUI) !void {
+    self.state.lock();
+    const isActive = self.state.data.isActive;
+    self.state.unlock();
+
     if (self.bgRect) |bgRect| {
         bgRect.draw();
+    }
+
+    if (self.headerLabel) |label| {
+        label.draw();
+    }
+
+    if (isActive) try self.drawActive() else try self.drawInactive();
+}
+
+fn drawActive(self: *DataFlasherUI) !void {
+    if (self.button) |*button| {
+        try button.draw();
+    }
+}
+
+fn drawInactive(self: *DataFlasherUI) !void {
+    if (self.moduleImg) |img| {
+        img.draw();
     }
 }
 
@@ -151,13 +218,36 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
                 self.state.data.isActive = data.isActive;
             }
 
+            try self.queryDeviceListUIDimensions();
+
             switch (data.isActive) {
-                //
                 true => {
-                    debug.print("\nDataFlasherUI is now active");
+                    debug.print("\nDataFlasherUI: setting UI to ACTIVE.");
+
+                    if (self.headerLabel) |*header| {
+                        header.style.textColor = Color.white;
+                    }
+
+                    self.recalculateUI(.{
+                        .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
+                        .color = Color.blueGray,
+                        .borderColor = Color.white,
+                    });
                 },
 
-                false => {},
+                false => {
+                    debug.print("\nDataFlasherUI: setting UI to INACTIVE.");
+
+                    if (self.headerLabel) |*header| {
+                        header.style.textColor = Color.lightGray;
+                    }
+
+                    self.recalculateUI(.{
+                        .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
+                        .color = Color.darkBlueGray,
+                        .borderColor = Color.transparentDark,
+                    });
+                },
             }
         },
 
@@ -177,8 +267,53 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
 pub fn dispatchComponentAction(self: *DataFlasherUI) void {
     _ = self;
 }
+
 pub fn deinit(self: *DataFlasherUI) void {
     _ = self;
+}
+
+fn queryDeviceListUIDimensions(self: *DataFlasherUI) !void {
+    const queryDimensionsEvent = DeviceListUI.Events.onUITransformQueried.create(self.asComponentPtr(), null);
+    const eventResult = try EventManager.signal("device_list_ui", queryDimensionsEvent);
+
+    if (!eventResult.success or eventResult.data == null) return error.DataFlasherUICouldNotObtainInitialUIDimensions;
+
+    if (eventResult.data) |dimensionsData| {
+        const deviceListUIData: *DeviceListUI.Events.onUITransformQueried.Response = @ptrCast(@alignCast(dimensionsData));
+
+        if (self.bgRect) |*bgRect| {
+            bgRect.transform.x = deviceListUIData.transform.x + deviceListUIData.transform.getWidth() + 20;
+        }
+
+        self.allocator.destroy(deviceListUIData);
+    }
+}
+
+fn recalculateUI(self: *DataFlasherUI, bgRectParams: BgRectParams) void {
+    debug.print("\nDataFlasherUI: updating bgRect properties!");
+
+    if (self.bgRect) |*bgRect| {
+        bgRect.transform.w = bgRectParams.width;
+        bgRect.style.color = bgRectParams.color;
+        bgRect.style.borderStyle.color = bgRectParams.borderColor;
+
+        if (self.headerLabel) |*headerLabel| {
+            headerLabel.transform.x = bgRect.transform.x + 12;
+            headerLabel.transform.y = bgRect.transform.relY(0.01);
+        }
+
+        if (self.moduleImg) |*image| {
+            image.transform.x = bgRect.transform.relX(0.5) - image.transform.getWidth() / 2;
+            image.transform.y = bgRect.transform.relY(0.5) - image.transform.getHeight() / 2;
+        }
+
+        if (self.button) |*btn| {
+            btn.setPosition(.{
+                .x = bgRect.transform.relX(0.5) - btn.rect.transform.getWidth() / 2,
+                .y = btn.rect.transform.y,
+            });
+        }
+    }
 }
 
 pub const ComponentImplementation = ComponentFramework.ImplementComponent(DataFlasherUI);

@@ -2,6 +2,8 @@ const std = @import("std");
 const debug = @import("../../lib/util/debug.zig");
 const rl = @import("raylib");
 
+const AppConfig = @import("../../config.zig");
+
 const WindowManager = @import("../../managers/WindowManager.zig").WindowManagerSingleton;
 const winRelX = WindowManager.relW;
 const winRelY = WindowManager.relH;
@@ -105,7 +107,12 @@ pub fn start(self: *ISOFilePickerUI) !void {
     } else return error.UnableToSubscribeToEventManager;
 
     self.bgRect = Rectangle{
-        .transform = .{ .x = winRelX(0.08), .y = winRelY(0.2), .w = winRelX(0.35), .h = winRelY(0.7) },
+        .transform = .{
+            .x = winRelX(0.08),
+            .y = winRelY(0.2),
+            .w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
+            .h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
+        },
         .style = .{
             .color = Color.violet,
             .borderStyle = .{
@@ -246,7 +253,7 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
                         img.transform.scale = 1.0;
                     }
                     self.recalculateUI(.{
-                        .width = winRelX(0.35),
+                        .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
                         .color = Color.violet,
                         .borderColor = Color.white,
                     });
@@ -262,7 +269,7 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
                     }
 
                     self.recalculateUI(.{
-                        .width = winRelX(0.16),
+                        .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
                         .color = Color.darkViolet,
                         .borderColor = Color.transparentDark,
                     });

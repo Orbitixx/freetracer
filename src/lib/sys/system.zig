@@ -1,3 +1,4 @@
+const std = @import("std");
 const MacOS = @import("../../modules/macos/MacOSTypes.zig");
 const Linux = @import("../../modules/linux/LinuxTypes.zig");
 
@@ -20,4 +21,7 @@ pub const c = if (isMac) @cImport({
 });
 
 // comptime type selector
-pub const USBStorageDevice = if (isMac) MacOS.USBStorageDevice else if (isLinux) Linux.USBStorageDevice;
+pub const USBStorageDevice = if (isMac) MacOS.USBStorageDevice else if (isLinux) Linux.USBStorageDevice else {
+    std.debug.panic("\nCRITICAL ERROR: unable to determine system type (MacOS or Linux) at runtime.", .{});
+    unreachable;
+};

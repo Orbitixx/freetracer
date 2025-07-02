@@ -2,7 +2,10 @@ const std = @import("std");
 const debug = @import("../../lib/util/debug.zig");
 const rl = @import("raylib");
 
-const MacOS = @import("../../modules/macos/MacOSTypes.zig");
+const AppConfig = @import("../../config.zig");
+
+const System = @import("../../lib/sys/system.zig");
+const USBStorageDevice = System.USBStorageDevice;
 
 const WindowManager = @import("../../managers/WindowManager.zig").WindowManagerSingleton;
 const winRelX = WindowManager.relW;
@@ -31,9 +34,9 @@ const Color = UIFramework.Styles.Color;
 
 pub const DeviceListUIState = struct {
     isActive: bool = false,
-    devices: *std.ArrayList(MacOS.USBStorageDevice),
+    devices: *std.ArrayList(USBStorageDevice),
     selectedDeviceName: ?[:0]u8 = null,
-    selectedDevice: ?MacOS.USBStorageDevice = null,
+    selectedDevice: ?USBStorageDevice = null,
 };
 
 pub const ComponentState = ComponentFramework.ComponentState(DeviceListUIState);
@@ -82,7 +85,7 @@ pub const Events = struct {
         "device_list_ui.on_device_name_changed",
         struct {
             // Not authoritative data; copy only -- use parent.
-            selectedDevice: ?MacOS.USBStorageDevice,
+            selectedDevice: ?USBStorageDevice,
         },
         struct {},
     );
@@ -131,7 +134,12 @@ pub fn start(self: *DeviceListUI) !void {
     } else return error.UnableToSubscribeToEventManager;
 
     self.bgRect = Rectangle{
-        .transform = .{ .x = winRelX(0.5), .y = winRelY(0.2), .w = winRelX(0.16), .h = winRelY(0.7) },
+        .transform = .{
+            .x = winRelX(0.5),
+            .y = winRelY(0.2),
+            .w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
+            .h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
+        },
         .style = .{
             .color = Styles.Color.transparentDark,
             .borderStyle = .{
@@ -259,7 +267,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
                     }
 
                     self.recalculateUI(.{
-                        .width = winRelX(0.35),
+                        .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
                         .color = Color.blueGray,
                         .borderColor = Color.white,
                     });
@@ -273,7 +281,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
                     }
 
                     self.recalculateUI(.{
-                        .width = winRelX(0.16),
+                        .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
                         .color = Color.darkBlueGray,
                         .borderColor = Color.transparentDark,
                     });
