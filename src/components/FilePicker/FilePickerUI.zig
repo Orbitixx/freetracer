@@ -39,6 +39,7 @@ parent: *ISOFilePicker,
 component: ?Component = null,
 
 // Component-specific, unique props
+allocator: std.mem.Allocator,
 bgRect: ?Rectangle = null,
 headerLabel: ?Text = null,
 diskImg: ?Texture = null,
@@ -69,12 +70,21 @@ pub const Events = struct {
         struct { transform: Transform },
         struct {},
     );
+
+    pub const onUIDimensionsQueried = ComponentFramework.defineEvent(
+        "iso_file_picker_ui.get_ui",
+        struct {},
+        struct {
+            bgRectWidth: f32,
+        },
+    );
 };
 
-pub fn init(parent: *ISOFilePicker) !ISOFilePickerUI {
+pub fn init(allocator: std.mem.Allocator, parent: *ISOFilePicker) !ISOFilePickerUI {
     debug.print("\nISOFilePickerUI: start() called.");
 
     return ISOFilePickerUI{
+        .allocator = allocator,
         .state = ComponentState.init(ISOFilePickerUIState{}),
         .parent = parent,
     };
@@ -194,13 +204,25 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
             }
         },
 
-        // NOTE: ISOFilePickerUI emits this event in response to receiving the same event
+        // NOTE: Deprecated implementation. Use Events.onUIDimensionsQueried.
+        // ISOFilePickerUI emits this event in response to receiving the same event
         Events.onGetUIDimensions.Hash => {
             //
             const data = Events.onGetUIDimensions.Data{ .transform = self.bgRect.?.transform };
-            const responseEvent = Events.onGetUIDimensions.create(&self.component.?, &data);
+
+            eventResult.validate(1);
+
+            const responseEvent = Events.onGetUIDimensions.create(self.asComponentPtr(), &data);
 
             EventManager.broadcast(responseEvent);
+        },
+
+        Events.onUIDimensionsQueried.Hash => {
+            eventResult.validate(1);
+
+            const responseDataPtr: *Events.onUIDimensionsQueried.Response = try self.allocator.create(Events.onUIDimensionsQueried.Response);
+            responseDataPtr.* = .{ .bgRectWidth = if (self.bgRect) |bgRect| bgRect.transform.w else 0 };
+            eventResult.data = @ptrCast(@alignCast(responseDataPtr));
         },
 
         ISOFilePicker.Events.onActiveStateChanged.Hash => {

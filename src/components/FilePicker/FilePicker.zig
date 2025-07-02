@@ -117,7 +117,7 @@ pub fn start(self: *ISOFilePickerComponent) !void {
 
         component.children = std.ArrayList(Component).init(self.allocator);
 
-        self.uiComponent = try ISOFilePickerUI.init(self);
+        self.uiComponent = try ISOFilePickerUI.init(self.allocator, self);
 
         if (component.children) |*children| {
             if (self.uiComponent) |*uiComponent| {

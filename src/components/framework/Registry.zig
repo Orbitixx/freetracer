@@ -20,26 +20,17 @@ pub const ComponentRegistry = struct {
         };
     }
 
-    pub fn deinit(self: *ComponentRegistry) void {
-        var iter = self.components.iterator();
-
-        while (iter.next()) |component| {
-            component.value_ptr.*.deinit();
-        }
-
-        self.components.deinit();
-    }
-
     pub fn register(self: *ComponentRegistry, componentId: ComponentID, component: *Component) !void {
         try self.components.put(componentId, component);
     }
 
     pub fn startAll(self: *ComponentRegistry) !void {
-        var iter = self.components.iterator();
-
-        while (iter.next()) |component| {
-            try component.value_ptr.*.start();
-        }
+        _ = self;
+        // var iter = self.components.iterator();
+        //
+        // while (iter.next()) |component| {
+        //     try component.value_ptr.*.start();
+        // }
     }
 
     pub fn updateAll(self: *ComponentRegistry) !void {
@@ -56,5 +47,15 @@ pub const ComponentRegistry = struct {
         while (iter.next()) |component| {
             try component.value_ptr.*.draw();
         }
+    }
+
+    pub fn deinit(self: *ComponentRegistry) void {
+        var iter = self.components.iterator();
+
+        while (iter.next()) |component| {
+            component.value_ptr.*.deinit();
+        }
+
+        self.components.deinit();
     }
 };

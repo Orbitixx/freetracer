@@ -1,6 +1,9 @@
 const std = @import("std");
 const debug = @import("../../lib/util/debug.zig");
 
+const System = @import("../../lib/sys/system.zig");
+const USBStorageDevice = System.USBStorageDevice;
+
 const MacOS = @import("../../modules/macos/MacOSTypes.zig");
 
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
@@ -10,10 +13,11 @@ const ComponentFramework = @import("../framework/import/index.zig");
 
 const DataFlasher = @import("./DataFlasher.zig");
 const DeviceList = @import("../DeviceList/DeviceList.zig");
+const DeviceListUI = @import("../DeviceList/DeviceListUI.zig");
 
 const DataFlasherUIState = struct {
     isActive: bool = false,
-    device: ?MacOS.USBStorageDevice = null,
+    device: ?USBStorageDevice = null,
 };
 
 const DataFlasherUI = @This();
@@ -75,7 +79,7 @@ pub fn init(allocator: std.mem.Allocator, parent: *DataFlasher) !DataFlasherUI {
     };
 }
 
-pub fn initComponent(self: *DataFlasherUI, parent: *Component) !void {
+pub fn initComponent(self: *DataFlasherUI, parent: ?*Component) !void {
     if (self.component != null) return error.BaseComponentAlreadyInitialized;
     self.component = try Component.init(self, &ComponentImplementation.vtable, parent);
 }
@@ -100,8 +104,20 @@ pub fn start(self: *DataFlasherUI) !void {
     };
 
     // Get initial width of the preceding UI element
-    // const event = ISOFilePickerUI.Events.ISOFilePickerUIGetUIDimensions.create(&self.component.?, null);
-    // EventManager.broadcast(event);
+    const initialDimensionsEvent = DeviceListUI.Events.onUITransformQueried.create(self.asComponentPtr(), null);
+    const eventResult = try EventManager.signal("device_list_ui", initialDimensionsEvent);
+
+    if (!eventResult.success or eventResult.data == null) return error.DataFlasherUICouldNotObtainInitialUIDimensions;
+
+    if (eventResult.data) |dimensionsData| {
+        const deviceListUIData: *DeviceListUI.Events.onUITransformQueried.Response = @ptrCast(@alignCast(dimensionsData));
+
+        if (self.bgRect) |*bgRect| {
+            bgRect.transform.x = deviceListUIData.transform.x + deviceListUIData.transform.getWidth() + 20;
+        }
+
+        self.allocator.destroy(deviceListUIData);
+    }
 }
 
 pub fn update(self: *DataFlasherUI) !void {
@@ -109,7 +125,9 @@ pub fn update(self: *DataFlasherUI) !void {
 }
 
 pub fn draw(self: *DataFlasherUI) !void {
-    _ = self;
+    if (self.bgRect) |bgRect| {
+        bgRect.draw();
+    }
 }
 
 pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {

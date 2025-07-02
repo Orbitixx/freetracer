@@ -86,6 +86,14 @@ pub const Events = struct {
         },
         struct {},
     );
+
+    pub const onUITransformQueried = ComponentFramework.defineEvent(
+        "device_list_ui.on_ui_transform_queried",
+        struct {},
+        struct {
+            transform: UIFramework.Primitives.Transform,
+        },
+    );
 };
 
 // Creates and returns an instance of DeviceListUI component
@@ -273,11 +281,28 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
             }
         },
 
+        Events.onUITransformQueried.Hash => {
+            eventResult.validate(1);
+
+            const responseDataPtr: *Events.onUITransformQueried.Response = try self.allocator.create(Events.onUITransformQueried.Response);
+
+            responseDataPtr.* = .{
+                .transform = if (self.bgRect) |bgRect| bgRect.transform else UIFramework.Primitives.Transform{
+                    .x = 0,
+                    .w = 0,
+                    .h = 0,
+                    .y = 0,
+                },
+            };
+
+            eventResult.data = @ptrCast(@alignCast(responseDataPtr));
+        },
+
         Events.onDevicesReadyToRender.Hash => {
             //
             debug.print("\nDeviceListUI: onDevicesReadyToRender() start.");
 
-            // WARNING: Genereal defer is OK here because no other call is coupled here where mutex lock would propagate.
+            // WARNING: General defer is OK here because no other call is coupled here where mutex lock would propagate.
             self.state.lock();
             defer self.state.unlock();
 
@@ -354,7 +379,8 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
                 self.state.data.selectedDevice = data.selectedDevice;
             }
 
-            // const labelDisplayName: [:0]const u8 = if (data.selectedDevice) |device| @ptrCast(@alignCast(device.deviceName)) else "NULL";
+            // BUG: Text display contains memory address? e.g.: "Sandisk 3.1Gen1@????"
+            // Console print is clean, however. Bug appeared after commit 4c694ad, redefining USBStorageDevice comptime type.
             const labelDisplayName: [:0]const u8 = if (data.selectedDevice) |device| @ptrCast(@alignCast(std.mem.sliceTo(device.deviceName, 0x00))) else "NULL";
             debug.printf("\n\n\nDeviceListUI: labelDisplayName = {s}, len = {d}, original len = {d}\n\n\n", .{ labelDisplayName, labelDisplayName.len, data.selectedDevice.?.deviceName.len });
 

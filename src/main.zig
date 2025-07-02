@@ -75,12 +75,15 @@ pub fn main() !void {
 
     var isoFilePicker = try ISOFilePicker.init(allocator);
     try componentRegistry.register(ComponentID.ISOFilePicker, @constCast(isoFilePicker.asComponentPtr()));
+    try isoFilePicker.start();
 
     var deviceList = try DeviceList.init(allocator);
     try componentRegistry.register(ComponentID.DeviceList, @constCast(deviceList.asComponentPtr()));
+    try deviceList.start();
 
     var dataFlasher = try DataFlasher.init(allocator);
     try componentRegistry.register(ComponentID.DataFlasher, @constCast(dataFlasher.asComponentPtr()));
+    try dataFlasher.start();
 
     //----------------------------------------------------------------------------------
     //--- @END COMPONENTS --------------------------------------------------------------
