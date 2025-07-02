@@ -1,7 +1,8 @@
 const std = @import("std");
 const debug = @import("../../lib/util/debug.zig");
 
-const MacOS = @import("../../modules/macos/MacOSTypes.zig");
+const System = @import("../../lib/sys/system.zig");
+const USBStorageDevice = System.USBStorageDevice;
 
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
 
@@ -12,8 +13,8 @@ const DeviceListUI = @import("./DeviceListUI.zig");
 
 const DeviceListState = struct {
     isActive: bool = false,
-    devices: std.ArrayList(MacOS.USBStorageDevice),
-    selectedDevice: ?MacOS.USBStorageDevice = null,
+    devices: std.ArrayList(USBStorageDevice),
+    selectedDevice: ?USBStorageDevice = null,
 };
 
 const DeviceListComponent = @This();
@@ -50,7 +51,7 @@ pub const Events = struct {
     pub const onDiscoverDevicesEnd = ComponentFramework.defineEvent(
         "device_list.on_discover_devices_end",
         struct {
-            devices: std.ArrayList(MacOS.USBStorageDevice),
+            devices: std.ArrayList(USBStorageDevice),
         },
         struct {},
     );
@@ -74,7 +75,7 @@ pub const Events = struct {
         "device_list.on_selected_device_queried",
         struct {},
         struct {
-            device: MacOS.USBStorageDevice,
+            device: USBStorageDevice,
         },
     );
 };
@@ -82,7 +83,7 @@ pub const Events = struct {
 pub fn init(allocator: std.mem.Allocator) !DeviceListComponent {
     return .{
         .state = ComponentState.init(DeviceListState{
-            .devices = std.ArrayList(MacOS.USBStorageDevice).init(allocator),
+            .devices = std.ArrayList(USBStorageDevice).init(allocator),
         }),
         .allocator = allocator,
     };
@@ -277,7 +278,7 @@ pub const dispatchComponentFinishedAction = struct {
 
 pub const SelectDeviceCallbackContext = struct {
     component: *DeviceListComponent,
-    selectedDevice: MacOS.USBStorageDevice,
+    selectedDevice: USBStorageDevice,
 };
 
 pub const selectDeviceActionWrapper = struct {

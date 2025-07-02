@@ -1,6 +1,9 @@
 const std = @import("std");
 const debug = @import("../../lib/util/debug.zig");
 
+const System = @import("../../lib/sys/system.zig");
+const USBStorageDevice = System.USBStorageDevice;
+
 const MacOS = @import("../../modules/macos/MacOSTypes.zig");
 
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
@@ -13,7 +16,7 @@ const DataFlasherUI = @import("./DataFlasherUI.zig");
 const DataFlasherState = struct {
     isActive: bool = false,
     isoPath: ?[:0]const u8 = null,
-    device: ?MacOS.USBStorageDevice = null,
+    device: ?USBStorageDevice = null,
 };
 
 const DataFlasher = @This();
@@ -150,7 +153,7 @@ pub fn handleEvent(self: *DataFlasher, event: ComponentEvent) !EventResult {
 
                     self.state.data.device = deviceResponse.device;
 
-                    // self.state.data.device = @as(*MacOS.USBStorageDevice, @ptrCast(@alignCast(deviceData))).*;
+                    // self.state.data.device = @as(*USBStorageDevice, @ptrCast(@alignCast(deviceData))).*;
 
                     // WARNING: cleaning up a pointer created on the heap by DeviceList.handleEvent.onSelectedDeviceQueried.
                     self.allocator.destroy(@as(

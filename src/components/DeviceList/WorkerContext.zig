@@ -1,6 +1,9 @@
 const std = @import("std");
 const debug = @import("../../lib/util/debug.zig");
 
+const System = @import("../../lib/sys/system.zig");
+const USBStorageDevice = System.USBStorageDevice;
+
 const MacOS = @import("../../modules/macos/MacOSTypes.zig");
 const IOKit = @import("../../modules/macos/IOKit.zig");
 
@@ -19,7 +22,7 @@ pub fn workerRun(worker: *DeviceListComponentWorker, context: *anyopaque) void {
 
     const devices = IOKit.getUSBStorageDevices(deviceList.allocator) catch blk: {
         debug.print("\nWARNING: Unable to capture USB devices. Please make sure a USB flash drive is plugged in.");
-        break :blk std.ArrayList(MacOS.USBStorageDevice).init(deviceList.allocator);
+        break :blk std.ArrayList(USBStorageDevice).init(deviceList.allocator);
     };
 
     debug.printf("\nDeviceList Worker: finished finding USB Storage devices, found: {d}", .{devices.items.len});

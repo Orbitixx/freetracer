@@ -1,3 +1,6 @@
+const MacOS = @import("../../modules/macos/MacOSTypes.zig");
+const Linux = @import("../../modules/linux/LinuxTypes.zig");
+
 pub const isMac = @import("builtin").os.tag == .macos;
 pub const isLinux = @import("builtin").os.tag == .linux;
 
@@ -15,3 +18,6 @@ pub const c = if (isMac) @cImport({
 }) else if (isLinux) @cImport({
     // @cInclude("blkid/blkid.h");
 });
+
+// comptime type selector
+pub const USBStorageDevice = if (isMac) MacOS.USBStorageDevice else if (isLinux) Linux.USBStorageDevice;

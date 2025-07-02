@@ -354,7 +354,9 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
                 self.state.data.selectedDevice = data.selectedDevice;
             }
 
-            const labelDisplayName: [:0]const u8 = if (data.selectedDevice) |device| @ptrCast(@alignCast(device.deviceName)) else "NULL";
+            // const labelDisplayName: [:0]const u8 = if (data.selectedDevice) |device| @ptrCast(@alignCast(device.deviceName)) else "NULL";
+            const labelDisplayName: [:0]const u8 = if (data.selectedDevice) |device| @ptrCast(@alignCast(std.mem.sliceTo(device.deviceName, 0x00))) else "NULL";
+            debug.printf("\n\n\nDeviceListUI: labelDisplayName = {s}, len = {d}, original len = {d}\n\n\n", .{ labelDisplayName, labelDisplayName.len, data.selectedDevice.?.deviceName.len });
 
             if (self.bgRect) |bgRect| {
                 self.deviceNameLabel = Text.init(labelDisplayName, .{

@@ -3,10 +3,13 @@ const debug = @import("../../lib/util/debug.zig");
 
 const c = @import("../../lib/sys/system.zig").c;
 
+const System = @import("../../lib/sys/system.zig");
+const USBStorageDevice = System.USBStorageDevice;
+
 const MacOS = @import("MacOSTypes.zig");
 
 /// TODO: needs refactoring - useless work being done to get to a list of IOMediaVolumes
-pub fn getUSBStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(MacOS.USBStorageDevice) {
+pub fn getUSBStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(USBStorageDevice) {
     var matchingDict: c.CFMutableDictionaryRef = null;
     var ioIterator: c.io_iterator_t = 0;
     var kernReturn: ?c.kern_return_t = null;
@@ -29,7 +32,7 @@ pub fn getUSBStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(MacOS.U
     var usbDevices = std.ArrayList(MacOS.USBDevice).init(allocator);
     defer usbDevices.deinit();
 
-    var usbStorageDevices = std.ArrayList(MacOS.USBStorageDevice).init(allocator);
+    var usbStorageDevices = std.ArrayList(USBStorageDevice).init(allocator);
 
     while (ioDevice != 0) {
 
@@ -88,7 +91,7 @@ pub fn getUSBStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(MacOS.U
         const usbDevice: MacOS.USBDevice = usbDevices.items[i];
         debug.printf("\nUSB Device with IOMedia volumes ({s} - {d})\n", .{ usbDevice.deviceName, usbDevice.serviceId });
 
-        var usbStorageDevice: MacOS.USBStorageDevice = .{
+        var usbStorageDevice: USBStorageDevice = .{
             .allocator = allocator,
             .volumes = std.ArrayList(MacOS.IOMediaVolume).init(allocator),
         };
@@ -141,7 +144,7 @@ pub fn getUSBStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(MacOS.U
 
         debug.print("\nDetected the following USB Storage Devices:\n");
         for (0..usbStorageDevices.items.len) |d| {
-            const dev: MacOS.USBStorageDevice = usbStorageDevices.items[d];
+            const dev: USBStorageDevice = usbStorageDevices.items[d];
             dev.print();
         }
     }

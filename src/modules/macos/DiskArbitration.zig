@@ -3,12 +3,13 @@ const debug = @import("../../lib/util/debug.zig");
 
 const c = @import("../../lib/sys/system.zig").c;
 
+const System = @import("../../lib/sys/system.zig");
 const MacOS = @import("MacOSTypes.zig");
 const toSlice = @import("IOKit.zig").toSlice;
 
 const IOMediaVolume = MacOS.IOMediaVolume;
 const USBDevice = MacOS.USBDevice;
-const USBStorageDevice = MacOS.USBStorageDevice;
+const USBStorageDevice = System.USBStorageDevice;
 
 pub fn unmountAllVolumes(pDevice: *const USBStorageDevice) !void {
     const daSession = c.DASessionCreate(c.kCFAllocatorDefault);
