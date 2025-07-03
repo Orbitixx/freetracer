@@ -18,7 +18,6 @@ const IsoWriter = @import("modules/IsoWriter.zig");
 const MacOS = @import("modules/macos/MacOSTypes.zig");
 const IOKit = @import("modules/macos/IOKit.zig");
 const DiskArbitration = @import("modules/macos/DiskArbitration.zig");
-const PrivilegedHelper = @import("modules/macos/PrivilegedHelper.zig");
 
 const Font = @import("managers/ResourceManager.zig").FONT;
 const Color = @import("components/ui/Styles.zig").Color;
@@ -29,6 +28,7 @@ const ComponentID = ComponentFramework.ComponentID;
 const ISOFilePicker = @import("./components/FilePicker/FilePicker.zig");
 const DeviceList = @import("./components/DeviceList/DeviceList.zig");
 const DataFlasher = @import("./components/DataFlasher/DataFlasher.zig");
+const PrivilegedHelper = @import("./components/macos/PrivilegedHelper.zig");
 
 const UI = @import("./components/ui/Primitives.zig");
 const Button = @import("components/ui/Button.zig");
@@ -85,22 +85,12 @@ pub fn main() !void {
     try componentRegistry.register(ComponentID.DataFlasher, @constCast(dataFlasher.asComponentPtr()));
     try dataFlasher.start();
 
+    var privilegedHelper = try PrivilegedHelper.init(allocator);
+    try componentRegistry.register(ComponentID.PrivilegedHelper, @constCast(privilegedHelper.asComponentPtr()));
+    try privilegedHelper.start();
+
     //----------------------------------------------------------------------------------
     //--- @END COMPONENTS --------------------------------------------------------------
-    //----------------------------------------------------------------------------------
-
-    //----------------------------------------------------------------------------------
-    //--- @MACOS: PRIVILEGED HELPER TOOL  ----------------------------------------------
-    //----------------------------------------------------------------------------------
-    var helperResponse: bool = false;
-    helperResponse = true;
-
-    // if (!PrivilegedHelper.isHelperToolInstalled()) {
-    // helperResponse = PrivilegedHelper.installPrivilegedHelperTool();
-    // } else helperResponse = true;
-
-    //----------------------------------------------------------------------------------
-    //--- @END MACOS: PRIVILEGED HELPER TOOL -------------------------------------------
     //----------------------------------------------------------------------------------
 
     const backgroundColor: rl.Color = .{ .r = 29, .g = 44, .b = 64, .a = 100 };
@@ -146,9 +136,6 @@ pub fn main() !void {
 
         logoText.draw();
         subLogoText.draw();
-
-        rl.drawCircleV(.{ .x = relX(0.9), .y = relY(0.065) }, 4.5, if (helperResponse) .green else .red);
-        rl.drawCircleLinesV(.{ .x = relX(0.9), .y = relY(0.065) }, 4.5, .white);
 
         versionText.draw();
 

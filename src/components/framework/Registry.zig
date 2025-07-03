@@ -6,6 +6,7 @@ pub const ComponentID = enum(u8) {
     ISOFilePicker = 0,
     DeviceList = 1,
     DataFlasher = 2,
+    PrivilegedHelper = 3,
 };
 
 pub const ComponentRegistry = struct {

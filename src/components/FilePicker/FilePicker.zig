@@ -215,7 +215,13 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
                 &.{ .isActive = false },
             );
 
-            EventManager.broadcast(inactivateComponentEvent);
+            if (self.uiComponent) |*uiComponent| {
+                _ = try uiComponent.handleEvent(Events.onActiveStateChanged.create(self.asComponentPtr(), &.{ .isActive = false }));
+            }
+
+            // EventManager.broadcast(inactivateComponentEvent);
+
+            _ = try EventManager.signal("device_list", inactivateComponentEvent);
         },
 
         Events.onISOFilePathQueried.Hash => {

@@ -121,7 +121,7 @@ pub fn start(self: *DataFlasherUI) !void {
 
     if (self.bgRect) |bgRect| {
         self.button = Button.init(
-            "Flash ⚡️",
+            "Flash",
             bgRect.transform.getPosition(),
             .Primary,
             .{

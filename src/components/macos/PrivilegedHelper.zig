@@ -1,4 +1,5 @@
 const std = @import("std");
+const rl = @import("raylib");
 const debug = @import("../../lib/util/debug.zig");
 
 const PrivilegedHelperTool = @import("../../modules/macos/PrivilegedHelperTool.zig");
@@ -11,8 +12,8 @@ const PrivilegedHelperState = struct {
 const System = @import("../../lib/sys/system.zig");
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
 const WindowManager = @import("../../managers/WindowManager.zig").WindowManagerSingleton;
-const winRelW = WindowManager.relW;
-const winRelH = WindowManager.relH;
+const winRelX = WindowManager.relW;
+const winRelY = WindowManager.relH;
 
 const ComponentFramework = @import("../framework/import/index.zig");
 const Component = ComponentFramework.Component;
@@ -40,7 +41,7 @@ pub const Events = struct {
     );
 };
 
-pub fn init(allocator: std.mem.Allocator) !void {
+pub fn init(allocator: std.mem.Allocator) !PrivilegedHelper {
     return PrivilegedHelper{
         .allocator = allocator,
         .state = ComponentState.init(PrivilegedHelperState{
@@ -79,23 +80,18 @@ pub fn start(self: *PrivilegedHelper) !void {
 
     try self.initWorker();
 
+    self.dispatchComponentAction();
+
     if (self.component) |*component| {
         if (component.children != null) return error.ComponentAlreadyCalledStartBefore;
 
         if (!EventManager.subscribe("privileged_helper", component)) return error.UnableToSubscribeToEventManager;
 
-        std.debug.print("\nDeviceList: attempting to initialize children...", .{});
+        std.debug.print("\nPrivilegedHelper: attempting to initialize children...", .{});
 
         component.children = std.ArrayList(Component).init(self.allocator);
 
-        if (component.children) |*children| {
-            if (self.uiComponent) |*uiComponent| {
-                try uiComponent.start();
-                try children.append(uiComponent.asComponent());
-            }
-        }
-
-        std.debug.print("\nDeviceList: finished initializing children.", .{});
+        std.debug.print("\nPrivilegedHelper: finished initializing children.", .{});
     }
 }
 
@@ -106,10 +102,16 @@ pub fn update(self: *PrivilegedHelper) !void {
 }
 
 pub fn draw(self: *PrivilegedHelper) !void {
-    _ = self;
+    self.state.lock();
+    errdefer self.state.unlock();
+    const isHelperToolInstalled = if (System.isMac) self.state.data.isInstalled else if (System.isLinux) true else unreachable;
+    self.state.unlock();
+
+    rl.drawCircleV(.{ .x = winRelX(0.9), .y = winRelY(0.065) }, 4.5, if (isHelperToolInstalled) .green else .red);
+    rl.drawCircleLinesV(.{ .x = winRelX(0.9), .y = winRelY(0.065) }, 4.5, .white);
 }
 
-pub fn handleEnvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult {
+pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult {
     _ = self;
 
     var eventResult = EventResult.init();
@@ -130,7 +132,7 @@ pub fn handleEnvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult
 
 pub fn deinit(self: *PrivilegedHelper) void {
     //
-    if (self.worker) |*worker| worker.deinit();
+    _ = self;
 }
 
 pub fn workerRun(worker: *ComponentWorker, context: *anyopaque) void {
@@ -144,14 +146,18 @@ pub fn workerCallback(worker: *ComponentWorker, context: *anyopaque) void {
 }
 
 pub fn dispatchComponentAction(self: *PrivilegedHelper) void {
-    _ = self;
+    //
+    const helperResponse = PrivilegedHelperTool.isHelperToolInstalled();
 
-    var helperResponse: bool = false;
-    helperResponse = true;
+    // if (!PrivilegedHelperTool.isHelperToolInstalled()) {
+    //     helperResponse = PrivilegedHelperTool.installPrivilegedHelperTool();
+    // } else helperResponse = true;
 
-    if (!PrivilegedHelperTool.isHelperToolInstalled()) {
-        helperResponse = PrivilegedHelperTool.installPrivilegedHelperTool();
-    } else helperResponse = true;
+    {
+        self.state.lock();
+        defer self.state.unlock();
+        self.state.data.isInstalled = helperResponse;
+    }
 }
 
 const ComponentImplementation = ComponentFramework.ImplementComponent(PrivilegedHelper);
