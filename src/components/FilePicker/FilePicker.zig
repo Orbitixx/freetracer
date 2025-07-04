@@ -215,12 +215,8 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
                 &.{ .isActive = false },
             );
 
-            if (self.uiComponent) |*uiComponent| {
-                _ = try uiComponent.handleEvent(Events.onActiveStateChanged.create(self.asComponentPtr(), &.{ .isActive = false }));
-            }
-
-            // EventManager.broadcast(inactivateComponentEvent);
-
+            // NOTE: Cannot broadcast here because order of operations matters here.
+            _ = try EventManager.signal("iso_file_picker_ui", inactivateComponentEvent);
             _ = try EventManager.signal("device_list", inactivateComponentEvent);
         },
 
