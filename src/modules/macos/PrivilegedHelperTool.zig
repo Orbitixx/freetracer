@@ -11,31 +11,31 @@ pub fn isHelperToolInstalled() bool {
     const smJobCopyDict = c.SMJobCopyDictionary(c.kSMDomainSystemLaunchd, helperLabel);
 
     if (smJobCopyDict == null) {
-        debug.printf("isHelperToolInstalled(): the SMJobCopyDictionary for helper tool is NULL. Helper tool is NOT installed.", .{});
+        debug.printf("\nisHelperToolInstalled(): the SMJobCopyDictionary for helper tool is NULL. Helper tool is NOT installed.", .{});
         return false;
     }
 
     defer _ = c.CFRelease(smJobCopyDict);
 
-    debug.printf("isHelperToolInstalled(): Helper tool found, it appears to be installed.", .{});
+    debug.printf("\nisHelperToolInstalled(): Helper tool found, it appears to be installed.", .{});
     return true;
 }
 
 pub fn installPrivilegedHelperTool() bool {
     var installStatus: c.Boolean = c.FALSE;
 
-    debug.print("Install Helper Tool: attempting to obtain initial (empty) authorization.");
+    debug.print("\nInstall Helper Tool: attempting to obtain initial (empty) authorization.");
 
     var authRef: c.AuthorizationRef = undefined;
     var authStatus: c.OSStatus = c.AuthorizationCreate(null, null, 0, &authRef);
 
     if (authStatus != c.errAuthorizationSuccess) {
-        debug.printf("Freetracer failed to obtain empty authorization in the process of installing its privileged helper tool. AuthStatus: {d}.", .{authStatus});
+        debug.printf("\nFreetracer failed to obtain empty authorization in the process of installing its privileged helper tool. AuthStatus: {d}.", .{authStatus});
         authRef = null;
         return false;
     }
 
-    debug.print("Install Helper Tool: successfully obtained an empty authorization.");
+    debug.print("\nInstall Helper Tool: successfully obtained an empty authorization.");
 
     defer _ = c.AuthorizationFree(authRef, c.kAuthorizationFlagDefaults);
 
@@ -44,68 +44,68 @@ pub fn installPrivilegedHelperTool() bool {
     const authRights: c.AuthorizationRights = .{ .count = 1, .items = &authItem };
     const authFlags: c.AuthorizationFlags = c.kAuthorizationFlagDefaults | c.kAuthorizationFlagInteractionAllowed | c.kAuthorizationFlagPreAuthorize | c.kAuthorizationFlagExtendRights;
 
-    debug.print("Install Helper Tool: attempting to copy authorization rights to authorization ref.");
+    debug.print("\nInstall Helper Tool: attempting to copy authorization rights to authorization ref.");
 
     authStatus = c.AuthorizationCopyRights(authRef, &authRights, null, authFlags, null);
 
     if (authStatus != c.errAuthorizationSuccess) {
-        debug.printf("Freetracer failed to obtain specific authorization rights in the process of installing its privileged helper tool. AuthStatus: {d}.", .{authStatus});
+        debug.printf("\nFreetracer failed to obtain specific authorization rights in the process of installing its privileged helper tool. AuthStatus: {d}.", .{authStatus});
         return false;
     }
 
-    debug.print("Install Helper Tool: successfully copied auth rights; attempting to create a bundle id CFStringRef.");
+    debug.print("\nInstall Helper Tool: successfully copied auth rights; attempting to create a bundle id CFStringRef.");
 
     const helperLabel: c.CFStringRef = c.CFStringCreateWithCStringNoCopy(c.kCFAllocatorDefault, env.HELPER_BUNDLE_ID, c.kCFStringEncodingUTF8, c.kCFAllocatorNull);
     defer _ = c.CFRelease(helperLabel);
 
-    debug.print("Install Helper Tool: successfully created a bundle id CFStringRef.");
+    debug.print("\nInstall Helper Tool: successfully created a bundle id CFStringRef.");
 
     var cfError: c.CFErrorRef = null;
 
-    debug.print("Install Helper Tool: launching SMJobBless call on the helper.");
+    debug.print("\nInstall Helper Tool: launching SMJobBless call on the helper.");
 
     installStatus = c.SMJobBless(c.kSMDomainSystemLaunchd, helperLabel, authRef, &cfError);
 
-    debug.print("Install Helper Tool: SMJobBless call completed without kernel panicking.");
+    debug.print("\nInstall Helper Tool: SMJobBless call completed without kernel panicking.");
 
     if (installStatus == c.TRUE) {
-        debug.printf("Freetracer successfully installed its privileged helper tool.", .{});
+        debug.printf("\nFreetracer successfully installed its privileged helper tool.", .{});
         return true;
     }
 
-    debug.print("Install Helper Tool: SMJobBless call failed, proceeding to analyze error.");
+    debug.print("\nInstall Helper Tool: SMJobBless call failed, proceeding to analyze error.");
 
     if (cfError == null) {
-        debug.printf("Freetracer failed to install its privileged helper tool without any error status from SMJobBless.", .{});
+        debug.printf("\nFreetracer failed to install its privileged helper tool without any error status from SMJobBless.", .{});
         return false;
     }
 
     defer _ = c.CFRelease(cfError);
 
-    debug.print("Install Helper Tool: attempting to copy error description.");
+    debug.print("\nInstall Helper Tool: attempting to copy error description.");
 
     const errorDesc = c.CFErrorCopyDescription(cfError);
 
     if (errorDesc == null) {
-        debug.printf("Freetracer could not copy error description from the SMJobBless operation error, error description is null.", .{});
+        debug.printf("\nFreetracer could not copy error description from the SMJobBless operation error, error description is null.", .{});
         return false;
     }
 
-    debug.print("Install Helper Tool: obtained a copy of error description.");
+    debug.print("\nInstall Helper Tool: obtained a copy of error description.");
 
     defer _ = c.CFRelease(errorDesc);
 
-    debug.print("Install Helper Tool: attempting to obtain a string from error description.");
+    debug.print("\nInstall Helper Tool: attempting to obtain a string from error description.");
 
     var errDescBuffer: [512]u8 = undefined;
     const obtainErrorDescStatus = c.CFStringGetCString(errorDesc, &errDescBuffer, errDescBuffer.len, c.kCFStringEncodingUTF8);
 
     if (obtainErrorDescStatus == 0) {
-        debug.printf("Freetracer could not obtain error description from the SMJobBless operation error, error description is NOT null.", .{});
+        debug.printf("\nFreetracer could not obtain error description from the SMJobBless operation error, error description is NOT null.", .{});
         return false;
     }
 
-    debug.printf("Freetracer received SMJobBless error: {s}.", .{std.mem.sliceTo(&errDescBuffer, 0)});
+    debug.printf("\nFreetracer received SMJobBless error: {s}.", .{std.mem.sliceTo(&errDescBuffer, 0)});
     return false;
 }
 
@@ -121,7 +121,7 @@ pub fn performPrivilegedTask(payload: []const u8) bool {
     const remoteMessagePort: c.CFMessagePortRef = c.CFMessagePortCreateRemote(c.kCFAllocatorDefault, portNameRef);
 
     if (remoteMessagePort == null) {
-        debug.printf("Freetracer unable to create a remote message port to Freetracer Helper Tool.", .{});
+        debug.printf("\nFreetracer unable to create a remote message port to Freetracer Helper Tool.", .{});
         return false;
     }
 
@@ -149,7 +149,7 @@ pub fn performPrivilegedTask(payload: []const u8) bool {
 
     if (helperResponseCode != c.kCFMessagePortSuccess or responseData == null) {
         debug.printf(
-            "Freetracer failed to communicate with Freetracer Helper Tool - received invalid response code ({d}) or null response data ({any}).",
+            "\nFreetracer failed to communicate with Freetracer Helper Tool - received invalid response code ({d}) or null response data ({any}).",
             .{ helperResponseCode, responseData },
         );
         return false;
@@ -164,10 +164,10 @@ pub fn performPrivilegedTask(payload: []const u8) bool {
     }
 
     if (result == 0) {
-        debug.printf("Freetracer successfully received response from Freetracer Helper Tool: {d}", .{result});
+        debug.printf("\nFreetracer successfully received response from Freetracer Helper Tool: {d}", .{result});
         return true;
     } else {
-        debug.printf("Freetracer failed to receive a structured response from Freetracer Helper Tool: {d}.", .{result});
+        debug.printf("\nFreetracer failed to receive a structured response from Freetracer Helper Tool: {d}.", .{result});
         return false;
     }
 }
