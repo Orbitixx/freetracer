@@ -56,7 +56,7 @@ pub const Events = struct {
         struct {},
     );
 
-    pub const onDevicesCleanUp = ComponentFramework.defineEvent(
+    pub const onDevicesCleanup = ComponentFramework.defineEvent(
         "device_list.on_devices_cleanup",
         struct {},
         struct {},
@@ -191,7 +191,7 @@ pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResu
                 self.state.data.devices = data.devices;
             }
 
-            const responseEvent = DeviceListUI.Events.onDevicesReadyToRender.create(&self.component.?, null);
+            const responseEvent = DeviceListUI.Events.onDevicesReadyToRender.create(self.asComponentPtr(), null);
 
             EventManager.broadcast(responseEvent);
 
@@ -214,7 +214,7 @@ pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResu
 
             // Prepare and broacast component state changed event
             var responseEvent = Events.onDeviceListActiveStateChanged.create(
-                &self.component.?,
+                self.asComponentPtr(),
                 &.{ .isActive = false },
             );
 
@@ -263,21 +263,23 @@ pub fn deinit(self: *DeviceListComponent) void {
 fn discoverDevices(self: *DeviceListComponent) !void {
     debug.print("\nDeviceList: discovering connected devices...");
 
-    {
-        self.state.lock();
-        defer self.state.unlock();
+    self.state.lock();
+    errdefer self.state.unlock();
+    var devices = self.state.data.devices;
+    self.state.data.selectedDevice = null;
+    self.state.unlock();
 
-        if (self.state.data.devices.items.len > 0) {
-            const eventResult = try EventManager.signal("device_list_ui", Events.onDevicesCleanUp.create(self.asComponentPtr(), null));
+    // Important memory cleanup for the refresh devices functionality
+    if (devices.items.len > 0) {
+        const eventResult = try EventManager.signal("device_list_ui", Events.onDevicesCleanup.create(self.asComponentPtr(), null));
 
-            if (!eventResult.success) return;
+        if (!eventResult.success) return error.DeviceListCouldNotCleanUpDevicesBeforeDiscoveringNewOnes;
 
-            for (self.state.data.devices.items) |*device| {
-                device.deinit();
-            }
-
-            self.state.data.devices.clearAndFree();
+        for (devices.items) |*device| {
+            device.deinit();
         }
+
+        devices.clearAndFree();
     }
 
     if (self.worker) |*worker| {
@@ -292,7 +294,7 @@ pub const dispatchComponentFinishedAction = struct {
 
         debug.print("\nDeviceList: component action wrapper dispatch.");
 
-        _ = self.handleEvent(Events.onFinishedComponentInteraction.create(&self.component.?, null)) catch |err| {
+        _ = self.handleEvent(Events.onFinishedComponentInteraction.create(self.asComponentPtr(), null)) catch |err| {
             debug.printf("\nDeviceList.dispatchComponentAction: ERROR - {any}", .{err});
             std.debug.panic("\nDeviceList.dispatchComponentAction failed. May result in unpredictable behavior, please report. Error: {any}", .{err});
         };
@@ -322,7 +324,7 @@ pub const selectDeviceActionWrapper = struct {
         debug.printf(
             "\nDeviceList: selected device set to: {s}",
             .{
-                if (context.component.state.data.selectedDevice != null) std.mem.sliceTo(context.selectedDevice.bsdName, 0x00) else "NULL",
+                if (context.component.state.data.selectedDevice != null) context.selectedDevice.getBsdNameSlice() else "NULL",
             },
         );
 

@@ -35,7 +35,6 @@ const Color = UIFramework.Styles.Color;
 pub const DeviceListUIState = struct {
     isActive: bool = false,
     devices: *std.ArrayList(USBStorageDevice),
-    selectedDeviceName: ?[:0]u8 = null,
     selectedDevice: ?USBStorageDevice = null,
 };
 
@@ -318,10 +317,19 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
             }
         },
 
-        DeviceList.Events.onDevicesCleanUp.Hash => {
+        DeviceList.Events.onDevicesCleanup.Hash => {
             if (self.deviceNameLabel) |*label| {
                 label.value = "NULL";
             }
+
+            self.state.lock();
+            defer self.state.unlock();
+
+            if (self.state.data.selectedDevice) |*device| {
+                device.deinit();
+            }
+
+            self.state.data.selectedDevice = null;
 
             eventResult.validate(1);
         },
@@ -358,14 +366,14 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
 
             debug.printf("\nDeviceListUI: onDevicesReadyToRender(): processing checkboxes for {d} devices.", .{self.state.data.devices.items.len});
 
-            for (self.state.data.devices.items, 0..) |device, i| {
+            for (self.state.data.devices.items, 0..) |*device, i| {
                 //
                 const selectDeviceContext = try self.allocator.create(DeviceList.SelectDeviceCallbackContext);
 
                 // Define context for the checkbox's on-click behavior/callback
                 selectDeviceContext.* = DeviceList.SelectDeviceCallbackContext{
                     .component = self.parent,
-                    .selectedDevice = device,
+                    .selectedDevice = device.*,
                 };
 
                 // Buffered display string in a predefined format
@@ -377,8 +385,8 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
                     deviceStringBuffer,
                     "{s} - {s} ({d:.0}GB)",
                     .{
-                        device.deviceName,
-                        std.mem.sliceTo(device.bsdName, 0x00),
+                        std.mem.sliceTo(device.deviceNameBuf[0..device.deviceNameBuf.len], 0x00),
+                        device.getBsdNameSlice(),
                         @divTrunc(device.size, 1_000_000_000),
                     },
                 ) catch |err| {
@@ -424,10 +432,12 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
                 self.state.data.selectedDevice = data.selectedDevice;
             }
 
+            std.debug.print("\nDeviceListUI.handleEvent.onSelectedDeviceNameChanged received selectedDevice: \n{s}\n\n", .{@constCast(&data.selectedDevice.?).getNameSlice()});
+
             // BUG: Text display contains memory address? e.g.: "Sandisk 3.1Gen1@????"
             // Console print is clean, however. Bug appeared after commit 4c694ad, redefining USBStorageDevice comptime type.
-            const labelDisplayName: [:0]const u8 = if (data.selectedDevice) |device| @ptrCast(@alignCast(std.mem.sliceTo(device.deviceName, 0x00))) else "NULL";
-            debug.printf("\n\n\nDeviceListUI: labelDisplayName = {s}, len = {d}, original len = {d}\n\n\n", .{ labelDisplayName, labelDisplayName.len, data.selectedDevice.?.deviceName.len });
+            const labelDisplayName: [:0]const u8 = if (data.selectedDevice) |*device| @ptrCast(@alignCast(@constCast(device).getNameSlice())) else "NULL";
+            // debug.printf("\nDeviceListUI: labelDisplayName = {s}, len = {d}, original len = {d}\n", .{ labelDisplayName, labelDisplayName.len, data.selectedDevice.?.deviceName.len });
 
             if (self.bgRect) |bgRect| {
                 self.deviceNameLabel = Text.init(labelDisplayName, .{
@@ -579,10 +589,6 @@ fn drawInactive(self: *DeviceListUI) !void {
 }
 
 pub fn deinit(self: *DeviceListUI) void {
-    // if (self.state.data.selectedDeviceName) |deviceName| {
-    //     self.parent.allocator.free(deviceName);
-    // }
-
     for (self.deviceCheckboxes.items) |checkbox| {
         // Free the buffered display name (allocated via std.mem.buffPrintZ)
         self.allocator.free(checkbox.text.value);

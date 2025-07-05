@@ -120,7 +120,7 @@ pub fn handleEvent(self: *DataFlasher, event: ComponentEvent) !EventResult {
 
                 debug.printf("\nDataFlasher received:\n\tisoPath: {s}\n\tdevice: {s}\n", .{
                     self.state.data.isoPath.?,
-                    self.state.data.device.?.bsdName,
+                    self.state.data.device.?.getBsdNameSlice(),
                 });
             }
 

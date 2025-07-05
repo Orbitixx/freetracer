@@ -31,7 +31,7 @@ pub fn workerRun(worker: *DeviceListComponentWorker, context: *anyopaque) void {
         .devices = devices,
     });
 
-    // Important to toggle flag for self-notify override
+    // Important to toggle flag for self-notify override since we're targeting self (DeviceList)
     event.flags.overrideNotifySelfOnSelfOrigin = true;
 
     _ = EventManager.broadcast(event);

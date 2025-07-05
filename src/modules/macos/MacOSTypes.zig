@@ -16,9 +16,12 @@ const c = if (isMac) @cImport({
 }) else if (isLinux) @cImport({});
 
 pub const IOMediaVolume = struct {
+    pub const kVolumeBsdNameBufferSize: usize = 128;
+
     allocator: std.mem.Allocator,
     serviceId: c.io_service_t,
-    bsdName: []const u8,
+    bsdName: []const u8 = undefined,
+    bsdNameBuf: [kVolumeBsdNameBufferSize:0]u8 = undefined,
     size: i64,
     isLeaf: bool,
     isWhole: bool,
@@ -27,7 +30,8 @@ pub const IOMediaVolume = struct {
     isWritable: bool,
 
     pub fn deinit(self: IOMediaVolume) void {
-        self.allocator.free(self.bsdName);
+        _ = self;
+        // self.allocator.free(self.bsdName);
     }
 };
 
@@ -45,29 +49,44 @@ pub const USBDevice = struct {
 };
 
 pub const USBStorageDevice = struct {
+    pub const kDeviceNameBufferSize: usize = 128;
+    pub const kDeviceBsdNameBufferSize: usize = 128;
+
     allocator: std.mem.Allocator,
     serviceId: c.io_service_t = undefined,
     deviceName: []u8 = undefined,
     bsdName: []u8 = undefined,
+    deviceNameBuf: [kDeviceNameBufferSize:0]u8 = undefined,
+    bsdNameBuf: [kDeviceBsdNameBufferSize:0]u8 = undefined,
     size: i64 = undefined,
     volumes: std.ArrayList(IOMediaVolume) = undefined,
 
     pub fn deinit(self: USBStorageDevice) void {
-        self.allocator.free(self.deviceName);
-        self.allocator.free(self.bsdName);
-
-        for (self.volumes.items) |volume| {
-            self.allocator.free(volume.bsdName);
-        }
+        // self.allocator.free(self.deviceName);
+        // self.allocator.free(self.bsdName);
+        //
+        // for (self.volumes.items) |volume| {
+        //     self.allocator.free(volume.bsdName);
+        // }
 
         self.volumes.deinit();
     }
 
-    pub fn print(self: USBStorageDevice) void {
-        debug.printf("\n- /dev/{s}\t{s}\t({d})", .{ self.bsdName, self.deviceName, std.fmt.fmtIntSizeDec(@intCast(self.size)) });
+    pub fn print(self: *USBStorageDevice) void {
+        debug.printf("\n- /dev/{s}\t{s}\t({d})", .{ self.getBsdNameSlice(), self.getNameSlice(), std.fmt.fmtIntSizeDec(@intCast(self.size)) });
 
         for (self.volumes.items) |volume| {
-            debug.printf("\n\t- /dev/{s}\t({d})", .{ volume.bsdName, std.fmt.fmtIntSizeDec(@intCast(volume.size)) });
+            debug.printf("\n\t- /dev/{s}\t({d})", .{ self.getBsdNameSlice(), std.fmt.fmtIntSizeDec(@intCast(volume.size)) });
         }
+    }
+
+    pub fn getNameSlice(self: *USBStorageDevice) [:0]const u8 {
+        std.debug.assert(self.deviceNameBuf[0] != 0x00 or self.deviceNameBuf[0] != 0x170);
+        return std.mem.sliceTo(@constCast(self).deviceNameBuf[0..@constCast(self).deviceNameBuf.len], 0x00);
+    }
+
+    pub fn getBsdNameSlice(self: *USBStorageDevice) [:0]const u8 {
+        std.debug.assert(self.bsdNameBuf[0] != 0x00 or self.bsdNameBuf[0] != 0x170);
+        return std.mem.sliceTo(@constCast(self).bsdNameBuf[0..@constCast(self).bsdNameBuf.len], 0x00);
     }
 };

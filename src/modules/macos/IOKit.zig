@@ -100,10 +100,10 @@ pub fn getUSBStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(USBStor
             var ioMediaVolume: MacOS.IOMediaVolume = usbDevice.ioMediaVolumes.items[v];
 
             // Need to re-allocate the bsdName slice, otherwise the lifespan of the old slice is cleaned up too soon
-            ioMediaVolume.bsdName = allocator.dupe(u8, usbDevice.ioMediaVolumes.items[v].bsdName) catch |err| {
-                debug.printf("\nERROR: Ran out of memory attempting to allocate IOMediaVolume BSDName. Error message: {any}", .{err});
-                return error.FailedToAllocateBSDNameMemoryDuringCopy;
-            };
+            // ioMediaVolume.bsdName = allocator.dupe(u8, usbDevice.ioMediaVolumes.items[v].bsdName) catch |err| {
+            //     debug.printf("\nERROR: Ran out of memory attempting to allocate IOMediaVolume BSDName. Error message: {any}", .{err});
+            //     return error.FailedToAllocateBSDNameMemoryDuringCopy;
+            // };
 
             // TODO: Make sure memory is cleaned up on every possible function exit (errors specifically!)
 
@@ -117,17 +117,27 @@ pub fn getUSBStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(USBStor
                 usbStorageDevice.serviceId = ioMediaVolume.serviceId;
                 usbStorageDevice.size = ioMediaVolume.size;
 
-                const deviceNameSlice = std.mem.sliceTo(&usbDevice.deviceName, 0);
+                const deviceNameSlice = std.mem.sliceTo(&usbDevice.deviceName, 0x00);
 
-                usbStorageDevice.deviceName = allocator.dupe(u8, deviceNameSlice) catch |err| {
-                    debug.printf("\nERROR: Failed to duplicate Device Name from USBDevice to USBStorageDevice. Error message: {any}", .{err});
-                    break;
-                };
+                // usbStorageDevice.deviceName = allocator.dupe(u8, deviceNameSlice) catch |err| {
+                //     debug.printf("\nERROR: Failed to duplicate Device Name from USBDevice to USBStorageDevice. Error message: {any}", .{err});
+                //     break;
+                // };
 
-                usbStorageDevice.bsdName = allocator.dupe(u8, ioMediaVolume.bsdName) catch |err| {
-                    debug.printf("\nERROR: Failed to duplicate BSDName from USBDevice to USDStorageDevice. Error message: {any}", .{err});
-                    break;
-                };
+                usbStorageDevice.deviceNameBuf = toArraySentinel(
+                    @constCast(deviceNameSlice),
+                    USBStorageDevice.kDeviceNameBufferSize,
+                );
+
+                // usbStorageDevice.bsdName = allocator.dupe(u8, ioMediaVolume.bsdName) catch |err| {
+                //     debug.printf("\nERROR: Failed to duplicate BSDName from USBDevice to USDStorageDevice. Error message: {any}", .{err});
+                //     break;
+                // };
+
+                usbStorageDevice.bsdNameBuf = toArraySentinel(
+                    @constCast(ioMediaVolume.bsdNameBuf[0..ioMediaVolume.bsdNameBuf.len]),
+                    USBStorageDevice.kDeviceBsdNameBufferSize,
+                );
 
                 // Volume is a Leaf scenario
             } else if (!ioMediaVolume.isWhole and ioMediaVolume.isLeaf and ioMediaVolume.isRemovable) {
@@ -140,12 +150,13 @@ pub fn getUSBStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(USBStor
 
         usbStorageDevices.append(usbStorageDevice) catch |err| {
             debug.printf("\nERROR: Failed to append USBStorageDevice to ArrayList<USBStorageDevice>. Error message: {any}\n", .{err});
+            return error.FailedToAppendUSBStorageDevice;
         };
 
         debug.print("\nDetected the following USB Storage Devices:\n");
-        for (0..usbStorageDevices.items.len) |d| {
-            const dev: USBStorageDevice = usbStorageDevices.items[d];
-            dev.print();
+        for (usbStorageDevices.items) |*device| {
+            debug.printf("\nPrinting device: {d}, size: {d}, {s}, {s}", .{ device.serviceId, device.size, device.deviceNameBuf, device.bsdNameBuf });
+            device.print();
         }
     }
 
@@ -187,7 +198,7 @@ pub fn getIOMediaVolumesForDevice(device: c.io_service_t, allocator: std.mem.All
             };
         }
 
-        // TODO: Review options other than recursion. Could be theoretically dangeroues to walk through the IORegistry recursively.
+        // TODO: Review options other than recursion. Could be theoretically dangerous to walk through the IORegistry recursively.
         // While the IORegirsty is a finite tree, a memory-safe alternative would be preferable.
         try getIOMediaVolumesForDevice(childService, allocator, pVolumesList);
     }
@@ -209,10 +220,12 @@ pub fn getIOMediaVolumeDescription(service: c.io_service_t, allocator: std.mem.A
 
     _ = c.CFStringGetCString(bsdNameValueRef, &bsdNameBuf, bsdNameBuf.len, c.kCFStringEncodingUTF8);
 
+    const newBsdNameBuf = toArraySentinel(bsdNameBuf[0..bsdNameBuf.len], MacOS.IOMediaVolume.kVolumeBsdNameBufferSize);
+
     // bsdNameBuf is a stack-allocated buffer, which is erased when function exits,
     // therefore the string must be saved on the heap and cleaned up later.
-    const heapBsdName = try allocator.alloc(u8, bsdNameBuf.len);
-    @memcpy(heapBsdName, &bsdNameBuf);
+    // const heapBsdName = try allocator.alloc(u8, bsdNameBuf.len);
+    // @memcpy(heapBsdName, &bsdNameBuf);
     //--- @endprop -----------------------------------------------------------------------
 
     //--- @prop: Leaf (Bool) -------------------------------------------------------------
@@ -236,7 +249,8 @@ pub fn getIOMediaVolumeDescription(service: c.io_service_t, allocator: std.mem.A
     return .{
         .allocator = allocator,
         .serviceId = service,
-        .bsdName = heapBsdName,
+        .bsdName = undefined,
+        .bsdNameBuf = newBsdNameBuf,
         .size = mediaSizeInBytes,
         .isLeaf = isLeaf,
         .isWhole = isWhole,
@@ -296,4 +310,29 @@ pub fn toCString(allocator: std.mem.Allocator, string: []const u8) ![]u8 {
 
 pub fn toSlice(string: [*:0]const u8) []const u8 {
     return std.mem.sliceTo(string, 0);
+}
+
+fn toArraySentinel(slice: []u8, comptime size: usize) [size:0]u8 {
+    var output: [size:0]u8 = comptime std.mem.zeroes([size:0]u8);
+    const usefulSlice = std.mem.sliceTo(slice, 0x00);
+
+    if (slice.len > size) {
+        debug.printf("\ntoArraySentinel(): WARNING: slice length [{d}] exceeds the buffer size [{d}]", .{ slice.len, size });
+    }
+
+    for (0..size) |i| {
+        //
+        if (i >= slice.len) {
+            output[i] = 0x00;
+            continue;
+        } else {
+            output[i] = slice[i];
+        }
+
+        if (i == usefulSlice.len) output[i] = 0x00;
+    }
+
+    std.debug.print("\ntoArraySentinel processed: {s}, {any}", .{ output, output });
+
+    return output;
 }
