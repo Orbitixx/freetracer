@@ -99,40 +99,21 @@ pub fn getUSBStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(USBStor
         for (0..usbDevice.ioMediaVolumes.items.len) |v| {
             var ioMediaVolume: MacOS.IOMediaVolume = usbDevice.ioMediaVolumes.items[v];
 
-            // Need to re-allocate the bsdName slice, otherwise the lifespan of the old slice is cleaned up too soon
-            // ioMediaVolume.bsdName = allocator.dupe(u8, usbDevice.ioMediaVolumes.items[v].bsdName) catch |err| {
-            //     debug.printf("\nERROR: Ran out of memory attempting to allocate IOMediaVolume BSDName. Error message: {any}", .{err});
-            //     return error.FailedToAllocateBSDNameMemoryDuringCopy;
-            // };
-
-            // TODO: Make sure memory is cleaned up on every possible function exit (errors specifically!)
-
+            // TODO: This is a ToDo, not a note.
+            // Make sure memory is cleaned up on every possible function exit (errors specifically!)
             errdefer ioMediaVolume.deinit();
 
             // Volume is the "parent" disk, e.g. the whole volume (disk4)
             if (ioMediaVolume.isWhole and !ioMediaVolume.isLeaf and ioMediaVolume.isRemovable) {
-                // Important to realease memory in this exit scenario
-                defer ioMediaVolume.deinit();
-
                 usbStorageDevice.serviceId = ioMediaVolume.serviceId;
                 usbStorageDevice.size = ioMediaVolume.size;
 
                 const deviceNameSlice = std.mem.sliceTo(&usbDevice.deviceName, 0x00);
 
-                // usbStorageDevice.deviceName = allocator.dupe(u8, deviceNameSlice) catch |err| {
-                //     debug.printf("\nERROR: Failed to duplicate Device Name from USBDevice to USBStorageDevice. Error message: {any}", .{err});
-                //     break;
-                // };
-
                 usbStorageDevice.deviceNameBuf = toArraySentinel(
                     @constCast(deviceNameSlice),
                     USBStorageDevice.kDeviceNameBufferSize,
                 );
-
-                // usbStorageDevice.bsdName = allocator.dupe(u8, ioMediaVolume.bsdName) catch |err| {
-                //     debug.printf("\nERROR: Failed to duplicate BSDName from USBDevice to USDStorageDevice. Error message: {any}", .{err});
-                //     break;
-                // };
 
                 usbStorageDevice.bsdNameBuf = toArraySentinel(
                     @constCast(ioMediaVolume.bsdNameBuf[0..ioMediaVolume.bsdNameBuf.len]),
@@ -155,7 +136,6 @@ pub fn getUSBStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(USBStor
 
         debug.print("\nDetected the following USB Storage Devices:\n");
         for (usbStorageDevices.items) |*device| {
-            debug.printf("\nPrinting device: {d}, size: {d}, {s}, {s}", .{ device.serviceId, device.size, device.deviceNameBuf, device.bsdNameBuf });
             device.print();
         }
     }
@@ -221,11 +201,6 @@ pub fn getIOMediaVolumeDescription(service: c.io_service_t, allocator: std.mem.A
     _ = c.CFStringGetCString(bsdNameValueRef, &bsdNameBuf, bsdNameBuf.len, c.kCFStringEncodingUTF8);
 
     const newBsdNameBuf = toArraySentinel(bsdNameBuf[0..bsdNameBuf.len], MacOS.IOMediaVolume.kVolumeBsdNameBufferSize);
-
-    // bsdNameBuf is a stack-allocated buffer, which is erased when function exits,
-    // therefore the string must be saved on the heap and cleaned up later.
-    // const heapBsdName = try allocator.alloc(u8, bsdNameBuf.len);
-    // @memcpy(heapBsdName, &bsdNameBuf);
     //--- @endprop -----------------------------------------------------------------------
 
     //--- @prop: Leaf (Bool) -------------------------------------------------------------
@@ -249,7 +224,6 @@ pub fn getIOMediaVolumeDescription(service: c.io_service_t, allocator: std.mem.A
     return .{
         .allocator = allocator,
         .serviceId = service,
-        .bsdName = undefined,
         .bsdNameBuf = newBsdNameBuf,
         .size = mediaSizeInBytes,
         .isLeaf = isLeaf,

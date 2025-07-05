@@ -436,11 +436,10 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
 
             // BUG: Text display contains memory address? e.g.: "Sandisk 3.1Gen1@????"
             // Console print is clean, however. Bug appeared after commit 4c694ad, redefining USBStorageDevice comptime type.
-            const labelDisplayName: [:0]const u8 = if (data.selectedDevice) |*device| @ptrCast(@alignCast(@constCast(device).getNameSlice())) else "NULL";
-            // debug.printf("\nDeviceListUI: labelDisplayName = {s}, len = {d}, original len = {d}\n", .{ labelDisplayName, labelDisplayName.len, data.selectedDevice.?.deviceName.len });
+            // const labelDisplayName: [:0]const u8 = if (data.selectedDevice) |*device| @ptrCast(@alignCast(@constCast(device).getNameSlice())) else "NULL";
 
             if (self.bgRect) |bgRect| {
-                self.deviceNameLabel = Text.init(labelDisplayName, .{
+                self.deviceNameLabel = Text.init(if (data.selectedDevice) |*device| @constCast(device).getNameSlice() else "NULL", .{
                     .x = bgRect.transform.relX(0.5),
                     .y = bgRect.transform.relY(0.5),
                 }, .{

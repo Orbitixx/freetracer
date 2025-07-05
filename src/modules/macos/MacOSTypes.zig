@@ -20,7 +20,6 @@ pub const IOMediaVolume = struct {
 
     allocator: std.mem.Allocator,
     serviceId: c.io_service_t,
-    bsdName: []const u8 = undefined,
     bsdNameBuf: [kVolumeBsdNameBufferSize:0]u8 = undefined,
     size: i64,
     isLeaf: bool,
@@ -28,11 +27,6 @@ pub const IOMediaVolume = struct {
     isRemovable: bool,
     isOpen: bool,
     isWritable: bool,
-
-    pub fn deinit(self: IOMediaVolume) void {
-        _ = self;
-        // self.allocator.free(self.bsdName);
-    }
 };
 
 pub const USBDevice = struct {
@@ -41,9 +35,6 @@ pub const USBDevice = struct {
     ioMediaVolumes: std.ArrayList(IOMediaVolume),
 
     pub fn deinit(self: USBDevice) void {
-        for (self.ioMediaVolumes.items) |volume| {
-            volume.deinit();
-        }
         self.ioMediaVolumes.deinit();
     }
 };
@@ -54,21 +45,12 @@ pub const USBStorageDevice = struct {
 
     allocator: std.mem.Allocator,
     serviceId: c.io_service_t = undefined,
-    deviceName: []u8 = undefined,
-    bsdName: []u8 = undefined,
     deviceNameBuf: [kDeviceNameBufferSize:0]u8 = undefined,
     bsdNameBuf: [kDeviceBsdNameBufferSize:0]u8 = undefined,
     size: i64 = undefined,
     volumes: std.ArrayList(IOMediaVolume) = undefined,
 
     pub fn deinit(self: USBStorageDevice) void {
-        // self.allocator.free(self.deviceName);
-        // self.allocator.free(self.bsdName);
-        //
-        // for (self.volumes.items) |volume| {
-        //     self.allocator.free(volume.bsdName);
-        // }
-
         self.volumes.deinit();
     }
 
