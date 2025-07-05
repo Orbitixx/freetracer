@@ -98,23 +98,25 @@ pub fn handleEvent(self: *DataFlasher, event: ComponentEvent) !EventResult {
     eventLoop: switch (event.hash) {
         //
         DeviceList.Events.onDeviceListActiveStateChanged.Hash => {
+            //
             const data = DeviceList.Events.onDeviceListActiveStateChanged.getData(event) orelse break :eventLoop;
 
-            // If DeviceList Component is still active -- break out early.
+            // If DeviceList Component is active -- break out early.
             if (data.isActive == true) break :eventLoop;
-
-            eventResult.validate(1);
-
-            debug.print("\nDataFlasher.handleEvent.onDeviceListActiveStateChanged: successfully obtained path and devices responses.");
 
             try self.queryAndSaveISOPath();
             try self.queryAndSaveSelectedDevice();
 
-            // Update state in a block with shorter lifycycle
+            debug.print("\nDataFlasher.handleEvent.onDeviceListActiveStateChanged: successfully obtained path and devices responses.");
+
+            // Update state in a block with shorter lifecycle
             {
                 self.state.lock();
                 defer self.state.unlock();
-                self.state.data.isActive = data.isActive == false;
+                self.state.data.isActive = true;
+
+                std.debug.assert(self.state.data.isoPath != null and self.state.data.isoPath.?.len > 2);
+                std.debug.assert(self.state.data.device != null and @TypeOf(self.state.data.device.?) == USBStorageDevice);
 
                 debug.printf("\nDataFlasher received:\n\tisoPath: {s}\n\tdevice: {s}\n", .{
                     self.state.data.isoPath.?,
@@ -122,12 +124,10 @@ pub fn handleEvent(self: *DataFlasher, event: ComponentEvent) !EventResult {
                 });
             }
 
-            const setUIActiveEvent = Events.onActiveStateChanged.create(
-                self.asComponentPtr(),
-                &.{ .isActive = data.isActive == false },
-            );
+            eventResult.validate(1);
 
-            EventManager.broadcast(setUIActiveEvent);
+            // Broadcast component's state change to active
+            EventManager.broadcast(Events.onActiveStateChanged.create(self.asComponentPtr(), &.{ .isActive = true }));
         },
 
         else => {},
