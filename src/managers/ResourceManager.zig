@@ -3,7 +3,7 @@ const debug = @import("../lib/util/debug.zig");
 const rl = @import("raylib");
 
 const FONTS_COUNT: usize = 2;
-const TEXTURES_COUNT: usize = 2;
+const TEXTURES_COUNT: usize = 3;
 
 pub const ResourceManagerSingleton = struct {
     var allocator: std.mem.Allocator = undefined;
@@ -68,6 +68,11 @@ pub const ResourceManagerSingleton = struct {
 
         const usbTexture = try rl.loadTexture(usbTextureFile);
 
+        const reloadIconTextureFile = try getResourcePath(allocator, "reload_icon.png");
+        defer allocator.free(reloadIconTextureFile);
+
+        const reloadIconTexture = try rl.loadTexture(reloadIconTextureFile);
+
         debug.print("\nResourceManager: textures successfully loaded!");
 
         //----------------------------------------//
@@ -85,6 +90,7 @@ pub const ResourceManagerSingleton = struct {
             inst.fonts[1] = jersey10Regular;
             inst.textures[0] = diskTexture;
             inst.textures[1] = usbTexture;
+            inst.textures[2] = reloadIconTexture;
         }
 
         debug.print("\nResourceManager: finished initialization!");
@@ -133,6 +139,7 @@ pub const FONT = enum(u8) {
 pub const TEXTURE = enum(u8) {
     DISK_IMAGE = 0,
     USB_IMAGE = 1,
+    RELOAD_ICON = 2,
 };
 
 // TODO: Make a Linux adaptation

@@ -105,21 +105,10 @@ pub fn handleEvent(self: *DataFlasher, event: ComponentEvent) !EventResult {
 
             eventResult.validate(1);
 
-            const isoResult = try EventManager.signal(
-                "iso_file_picker",
-                ISOFilePicker.Events.onISOFilePathQueried.create(self.asComponentPtr(), null),
-            );
-
-            if (!isoResult.success) return error.DataFlasherFailedToQueryISOPath;
-
-            const deviceResult = try EventManager.signal(
-                "device_list",
-                DeviceList.Events.onSelectedDeviceQueried.create(self.asComponentPtr(), null),
-            );
-
-            if (!deviceResult.success) return error.DataFlasherFailedToQuerySelectedDevice;
-
             debug.print("\nDataFlasher.handleEvent.onDeviceListActiveStateChanged: successfully obtained path and devices responses.");
+
+            try self.queryAndSaveISOPath();
+            try self.queryAndSaveSelectedDevice();
 
             // Update state in a block with shorter lifycycle
             {
@@ -127,43 +116,7 @@ pub fn handleEvent(self: *DataFlasher, event: ComponentEvent) !EventResult {
                 defer self.state.unlock();
                 self.state.data.isActive = data.isActive == false;
 
-                if (isoResult.data) |isoData| {
-                    const isoResponse: ISOFilePicker.Events.onISOFilePathQueried.Response = @as(
-                        *ISOFilePicker.Events.onISOFilePathQueried.Response,
-                        @ptrCast(@alignCast(isoData)),
-                    ).*;
-
-                    // const intermediatePath: [*:0]const u8 = @ptrCast(@alignCast(isoData));
-                    // const len = std.mem.len(intermediatePath);
-                    self.state.data.isoPath = isoResponse.isoPath;
-
-                    // WARNING: cleaning up a pointer created on the heap by ISOFilePicker.handleEvent.onISOFilePathQueried.
-                    self.allocator.destroy(@as(
-                        *ISOFilePicker.Events.onISOFilePathQueried.Response,
-                        @ptrCast(@alignCast(isoData)),
-                    ));
-                    //
-                } else return error.DataFlasherReceivedNullISOPath;
-
-                if (deviceResult.data) |deviceData| {
-                    const deviceResponse: DeviceList.Events.onSelectedDeviceQueried.Response = @as(
-                        *DeviceList.Events.onSelectedDeviceQueried.Response,
-                        @ptrCast(@alignCast(deviceData)),
-                    ).*;
-
-                    self.state.data.device = deviceResponse.device;
-
-                    // self.state.data.device = @as(*USBStorageDevice, @ptrCast(@alignCast(deviceData))).*;
-
-                    // WARNING: cleaning up a pointer created on the heap by DeviceList.handleEvent.onSelectedDeviceQueried.
-                    self.allocator.destroy(@as(
-                        *DeviceList.Events.onSelectedDeviceQueried.Response,
-                        @ptrCast(@alignCast(deviceData)),
-                    ));
-                    //
-                } else return error.DataFlasherReceivedNullDevice;
-
-                debug.printf("\n\n\nDataFlasher received:\n\tisoPath: {s}\n\tdevice: {s}\n\n\n", .{
+                debug.printf("\nDataFlasher received:\n\tisoPath: {s}\n\tdevice: {s}\n", .{
                     self.state.data.isoPath.?,
                     self.state.data.device.?.bsdName,
                 });
@@ -193,3 +146,57 @@ pub const ComponentImplementation = ComponentFramework.ImplementComponent(DataFl
 pub const asComponent = ComponentImplementation.asComponent;
 pub const asComponentPtr = ComponentImplementation.asComponentPtr;
 pub const asInstance = ComponentImplementation.asInstance;
+
+fn queryAndSaveISOPath(self: *DataFlasher) !void {
+    //
+    self.state.lock();
+    defer self.state.unlock();
+
+    const isoResult = try EventManager.signal("iso_file_picker", ISOFilePicker.Events.onISOFilePathQueried.create(self.asComponentPtr(), null));
+
+    if (isoResult.data) |isoData| {
+        //
+        const isoDataPtr: *ISOFilePicker.Events.onISOFilePathQueried.Response = @ptrCast(@alignCast(isoData));
+
+        // Destroy a heap-allocated isoResult.data pointer.
+        // Defer is required in order to clean up irrespective of function's outcome (i.e. success or error)
+        // WARNING: cleaning up a pointer created on the heap by ISOFilePicker.handleEvent.onISOFilePathQueried.
+        defer self.allocator.destroy(isoDataPtr);
+
+        const isoResponse: ISOFilePicker.Events.onISOFilePathQueried.Response = isoDataPtr.*;
+
+        if (!isoResult.success) return error.DataFlasherFailedToQueryISOPath;
+
+        if (isoResponse.isoPath.len < 2) {
+            debug.printf("\nERROR: DataFlasher received invalid ISO path: {s}", .{isoResponse.isoPath});
+            return error.DataFlasherReceivedInvalidISOPath;
+        }
+
+        self.state.data.isoPath = isoResponse.isoPath;
+    } else return error.DataFlasherReceivedNullISOPath;
+}
+
+fn queryAndSaveSelectedDevice(self: *DataFlasher) !void {
+    //
+    self.state.lock();
+    defer self.state.unlock();
+
+    const deviceResult = try EventManager.signal("device_list", DeviceList.Events.onSelectedDeviceQueried.create(self.asComponentPtr(), null));
+
+    if (deviceResult.data) |deviceData| {
+        //
+        const deviceDataPtr: *DeviceList.Events.onSelectedDeviceQueried.Response = @ptrCast(@alignCast(deviceData));
+
+        // Destroy a heap-allocated deviceResult.data pointer.
+        // Defer is required in order to clean up irrespective of function's outcome (i.e. success or error)
+        // WARNING: cleaning up a pointer created on the heap by DeviceList.handleEvent.onSelectedDeviceQueried.
+        defer self.allocator.destroy(deviceDataPtr);
+
+        if (!deviceResult.success) return error.DataFlasherFailedToQuerySelectedDevice;
+
+        const deviceResponse: DeviceList.Events.onSelectedDeviceQueried.Response = deviceDataPtr.*;
+
+        // deviceResponse.device is not an optional, it cannot be a null device
+        self.state.data.device = deviceResponse.device;
+    } else return error.DataFlasherReceivedNullDevice;
+}

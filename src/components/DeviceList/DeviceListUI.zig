@@ -52,12 +52,14 @@ component: ?Component = null,
 // Component-specific, unique props
 allocator: std.mem.Allocator,
 parent: *DeviceList,
+deviceCheckboxes: std.ArrayList(Checkbox),
 bgRect: ?Rectangle = null,
 headerLabel: ?Text = null,
 moduleImg: ?Texture = null,
-button: ?Button = null,
+nextButton: ?Button = null,
 deviceNameLabel: ?Text = null,
-deviceCheckboxes: std.ArrayList(Checkbox),
+noDevicesLabel: ?Text = null,
+refreshDevicesButton: ?Button = null,
 
 const BgRectParams = struct {
     width: f32,
@@ -158,7 +160,7 @@ pub fn start(self: *DeviceListUI) !void {
     // const data: *ISOFilePickerUI.Events.onGetUIDimensions.Response = response.data
 
     if (self.bgRect) |bgRect| {
-        self.button = Button.init(
+        self.nextButton = Button.init(
             "Next",
             bgRect.transform.getPosition(),
             .Primary,
@@ -168,18 +170,43 @@ pub fn start(self: *DeviceListUI) !void {
             },
         );
 
-        if (self.button) |*button| {
+        if (self.nextButton) |*button| {
             button.setEnabled(false);
         }
 
-        self.headerLabel = Text.init("device", .{
-            .x = bgRect.transform.x + 12,
-            .y = bgRect.transform.relY(0.01),
-        }, .{
-            .font = .JERSEY10_REGULAR,
-            .fontSize = 34,
-            .textColor = Styles.Color.white,
-        });
+        const refreshDevices = struct {
+            fn call(ctx: *anyopaque) void {
+                const component = DeviceList.asInstance(ctx);
+                component.dispatchComponentAction();
+            }
+        };
+
+        self.refreshDevicesButton = Button.init(
+            "R",
+            bgRect.transform.getPosition(),
+            .Primary,
+            .{
+                .context = self.parent,
+                .function = refreshDevices.call,
+            },
+        );
+
+        if (self.refreshDevicesButton) |*button| {
+            button.rect.rounded = true;
+        }
+
+        self.headerLabel = Text.init(
+            "device",
+            .{
+                .x = bgRect.transform.x + 12,
+                .y = bgRect.transform.relY(0.01),
+            },
+            .{
+                .font = .JERSEY10_REGULAR,
+                .fontSize = 34,
+                .textColor = Styles.Color.white,
+            },
+        );
 
         self.moduleImg = Texture.init(.USB_IMAGE, .{ .x = 0, .y = 0 });
 
@@ -190,7 +217,7 @@ pub fn start(self: *DeviceListUI) !void {
             img.tint = .{ .r = 255, .g = 255, .b = 255, .a = 150 };
         }
 
-        if (self.button) |*button| {
+        if (self.nextButton) |*button| {
             try button.start();
 
             button.setPosition(.{
@@ -202,6 +229,8 @@ pub fn start(self: *DeviceListUI) !void {
         }
 
         self.deviceNameLabel = Text.init("No device selected...", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
+
+        self.noDevicesLabel = Text.init("No external devices found...", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
 
         if (self.deviceNameLabel) |*label| {
             if (self.moduleImg) |img| {
@@ -287,6 +316,14 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
                     });
                 },
             }
+        },
+
+        DeviceList.Events.onDevicesCleanUp.Hash => {
+            if (self.deviceNameLabel) |*label| {
+                label.value = "NULL";
+            }
+
+            eventResult.validate(1);
         },
 
         Events.onUITransformQueried.Hash => {
@@ -402,7 +439,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
             }
 
             // Toggle the "Next" button based on whether or not a device is selected
-            if (self.button) |*button| {
+            if (self.nextButton) |*button| {
                 button.setEnabled(data.selectedDevice != null);
             }
         },
@@ -425,6 +462,33 @@ fn recalculateUI(self: *DeviceListUI, bgRectParams: BgRectParams) void {
             headerLabel.transform.y = bgRect.transform.relY(0.01);
         }
 
+        if (self.noDevicesLabel) |*label| {
+            const dims = label.getDimensions();
+            label.transform.x = bgRect.transform.relX(0.5) - dims.width / 2;
+            label.transform.y = bgRect.transform.relY(0.5) - dims.height / 2;
+        }
+
+        if (self.refreshDevicesButton) |*button| {
+            self.state.lock();
+            errdefer self.state.unlock();
+            const devicesFound = self.state.data.devices.items.len > 0;
+            self.state.unlock();
+
+            if (devicesFound) {
+                button.setPosition(.{
+                    .x = bgRect.transform.relX(0.9) - button.rect.transform.getWidth() / 2,
+                    .y = bgRect.transform.relY(0.1) - button.rect.transform.getHeight() / 2,
+                });
+            } else {
+                if (self.noDevicesLabel) |*label| {
+                    button.setPosition(.{
+                        .x = bgRect.transform.relX(0.5) - button.rect.transform.getWidth() / 2,
+                        .y = label.transform.y + label.transform.h + winRelY(0.02),
+                    });
+                }
+            }
+        }
+
         if (self.moduleImg) |*image| {
             image.transform.x = bgRect.transform.relX(0.5) - image.transform.getWidth() / 2;
             image.transform.y = bgRect.transform.relY(0.5) - image.transform.getHeight() / 2;
@@ -435,7 +499,7 @@ fn recalculateUI(self: *DeviceListUI, bgRectParams: BgRectParams) void {
             }
         }
 
-        if (self.button) |*btn| {
+        if (self.nextButton) |*btn| {
             btn.setPosition(.{
                 .x = bgRect.transform.relX(0.5) - btn.rect.transform.getWidth() / 2,
                 .y = btn.rect.transform.y,
@@ -455,7 +519,11 @@ pub fn update(self: *DeviceListUI) !void {
         try checkbox.update();
     }
 
-    if (self.button) |*button| {
+    if (self.refreshDevicesButton) |*button| {
+        try button.update();
+    }
+
+    if (self.nextButton) |*button| {
         try button.update();
     }
 }
@@ -477,11 +545,25 @@ pub fn draw(self: *DeviceListUI) !void {
 }
 
 fn drawActive(self: *DeviceListUI) !void {
+    self.state.lock();
+    const foundDevices = self.state.data.devices.items.len > 0;
+    self.state.unlock();
+
+    if (!foundDevices) {
+        if (self.noDevicesLabel) |*label| {
+            label.draw();
+        }
+    }
+
     for (self.deviceCheckboxes.items) |*checkbox| {
         try checkbox.draw();
     }
 
-    if (self.button) |*button| {
+    if (self.refreshDevicesButton) |*button| {
+        try button.draw();
+    }
+
+    if (self.nextButton) |*button| {
         try button.draw();
     }
 }

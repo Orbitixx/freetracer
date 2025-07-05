@@ -56,6 +56,12 @@ pub const Events = struct {
         struct {},
     );
 
+    pub const onDevicesCleanUp = ComponentFramework.defineEvent(
+        "device_list.on_devices_cleanup",
+        struct {},
+        struct {},
+    );
+
     // Event: User selected a target storage device to be written
     pub const onSelectedDeviceConfirmed = ComponentFramework.defineEvent(
         "device_list.on_selected_device_confirmed",
@@ -256,6 +262,23 @@ pub fn deinit(self: *DeviceListComponent) void {
 
 fn discoverDevices(self: *DeviceListComponent) !void {
     debug.print("\nDeviceList: discovering connected devices...");
+
+    {
+        self.state.lock();
+        defer self.state.unlock();
+
+        if (self.state.data.devices.items.len > 0) {
+            const eventResult = try EventManager.signal("device_list_ui", Events.onDevicesCleanUp.create(self.asComponentPtr(), null));
+
+            if (!eventResult.success) return;
+
+            for (self.state.data.devices.items) |*device| {
+                device.deinit();
+            }
+
+            self.state.data.devices.clearAndFree();
+        }
+    }
 
     if (self.worker) |*worker| {
         debug.print("\nDeviceList: starting Worker...");
