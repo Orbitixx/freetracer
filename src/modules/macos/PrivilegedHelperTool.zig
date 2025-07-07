@@ -4,6 +4,7 @@ const env = @import("../../env.zig");
 const k = @import("../../lib/constants.zig");
 const debug = @import("../../lib/util/debug.zig");
 
+/// "Client"-side function, whereas Freetracer acts as the client for the Freetracer Privileged Tool
 pub fn isHelperToolInstalled() bool {
     const helperLabel: c.CFStringRef = c.CFStringCreateWithCStringNoCopy(c.kCFAllocatorDefault, env.HELPER_BUNDLE_ID, c.kCFStringEncodingUTF8, c.kCFAllocatorNull);
     defer _ = c.CFRelease(helperLabel);
@@ -21,6 +22,7 @@ pub fn isHelperToolInstalled() bool {
     return true;
 }
 
+/// "Client"-side function, whereas Freetracer acts as the client for the Freetracer Privileged Tool
 pub fn installPrivilegedHelperTool() bool {
     var installStatus: c.Boolean = c.FALSE;
 
@@ -109,7 +111,10 @@ pub fn installPrivilegedHelperTool() bool {
     return false;
 }
 
-pub fn performPrivilegedTask(payload: []const u8) bool {
+/// Sends a CFMessage to the Privileged Helper Tool via a CFPort to request a disk unmount
+/// "Client"-side function, whereas Freetracer acts as the client for the Freetracer Privileged Tool
+pub fn requestPerformUnmount(targetDisk: []const u8) bool {
+    // Create a CString from the Privileged Tool's Apple App Bundle ID
     const portNameRef: c.CFStringRef = c.CFStringCreateWithCStringNoCopy(
         c.kCFAllocatorDefault,
         env.HELPER_BUNDLE_ID,
@@ -127,9 +132,8 @@ pub fn performPrivilegedTask(payload: []const u8) bool {
 
     defer _ = c.CFRelease(remoteMessagePort);
 
-    const dataPayload: [*c]const u8 = @ptrCast(payload);
-    const dataLength: i32 = @intCast(payload.len);
-    // const dataPayloadBytePtr: [*c]const u8 = @ptrCast(&dataPayload);
+    const dataPayload: [*c]const u8 = @ptrCast(targetDisk);
+    const dataLength: i32 = @intCast(targetDisk.len);
 
     const requestDataRef: c.CFDataRef = c.CFDataCreate(c.kCFAllocatorDefault, dataPayload, dataLength);
     defer _ = c.CFRelease(requestDataRef);

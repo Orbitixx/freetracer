@@ -12,6 +12,7 @@ const EventManager = @import("managers/EventManager.zig").EventManagerSingleton;
 
 const debug = @import("lib/util/debug.zig");
 const strings = @import("lib/util/strings.zig");
+const time = @import("lib/util/time.zig");
 
 const IsoParser = @import("modules/IsoParser.zig");
 const IsoWriter = @import("modules/IsoWriter.zig");
@@ -52,6 +53,12 @@ pub fn main() !void {
 
     try Logger.init(allocator);
     defer Logger.deinit();
+
+    const stamp = time.now();
+
+    debug.printf("\nStamp: \n{any}\n", .{stamp});
+
+    if (true) return;
 
     try WindowManager.init();
     defer WindowManager.deinit();

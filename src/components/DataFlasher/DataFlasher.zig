@@ -22,6 +22,7 @@ const DataFlasherState = struct {
 const DataFlasher = @This();
 const DeviceList = @import("../DeviceList/DeviceList.zig");
 const ISOFilePicker = @import("../FilePicker/FilePicker.zig");
+const PrivilegedHelper = @import("../macos/PrivilegedHelper.zig");
 
 const Component = ComponentFramework.Component;
 const ComponentState = ComponentFramework.ComponentState(DataFlasherState);
@@ -136,8 +137,27 @@ pub fn handleEvent(self: *DataFlasher, event: ComponentEvent) !EventResult {
     return eventResult;
 }
 pub fn dispatchComponentAction(self: *DataFlasher) void {
-    _ = self;
     debug.print("\nDataFlasher: dispatching component action!");
+
+    // NOTE: Need to be careful with the memory access operations here since targetDisk (and obtained slice below)
+    // live/s only within the scope of this function.
+    var targetDisk: [:0]const u8 = undefined;
+
+    {
+        self.state.lock();
+        defer self.state.unlock();
+        targetDisk = self.state.data.device.?.getBsdNameSlice();
+    }
+
+    if (targetDisk.len < 2) {
+        debug.print("\nDataFlasher.dispatchComponentAction: ERROR: unable to obtain the BSD Name of the target device.");
+        return;
+    }
+
+    // Send a request to unmount the target disk to the PrivilegedHelper Component, which will communicate with the Helper Tool
+    EventManager.broadcast(PrivilegedHelper.Events.onUnmountDiskRequest.create(self.asComponentPtr(), &.{ .targetDisk = targetDisk }));
+
+    debug.print("\nDataFlasher: finished the broadcast of the unmountRequest. Ready for next step...");
 }
 pub fn deinit(self: *DataFlasher) void {
     _ = self;

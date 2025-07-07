@@ -7,6 +7,7 @@ const PrivilegedHelperTool = @import("../../modules/macos/PrivilegedHelperTool.z
 const PrivilegedHelperState = struct {
     isActive: bool = false,
     isInstalled: bool = false,
+    installedVersion: [:0]const u8 = "-1",
 };
 
 const System = @import("../../lib/sys/system.zig");
@@ -31,12 +32,15 @@ worker: ?ComponentWorker = null,
 
 // Component-specific, unique props
 allocator: std.mem.Allocator,
+isInstalled: bool = false,
 
 pub const Events = struct {
     //
-    pub const onSomeEvent = ComponentFramework.defineEvent(
-        "privileged_helper.on_",
-        struct {},
+    pub const onUnmountDiskRequest = ComponentFramework.defineEvent(
+        "privileged_helper.on_unmount_disk_request",
+        struct {
+            targetDisk: [:0]const u8,
+        },
         struct {},
     );
 };
@@ -80,7 +84,11 @@ pub fn start(self: *PrivilegedHelper) !void {
 
     try self.initWorker();
 
-    self.dispatchComponentAction();
+    {
+        self.state.lock();
+        defer self.state.unlock();
+        self.isInstalled = self.state.data.isInstalled;
+    }
 
     if (self.component) |*component| {
         if (component.children != null) return error.ComponentAlreadyCalledStartBefore;
@@ -102,26 +110,27 @@ pub fn update(self: *PrivilegedHelper) !void {
 }
 
 pub fn draw(self: *PrivilegedHelper) !void {
-    self.state.lock();
-    errdefer self.state.unlock();
-    const isHelperToolInstalled = if (System.isMac) self.state.data.isInstalled else if (System.isLinux) true else unreachable;
-    self.state.unlock();
+    const isHelperToolInstalled = if (System.isMac) self.isInstalled else if (System.isLinux) true else unreachable;
 
     rl.drawCircleV(.{ .x = winRelX(0.9), .y = winRelY(0.065) }, 4.5, if (isHelperToolInstalled) .green else .red);
     rl.drawCircleLinesV(.{ .x = winRelX(0.9), .y = winRelY(0.065) }, 4.5, .white);
 }
 
 pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult {
-    _ = self;
-
     var eventResult = EventResult.init();
 
     if (System.isLinux) return eventResult;
 
-    switch (event.hash) {
+    eventLoop: switch (event.hash) {
         //
-        Events.onSomeEvent.Hash => {
-            eventResult.validate(1);
+        Events.onUnmountDiskRequest.Hash => {
+            const data = Events.onUnmountDiskRequest.getData(event) orelse break :eventLoop;
+
+            const response = self.requestUnmount(data.targetDisk);
+
+            debug.printf("\nPrivilegedHelper Component received response from Privileged Tool: {any}", .{response});
+
+            if (response) eventResult.validate(1);
         },
 
         else => {},
@@ -147,17 +156,14 @@ pub fn workerCallback(worker: *ComponentWorker, context: *anyopaque) void {
 
 pub fn dispatchComponentAction(self: *PrivilegedHelper) void {
     //
-    const helperResponse = PrivilegedHelperTool.isHelperToolInstalled();
+    self.state.lock();
+    defer self.state.unlock();
+    self.state.data.isInstalled = PrivilegedHelperTool.isHelperToolInstalled();
+}
 
-    // if (!PrivilegedHelperTool.isHelperToolInstalled()) {
-    //     helperResponse = PrivilegedHelperTool.installPrivilegedHelperTool();
-    // } else helperResponse = true;
-
-    {
-        self.state.lock();
-        defer self.state.unlock();
-        self.state.data.isInstalled = helperResponse;
-    }
+fn requestUnmount(self: *PrivilegedHelper, targetDisk: [:0]const u8) bool {
+    if (!self.isInstalled) _ = PrivilegedHelperTool.installPrivilegedHelperTool();
+    return PrivilegedHelperTool.requestPerformUnmount(targetDisk);
 }
 
 const ComponentImplementation = ComponentFramework.ImplementComponent(PrivilegedHelper);

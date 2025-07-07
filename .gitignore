@@ -1,5 +1,6 @@
 
 env.zig
+TODO.md
 
 *.sh
 *.py

@@ -58,6 +58,7 @@ pub fn main() !void {
     c.CFRunLoopRun();
 }
 
+/// Runs once for every CFMessage received from the Freetracer tool
 pub fn messagePortCallback(port: c.CFMessagePortRef, msgId: c.SInt32, data: c.CFDataRef, info: ?*anyopaque) callconv(.C) c.CFDataRef {
     var returnData: c.CFDataRef = null;
 
@@ -112,6 +113,7 @@ pub fn processDiskUnmountRequest(bsdName: []const u8) ReturnCode {
     const currentLoop = c.CFRunLoopGetCurrent();
 
     c.DASessionScheduleWithRunLoop(daSession, currentLoop, c.kCFRunLoopDefaultMode);
+
     // Ensure unscheduling happens before the session is released
     defer c.DASessionUnscheduleFromRunLoop(daSession, currentLoop, c.kCFRunLoopDefaultMode);
 
