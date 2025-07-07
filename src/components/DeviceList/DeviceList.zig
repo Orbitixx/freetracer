@@ -282,6 +282,7 @@ fn discoverDevices(self: *DeviceListComponent) !void {
         devices.clearAndFree();
     }
 
+    // Start the worker once the cleanup is complete
     if (self.worker) |*worker| {
         debug.print("\nDeviceList: starting Worker...");
         try worker.start();

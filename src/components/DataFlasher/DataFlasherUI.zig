@@ -18,6 +18,7 @@ const DeviceListUI = @import("../DeviceList/DeviceListUI.zig");
 
 const DataFlasherUIState = struct {
     isActive: bool = false,
+    isoPath: ?[:0]const u8 = null,
     device: ?USBStorageDevice = null,
 };
 
@@ -56,6 +57,8 @@ bgRect: ?Rectangle = null,
 headerLabel: ?Text = null,
 moduleImg: ?Texture = null,
 button: ?Button = null,
+isoText: ?Text = null,
+deviceText: ?Text = null,
 
 const BgRectParams = struct {
     width: f32,
@@ -126,13 +129,27 @@ pub fn start(self: *DataFlasherUI) !void {
             .Primary,
             .{
                 .context = self.parent,
-                .function = DeviceList.dispatchComponentFinishedAction.call,
+                .function = DataFlasher.flashISOtoDeviceWrapper.call,
             },
         );
 
         if (self.button) |*button| {
             button.setEnabled(false);
         }
+
+        self.isoText = Text.init("NULL", .{
+            .x = bgRect.transform.relX(0.05),
+            .y = bgRect.transform.relY(0.1),
+        }, .{
+            .fontSize = 14,
+        });
+
+        self.deviceText = Text.init("NULL", .{
+            .x = bgRect.transform.relX(0.05),
+            .y = bgRect.transform.relY(0.15),
+        }, .{
+            .fontSize = 14,
+        });
 
         self.headerLabel = Text.init("flash", .{
             .x = bgRect.transform.x + 12,
@@ -166,7 +183,9 @@ pub fn start(self: *DataFlasherUI) !void {
 }
 
 pub fn update(self: *DataFlasherUI) !void {
-    _ = self;
+    if (self.button) |*button| {
+        try button.update();
+    }
 }
 
 pub fn draw(self: *DataFlasherUI) !void {
@@ -186,6 +205,14 @@ pub fn draw(self: *DataFlasherUI) !void {
 }
 
 fn drawActive(self: *DataFlasherUI) !void {
+    if (self.isoText) |*text| {
+        text.draw();
+    }
+
+    if (self.deviceText) |*text| {
+        text.draw();
+    }
+
     if (self.button) |*button| {
         try button.draw();
     }
@@ -224,6 +251,38 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
                 true => {
                     debug.print("\nDataFlasherUI: setting UI to ACTIVE.");
 
+                    var isoPath: [:0]const u8 = "NULL";
+                    var device: ?*System.USBStorageDevice = null;
+                    var areStateParamsAvailable: bool = false;
+
+                    {
+                        self.parent.state.lock();
+                        defer self.parent.state.unlock();
+                        isoPath = self.parent.state.data.isoPath orelse "NULL";
+                        device = &self.parent.state.data.device.?;
+                        areStateParamsAvailable = (self.parent.state.data.isoPath != null and self.parent.state.data.device != null);
+
+                        if (areStateParamsAvailable) {
+                            std.debug.assert(device != null);
+                            std.debug.assert(isoPath.len > 2);
+                            std.debug.assert(device.?.getBsdNameSlice().len > 2);
+                        }
+                    }
+
+                    if (self.isoText) |*text| {
+                        text.value = isoPath;
+                    }
+
+                    if (self.deviceText) |*text| {
+                        text.value = device.?.getBsdNameSlice();
+                    }
+
+                    if (areStateParamsAvailable) {
+                        if (self.button) |*button| {
+                            button.setEnabled(true);
+                        }
+                    }
+
                     if (self.headerLabel) |*header| {
                         header.style.textColor = Color.white;
                     }
@@ -240,6 +299,10 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
 
                     if (self.headerLabel) |*header| {
                         header.style.textColor = Color.lightGray;
+                    }
+
+                    if (self.button) |*button| {
+                        button.setEnabled(false);
                     }
 
                     self.recalculateUI(.{
@@ -305,6 +368,16 @@ fn recalculateUI(self: *DataFlasherUI, bgRectParams: BgRectParams) void {
         if (self.moduleImg) |*image| {
             image.transform.x = bgRect.transform.relX(0.5) - image.transform.getWidth() / 2;
             image.transform.y = bgRect.transform.relY(0.5) - image.transform.getHeight() / 2;
+        }
+
+        if (self.isoText) |*isoText| {
+            isoText.transform.x = bgRect.transform.relX(0.05);
+            isoText.transform.y = bgRect.transform.relY(0.13);
+
+            if (self.deviceText) |*deviceText| {
+                deviceText.transform.x = bgRect.transform.relX(0.05);
+                deviceText.transform.y = isoText.transform.y + isoText.transform.getHeight() + 10;
+            }
         }
 
         if (self.button) |*btn| {

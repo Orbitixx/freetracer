@@ -18,7 +18,7 @@ pub fn workerRun(worker: *DeviceListComponentWorker, context: *anyopaque) void {
     const deviceList = DeviceListComponent.asInstance(context);
 
     // worker.state.lock();
-    //  worker.state.unlock();
+    // worker.state.unlock();
 
     const devices = IOKit.getUSBStorageDevices(deviceList.allocator) catch blk: {
         debug.print("\nWARNING: Unable to capture USB devices. Please make sure a USB flash drive is plugged in.");
@@ -40,4 +40,5 @@ pub fn workerRun(worker: *DeviceListComponentWorker, context: *anyopaque) void {
 pub fn workerCallback(worker: *DeviceListComponentWorker, context: *anyopaque) void {
     _ = worker;
     _ = context;
+    debug.print("\nDeviceList: Worker - onWorkerFinished callback executed.");
 }

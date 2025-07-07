@@ -320,6 +320,7 @@ pub fn workerRun(worker: *ComponentWorker, context: *anyopaque) void {
 
     // NOTE: It is important that this memory address / contents are released in component's deinit().
     // Currently, the ownership change occurs inside of handleEvent(), which assigns state as owner.
+    // NOTE: osd.path cannot be run on a child process and must be run on the main process (enforced by MacOS).
     const selectedPath = osd.path(worker.allocator, .open, .{});
 
     // Update state in a block with shorter lifecycle (handles unlock on error too)

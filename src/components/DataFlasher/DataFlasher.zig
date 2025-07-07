@@ -137,6 +137,7 @@ pub fn handleEvent(self: *DataFlasher, event: ComponentEvent) !EventResult {
 }
 pub fn dispatchComponentAction(self: *DataFlasher) void {
     _ = self;
+    debug.print("\nDataFlasher: dispatching component action!");
 }
 pub fn deinit(self: *DataFlasher) void {
     _ = self;
@@ -200,3 +201,10 @@ fn queryAndSaveSelectedDevice(self: *DataFlasher) !void {
         self.state.data.device = deviceResponse.device;
     } else return error.DataFlasherReceivedNullDevice;
 }
+
+pub const flashISOtoDeviceWrapper = struct {
+    pub fn call(ctx: *anyopaque) void {
+        var self = DataFlasher.asInstance(ctx);
+        self.dispatchComponentAction();
+    }
+};

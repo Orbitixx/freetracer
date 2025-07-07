@@ -277,8 +277,6 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
             const data = DeviceList.Events.onDeviceListActiveStateChanged.getData(event) orelse break :eventLoop;
             eventResult.validate(1);
 
-            // debug.print("")
-
             // Update state in a block with a shorter lifecycle
             {
                 self.state.lock();
@@ -416,7 +414,6 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
                     try checkbox.start();
                 }
             }
-
             debug.print("\nDeviceListUI: onDevicesReadyToRender() end.");
         },
 
@@ -432,10 +429,6 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
             self.state.data.selectedDevice = data.selectedDevice;
 
             std.debug.print("\nDeviceListUI.handleEvent.onSelectedDeviceNameChanged received selectedDevice: \n{s}\n\n", .{data.selectedDevice.?.getNameSlice()});
-
-            // BUG: Text display contains memory address? e.g.: "Sandisk 3.1Gen1@????"
-            // Console print is clean, however. Bug appeared after commit 4c694ad, redefining USBStorageDevice comptime type.
-            // const labelDisplayName: [:0]const u8 = if (data.selectedDevice) |*device| @ptrCast(@alignCast(@constCast(device).getNameSlice())) else "NULL";
 
             if (self.bgRect) |bgRect| {
                 self.deviceNameLabel = Text.init(if (self.state.data.selectedDevice) |*device| device.getNameSlice() else "NULL", .{
