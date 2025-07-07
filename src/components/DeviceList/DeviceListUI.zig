@@ -426,20 +426,19 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
             const data = Events.onSelectedDeviceNameChanged.getData(event) orelse break :eventLoop;
             eventResult.validate(1);
 
-            {
-                self.state.lock();
-                defer self.state.unlock();
-                self.state.data.selectedDevice = data.selectedDevice;
-            }
+            // WARNING: Mutex lock is used within larger block. OK as of the moment of implementation.
+            self.state.lock();
+            defer self.state.unlock();
+            self.state.data.selectedDevice = data.selectedDevice;
 
-            std.debug.print("\nDeviceListUI.handleEvent.onSelectedDeviceNameChanged received selectedDevice: \n{s}\n\n", .{@constCast(&data.selectedDevice.?).getNameSlice()});
+            std.debug.print("\nDeviceListUI.handleEvent.onSelectedDeviceNameChanged received selectedDevice: \n{s}\n\n", .{data.selectedDevice.?.getNameSlice()});
 
             // BUG: Text display contains memory address? e.g.: "Sandisk 3.1Gen1@????"
             // Console print is clean, however. Bug appeared after commit 4c694ad, redefining USBStorageDevice comptime type.
             // const labelDisplayName: [:0]const u8 = if (data.selectedDevice) |*device| @ptrCast(@alignCast(@constCast(device).getNameSlice())) else "NULL";
 
             if (self.bgRect) |bgRect| {
-                self.deviceNameLabel = Text.init(if (data.selectedDevice) |*device| @constCast(device).getNameSlice() else "NULL", .{
+                self.deviceNameLabel = Text.init(if (self.state.data.selectedDevice) |*device| device.getNameSlice() else "NULL", .{
                     .x = bgRect.transform.relX(0.5),
                     .y = bgRect.transform.relY(0.5),
                 }, .{

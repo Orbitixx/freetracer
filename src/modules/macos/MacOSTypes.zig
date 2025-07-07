@@ -62,12 +62,12 @@ pub const USBStorageDevice = struct {
         }
     }
 
-    pub fn getNameSlice(self: *USBStorageDevice) [:0]const u8 {
+    pub fn getNameSlice(self: *const USBStorageDevice) [:0]const u8 {
         std.debug.assert(self.deviceNameBuf[0] != 0x00 or self.deviceNameBuf[0] != 0x170);
         return std.mem.sliceTo(@constCast(self).deviceNameBuf[0..@constCast(self).deviceNameBuf.len], 0x00);
     }
 
-    pub fn getBsdNameSlice(self: *USBStorageDevice) [:0]const u8 {
+    pub fn getBsdNameSlice(self: *const USBStorageDevice) [:0]const u8 {
         std.debug.assert(self.bsdNameBuf[0] != 0x00 or self.bsdNameBuf[0] != 0x170);
         return std.mem.sliceTo(@constCast(self).bsdNameBuf[0..@constCast(self).bsdNameBuf.len], 0x00);
     }
