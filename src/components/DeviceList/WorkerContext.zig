@@ -13,7 +13,7 @@ const DeviceListComponent = @import("./DeviceList.zig");
 const DeviceListComponentWorker = @import("./DeviceList.zig").ComponentWorker;
 
 pub fn workerRun(worker: *DeviceListComponentWorker, context: *anyopaque) void {
-    debug.print("\nDevicesList Worker: starting devices discovery...");
+    debug.print("DevicesList Worker: starting devices discovery...");
 
     const deviceList = DeviceListComponent.asInstance(context);
 
@@ -21,11 +21,11 @@ pub fn workerRun(worker: *DeviceListComponentWorker, context: *anyopaque) void {
     // worker.state.unlock();
 
     const devices = IOKit.getUSBStorageDevices(deviceList.allocator) catch blk: {
-        debug.print("\nWARNING: Unable to capture USB devices. Please make sure a USB flash drive is plugged in.");
+        debug.print("WARNING: Unable to capture USB devices. Please make sure a USB flash drive is plugged in.");
         break :blk std.ArrayList(USBStorageDevice).init(deviceList.allocator);
     };
 
-    debug.printf("\nDeviceList Worker: finished finding USB Storage devices, found: {d}", .{devices.items.len});
+    debug.printf("DeviceList Worker: finished finding USB Storage devices, found: {d}", .{devices.items.len});
 
     var event = DeviceListComponent.Events.onDiscoverDevicesEnd.create(@ptrCast(@alignCast(worker.context.run_context)), &.{
         .devices = devices,
@@ -40,5 +40,5 @@ pub fn workerRun(worker: *DeviceListComponentWorker, context: *anyopaque) void {
 pub fn workerCallback(worker: *DeviceListComponentWorker, context: *anyopaque) void {
     _ = worker;
     _ = context;
-    debug.print("\nDeviceList: Worker - onWorkerFinished callback executed.");
+    debug.print("DeviceList: Worker - onWorkerFinished callback executed.");
 }

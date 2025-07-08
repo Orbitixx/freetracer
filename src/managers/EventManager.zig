@@ -25,7 +25,7 @@ pub const EventManagerSingleton = struct {
 
         pub fn subscribe(self: *EventManager, comptime name: []const u8, subscriber: *Component) bool {
             self.subscribers.put(hashComponentName(name), subscriber) catch |err| {
-                debug.printf("\nEventManager: unable to subscribe component ({any}), error: {any}", .{ subscriber, err });
+                debug.printf("EventManager: unable to subscribe component ({any}), error: {any}", .{ subscriber, err });
                 return false;
             };
 
@@ -50,7 +50,7 @@ pub const EventManagerSingleton = struct {
 
                 _ = component.value_ptr.*.handleEvent(event) catch |err| {
                     debug.printf(
-                        "\nEventManager: error on broadcasting ({s}) event to ({any}) component. {any}.",
+                        "EventManager: error on broadcasting ({s}) event to ({any}) component. {any}.",
                         .{ event.name, @TypeOf(component.value_ptr.*.parent), err },
                     );
                 };

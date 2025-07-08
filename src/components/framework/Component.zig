@@ -33,13 +33,13 @@ pub const Component = struct {
     }
 
     pub fn update(self: Component) !void {
-        // std.debug.print("\nBase Component.update() called.", .{});
+        // std.debug.print("Base Component.update() called.", .{});
 
         if (self.children) |children| {
-            // std.debug.print("\nBase Component.update(): found children, attempting to update children...", .{});
+            // std.debug.print("Base Component.update(): found children, attempting to update children...", .{});
             if (children.items.len > 0) {
                 for (children.items) |*child| {
-                    // std.debug.print("\nBase Component.update(): updating a specific child...", .{});
+                    // std.debug.print("Base Component.update(): updating a specific child...", .{});
                     try child.update();
                 }
             }
@@ -49,13 +49,13 @@ pub const Component = struct {
     }
 
     pub fn draw(self: Component) !void {
-        // std.debug.print("\nBase Component.draw() called.", .{});
+        // std.debug.print("Base Component.draw() called.", .{});
 
         if (self.children) |children| {
-            // std.debug.print("\nBase Component.draw(): found children, attempting to draw children...", .{});
+            // std.debug.print("Base Component.draw(): found children, attempting to draw children...", .{});
             if (children.items.len > 0) {
                 for (children.items) |*child| {
-                    // std.debug.print("\nBase Component.draw(): drawing a specific child...", .{});
+                    // std.debug.print("Base Component.draw(): drawing a specific child...", .{});
                     try child.draw();
                 }
             }
@@ -90,17 +90,17 @@ pub const Component = struct {
     }
 
     pub fn deinit(self: *Component) void {
-        std.debug.print("\nGeneric Component deinit() called!", .{});
+        std.debug.print("Generic Component deinit() called!", .{});
 
         if (self.children) |children| {
-            std.debug.print("\nGeneric Component deinit(): component has children.", .{});
+            std.debug.print("Generic Component deinit(): component has children.", .{});
 
             for (children.items) |*child| {
                 child.deinit();
             }
             children.deinit();
 
-            std.debug.print("\nGeneric Component deinit(): children have been cleaned up.", .{});
+            std.debug.print("Generic Component deinit(): children have been cleaned up.", .{});
         }
 
         self.children = null;
@@ -130,7 +130,7 @@ pub fn ImplementComponent(comptime T: type) type {
             // TODO: contemplate the impact of null here.
 
             if (self.component == null) self.initComponent(null) catch |err| {
-                std.debug.print("\nError initializing Base Component for Component type: {any}, error: {any}", .{ T, err });
+                std.debug.print("Error initializing Base Component for Component type: {any}, error: {any}", .{ T, err });
             };
 
             return &self.component.?;

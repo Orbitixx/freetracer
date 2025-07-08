@@ -34,7 +34,7 @@ pub fn parseIso(pAllocator: *const std.mem.Allocator, isoPath: []const u8) anyer
     const str =
         \\-------------------------- IsoParser ----------------------------
         \\ISO: {s}
-        \\nISO size: {d}
+        \\ISO size: {d}
         \\ISO sectors: {d}
         \\
     ;
@@ -49,7 +49,7 @@ pub fn parseIso(pAllocator: *const std.mem.Allocator, isoPath: []const u8) anyer
     var sectorBuffer: [ISO_SECTOR_SIZE]u8 = undefined;
 
     for (16..isoSectorCount) |i| {
-        debug.printf("\n:: IsoParser: Parsing ISO sector:\t{d}", .{i});
+        debug.printf(":: IsoParser: Parsing ISO sector:\t{d}", .{i});
 
         try file.seekTo(ISO_SYS_BYTES_OFFSET + ISO_SECTOR_SIZE * (i - 16));
         const sectorBytesRead = try file.read(&sectorBuffer);
@@ -156,7 +156,7 @@ pub fn parseIso(pAllocator: *const std.mem.Allocator, isoPath: []const u8) anyer
 
     try walkDirectories(pAllocator, &file, @bitCast(endian.readBoth(i32, &rootDirectoryEntry.dataLength)), @bitCast(endian.readBoth(i32, &rootDirectoryEntry.locationOfExtent)));
 
-    debug.print("\n");
+    debug.print("");
 }
 pub const IsoParserError = error{
     IsoSystemBlockTooShort,
@@ -210,8 +210,8 @@ pub const DirectoryEntry = struct {
 };
 
 pub fn walkDirectories(pAllocator: *const std.mem.Allocator, pFile: *const std.fs.File, dataLength: u32, offsetLba: u32) !void {
-    debug.print("\n\n-------------------- BEGIN DIRECTORY WALKTHROUGH --------------------");
-    debug.printf("\n\tData Length: {d}\n\tOffset LBA: {d}\n\n", .{ dataLength, offsetLba });
+    debug.print("\n-------------------- BEGIN DIRECTORY WALKTHROUGH --------------------");
+    debug.printf("\tData Length: {d}\n\tOffset LBA: {d}\n\n", .{ dataLength, offsetLba });
 
     var buffer: []u8 = try pAllocator.*.alloc(u8, dataLength);
     defer pAllocator.*.free(buffer);
@@ -261,7 +261,7 @@ pub fn walkDirectories(pAllocator: *const std.mem.Allocator, pFile: *const std.f
             ;
 
             debug.printf(str, .{ dirType, name, lba, size });
-            debug.print("\n");
+            debug.print("");
         }
 
         byteOffset += recordLength;
@@ -316,7 +316,7 @@ pub fn walkDirectory(buffer: *const []u8, dirEntries: *std.ArrayList(DirectoryEn
             ;
 
             debug.printf(str, .{ dirType, name, lba, size });
-            debug.print("\n");
+            debug.print("");
         }
 
         byteOffset += recordLength;

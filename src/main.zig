@@ -54,11 +54,8 @@ pub fn main() !void {
     try Logger.init(allocator);
     defer Logger.deinit();
 
-    const stamp = time.now();
-
-    debug.printf("\nStamp: \n{any}\n", .{stamp});
-
-    if (true) return;
+    try debug.init(allocator);
+    defer debug.deinit();
 
     try WindowManager.init();
     defer WindowManager.deinit();
@@ -170,7 +167,7 @@ pub fn main() !void {
     //
 
     // const usbStorageDevices = IOKit.getUSBStorageDevices(&allocator) catch blk: {
-    //     debug.print("\nWARNING: Unable to capture USB devices. Please make sure a USB flash drive is plugged in.");
+    //     debug.print("WARNING: Unable to capture USB devices. Please make sure a USB flash drive is plugged in.");
     //     break :blk std.ArrayList(MacOS.USBStorageDevice).init(allocator);
     // };
     //
@@ -178,9 +175,9 @@ pub fn main() !void {
     //
     // if (usbStorageDevices.items.len > 0) {
     //     if (std.mem.count(u8, usbStorageDevices.items[0].bsdName, "disk4") > 0) {
-    //         debug.print("\nFound disk4 by literal. Preparing to unmount...");
+    //         debug.print("Found disk4 by literal. Preparing to unmount...");
     //         DiskArbitration.unmountAllVolumes(&usbStorageDevices.items[0]) catch |err| {
-    //             debug.printf("\nERROR: Failed to unmount volumes on {s}. Error message: {any}", .{ usbStorageDevices.items[0].bsdName, err });
+    //             debug.printf("ERROR: Failed to unmount volumes on {s}. Error message: {any}", .{ usbStorageDevices.items[0].bsdName, err });
     //         };
     //     }
     // }

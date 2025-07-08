@@ -17,14 +17,14 @@ pub fn write(isoPath: []const u8, devicePath: []const u8) !void {
 
     var currentByte: u64 = 0;
 
-    debug.print("\n[*] Writing ISO to device, please wait...\n");
+    debug.print("[*] Writing ISO to device, please wait...\n");
 
     while (currentByte < ISO_SIZE) {
         try isoFile.seekTo(currentByte);
         const bytesRead = try isoFile.read(&writeBuffer);
 
         if (bytesRead == 0) {
-            debug.printf("\n[v] End of ISO File reached, final block: {d} at {d}!\n", .{ currentByte / WRITE_BLOCK_SIZE, currentByte });
+            debug.printf("[v] End of ISO File reached, final block: {d} at {d}!\n", .{ currentByte / WRITE_BLOCK_SIZE, currentByte });
             break;
         }
 
@@ -34,7 +34,7 @@ pub fn write(isoPath: []const u8, devicePath: []const u8) !void {
         const bytesWritten = try device.write(writeBuffer[0..bytesRead]);
 
         if (bytesWritten != bytesRead or bytesWritten == 0) {
-            debug.print("\nCRITICAL ERROR: failed to correctly write to device. Aborting...");
+            debug.print("CRITICAL ERROR: failed to correctly write to device. Aborting...");
             break;
         }
 
@@ -43,5 +43,5 @@ pub fn write(isoPath: []const u8, devicePath: []const u8) !void {
 
     try device.sync();
 
-    debug.print("\n[v] Finished writing ISO image to device!");
+    debug.print("[v] Finished writing ISO image to device!");
 }

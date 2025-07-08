@@ -27,7 +27,7 @@ pub const ResourceManagerSingleton = struct {
     pub fn init(_allocator: std.mem.Allocator) !void {
         allocator = _allocator;
 
-        debug.print("\nResourceManager: started initialization...");
+        debug.print("ResourceManager: started initialization...");
 
         const cwd = try std.process.getCwdAlloc(allocator);
         defer allocator.free(cwd);
@@ -36,7 +36,7 @@ pub const ResourceManagerSingleton = struct {
         //-------- *** LOAD FONTS *** ----------//
         //--------------------------------------//
 
-        debug.print("\nResourceManager: preparing to load fonts...");
+        debug.print("ResourceManager: preparing to load fonts...");
 
         const robotoFontFile = try getResourcePath(allocator, "Roboto-Regular.ttf");
         defer allocator.free(robotoFontFile);
@@ -50,13 +50,13 @@ pub const ResourceManagerSingleton = struct {
         const jersey10Regular = try rl.loadFontEx(jerseyFontFile, 512, null);
         rl.setTextureFilter(jersey10Regular.texture, .trilinear);
 
-        debug.print("\nResourceManager: fonts successfully loaded!");
+        debug.print("ResourceManager: fonts successfully loaded!");
 
         //----------------------------------------//
         //-------- *** LOAD TEXTURES *** ---------//
         //----------------------------------------//
 
-        debug.print("\nResourceManager: preparing to load textures...");
+        debug.print("ResourceManager: preparing to load textures...");
 
         const diskTextureFile = try getResourcePath(allocator, "disk_image.png");
         defer allocator.free(diskTextureFile);
@@ -73,7 +73,7 @@ pub const ResourceManagerSingleton = struct {
 
         const reloadIconTexture = try rl.loadTexture(reloadIconTextureFile);
 
-        debug.print("\nResourceManager: textures successfully loaded!");
+        debug.print("ResourceManager: textures successfully loaded!");
 
         //----------------------------------------//
         //-------- *** INITIALIZE INSTANCE *** ---//
@@ -93,7 +93,7 @@ pub const ResourceManagerSingleton = struct {
             inst.textures[2] = reloadIconTexture;
         }
 
-        debug.print("\nResourceManager: finished initialization!");
+        debug.print("ResourceManager: finished initialization!");
     }
 
     // TODO: handle unhappy path

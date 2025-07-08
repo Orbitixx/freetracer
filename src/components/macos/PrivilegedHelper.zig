@@ -95,11 +95,11 @@ pub fn start(self: *PrivilegedHelper) !void {
 
         if (!EventManager.subscribe("privileged_helper", component)) return error.UnableToSubscribeToEventManager;
 
-        std.debug.print("\nPrivilegedHelper: attempting to initialize children...", .{});
+        std.debug.print("PrivilegedHelper: attempting to initialize children...", .{});
 
         component.children = std.ArrayList(Component).init(self.allocator);
 
-        std.debug.print("\nPrivilegedHelper: finished initializing children.", .{});
+        std.debug.print("PrivilegedHelper: finished initializing children.", .{});
     }
 }
 
@@ -128,7 +128,7 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
 
             const response = self.requestUnmount(data.targetDisk);
 
-            debug.printf("\nPrivilegedHelper Component received response from Privileged Tool: {any}", .{response});
+            debug.printf("PrivilegedHelper Component received response from Privileged Tool: {any}", .{response});
 
             if (response) eventResult.validate(1);
         },

@@ -68,10 +68,10 @@ pub const USBStorageDevice = struct {
     }
 
     pub fn print(self: *USBStorageDevice) void {
-        debug.printf("\n- /dev/{s}\t{s}\t({d})", .{ self.getBsdNameSlice(), self.getNameSlice(), std.fmt.fmtIntSizeDec(@intCast(self.size)) });
+        debug.printf("- /dev/{s}\t{s}\t({d})", .{ self.getBsdNameSlice(), self.getNameSlice(), std.fmt.fmtIntSizeDec(@intCast(self.size)) });
 
         for (self.volumes.items) |volume| {
-            debug.printf("\n\t- /dev/{s}\t({d})", .{ self.getBsdNameSlice(), std.fmt.fmtIntSizeDec(@intCast(volume.size)) });
+            debug.printf("\t- /dev/{s}\t({d})", .{ self.getBsdNameSlice(), std.fmt.fmtIntSizeDec(@intCast(volume.size)) });
         }
     }
 
@@ -85,4 +85,3 @@ pub const USBStorageDevice = struct {
         return std.mem.sliceTo(@constCast(self).bsdNameBuf[0..@constCast(self).bsdNameBuf.len], 0x00);
     }
 };
-

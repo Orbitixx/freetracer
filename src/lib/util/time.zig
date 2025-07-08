@@ -1,43 +1,66 @@
 const std = @import("std");
+const env = @import("../../env.zig");
 
 pub const DateTime = struct {
-    year: i64,
-    month: i64,
-    days: i64,
-    hours: i64,
-    minutes: i64,
-    seconds: i64,
-    milliseconds: i64,
+    month: u4,
+    day: u5,
+    hours: u5,
+    minutes: u6,
+    seconds: u6,
+    year: u16,
+    format: [:0]const u8 = "{d:0>2}/{d:0>2}/{d} {d:0>2}:{d:0>2}:{d:0>2}",
 };
 
-// Divisions of a nanosecond.
-pub const ns_per_us: i64 = 1000;
-pub const ns_per_ms: i64 = 1000 * ns_per_us;
-pub const ns_per_s: i64 = 1000 * ns_per_ms;
-pub const ns_per_min: i64 = 60 * ns_per_s;
-pub const ns_per_hour: i64 = 60 * ns_per_min;
-pub const ns_per_day: i64 = 24 * ns_per_hour;
-pub const ns_per_week: i64 = 7 * ns_per_day;
-
 pub fn now() DateTime {
-    const epochTime = std.time.timestamp();
+    const timestamp = std.time.timestamp();
+    const epoch_seconds = @as(u64, @intCast(timestamp));
 
-    std.debug.print("\n\nepoch: {d}\n", .{epochTime});
+    const utcCorrectionHours = env.UTC_CORRECTION_HOURS;
 
-    const microseconds: i64 = @divTrunc(epochTime, 1000);
-    const milliseconds: i64 = @divTrunc(microseconds, 1000);
-    const seconds: i64 = @divTrunc(milliseconds, 1000);
-    const minutes: i64 = @divTrunc(seconds, 60);
-    const hours: i64 = @divTrunc(minutes, 60);
-    const days: i64 = @divTrunc(hours, 24);
+    // Convert to datetime
+    const datetime = std.time.epoch.EpochSeconds{ .secs = epoch_seconds };
+    const year_day = datetime.getEpochDay().calculateYearDay();
+    const month_day = year_day.calculateMonthDay();
+    const day_seconds = datetime.getDaySeconds();
+
+    const utcHours = day_seconds.getHoursIntoDay();
+    var hours: i8 = @intCast(day_seconds.getHoursIntoDay());
+    var day = month_day.day_index + 1;
+    var month = month_day.month.numeric();
+    var year = year_day.year;
+
+    std.debug.assert(@abs(utcCorrectionHours) < 24);
+
+    if (utcHours >= @abs(utcCorrectionHours)) hours += utcCorrectionHours;
+
+    if (utcHours <= @abs(utcCorrectionHours)) {
+        const diff = @abs(utcCorrectionHours) - utcHours;
+        hours = 24 - diff;
+
+        if (day == 1) {
+            day = 0;
+            if (month == 1) {
+                month = 12;
+                year -= 1;
+            } else month -= 1;
+        } else day -= 1;
+    }
+
+    // std.debug.print("{d:0>2}/{d:0>2}/{d} {d:0>2}:{d:0>2}:{d:0>2}\n", .{
+    //     month_day.month.numeric(),
+    //     month_day.day_index + 1,
+    //     year_day.year,
+    //     day_seconds.getHoursIntoDay(),
+    //     day_seconds.getMinutesIntoHour(),
+    //     day_seconds.getSecondsIntoMinute(),
+    // });
 
     return DateTime{
-        .milliseconds = milliseconds,
-        .seconds = (seconds),
-        .minutes = (minutes),
-        .hours = (hours),
-        .days = (days),
-        .month = 12,
-        .year = 1970,
+        .seconds = day_seconds.getSecondsIntoMinute(),
+        .minutes = day_seconds.getMinutesIntoHour(),
+        .hours = @intCast(@abs(hours)),
+        .day = day,
+        .month = month,
+        .year = year,
     };
 }

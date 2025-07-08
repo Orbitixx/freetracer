@@ -70,7 +70,7 @@ pub fn start(self: *DataFlasher) !void {
 
         if (!EventManager.subscribe("data_flasher", component)) return error.UnableToSubscribeToEventManager;
 
-        std.debug.print("\nDataFlasher: attempting to initialize children...", .{});
+        std.debug.print("DataFlasher: attempting to initialize children...", .{});
 
         component.children = std.ArrayList(Component).init(self.allocator);
 
@@ -83,7 +83,7 @@ pub fn start(self: *DataFlasher) !void {
             }
         }
 
-        std.debug.print("\nDataFlasher: finished initializing children.", .{});
+        std.debug.print("DataFlasher: finished initializing children.", .{});
     }
 }
 pub fn update(self: *DataFlasher) !void {
@@ -108,7 +108,7 @@ pub fn handleEvent(self: *DataFlasher, event: ComponentEvent) !EventResult {
             try self.queryAndSaveISOPath();
             try self.queryAndSaveSelectedDevice();
 
-            debug.print("\nDataFlasher.handleEvent.onDeviceListActiveStateChanged: successfully obtained path and devices responses.");
+            debug.print("DataFlasher.handleEvent.onDeviceListActiveStateChanged: successfully obtained path and devices responses.");
 
             // Update state in a block with shorter lifecycle
             {
@@ -119,7 +119,7 @@ pub fn handleEvent(self: *DataFlasher, event: ComponentEvent) !EventResult {
                 std.debug.assert(self.state.data.isoPath != null and self.state.data.isoPath.?.len > 2);
                 std.debug.assert(self.state.data.device != null and @TypeOf(self.state.data.device.?) == USBStorageDevice);
 
-                debug.printf("\nDataFlasher received:\n\tisoPath: {s}\n\tdevice: {s}\n", .{
+                debug.printf("DataFlasher received:\n\tisoPath: {s}\n\tdevice: {s}\n", .{
                     self.state.data.isoPath.?,
                     self.state.data.device.?.getBsdNameSlice(),
                 });
@@ -137,7 +137,7 @@ pub fn handleEvent(self: *DataFlasher, event: ComponentEvent) !EventResult {
     return eventResult;
 }
 pub fn dispatchComponentAction(self: *DataFlasher) void {
-    debug.print("\nDataFlasher: dispatching component action!");
+    debug.print("DataFlasher: dispatching component action!");
 
     // NOTE: Need to be careful with the memory access operations here since targetDisk (and obtained slice below)
     // live/s only within the scope of this function.
@@ -150,14 +150,14 @@ pub fn dispatchComponentAction(self: *DataFlasher) void {
     }
 
     if (targetDisk.len < 2) {
-        debug.print("\nDataFlasher.dispatchComponentAction: ERROR: unable to obtain the BSD Name of the target device.");
+        debug.print("DataFlasher.dispatchComponentAction: ERROR: unable to obtain the BSD Name of the target device.");
         return;
     }
 
     // Send a request to unmount the target disk to the PrivilegedHelper Component, which will communicate with the Helper Tool
     EventManager.broadcast(PrivilegedHelper.Events.onUnmountDiskRequest.create(self.asComponentPtr(), &.{ .targetDisk = targetDisk }));
 
-    debug.print("\nDataFlasher: finished the broadcast of the unmountRequest. Ready for next step...");
+    debug.print("DataFlasher: finished the broadcast of the unmountRequest. Ready for next step...");
 }
 pub fn deinit(self: *DataFlasher) void {
     _ = self;
@@ -189,7 +189,7 @@ fn queryAndSaveISOPath(self: *DataFlasher) !void {
         if (!isoResult.success) return error.DataFlasherFailedToQueryISOPath;
 
         if (isoResponse.isoPath.len < 2) {
-            debug.printf("\nERROR: DataFlasher received invalid ISO path: {s}", .{isoResponse.isoPath});
+            debug.printf("ERROR: DataFlasher received invalid ISO path: {s}", .{isoResponse.isoPath});
             return error.DataFlasherReceivedInvalidISOPath;
         }
 

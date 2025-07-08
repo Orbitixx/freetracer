@@ -69,7 +69,7 @@ pub const Events = struct {
 };
 
 pub fn init(allocator: std.mem.Allocator) !ISOFilePickerComponent {
-    std.debug.print("\nISOFilePickerComponent: component initialized!", .{});
+    std.debug.print("ISOFilePickerComponent: component initialized!", .{});
 
     return ISOFilePickerComponent{
         .allocator = allocator,
@@ -104,7 +104,7 @@ pub fn initWorker(self: *ISOFilePickerComponent) !void {
 }
 
 pub fn start(self: *ISOFilePickerComponent) !void {
-    std.debug.print("\nISOFilePickerComponent: start() function called!", .{});
+    std.debug.print("ISOFilePickerComponent: start() function called!", .{});
 
     try self.initWorker();
 
@@ -113,7 +113,7 @@ pub fn start(self: *ISOFilePickerComponent) !void {
 
         if (!EventManager.subscribe("iso_file_picker", component)) return error.UnableToSubscribeToEventManager;
 
-        std.debug.print("\nISOFilePickerComponent: attempting to initialize children...", .{});
+        std.debug.print("ISOFilePickerComponent: attempting to initialize children...", .{});
 
         component.children = std.ArrayList(Component).init(self.allocator);
 
@@ -126,7 +126,7 @@ pub fn start(self: *ISOFilePickerComponent) !void {
             }
         }
 
-        std.debug.print("\nISOFilePickerComponent: finished initializing children.", .{});
+        std.debug.print("ISOFilePickerComponent: finished initializing children.", .{});
     }
 }
 
@@ -151,7 +151,7 @@ pub fn draw(self: *ISOFilePickerComponent) !void {
 }
 
 pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventResult {
-    debug.printf("\nISOFilePickerComponent: handleEvent() received an event: \"{s}\"", .{event.name});
+    debug.printf("ISOFilePickerComponent: handleEvent() received an event: \"{s}\"", .{event.name});
 
     var eventResult = EventResult.init();
 
@@ -164,7 +164,7 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
             eventResult.validate(1);
 
             debug.printf(
-                "\nISOFilePickerComponent: handleEvent() received: \"{s}\" event, data: newWidth = {d}",
+                "ISOFilePickerComponent: handleEvent() received: \"{s}\" event, data: newWidth = {d}",
                 .{ event.name, data.transform.w },
             );
         },
@@ -178,7 +178,7 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
 
             if (isSelecting or selectedPath == null) {
                 debug.print(
-                    \\"\nISOFilePicker.handleEvent.onISOFileSelected: 
+                    \\"ISOFilePicker.handleEvent.onISOFileSelected: 
                     \\WARNING - State reflects file is still being selected or path is NULL. Aborting event processing."
                     ,
                 );
@@ -188,7 +188,7 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
             eventResult.validate(1);
 
             debug.printf(
-                "\nISOFilePickerComponent: handleEvent() received: \"{s}\" event, data: newPath = {s}",
+                "ISOFilePickerComponent: handleEvent() received: \"{s}\" event, data: newPath = {s}",
                 .{ event.name, if (selectedPath) |newPath| newPath else "NULL" },
             );
 
@@ -205,7 +205,7 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
                     const result = try ui.handleEvent(newEvent);
 
                     if (!result.success) {
-                        debug.print("\nERROR: FilePickerUI was not able to handle ISOFileNameChanged event.");
+                        debug.print("ERROR: FilePickerUI was not able to handle ISOFileNameChanged event.");
                     }
                 }
             }
@@ -228,9 +228,9 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
             const isSelecting = self.state.data.is_selecting;
             self.state.unlock();
 
-            debug.print("\nISOFilePicker.handleEvent.onISOFilePathQueried: processing event...");
+            debug.print("ISOFilePicker.handleEvent.onISOFilePathQueried: processing event...");
 
-            debug.printf("\n\tpath: {s}\n\tisSelecting: {any}", .{ path.?, isSelecting });
+            debug.printf("\tpath: {s}\n\tisSelecting: {any}", .{ path.?, isSelecting });
 
             // WARNING: Debug assertion
             std.debug.assert(path != null and isSelecting == false);
@@ -241,8 +241,8 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
                 eventResult.data = null;
 
                 debug.printf(
-                    \\"\nWARNING: ISOFilePicker.handleEvent.onISOFilePathQueried: the ISO path is either NULL 
-                    \\ or is still being selected. Path: {any}, isSelecting: {any}\n"
+                    \\"WARNING: ISOFilePicker.handleEvent.onISOFilePathQueried: the ISO path is either NULL 
+                    \\ or is still being selected. Path: {any}, isSelecting: {any}"
                 ,
                     .{ path, isSelecting },
                 );
@@ -287,14 +287,14 @@ pub fn selectFile(self: *ISOFilePickerComponent) !void {
 pub const dispatchComponentActionWrapper = struct {
     pub fn call(ptr: *anyopaque) void {
         ISOFilePickerComponent.asInstance(ptr).selectFile() catch |err| {
-            debug.printf("\nISOFilePickerComponent: Failed to dispatch component action. Error: {any}", .{err});
+            debug.printf("ISOFilePickerComponent: Failed to dispatch component action. Error: {any}", .{err});
         };
     }
 };
 
 pub fn dispatchComponentAction(self: *ISOFilePickerComponent) void {
     self.selectFile() catch |err| {
-        debug.printf("\nISOFilePickerComponent: Failed to dispatch component action. Error: {any}", .{err});
+        debug.printf("ISOFilePickerComponent: Failed to dispatch component action. Error: {any}", .{err});
     };
 }
 
@@ -307,7 +307,7 @@ pub fn checkAndJoinWorker(self: *ISOFilePickerComponent) void {
 }
 
 pub fn workerRun(worker: *ComponentWorker, context: *anyopaque) void {
-    std.debug.print("\nISOFilePickerComponent: runWorker() started!", .{});
+    std.debug.print("ISOFilePickerComponent: runWorker() started!", .{});
 
     _ = context;
 
@@ -340,16 +340,16 @@ pub fn workerRun(worker: *ComponentWorker, context: *anyopaque) void {
         debug.printf("ISOFilePickerComponent Worker caught error: {any}", .{err});
     };
 
-    std.debug.print("\nISOFilePickerComponent: runWorker() finished executing!", .{});
+    std.debug.print("ISOFilePickerComponent: runWorker() finished executing!", .{});
 }
 
 pub fn workerCallback(worker: *ComponentWorker, context: *anyopaque) void {
-    std.debug.print("\nISOFilePickerComponent: workerCallback() called!", .{});
+    std.debug.print("ISOFilePickerComponent: workerCallback() called!", .{});
 
     _ = worker;
     _ = context;
 
-    std.debug.print("\nISOFilePickerComponent: workerCallback() joined!", .{});
+    std.debug.print("ISOFilePickerComponent: workerCallback() joined!", .{});
 }
 
 pub const ComponentImplementation = ComponentFramework.ImplementComponent(ISOFilePickerComponent);

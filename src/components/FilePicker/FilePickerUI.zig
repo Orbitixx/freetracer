@@ -83,7 +83,7 @@ pub const Events = struct {
 };
 
 pub fn init(allocator: std.mem.Allocator, parent: *ISOFilePicker) !ISOFilePickerUI {
-    debug.print("\nISOFilePickerUI: start() called.");
+    debug.print("ISOFilePickerUI: start() called.");
 
     return ISOFilePickerUI{
         .allocator = allocator,
@@ -98,7 +98,7 @@ pub fn initComponent(self: *ISOFilePickerUI, parent: ?*Component) !void {
 }
 
 pub fn start(self: *ISOFilePickerUI) !void {
-    debug.print("\nISOFilePickerUI: component start() called.");
+    debug.print("ISOFilePickerUI: component start() called.");
 
     if (self.component == null) try self.initComponent(self.parent.asComponentPtr());
 
@@ -165,11 +165,11 @@ pub fn start(self: *ISOFilePickerUI) !void {
         self.isoTitle = Text.init("No ISO selected...", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
     }
 
-    debug.print("\nISOFilePickerUI: component start() finished.");
+    debug.print("ISOFilePickerUI: component start() finished.");
 }
 
 pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
-    debug.printf("\nISOFilePickerUI: handleEvent() received an event: \"{s}\"", .{event.name});
+    debug.printf("ISOFilePickerUI: handleEvent() received an event: \"{s}\"", .{event.name});
 
     var eventResult = EventResult.init();
 
@@ -291,7 +291,7 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
 }
 
 fn recalculateUI(self: *ISOFilePickerUI, bgRectParams: BgRectParams) void {
-    debug.print("\nIsoFilePickerUI: recalculating UI...");
+    debug.print("IsoFilePickerUI: recalculating UI...");
 
     if (self.bgRect) |*bgRect| {
         bgRect.transform.w = bgRectParams.width;

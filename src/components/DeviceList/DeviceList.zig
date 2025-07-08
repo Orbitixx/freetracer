@@ -126,7 +126,7 @@ pub fn start(self: *DeviceListComponent) !void {
 
         if (!EventManager.subscribe("device_list", component)) return error.UnableToSubscribeToEventManager;
 
-        std.debug.print("\nDeviceList: attempting to initialize children...", .{});
+        std.debug.print("DeviceList: attempting to initialize children...", .{});
 
         component.children = std.ArrayList(Component).init(self.allocator);
 
@@ -139,7 +139,7 @@ pub fn start(self: *DeviceListComponent) !void {
             }
         }
 
-        std.debug.print("\nDeviceList: finished initializing children.", .{});
+        std.debug.print("DeviceList: finished initializing children.", .{});
     }
 }
 
@@ -152,7 +152,7 @@ pub fn draw(self: *DeviceListComponent) !void {
 }
 
 pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResult {
-    debug.printf("\nDeviceList: handleEvent() received an event: \"{s}\"", .{event.name});
+    debug.printf("DeviceList: handleEvent() received an event: \"{s}\"", .{event.name});
 
     var eventResult = EventResult.init();
 
@@ -195,7 +195,7 @@ pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResu
 
             EventManager.broadcast(responseEvent);
 
-            debug.print("\nDeviceList: Component processed USBStorageDevices from Worker");
+            debug.print("DeviceList: Component processed USBStorageDevices from Worker");
         },
 
         // Event: User is finished interacting with DeviceList component
@@ -204,7 +204,7 @@ pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResu
 
             // Quality control check: OK to move on from component?
             if (self.state.data.selectedDevice == null) {
-                debug.print("\nDeviceList.handleEvent.onFinishedComponentInteraction: WARNING - selectedDevice is NULL.");
+                debug.print("DeviceList.handleEvent.onFinishedComponentInteraction: WARNING - selectedDevice is NULL.");
                 break :eventLoop;
             }
 
@@ -220,7 +220,7 @@ pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResu
 
             responseEvent.flags.overrideNotifySelfOnSelfOrigin = true;
 
-            debug.print("\nDeviceList: broadcasting state changed to INACTIVE.");
+            debug.print("DeviceList: broadcasting state changed to INACTIVE.");
 
             EventManager.broadcast(responseEvent);
         },
@@ -261,7 +261,7 @@ pub fn deinit(self: *DeviceListComponent) void {
 }
 
 fn discoverDevices(self: *DeviceListComponent) !void {
-    debug.print("\nDeviceList: discovering connected devices...");
+    debug.print("DeviceList: discovering connected devices...");
 
     self.state.lock();
     errdefer self.state.unlock();
@@ -284,7 +284,7 @@ fn discoverDevices(self: *DeviceListComponent) !void {
 
     // Start the worker once the cleanup is complete
     if (self.worker) |*worker| {
-        debug.print("\nDeviceList: starting Worker...");
+        debug.print("DeviceList: starting Worker...");
         try worker.start();
     }
 }
@@ -293,11 +293,11 @@ pub const dispatchComponentFinishedAction = struct {
     pub fn call(ctx: *anyopaque) void {
         const self = DeviceListComponent.asInstance(ctx);
 
-        debug.print("\nDeviceList: component action wrapper dispatch.");
+        debug.print("DeviceList: component action wrapper dispatch.");
 
         _ = self.handleEvent(Events.onFinishedComponentInteraction.create(self.asComponentPtr(), null)) catch |err| {
-            debug.printf("\nDeviceList.dispatchComponentAction: ERROR - {any}", .{err});
-            std.debug.panic("\nDeviceList.dispatchComponentAction failed. May result in unpredictable behavior, please report. Error: {any}", .{err});
+            debug.printf("DeviceList.dispatchComponentAction: ERROR - {any}", .{err});
+            std.debug.panic("DeviceList.dispatchComponentAction failed. May result in unpredictable behavior, please report. Error: {any}", .{err});
         };
     }
 };
@@ -323,7 +323,7 @@ pub const selectDeviceActionWrapper = struct {
         }
 
         debug.printf(
-            "\nDeviceList: selected device set to: {s}",
+            "DeviceList: selected device set to: {s}",
             .{
                 if (context.component.state.data.selectedDevice != null) context.selectedDevice.getBsdNameSlice() else "NULL",
             },
@@ -338,19 +338,19 @@ pub const selectDeviceActionWrapper = struct {
 };
 
 pub fn dispatchComponentAction(self: *DeviceListComponent) void {
-    debug.print("\nDeviceList: dispatched component action...");
+    debug.print("DeviceList: dispatched component action...");
 
     self.discoverDevices() catch |err| {
-        debug.printf("\nDeviceList Component caught error: {any}", .{err});
+        debug.printf("DeviceList Component caught error: {any}", .{err});
     };
 }
 
 pub fn checkAndJoinWorker(self: *DeviceListComponent) void {
     if (self.worker) |*worker| {
         if (worker.status == ComponentFramework.WorkerStatus.NEEDS_JOINING) {
-            debug.print("\nDeviceList: Worker finished, needs joining...");
+            debug.print("DeviceList: Worker finished, needs joining...");
             worker.join();
-            debug.print("\nDeviceList: Worker joined.");
+            debug.print("DeviceList: Worker joined.");
         }
     }
 }

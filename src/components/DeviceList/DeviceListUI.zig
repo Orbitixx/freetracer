@@ -102,7 +102,7 @@ pub const Events = struct {
 
 // Creates and returns an instance of DeviceListUI component
 pub fn init(allocator: std.mem.Allocator, parent: *DeviceList) !DeviceListUI {
-    debug.print("\nDeviceListUI: start() called.");
+    debug.print("DeviceListUI: start() called.");
 
     parent.state.lock();
     defer parent.state.unlock();
@@ -126,7 +126,7 @@ pub fn initComponent(self: *DeviceListUI, parent: ?*Component) !void {
 
 // Called once upon component initialization.
 pub fn start(self: *DeviceListUI) !void {
-    debug.print("\nDeviceListUI: component start() called.");
+    debug.print("DeviceListUI: component start() called.");
 
     if (self.component == null) try self.initComponent(self.parent.asComponentPtr());
 
@@ -239,11 +239,11 @@ pub fn start(self: *DeviceListUI) !void {
         }
     }
 
-    debug.print("\nDeviceListUI: component start() finished.");
+    debug.print("DeviceListUI: component start() finished.");
 }
 
 pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
-    debug.printf("\nDeviceListUI: handleEvent() received an event: \"{s}\"", .{event.name});
+    debug.printf("DeviceListUI: handleEvent() received an event: \"{s}\"", .{event.name});
 
     var eventResult = EventResult.init();
 
@@ -286,7 +286,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
 
             switch (data.isActive) {
                 true => {
-                    debug.print("\nDeviceListUI: setting UI to ACTIVE.");
+                    debug.print("DeviceListUI: setting UI to ACTIVE.");
 
                     if (self.headerLabel) |*header| {
                         header.style.textColor = Color.white;
@@ -300,7 +300,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
                 },
 
                 false => {
-                    debug.print("\nDeviceListUI: setting UI to INACTIVE.");
+                    debug.print("DeviceListUI: setting UI to INACTIVE.");
 
                     if (self.headerLabel) |*header| {
                         header.style.textColor = Color.lightGray;
@@ -351,18 +351,18 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
 
         Events.onDevicesReadyToRender.Hash => {
             //
-            debug.print("\nDeviceListUI: onDevicesReadyToRender() start.");
+            debug.print("DeviceListUI: onDevicesReadyToRender() start.");
 
             // WARNING: General defer is OK here because no other call is coupled here where mutex lock would propagate.
             self.state.lock();
             defer self.state.unlock();
 
             if (self.state.data.devices.items.len < 1) {
-                debug.print("\nDeviceListUI: onDevicesReadyToRender(): no devices discovered, breaking the event loop.");
+                debug.print("DeviceListUI: onDevicesReadyToRender(): no devices discovered, breaking the event loop.");
                 break :eventLoop;
             }
 
-            debug.printf("\nDeviceListUI: onDevicesReadyToRender(): processing checkboxes for {d} devices.", .{self.state.data.devices.items.len});
+            debug.printf("DeviceListUI: onDevicesReadyToRender(): processing checkboxes for {d} devices.", .{self.state.data.devices.items.len});
 
             for (self.state.data.devices.items, 0..) |*device, i| {
                 //
@@ -376,7 +376,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
 
                 // Buffered display string in a predefined format
                 const deviceStringBuffer = self.allocator.allocSentinel(u8, 254, 0x00) catch |err| {
-                    std.debug.panic("\n{any}", .{err});
+                    std.debug.panic("{any}", .{err});
                 };
 
                 _ = std.fmt.bufPrintZ(
@@ -388,10 +388,10 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
                         @divTrunc(device.size, 1_000_000_000),
                     },
                 ) catch |err| {
-                    std.debug.panic("\n{any}", .{err});
+                    std.debug.panic("{any}", .{err});
                 };
 
-                debug.printf("\nComponentUI: formatted string is: {s}", .{deviceStringBuffer});
+                debug.printf("ComponentUI: formatted string is: {s}", .{deviceStringBuffer});
 
                 try self.deviceCheckboxes.append(Checkbox.init(
                     @ptrCast(@alignCast(deviceStringBuffer)),
@@ -414,7 +414,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
                     try checkbox.start();
                 }
             }
-            debug.print("\nDeviceListUI: onDevicesReadyToRender() end.");
+            debug.print("DeviceListUI: onDevicesReadyToRender() end.");
         },
 
         // Fired when a device is selected, e.g. selectedDevice != null
@@ -428,7 +428,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
             defer self.state.unlock();
             self.state.data.selectedDevice = data.selectedDevice;
 
-            std.debug.print("\nDeviceListUI.handleEvent.onSelectedDeviceNameChanged received selectedDevice: \n{s}\n\n", .{data.selectedDevice.?.getNameSlice()});
+            std.debug.print("DeviceListUI.handleEvent.onSelectedDeviceNameChanged received selectedDevice: \n{s}\n\n", .{data.selectedDevice.?.getNameSlice()});
 
             if (self.bgRect) |bgRect| {
                 self.deviceNameLabel = Text.init(if (self.state.data.selectedDevice) |*device| device.getNameSlice() else "NULL", .{
@@ -451,7 +451,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
 }
 
 fn recalculateUI(self: *DeviceListUI, bgRectParams: BgRectParams) void {
-    debug.print("\nDeviceListUI: updating bgRect properties!");
+    debug.print("DeviceListUI: updating bgRect properties!");
 
     if (self.bgRect) |*bgRect| {
         bgRect.transform.w = bgRectParams.width;
