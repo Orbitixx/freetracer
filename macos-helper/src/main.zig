@@ -57,7 +57,7 @@ pub const Debug = struct {
             }
 
             // Create the full message with timestamp and format arguments
-            const full_message = std.fmt.allocPrintZ(self.allocator, "\n[{d:0>2}/{d:0>2}/{d} {d:0>2}:{d:0>2}:{d:0>2}] {s}: " ++ fmt, .{
+            const full_message = std.fmt.allocPrintZ(self.allocator, "[{d:0>2}/{d:0>2}/{d} {d:0>2}:{d:0>2}:{d:0>2}] {s}: " ++ fmt, .{
                 t.month,
                 t.day,
                 t.year,
@@ -131,7 +131,9 @@ pub fn main() !void {
 
     defer _ = c.CFRelease(localMessagePort);
 
-    const runLoopSource: c.CFRunLoopSourceRef = c.CFMessagePortCreateRunLoopSource(c.kCFAllocatorDefault, localMessagePort, 0);
+    const kRunLoopOrder: c.CFIndex = 0;
+
+    const runLoopSource: c.CFRunLoopSourceRef = c.CFMessagePortCreateRunLoopSource(c.kCFAllocatorDefault, localMessagePort, kRunLoopOrder);
     defer _ = c.CFRelease(runLoopSource);
 
     c.CFRunLoopAddSource(c.CFRunLoopGetCurrent(), runLoopSource, c.kCFRunLoopDefaultMode);
@@ -153,25 +155,41 @@ pub fn messagePortCallback(port: c.CFMessagePortRef, msgId: c.SInt32, data: c.CF
     var requestLength: usize = 0;
     var response: i32 = -1;
 
-    if (data != null) {
-        requestData = c.CFDataGetBytePtr(data);
-        requestLength = @intCast(c.CFDataGetLength(data));
+    if (data == null) {
+        Debug.log(.WARNING, "messagePortCallback received NULL data as parameter. Ignoring request...", .{});
+        return returnData;
+    }
 
-        if (requestData != null and requestLength > 0) {
-            Debug.log(.INFO, "Request data received: {s}\n", .{std.mem.sliceTo(requestData.?, 0)});
-        }
+    requestData = c.CFDataGetBytePtr(data);
+    requestLength = @intCast(c.CFDataGetLength(data));
+
+    if (requestData == null) {
+        Debug.log(.WARNING, "The received request data is NULL. Ignoring request...", .{});
+        return returnData;
+    }
+
+    if (requestLength < 1) {
+        Debug.log(.WARNING, "The received length of the request data is 0.", .{});
+        return returnData;
+    }
+
+    // Data capture, not a conditional. Data check conditionals must have already passed by this point.
+    if (requestData) |rdata| {
+        Debug.log(.INFO, "Request data received: {s}\n", .{std.mem.sliceTo(rdata, 0x00)});
     }
 
     switch (msgId) {
         kUnmountDiskRequest => {
             Debug.log(.INFO, "Freetracer Helper Tool received DADiskUnmount() request {d}.", .{kUnmountDiskRequest});
-            if (requestData != null) {
-                // const payload: []const u8 = @ptrCast(requestData.?);
-                response = @intFromEnum(processDiskUnmountRequest(std.mem.sliceTo(requestData.?, 0)));
+
+            if (requestData) |rdata| {
+                response = @intFromEnum(processDiskUnmountRequest(std.mem.sliceTo(rdata, 0)));
+            } else {
+                Debug.log(.WARNING, "Freetracer Helper Tool received a NULL request data in the UnmoutDiskRequest message. Request ignored.", .{});
             }
         },
         else => {
-            Debug.log(.WARNING, "Freetracer Helper Tool received unknown request. Aborting response...", .{});
+            Debug.log(.WARNING, "Freetracer Helper Tool received unknown request. Ignoring response...", .{});
         },
     }
 
@@ -194,12 +212,16 @@ pub fn processDiskUnmountRequest(bsdName: []const u8) ReturnCode {
     }
     defer _ = c.CFRelease(daSession);
 
+    Debug.log(.INFO, "Successfully started a blank DASession.", .{});
+
     const currentLoop = c.CFRunLoopGetCurrent();
 
     c.DASessionScheduleWithRunLoop(daSession, currentLoop, c.kCFRunLoopDefaultMode);
 
     // Ensure unscheduling happens before the session is released
     defer c.DASessionUnscheduleFromRunLoop(daSession, currentLoop, c.kCFRunLoopDefaultMode);
+
+    Debug.log(.INFO, "DASession is successfully scheduled with the run loop.", .{});
 
     const daDiskRef: c.DADiskRef = c.DADiskCreateFromBSDName(c.kCFAllocatorDefault, daSession, bsdName.ptr);
 
@@ -209,26 +231,45 @@ pub fn processDiskUnmountRequest(bsdName: []const u8) ReturnCode {
     }
     defer _ = c.CFRelease(daDiskRef);
 
+    Debug.log(.INFO, "DA Disk refererence is successfuly created for the provided device BSD name.", .{});
+
     const diskInfo: c.CFDictionaryRef = @ptrCast(c.DADiskCopyDescription(daDiskRef));
 
     if (diskInfo == null) return ReturnCode.FAILED_TO_OBTAIN_DISK_INFO_DICT_REF;
     defer _ = c.CFRelease(diskInfo);
 
-    // _ = c.CFShow(diskInfo);
+    Debug.log(.INFO, "DA Disk Description is successfully obtained/copied.", .{});
 
-    // --- @PROP: Check for EFI parition ---------------------------------------------------
-    // Do not release efiKey, release causes segmentation fault
-    const efiKeyRef: c.CFStringRef = @ptrCast(c.CFDictionaryGetValue(diskInfo, c.kDADiskDescriptionVolumeNameKey));
+    _ = c.CFShow(diskInfo);
 
-    var efiKeyBuf: [128]u8 = undefined;
-    _ = c.CFStringGetCString(efiKeyRef, &efiKeyBuf, efiKeyBuf.len, c.kCFStringEncodingUTF8);
-
-    if (efiKeyRef == null or c.CFGetTypeID(efiKeyRef) != c.CFStringGetTypeID()) {
-        return ReturnCode.FAILED_TO_OBTAIN_EFI_KEY_STRING;
-    }
-
-    const isEfi = std.mem.count(u8, &efiKeyBuf, "EFI") > 0;
-    // --- @ENDPROP: EFI
+    // NOTE: Not sure that it is appropriate to run an EFI check against a whole device, instead of a leaf.
+    // Probably no value in doing so, unless the unmount is processed separately for each leaf volume.
+    //
+    // Debug.log(.DEBUG, "Running a check for an EFI partition...", .{});
+    //
+    // // --- @PROP: Check for EFI parition ---------------------------------------------------
+    // // Do not release efiKey, release causes segmentation fault
+    // const efiKeyRef: c.CFStringRef = @ptrCast(@alignCast(c.CFDictionaryGetValue(diskInfo, c.kDADiskDescriptionVolumeNameKey)));
+    //
+    // if (efiKeyRef == null) return ReturnCode.FAILED_TO_OBTAIN_EFI_KEY_STRING;
+    //
+    // std.log.info("\nEfi Key String: {any}", .{efiKeyRef});
+    //
+    // Debug.log(.DEBUG, "First intermediate EFI check log", .{});
+    //
+    // var efiKeyBuf: [255]u8 = std.mem.zeroes([255]u8);
+    // const efiKeyResult: c.Boolean = c.CFStringGetCString(efiKeyRef, &efiKeyBuf, efiKeyBuf.len, c.kCFStringEncodingUTF8);
+    //
+    // if (efiKeyResult == 0 or efiKeyRef == null or c.CFGetTypeID(efiKeyRef) != c.CFStringGetTypeID()) {
+    //     return ReturnCode.FAILED_TO_OBTAIN_EFI_KEY_STRING;
+    // }
+    //
+    // Debug.log(.DEBUG, "Second intermediate EFI check log", .{});
+    //
+    // const isEfi = std.mem.count(u8, &efiKeyBuf, "EFI") > 0;
+    // // --- @ENDPROP: EFI
+    //
+    // Debug.log(.INFO, "Finished checking for an EFI partition... Checking if the device is an internal device...", .{});
 
     // --- @PROP: Check for DeviceInternal ---------------------------------------------------
     const isInternalDeviceRef: c.CFBooleanRef = @ptrCast(c.CFDictionaryGetValue(diskInfo, c.kDADiskDescriptionDeviceInternalKey));
@@ -240,19 +281,21 @@ pub fn processDiskUnmountRequest(bsdName: []const u8) ReturnCode {
     const isInternalDevice: bool = (isInternalDeviceRef == c.kCFBooleanTrue);
     // --- @ENDPROP: DeviceInternal
 
+    Debug.log(.INFO, "Finished checking for an internal device...", .{});
+
     if (isInternalDevice) {
         Debug.log(.ERROR, "ERROR: internal device detected on disk: {s}. Aborting unmount operations for device.", .{bsdName});
         return ReturnCode.UNMOUNT_REQUEST_ON_INTERNAL_DEVICE;
     }
 
-    if (isEfi) {
-        std.log.warn("WARNING: Skipping unmount because of a potential EFI partition on disk: {s}.", .{bsdName});
-        return ReturnCode.SKIPPED_UNMOUNT_ATTEMPT_ON_EFI_PARTITION;
-    }
+    // if (isEfi) {
+    //     std.log.warn("Skipping unmount because of a potential EFI partition on disk: {s}.", .{bsdName});
+    //     return ReturnCode.SKIPPED_UNMOUNT_ATTEMPT_ON_EFI_PARTITION;
+    // }
 
     Debug.log(.INFO, "Unmount request passed checks. Initiating unmount call for disk: {s}.", .{bsdName});
 
-    c.DADiskUnmount(daDiskRef, c.kDADiskUnmountOptionDefault, unmountDiskCallback, &queuedUnmounts);
+    c.DADiskUnmount(daDiskRef, c.kDADiskUnmountOptionWhole, unmountDiskCallback, &queuedUnmounts);
 
     queuedUnmounts += 1;
 
@@ -274,7 +317,18 @@ fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: 
 
     // const counter_ptr: *u8 = @ptrCast(context);
     // _ = context;
-    const bsdName = if (c.DADiskGetBSDName(disk)) |name| std.mem.sliceTo(name, 0) else "Unknown Disk";
+
+    // const bsdName = if (c.DADiskGetBSDName(disk)) |name| std.mem.sliceTo(name, 0) else "Unknown Disk";
+
+    Debug.log(.INFO, "Processing unmountDiskCallback()...", .{});
+
+    const bsdNameCPtr = c.DADiskGetBSDName(disk);
+
+    const bsdName: [:0]const u8 = @ptrCast(std.mem.sliceTo(bsdNameCPtr, 0x00));
+
+    if (bsdName.len == 0) {
+        Debug.log(.WARNING, "unmountDiskCallback(): bsdName received is of 0 length.", .{});
+    }
 
     if (dissenter != null) {
         Debug.log(.WARNING, "Disk Arbitration Dissenter returned a non-empty status.", .{});
