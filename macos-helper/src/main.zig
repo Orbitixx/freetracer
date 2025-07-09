@@ -1,14 +1,16 @@
 const std = @import("std");
 const env = @import("env.zig");
 const time = @import("lib/time.zig");
+const shared = @import("lib/shared.zig");
+
+// Constants struct in MacOS' format
+const k = shared.k;
+const ReturnCode = shared.HelperReturnCode;
 
 const c = @cImport({
     @cInclude("CoreFoundation/CoreFoundation.h");
     @cInclude("DiskArbitration/DiskArbitration.h");
 });
-
-const kUnmountDiskRequest: i32 = 101;
-const kUnmountDiskResponse: i32 = 201;
 
 var queuedUnmounts: i32 = 0;
 
@@ -179,11 +181,11 @@ pub fn messagePortCallback(port: c.CFMessagePortRef, msgId: c.SInt32, data: c.CF
     }
 
     switch (msgId) {
-        kUnmountDiskRequest => {
-            Debug.log(.INFO, "Freetracer Helper Tool received DADiskUnmount() request {d}.", .{kUnmountDiskRequest});
+        k.UnmountDiskRequest => {
+            Debug.log(.INFO, "Freetracer Helper Tool received DADiskUnmount() request {d}.", .{k.UnmountDiskRequest});
 
             if (requestData) |rdata| {
-                response = @intFromEnum(processDiskUnmountRequest(std.mem.sliceTo(rdata, 0)));
+                response = @intFromEnum(processDiskUnmountRequest(std.mem.sliceTo(rdata, 0x00)));
             } else {
                 Debug.log(.WARNING, "Freetracer Helper Tool received a NULL request data in the UnmoutDiskRequest message. Request ignored.", .{});
             }
@@ -342,7 +344,7 @@ fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: 
         }
         Debug.log(.ERROR, "Failed to unmount {s}. Dissenter status code: {any}, status message: {s}", .{ bsdName, status, statusString });
     } else {
-        Debug.log(.ERROR, "Successfully unmounted disk: {s}", .{bsdName});
+        Debug.log(.INFO, "Successfully unmounted disk: {s}", .{bsdName});
         queuedUnmounts -= 1;
     }
 
@@ -352,17 +354,6 @@ fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: 
         c.CFRunLoopStop(currentLoop);
     }
 }
-
-pub const ReturnCode = enum(i32) {
-    SUCCESS = 0,
-    FAILED_TO_CREATE_DA_SESSION = 4000,
-    FAILED_TO_CREATE_DA_DISK_REF = 4001,
-    FAILED_TO_OBTAIN_DISK_INFO_DICT_REF = 4002,
-    FAILED_TO_OBTAIN_EFI_KEY_STRING = 4003,
-    FAILED_TO_OBTAIN_INTERNAL_DEVICE_KEY_BOOL = 4004,
-    UNMOUNT_REQUEST_ON_INTERNAL_DEVICE = 4005,
-    SKIPPED_UNMOUNT_ATTEMPT_ON_EFI_PARTITION = 4006,
-};
 
 comptime {
     @export(@as([*:0]const u8, @ptrCast(env.INFO_PLIST)), .{ .name = "__info_plist", .section = "__TEXT,__info_plist", .visibility = .default, .linkage = .strong });

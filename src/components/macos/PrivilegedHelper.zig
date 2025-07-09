@@ -1,6 +1,7 @@
 const std = @import("std");
 const rl = @import("raylib");
 const debug = @import("../../lib/util/debug.zig");
+const shared = @import("../../lib/shared.zig");
 
 const PrivilegedHelperTool = @import("../../modules/macos/PrivilegedHelperTool.zig");
 
@@ -84,11 +85,8 @@ pub fn start(self: *PrivilegedHelper) !void {
 
     try self.initWorker();
 
-    {
-        self.state.lock();
-        defer self.state.unlock();
-        self.isInstalled = PrivilegedHelperTool.isHelperToolInstalled();
-    }
+    // Verify if the Helper Tool is installed and set self.isInstalled flag accordingly
+    self.dispatchComponentAction();
 
     if (self.component) |*component| {
         if (component.children != null) return error.ComponentAlreadyCalledStartBefore;
@@ -126,11 +124,11 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
         Events.onUnmountDiskRequest.Hash => {
             const data = Events.onUnmountDiskRequest.getData(event) orelse break :eventLoop;
 
-            const response = self.requestUnmount(data.targetDisk);
+            const response: shared.HelperUnmountRequestCode = self.requestUnmount(data.targetDisk);
 
             debug.printf("PrivilegedHelper Component received response from Privileged Tool: {any}", .{response});
 
-            if (response) eventResult.validate(1);
+            if (response == shared.HelperUnmountRequestCode.SUCCESS) eventResult.validate(1);
         },
 
         else => {},
@@ -156,13 +154,22 @@ pub fn workerCallback(worker: *ComponentWorker, context: *anyopaque) void {
 
 pub fn dispatchComponentAction(self: *PrivilegedHelper) void {
     //
+    const installCheckResult: shared.HelperInstallCode = PrivilegedHelperTool.isHelperToolInstalled();
+
     self.state.lock();
     defer self.state.unlock();
-    self.state.data.isInstalled = PrivilegedHelperTool.isHelperToolInstalled();
+
+    if (installCheckResult == shared.HelperInstallCode.SUCCESS) {
+        self.isInstalled = true;
+    } else self.isInstalled = false;
 }
 
-fn requestUnmount(self: *PrivilegedHelper, targetDisk: [:0]const u8) bool {
-    if (!self.isInstalled) _ = PrivilegedHelperTool.installPrivilegedHelperTool();
+fn requestUnmount(self: *PrivilegedHelper, targetDisk: [:0]const u8) shared.HelperUnmountRequestCode {
+    if (!self.isInstalled) {
+        const installResult = PrivilegedHelperTool.installPrivilegedHelperTool();
+        if (installResult != shared.HelperInstallCode.SUCCESS) return shared.HelperUnmountRequestCode.FAILURE;
+    }
+
     return PrivilegedHelperTool.requestPerformUnmount(targetDisk);
 }
 

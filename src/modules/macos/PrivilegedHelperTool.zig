@@ -1,58 +1,80 @@
 const std = @import("std");
 const c = @import("../../lib/sys/system.zig").c;
 const env = @import("../../env.zig");
-const k = @import("../../lib/constants.zig");
 const debug = @import("../../lib/util/debug.zig");
+const System = @import("../../lib/sys/system.zig");
 
-/// "Client"-side function, whereas Freetracer acts as the client for the Freetracer Privileged Tool
-pub fn isHelperToolInstalled() bool {
+const shared = @import("../../lib/shared.zig");
+
+const k = shared.k;
+const HelperReturnCode = shared.HelperReturnCode;
+const HelperInstallCode = shared.HelperInstallCode;
+const HelperUnmountRequestCode = shared.HelperUnmountRequestCode;
+
+/// MacOS-only
+/// Checks via the SMJobBless system daemon if the privileged helper tool is installed.
+/// "Client"-side function, whereas Freetracer main process acts as the client for the Freetracer Privileged Tool
+/// @Returns HelperInstallCode = enum(bool) { FAILURE: bool = false, SUCCESS: bool = true}
+pub fn isHelperToolInstalled() HelperInstallCode {
+    if (!System.isMac) return HelperInstallCode.FAILURE;
+
     const helperLabel: c.CFStringRef = c.CFStringCreateWithCStringNoCopy(c.kCFAllocatorDefault, env.HELPER_BUNDLE_ID, c.kCFStringEncodingUTF8, c.kCFAllocatorNull);
     defer _ = c.CFRelease(helperLabel);
 
     const smJobCopyDict = c.SMJobCopyDictionary(c.kSMDomainSystemLaunchd, helperLabel);
+    defer _ = c.CFRelease(smJobCopyDict);
 
     if (smJobCopyDict == null) {
         debug.printf("isHelperToolInstalled(): the SMJobCopyDictionary for helper tool is NULL. Helper tool is NOT installed.", .{});
-        return false;
+        return HelperInstallCode.FAILURE;
     }
 
-    defer _ = c.CFRelease(smJobCopyDict);
-
     debug.printf("isHelperToolInstalled(): Helper tool found, it appears to be installed.", .{});
-    return true;
+
+    return HelperInstallCode.SUCCESS;
 }
 
-/// "Client"-side function, whereas Freetracer acts as the client for the Freetracer Privileged Tool
-pub fn installPrivilegedHelperTool() bool {
+/// MacOS-only
+/// Installs the privileged helper tool via MacOS' SMJobBless.
+/// "Client"-side function, whereas Freetracer main process acts as the client for the Freetracer Privileged Tool
+/// @Returns HelperInstallCode = enum(bool) { FAILURE: bool = false, SUCCESS: bool = true}
+pub fn installPrivilegedHelperTool() HelperInstallCode {
+    if (!System.isMac) return HelperInstallCode.FAILURE;
+
     var installStatus: c.Boolean = c.FALSE;
 
     debug.print("Install Helper Tool: attempting to obtain initial (empty) authorization.");
 
     var authRef: c.AuthorizationRef = undefined;
-    var authStatus: c.OSStatus = c.AuthorizationCreate(null, null, 0, &authRef);
+
+    var authStatus: c.OSStatus = c.AuthorizationCreate(k.NullAuthorizationRights, k.NullAuthorizationEnvironment, k.EmptyAuthotizationFlags, &authRef);
+    defer _ = c.AuthorizationFree(authRef, c.kAuthorizationFlagDefaults);
 
     if (authStatus != c.errAuthorizationSuccess) {
         debug.printf("Freetracer failed to obtain empty authorization in the process of installing its privileged helper tool. AuthStatus: {d}.", .{authStatus});
         authRef = null;
-        return false;
+        return HelperInstallCode.FAILURE;
     }
 
     debug.print("Install Helper Tool: successfully obtained an empty authorization.");
 
-    defer _ = c.AuthorizationFree(authRef, c.kAuthorizationFlagDefaults);
-
-    var authItem = c.AuthorizationItem{ .name = c.kSMRightBlessPrivilegedHelper, .flags = 0, .value = null, .valueLength = 0 };
+    var authItem = c.AuthorizationItem{
+        .name = c.kSMRightBlessPrivilegedHelper,
+        .flags = k.EmptyAuthorizationItemFlags,
+        .value = k.NullAuthorizationItemValue,
+        .valueLength = k.ZeroAuthorizationItemValueLength,
+    };
 
     const authRights: c.AuthorizationRights = .{ .count = 1, .items = &authItem };
     const authFlags: c.AuthorizationFlags = c.kAuthorizationFlagDefaults | c.kAuthorizationFlagInteractionAllowed | c.kAuthorizationFlagPreAuthorize | c.kAuthorizationFlagExtendRights;
 
     debug.print("Install Helper Tool: attempting to copy authorization rights to authorization ref.");
 
-    authStatus = c.AuthorizationCopyRights(authRef, &authRights, null, authFlags, null);
+    authStatus = c.AuthorizationCopyRights(authRef, &authRights, k.NullAuthorizationEnvironment, authFlags, k.NullAuthorizationRights);
 
     if (authStatus != c.errAuthorizationSuccess) {
         debug.printf("Freetracer failed to obtain specific authorization rights in the process of installing its privileged helper tool. AuthStatus: {d}.", .{authStatus});
-        return false;
+        return HelperInstallCode.FAILURE;
     }
 
     debug.print("Install Helper Tool: successfully copied auth rights; attempting to create a bundle id CFStringRef.");
@@ -70,50 +92,59 @@ pub fn installPrivilegedHelperTool() bool {
 
     debug.print("Install Helper Tool: SMJobBless call completed without kernel panicking.");
 
+    if (installStatus != c.TRUE) {
+        debug.print("Install Helper Tool: SMJobBless call failed, proceeding to attempt to analyze error.");
+        //
+        if (cfError == null) {
+            debug.printf("Freetracer failed to install its privileged helper tool without any error status from SMJobBless.", .{});
+            return HelperInstallCode.FAILURE;
+        }
+
+        defer _ = c.CFRelease(cfError);
+
+        debug.print("Install Helper Tool: attempting to copy error description.");
+
+        const errorDesc = c.CFErrorCopyDescription(cfError);
+
+        if (errorDesc == null) {
+            debug.printf("Freetracer could not copy error description from the SMJobBless operation error, error description is null.", .{});
+            return HelperInstallCode.FAILURE;
+        }
+
+        debug.print("Install Helper Tool: obtained a copy of error description.");
+
+        defer _ = c.CFRelease(errorDesc);
+
+        debug.print("Install Helper Tool: attempting to obtain a string from error description.");
+
+        var errDescBuffer: [512]u8 = undefined;
+        const obtainErrorDescStatus = c.CFStringGetCString(errorDesc, &errDescBuffer, errDescBuffer.len, c.kCFStringEncodingUTF8);
+
+        if (obtainErrorDescStatus == 0) {
+            debug.printf("Freetracer could not obtain error description from the SMJobBless operation error, error description is NOT null.", .{});
+            return HelperInstallCode.FAILURE;
+        }
+
+        debug.printf("Freetracer received SMJobBless error: {s}.", .{std.mem.sliceTo(&errDescBuffer, 0)});
+        return HelperInstallCode.FAILURE;
+    }
+
     if (installStatus == c.TRUE) {
         debug.printf("Freetracer successfully installed its privileged helper tool.", .{});
-        return true;
+        return HelperInstallCode.SUCCESS;
     }
 
-    debug.print("Install Helper Tool: SMJobBless call failed, proceeding to analyze error.");
-
-    if (cfError == null) {
-        debug.printf("Freetracer failed to install its privileged helper tool without any error status from SMJobBless.", .{});
-        return false;
-    }
-
-    defer _ = c.CFRelease(cfError);
-
-    debug.print("Install Helper Tool: attempting to copy error description.");
-
-    const errorDesc = c.CFErrorCopyDescription(cfError);
-
-    if (errorDesc == null) {
-        debug.printf("Freetracer could not copy error description from the SMJobBless operation error, error description is null.", .{});
-        return false;
-    }
-
-    debug.print("Install Helper Tool: obtained a copy of error description.");
-
-    defer _ = c.CFRelease(errorDesc);
-
-    debug.print("Install Helper Tool: attempting to obtain a string from error description.");
-
-    var errDescBuffer: [512]u8 = undefined;
-    const obtainErrorDescStatus = c.CFStringGetCString(errorDesc, &errDescBuffer, errDescBuffer.len, c.kCFStringEncodingUTF8);
-
-    if (obtainErrorDescStatus == 0) {
-        debug.printf("Freetracer could not obtain error description from the SMJobBless operation error, error description is NOT null.", .{});
-        return false;
-    }
-
-    debug.printf("Freetracer received SMJobBless error: {s}.", .{std.mem.sliceTo(&errDescBuffer, 0)});
-    return false;
+    debug.print("installPrivilegedHelperTool(): CRITICAL ERROR: Unreachable path reached! o_O");
+    unreachable;
 }
 
+/// MacOS-only
 /// Sends a CFMessage to the Privileged Helper Tool via a CFPort to request a disk unmount
 /// "Client"-side function, whereas Freetracer acts as the client for the Freetracer Privileged Tool
-pub fn requestPerformUnmount(targetDisk: []const u8) bool {
+/// @Returns HelperUnmountRequestCode = enum(bool) { FAILURE: bool = false, SUCCESS: bool = true}
+pub fn requestPerformUnmount(targetDisk: []const u8) HelperUnmountRequestCode {
+    if (!System.isMac) return HelperUnmountRequestCode.FAILURE;
+
     // Create a CString from the Privileged Tool's Apple App Bundle ID
     const portNameRef: c.CFStringRef = c.CFStringCreateWithCStringNoCopy(
         c.kCFAllocatorDefault,
@@ -127,7 +158,7 @@ pub fn requestPerformUnmount(targetDisk: []const u8) bool {
 
     if (remoteMessagePort == null) {
         debug.printf("Freetracer unable to create a remote message port to Freetracer Helper Tool.", .{});
-        return false;
+        return HelperUnmountRequestCode.FAILURE;
     }
 
     defer _ = c.CFRelease(remoteMessagePort);
@@ -153,10 +184,10 @@ pub fn requestPerformUnmount(targetDisk: []const u8) bool {
 
     if (helperResponseCode != c.kCFMessagePortSuccess or responseData == null) {
         debug.printf(
-            "Freetracer failed to communicate with Freetracer Helper Tool - received invalid response code ({d}) or null response data ({any}).",
+            "Freetracer failed to communicate with Freetracer Helper Tool - received invalid response code ({d}) or null response data ({any})",
             .{ helperResponseCode, responseData },
         );
-        return false;
+        return HelperUnmountRequestCode.FAILURE;
     }
 
     var result: i32 = -1;
@@ -167,11 +198,12 @@ pub fn requestPerformUnmount(targetDisk: []const u8) bool {
         result = resultPtr.*;
     }
 
-    if (result == 0) {
-        debug.printf("Freetracer successfully received response from Freetracer Helper Tool: {d}", .{result});
-        return true;
-    } else {
+    if (result != @as(i32, @intFromEnum(HelperReturnCode.SUCCESS))) {
         debug.printf("Freetracer failed to receive a structured response from Freetracer Helper Tool: {d}.", .{result});
-        return false;
+        return HelperUnmountRequestCode.FAILURE;
     }
+
+    debug.printf("Freetracer successfully received response from Freetracer Helper Tool: {d}", .{result});
+
+    return HelperUnmountRequestCode.SUCCESS;
 }

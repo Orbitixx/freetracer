@@ -155,9 +155,17 @@ pub fn dispatchComponentAction(self: *DataFlasher) void {
     }
 
     // Send a request to unmount the target disk to the PrivilegedHelper Component, which will communicate with the Helper Tool
-    EventManager.broadcast(PrivilegedHelper.Events.onUnmountDiskRequest.create(self.asComponentPtr(), &.{ .targetDisk = targetDisk }));
+    const unmountResult = EventManager.signal(
+        "privileged_helper",
+        PrivilegedHelper.Events.onUnmountDiskRequest.create(self.asComponentPtr(), &.{ .targetDisk = targetDisk }),
+    ) catch |err| errBlk: {
+        debug.printf("DataFlasher: Received an error dispatching a disk unmount request. Aborting... Error: {any}", .{err});
+        break :errBlk EventResult{ .success = false, .validation = 0 };
+    };
 
-    debug.print("DataFlasher: finished the broadcast of the unmountRequest. Ready for next step...");
+    if (!unmountResult.success) return;
+
+    debug.print("DataFlasher: recevied response that unmount request succeeded. Ready for next step...");
 }
 pub fn deinit(self: *DataFlasher) void {
     _ = self;
