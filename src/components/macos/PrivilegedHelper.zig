@@ -87,7 +87,7 @@ pub fn start(self: *PrivilegedHelper) !void {
     {
         self.state.lock();
         defer self.state.unlock();
-        self.isInstalled = self.state.data.isInstalled;
+        self.isInstalled = PrivilegedHelperTool.isHelperToolInstalled();
     }
 
     if (self.component) |*component| {
