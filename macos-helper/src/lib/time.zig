@@ -1,5 +1,5 @@
 const std = @import("std");
-const env = @import("../../env.zig");
+const env = @import("../env.zig");
 
 pub const DateTime = struct {
     month: u4,

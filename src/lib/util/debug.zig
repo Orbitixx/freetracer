@@ -39,7 +39,7 @@ const DebugInstance = struct {
     pub fn print(self: *DebugInstance, severity: LogSeverity, comptime fmt: []const u8, args: anytype) void {
         const t = time.now();
 
-        // Create the full message with timestamp and format arguments in one step
+        // Create the full message with timestamp and format arguments
         const full_message = std.fmt.allocPrintZ(self.allocator, "\n[{d:0>2}/{d:0>2}/{d} {d:0>2}:{d:0>2}:{d:0>2}] " ++ fmt, .{
             t.month,
             t.day,
@@ -60,6 +60,37 @@ const DebugInstance = struct {
         if (@intFromEnum(severity) > env.DEBUG_SEVERITY) {
             std.debug.print("{s}", .{full_message});
         }
+
+        Logger.log("{s}", .{full_message});
+    }
+
+    pub fn logError(self: *DebugInstance, severity: LogSeverity, comptime fmt: []const u8, args: anytype) void {
+        const t = time.now();
+
+        // Create the full message with timestamp and format arguments
+        const full_message = std.fmt.allocPrintZ(self.allocator, "\n[{d:0>2}/{d:0>2}/{d} {d:0>2}:{d:0>2}:{d:0>2}] ERROR:" ++ fmt, .{
+            t.month,
+            t.day,
+            t.year,
+            t.hours,
+            t.minutes,
+            t.seconds,
+        } ++ args) catch |err| blk: {
+            const msg = "\nDebug.logError(): ERROR occurred attempting to allocPrintZ msg: \n\t{s}\nError: {any}";
+            std.debug.print(msg, .{ fmt, err });
+            std.log.err(msg, .{ fmt, err });
+            break :blk "";
+        };
+
+        defer self.allocator.free(full_message);
+
+        if (full_message.len < 1) return;
+
+        if (@intFromEnum(severity) > env.DEBUG_SEVERITY) {
+            std.debug.print("{s}", .{full_message});
+            std.log.err("{s}", .{full_message});
+        }
+
         Logger.log("{s}", .{full_message});
     }
 };

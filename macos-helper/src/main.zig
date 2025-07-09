@@ -1,7 +1,6 @@
 const std = @import("std");
 const env = @import("env.zig");
-
-const print = std.std.log.err;
+const time = @import("lib/time.zig");
 
 const c = @cImport({
     @cInclude("CoreFoundation/CoreFoundation.h");
@@ -13,7 +12,92 @@ const kUnmountDiskResponse: i32 = 201;
 
 var queuedUnmounts: i32 = 0;
 
+pub const Debug = struct {
+    var instance: ?Logger = null;
+
+    pub const SeverityLevel = enum(u8) {
+        DEBUG,
+        INFO,
+        WARNING,
+        ERROR,
+    };
+
+    pub fn log(comptime level: SeverityLevel, comptime fmt: []const u8, args: anytype) void {
+        if (instance) |*inst| {
+            inst.log(level, fmt, args);
+        }
+    }
+
+    pub const Logger = struct {
+        allocator: std.mem.Allocator,
+
+        pub fn log(self: *Logger, comptime level: SeverityLevel, comptime fmt: []const u8, args: anytype) void {
+            const t = time.now();
+
+            comptime var logFn: ?*const fn (comptime format: []const u8, args: anytype) void = null;
+            comptime var severityPrefix: [:0]const u8 = "NONE";
+
+            switch (level) {
+                .DEBUG => {
+                    logFn = std.log.debug;
+                    severityPrefix = "DEBUG";
+                },
+                .INFO => {
+                    logFn = std.log.info;
+                    severityPrefix = "INFO";
+                },
+                .WARNING => {
+                    logFn = std.log.warn;
+                    severityPrefix = "WARNING";
+                },
+                .ERROR => {
+                    logFn = std.log.err;
+                    severityPrefix = "ERROR";
+                },
+            }
+
+            // Create the full message with timestamp and format arguments
+            const full_message = std.fmt.allocPrintZ(self.allocator, "\n[{d:0>2}/{d:0>2}/{d} {d:0>2}:{d:0>2}:{d:0>2}] {s}: " ++ fmt, .{
+                t.month,
+                t.day,
+                t.year,
+                t.hours,
+                t.minutes,
+                t.seconds,
+                severityPrefix,
+            } ++ args) catch |err| blk: {
+                const msg = "\nlogError(): ERROR occurred attempting to allocPrintZ msg: \n\t{s}\nError: {any}";
+                std.debug.print(msg, .{ fmt, err });
+                Debug.log(.ERROR, msg, .{ fmt, err });
+                break :blk "";
+            };
+
+            defer self.allocator.free(full_message);
+
+            if (full_message.len < 1) return;
+
+            //std.debug.print("{s}", .{full_message});
+
+            if (logFn) |log_fn| {
+                log_fn("{s}", .{full_message});
+            }
+        }
+    };
+};
+
 pub fn main() !void {
+    var debugAllocator = std.heap.DebugAllocator(.{ .thread_safe = true }).init;
+    const allocator = debugAllocator.allocator();
+
+    defer {
+        _ = debugAllocator.detectLeaks();
+        _ = debugAllocator.deinit();
+    }
+
+    // Initialize Debug singleton
+    Debug.instance = Debug.Logger{ .allocator = allocator };
+    Debug.log(.DEBUG, "Debug logger initialized.", .{});
+
     const portNameRef: c.CFStringRef = c.CFStringCreateWithCStringNoCopy(
         c.kCFAllocatorDefault,
         env.BUNDLE_ID,
@@ -41,7 +125,7 @@ pub fn main() !void {
     );
 
     if (localMessagePort == null) {
-        std.log.err("Error: Freetracer Helper Tool unable to create a local message port.", .{});
+        Debug.log(.ERROR, "Freetracer Helper Tool unable to create a local message port.", .{});
         return;
     }
 
@@ -53,7 +137,7 @@ pub fn main() !void {
     c.CFRunLoopAddSource(c.CFRunLoopGetCurrent(), runLoopSource, c.kCFRunLoopDefaultMode);
     defer c.CFRunLoopSourceInvalidate(runLoopSource);
 
-    std.log.info("Freetracer Helper Tool started. Awaiting requests...", .{});
+    Debug.log(.INFO, "Freetracer Helper Tool started. Awaiting requests...", .{});
 
     c.CFRunLoopRun();
 }
@@ -74,20 +158,20 @@ pub fn messagePortCallback(port: c.CFMessagePortRef, msgId: c.SInt32, data: c.CF
         requestLength = @intCast(c.CFDataGetLength(data));
 
         if (requestData != null and requestLength > 0) {
-            std.log.info("Request data received: {s}\n", .{std.mem.sliceTo(requestData.?, 0)});
+            Debug.log(.INFO, "Request data received: {s}\n", .{std.mem.sliceTo(requestData.?, 0)});
         }
     }
 
     switch (msgId) {
         kUnmountDiskRequest => {
-            std.log.info("Freetracer Helper Tool received DADiskUnmount() request {d}.", .{kUnmountDiskRequest});
+            Debug.log(.INFO, "Freetracer Helper Tool received DADiskUnmount() request {d}.", .{kUnmountDiskRequest});
             if (requestData != null) {
                 // const payload: []const u8 = @ptrCast(requestData.?);
                 response = @intFromEnum(processDiskUnmountRequest(std.mem.sliceTo(requestData.?, 0)));
             }
         },
         else => {
-            std.log.warn("WARNING: Freetracer Helper Tool received unknown request. Aborting repsponse...", .{});
+            Debug.log(.WARNING, "Freetracer Helper Tool received unknown request. Aborting response...", .{});
         },
     }
 
@@ -95,17 +179,17 @@ pub fn messagePortCallback(port: c.CFMessagePortRef, msgId: c.SInt32, data: c.CF
 
     returnData = c.CFDataCreate(c.kCFAllocatorDefault, responseBytePtr, @sizeOf(i32));
 
-    std.log.info("Freetracer Helper Tool successfully packaged response: {d}.", .{response});
+    Debug.log(.INFO, "Freetracer Helper Tool successfully packaged response: {d}.", .{response});
     return returnData;
 }
 
 pub fn processDiskUnmountRequest(bsdName: []const u8) ReturnCode {
-    std.log.info("Received bsdName: {s}", .{bsdName});
+    Debug.log(.INFO, "Received bsdName: {s}", .{bsdName});
 
     const daSession = c.DASessionCreate(c.kCFAllocatorDefault);
 
     if (daSession == null) {
-        std.log.err("Error: Failed to create DASession\n", .{});
+        Debug.log(.ERROR, "Failed to create DASession\n", .{});
         return ReturnCode.FAILED_TO_CREATE_DA_SESSION;
     }
     defer _ = c.CFRelease(daSession);
@@ -120,7 +204,7 @@ pub fn processDiskUnmountRequest(bsdName: []const u8) ReturnCode {
     const daDiskRef: c.DADiskRef = c.DADiskCreateFromBSDName(c.kCFAllocatorDefault, daSession, bsdName.ptr);
 
     if (daDiskRef == null) {
-        std.log.err("\nError: Could not create DADiskRef for '{s}', skipping.\n", .{bsdName});
+        Debug.log(.ERROR, "Could not create DADiskRef for '{s}', skipping.\n", .{bsdName});
         return ReturnCode.FAILED_TO_CREATE_DA_DISK_REF;
     }
     defer _ = c.CFRelease(daDiskRef);
@@ -157,16 +241,16 @@ pub fn processDiskUnmountRequest(bsdName: []const u8) ReturnCode {
     // --- @ENDPROP: DeviceInternal
 
     if (isInternalDevice) {
-        std.log.err("\nERROR: internal device detected on disk: {s}. Aborting unmount operations for device.", .{bsdName});
+        Debug.log(.ERROR, "ERROR: internal device detected on disk: {s}. Aborting unmount operations for device.", .{bsdName});
         return ReturnCode.UNMOUNT_REQUEST_ON_INTERNAL_DEVICE;
     }
 
     if (isEfi) {
-        std.log.warn("\nWARNING: Skipping unmount because of a potential EFI partition on disk: {s}.", .{bsdName});
+        std.log.warn("WARNING: Skipping unmount because of a potential EFI partition on disk: {s}.", .{bsdName});
         return ReturnCode.SKIPPED_UNMOUNT_ATTEMPT_ON_EFI_PARTITION;
     }
 
-    std.log.info("\nUnmount request passed checks. Initiating unmount call for disk: {s}.", .{bsdName});
+    Debug.log(.INFO, "Unmount request passed checks. Initiating unmount call for disk: {s}.", .{bsdName});
 
     c.DADiskUnmount(daDiskRef, c.kDADiskUnmountOptionDefault, unmountDiskCallback, &queuedUnmounts);
 
@@ -175,7 +259,7 @@ pub fn processDiskUnmountRequest(bsdName: []const u8) ReturnCode {
     if (queuedUnmounts > 0) {
         c.CFRunLoopRun();
     } else {
-        std.log.err("\nERROR: No valid unmount calls could be initiated for device: {s}.", .{bsdName});
+        Debug.log(.ERROR, "No valid unmount calls could be initiated for device: {s}.", .{bsdName});
     }
 
     return ReturnCode.SUCCESS;
@@ -184,7 +268,7 @@ pub fn processDiskUnmountRequest(bsdName: []const u8) ReturnCode {
 fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: ?*anyopaque) callconv(.C) void {
     _ = context;
     // if (context == null) {
-    //     std.log.err("\nERROR: Unmount callback returned NULL context.");
+    //     Debug.log(.ERROR, "\nERROR: Unmount callback returned NULL context.");
     //     return;
     // }
 
@@ -193,7 +277,7 @@ fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: 
     const bsdName = if (c.DADiskGetBSDName(disk)) |name| std.mem.sliceTo(name, 0) else "Unknown Disk";
 
     if (dissenter != null) {
-        std.log.err("\nWARNING: Disk Arbitration Dissenter returned a non-empty status.", .{});
+        Debug.log(.WARNING, "Disk Arbitration Dissenter returned a non-empty status.", .{});
 
         const status = c.DADissenterGetStatus(dissenter);
         const statusStringRef = c.DADissenterGetStatusString(dissenter);
@@ -202,14 +286,14 @@ fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: 
         if (statusStringRef != null) {
             _ = c.CFStringGetCString(statusStringRef, &statusString, statusString.len, c.kCFStringEncodingUTF8);
         }
-        std.log.err("\nERROR: Failed to unmount {s}. Dissenter status code: {any}, status message: {s}", .{ bsdName, status, statusString });
+        Debug.log(.ERROR, "Failed to unmount {s}. Dissenter status code: {any}, status message: {s}", .{ bsdName, status, statusString });
     } else {
-        std.log.err("\nSuccessfully unmounted disk: {s}", .{bsdName});
+        Debug.log(.ERROR, "Successfully unmounted disk: {s}", .{bsdName});
         queuedUnmounts -= 1;
     }
 
     if (queuedUnmounts == 0) {
-        std.log.info("\nFinished unmounting all volumes for device.", .{});
+        Debug.log(.INFO, "Finished unmounting all volumes for device.", .{});
         const currentLoop = c.CFRunLoopGetCurrent();
         c.CFRunLoopStop(currentLoop);
     }
