@@ -16,7 +16,7 @@ const VolumeDescriptorsInitialized = struct {
     volumeDescriptorSetTerminator: bool = false,
 };
 
-pub fn parseIso(pAllocator: *const std.mem.Allocator, isoPath: []const u8) anyerror!void {
+pub fn parseIso(allocator: std.mem.Allocator, isoPath: []const u8) !void {
     const file: std.fs.File = try std.fs.cwd().openFile(isoPath, .{ .mode = .read_only });
     defer file.close();
 
@@ -154,7 +154,7 @@ pub fn parseIso(pAllocator: *const std.mem.Allocator, isoPath: []const u8) anyer
     const loadRbaSector = iso9660.DirectoryRecord().init(&sectorBuffer);
     loadRbaSector.print();
 
-    try walkDirectories(pAllocator, &file, @bitCast(endian.readBoth(i32, &rootDirectoryEntry.dataLength)), @bitCast(endian.readBoth(i32, &rootDirectoryEntry.locationOfExtent)));
+    try walkDirectories(allocator, &file, @bitCast(endian.readBoth(i32, &rootDirectoryEntry.dataLength)), @bitCast(endian.readBoth(i32, &rootDirectoryEntry.locationOfExtent)));
 
     debug.print("");
 }
@@ -209,14 +209,14 @@ pub const DirectoryEntry = struct {
     isDir: bool,
 };
 
-pub fn walkDirectories(pAllocator: *const std.mem.Allocator, pFile: *const std.fs.File, dataLength: u32, offsetLba: u32) !void {
+pub fn walkDirectories(allocator: std.mem.Allocator, pFile: *const std.fs.File, dataLength: u32, offsetLba: u32) !void {
     debug.print("\n-------------------- BEGIN DIRECTORY WALKTHROUGH --------------------");
     debug.printf("\tData Length: {d}\n\tOffset LBA: {d}\n\n", .{ dataLength, offsetLba });
 
-    var buffer: []u8 = try pAllocator.*.alloc(u8, dataLength);
-    defer pAllocator.*.free(buffer);
+    var buffer: []u8 = try allocator.alloc(u8, dataLength);
+    defer allocator.free(buffer);
 
-    var dirEntries = std.ArrayList(DirectoryEntry).init(pAllocator.*);
+    var dirEntries = std.ArrayList(DirectoryEntry).init(allocator);
     defer dirEntries.deinit();
 
     try pFile.*.seekTo(ISO_SECTOR_SIZE * offsetLba);
@@ -271,7 +271,7 @@ pub fn walkDirectories(pAllocator: *const std.mem.Allocator, pFile: *const std.f
     }
 
     for (0..dirEntries.items.len) |i| {
-        if (dirEntries.items[i].isDir == true) try walkDirectories(pAllocator, pFile, dirEntries.items[i].size, dirEntries.items[i].lba);
+        if (dirEntries.items[i].isDir == true) try walkDirectories(allocator, pFile, dirEntries.items[i].size, dirEntries.items[i].lba);
     }
 }
 

@@ -185,6 +185,8 @@ pub fn messagePortCallback(port: c.CFMessagePortRef, msgId: c.SInt32, data: c.CF
             Debug.log(.INFO, "Freetracer Helper Tool received DADiskUnmount() request {d}.", .{k.UnmountDiskRequest});
 
             if (requestData) |rdata| {
+                // BUG: response appears to be 0 here upon successful unmount. At any rate, 0 is logged
+                // by the "packaged response log"
                 response = @intFromEnum(processDiskUnmountRequest(std.mem.sliceTo(rdata, 0x00)));
             } else {
                 Debug.log(.WARNING, "Freetracer Helper Tool received a NULL request data in the UnmoutDiskRequest message. Request ignored.", .{});
@@ -200,6 +202,7 @@ pub fn messagePortCallback(port: c.CFMessagePortRef, msgId: c.SInt32, data: c.CF
     returnData = c.CFDataCreate(c.kCFAllocatorDefault, responseBytePtr, @sizeOf(i32));
 
     Debug.log(.INFO, "Freetracer Helper Tool successfully packaged response: {d}.", .{response});
+
     return returnData;
 }
 

@@ -182,6 +182,7 @@ pub fn requestPerformUnmount(targetDisk: []const u8) HelperUnmountRequestCode {
         &responseData,
     );
 
+    // TODO: Is the responseData == null check effective here?
     if (helperResponseCode != c.kCFMessagePortSuccess or responseData == null) {
         debug.printf(
             "Freetracer failed to communicate with Freetracer Helper Tool - received invalid response code ({d}) or null response data ({any})",
@@ -198,7 +199,8 @@ pub fn requestPerformUnmount(targetDisk: []const u8) HelperUnmountRequestCode {
         result = resultPtr.*;
     }
 
-    if (result != @as(i32, @intFromEnum(HelperReturnCode.SUCCESS))) {
+    // if (result != @as(i32, @intFromEnum(HelperReturnCode.SUCCESS))) {
+    if (result != 0) {
         debug.printf("Freetracer failed to receive a structured response from Freetracer Helper Tool: {d}.", .{result});
         return HelperUnmountRequestCode.FAILURE;
     }
