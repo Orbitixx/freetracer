@@ -187,36 +187,36 @@ pub fn dispatchComponentAction(self: *DataFlasher) void {
         return;
     }
 
-    const isoFilePath: []const u8 = self.state.data.isoPath.?;
-    const device: USBStorageDevice = self.state.data.device.?;
+    // const isoFilePath: []const u8 = self.state.data.isoPath.?;
+    // const device: USBStorageDevice = self.state.data.device.?;
+    //
+    // self.state.unlock();
+    //
+    // ISOParser.parseIso(self.allocator, isoFilePath) catch |err| {
+    //     debug.printf("DataFlasher.dispatchComponentAction(): ISOParser.parseIso returned an error: {any}", .{err});
+    //     return;
+    // };
 
-    self.state.unlock();
-
-    ISOParser.parseIso(self.allocator, isoFilePath) catch |err| {
-        debug.printf("DataFlasher.dispatchComponentAction(): ISOParser.parseIso returned an error: {any}", .{err});
-        return;
-    };
-
-    const devicePathPrefix: [:0]const u8 = "/dev/";
-    const deviceBsdName = device.getBsdNameSlice();
-
-    const finalDevicePath = self.allocator.alloc(u8, devicePathPrefix.len + deviceBsdName.len) catch |err| {
-        debug.printf("DataFlasher.dispatchComponentAction(): failed to allocate memory for device path. Error: {any}", .{err});
-        return;
-    };
-    defer self.allocator.free(finalDevicePath);
-
-    @memcpy(finalDevicePath[0..devicePathPrefix.len], devicePathPrefix);
-    @memcpy(finalDevicePath[devicePathPrefix.len..], deviceBsdName);
-
-    std.debug.assert(finalDevicePath.len == devicePathPrefix.len + deviceBsdName.len);
-
-    debug.printf("DataFlasher: final device path is: {s}", .{finalDevicePath});
-
-    ISOWriter.writeIOKit(&device, isoFilePath) catch |err| {
-        debug.printf("DataFlasher.dispatchComponentAction(): ISOWriter.write returned an error: {any}", .{err});
-        return;
-    };
+    // const devicePathPrefix: [:0]const u8 = "/dev/";
+    // const deviceBsdName = device.getBsdNameSlice();
+    //
+    // const finalDevicePath = self.allocator.alloc(u8, devicePathPrefix.len + deviceBsdName.len) catch |err| {
+    //     debug.printf("DataFlasher.dispatchComponentAction(): failed to allocate memory for device path. Error: {any}", .{err});
+    //     return;
+    // };
+    // defer self.allocator.free(finalDevicePath);
+    //
+    // @memcpy(finalDevicePath[0..devicePathPrefix.len], devicePathPrefix);
+    // @memcpy(finalDevicePath[devicePathPrefix.len..], deviceBsdName);
+    //
+    // std.debug.assert(finalDevicePath.len == devicePathPrefix.len + deviceBsdName.len);
+    //
+    // debug.printf("DataFlasher: final device path is: {s}", .{finalDevicePath});
+    //
+    // ISOWriter.writeIOKit(&device, isoFilePath) catch |err| {
+    //     debug.printf("DataFlasher.dispatchComponentAction(): ISOWriter.write returned an error: {any}", .{err});
+    //     return;
+    // };
 }
 pub fn deinit(self: *DataFlasher) void {
     _ = self;

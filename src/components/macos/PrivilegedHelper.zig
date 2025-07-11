@@ -165,10 +165,11 @@ pub fn dispatchComponentAction(self: *PrivilegedHelper) void {
 }
 
 fn requestUnmount(self: *PrivilegedHelper, targetDisk: [:0]const u8) shared.HelperUnmountRequestCode {
-    if (!self.isInstalled) {
-        const installResult = PrivilegedHelperTool.installPrivilegedHelperTool();
-        if (installResult != shared.HelperInstallCode.SUCCESS) return shared.HelperUnmountRequestCode.FAILURE;
-    }
+    _ = self;
+    // if (!self.isInstalled) {
+    const installResult = PrivilegedHelperTool.installPrivilegedHelperTool();
+    if (installResult != shared.HelperInstallCode.SUCCESS) return shared.HelperUnmountRequestCode.FAILURE;
+    // }
 
     return PrivilegedHelperTool.requestPerformUnmount(targetDisk);
 }

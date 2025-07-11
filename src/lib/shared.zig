@@ -1,4 +1,5 @@
 pub const k = struct {
+    pub const HelperVersionRequest: i32 = 11;
     pub const UnmountDiskRequest: i32 = 101;
     pub const UnmountDiskResponse: i32 = 201;
 
@@ -31,6 +32,11 @@ pub const HelperInstallCode = enum(u1) {
 };
 
 pub const HelperUnmountRequestCode = enum(u1) {
+    FAILURE = 0,
+    SUCCESS = 1,
+};
+
+pub const HelperResponseCode = enum(u1) {
     FAILURE = 0,
     SUCCESS = 1,
 };

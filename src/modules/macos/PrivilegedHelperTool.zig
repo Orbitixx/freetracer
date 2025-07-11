@@ -10,6 +10,7 @@ const k = shared.k;
 const HelperReturnCode = shared.HelperReturnCode;
 const HelperInstallCode = shared.HelperInstallCode;
 const HelperUnmountRequestCode = shared.HelperUnmountRequestCode;
+const HelperResponseCode = shared.HelperResponseCode;
 
 /// MacOS-only
 /// Checks via the SMJobBless system daemon if the privileged helper tool is installed.
@@ -22,12 +23,13 @@ pub fn isHelperToolInstalled() HelperInstallCode {
     defer _ = c.CFRelease(helperLabel);
 
     const smJobCopyDict = c.SMJobCopyDictionary(c.kSMDomainSystemLaunchd, helperLabel);
-    defer _ = c.CFRelease(smJobCopyDict);
 
     if (smJobCopyDict == null) {
         debug.printf("isHelperToolInstalled(): the SMJobCopyDictionary for helper tool is NULL. Helper tool is NOT installed.", .{});
         return HelperInstallCode.FAILURE;
     }
+
+    defer _ = c.CFRelease(smJobCopyDict);
 
     debug.printf("isHelperToolInstalled(): Helper tool found, it appears to be installed.", .{});
 
@@ -138,6 +140,72 @@ pub fn installPrivilegedHelperTool() HelperInstallCode {
     unreachable;
 }
 
+pub fn requestHelperVersion() [:0]const u8 {
+    if (!System.isMac) return HelperResponseCode.FAILURE;
+
+    // Create a CString from the Privileged Tool's Apple App Bundle ID
+    const portNameRef: c.CFStringRef = c.CFStringCreateWithCStringNoCopy(
+        c.kCFAllocatorDefault,
+        env.HELPER_BUNDLE_ID,
+        c.kCFStringEncodingUTF8,
+        c.kCFAllocatorNull,
+    );
+    defer _ = c.CFRelease(portNameRef);
+
+    const remoteMessagePort: c.CFMessagePortRef = c.CFMessagePortCreateRemote(c.kCFAllocatorDefault, portNameRef);
+
+    if (remoteMessagePort == null) {
+        debug.printf("Freetracer unable to create a remote message port to Freetracer Helper Tool.", .{});
+        return HelperResponseCode.FAILURE;
+    }
+
+    defer _ = c.CFRelease(remoteMessagePort);
+
+    const dataPayload: [*c]const u8 = null;
+    const dataLength: i32 = 0;
+
+    const requestDataRef: c.CFDataRef = c.CFDataCreate(c.kCFAllocatorDefault, dataPayload, dataLength);
+    defer _ = c.CFRelease(requestDataRef);
+
+    var portResponseCode: c.SInt32 = 0;
+    var responseData: c.CFDataRef = null;
+
+    portResponseCode = c.CFMessagePortSendRequest(
+        remoteMessagePort,
+        k.HelperVersionRequest,
+        requestDataRef,
+        k.SendTimeoutInSeconds,
+        k.ReceiveTimeoutInSeconds,
+        c.kCFRunLoopDefaultMode,
+        &responseData,
+    );
+
+    // TODO: Is the responseData == null check effective here?
+    if (portResponseCode != c.kCFMessagePortSuccess or responseData == null) {
+        debug.printf(
+            "Freetracer failed to communicate with Freetracer Helper Tool - received invalid response code ({d}) or null response data ({any})",
+            .{ portResponseCode, responseData },
+        );
+        return HelperResponseCode.FAILURE;
+    }
+
+    var result: [:0]const u8 = undefined;
+
+    if (c.CFDataGetLength(responseData) >= 1) {
+        const dataPtr = c.CFDataGetBytePtr(responseData);
+        result = @ptrCast(@alignCast(dataPtr));
+    }
+
+    if (result.len < 1) {
+        debug.printf("Freetracer failed to receive a structured response from Freetracer Helper Tool: {s}.", .{result});
+        return HelperResponseCode.FAILURE;
+    }
+
+    debug.printf("Freetracer successfully received response from Freetracer Helper Tool: {s}", .{result});
+
+    return result;
+}
+
 /// MacOS-only
 /// Sends a CFMessage to the Privileged Helper Tool via a CFPort to request a disk unmount
 /// "Client"-side function, whereas Freetracer acts as the client for the Freetracer Privileged Tool
@@ -199,8 +267,8 @@ pub fn requestPerformUnmount(targetDisk: []const u8) HelperUnmountRequestCode {
         result = resultPtr.*;
     }
 
-    // if (result != @as(i32, @intFromEnum(HelperReturnCode.SUCCESS))) {
-    if (result != 0) {
+    if (result != @as(i32, @intFromEnum(HelperReturnCode.SUCCESS))) {
+        // if (result != 40) {
         debug.printf("Freetracer failed to receive a structured response from Freetracer Helper Tool: {d}.", .{result});
         return HelperUnmountRequestCode.FAILURE;
     }

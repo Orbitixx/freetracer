@@ -74,43 +74,4 @@ pub const USBStorageDevice = struct {
         std.debug.assert(self.bsdNameBuf[0] != 0x00 or self.bsdNameBuf[0] != 0x170);
         return std.mem.sliceTo(@constCast(self).bsdNameBuf[0..@constCast(self).bsdNameBuf.len], 0x00);
     }
-
-    pub fn open(self: *USBStorageDevice) !void {
-        const deviceBsdName = self.getBsdNameSlice();
-
-        // Convert BSD name to CFString
-        const bsdNameRef = c.CFStringCreateWithCString(c.kCFAllocatorDefault, deviceBsdName.ptr, c.kCFStringEncodingUTF8);
-
-        if (bsdNameRef) |ref| {
-            defer c.CFRelease(ref);
-        } else return error.FailedToObtainBSDNameRef;
-
-        // Open connection to the service
-        const kr = c.IOServiceOpen(self.serviceId, c.mach_task_self(), 0, &self.connection.?);
-
-        if (kr != c.KERN_SUCCESS) {
-            return error.IOServiceOpenFailed;
-        }
-    }
-
-    pub fn writeBlocks(self: *const USBStorageDevice, writeBuffer: []const u8, start_block: u64, block_count: u64) !usize {
-        const inputStruct = struct {
-            offset: u64,
-            length: u64,
-        }{
-            .offset = start_block,
-            .length = block_count,
-        };
-
-        var outputSize: usize = 0;
-
-        const kr = c.IOConnectCallStructMethod(self.connection.?, 1, // Method selector for write
-            &inputStruct, @sizeOf(@TypeOf(inputStruct)), @ptrCast(@constCast(writeBuffer.ptr)), &outputSize);
-
-        if (kr != c.KERN_SUCCESS) {
-            return error.WriteFailed;
-        }
-
-        return writeBuffer.len;
-    }
 };

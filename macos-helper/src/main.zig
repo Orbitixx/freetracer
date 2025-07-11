@@ -14,6 +14,8 @@ const c = @cImport({
 
 var queuedUnmounts: i32 = 0;
 
+pub const WRITE_BLOCK_SIZE = 4096;
+
 pub const Debug = struct {
     var instance: ?Logger = null;
 
@@ -192,6 +194,12 @@ pub fn messagePortCallback(port: c.CFMessagePortRef, msgId: c.SInt32, data: c.CF
                 Debug.log(.WARNING, "Freetracer Helper Tool received a NULL request data in the UnmoutDiskRequest message. Request ignored.", .{});
             }
         },
+
+        k.HelperVersionRequest => {
+            Debug.log(.INFO, "Freetracer Helper Tool received a version query request {d}.", .{k.UnmountDiskRequest});
+            response = 0;
+        },
+
         else => {
             Debug.log(.WARNING, "Freetracer Helper Tool received unknown request. Ignoring response...", .{});
         },
@@ -353,9 +361,63 @@ fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: 
 
     if (queuedUnmounts == 0) {
         Debug.log(.INFO, "Finished unmounting all volumes for device.", .{});
+
+        write("/Users/cerberus/Downloads/porteus.iso", "/dev/disk4") catch |err| {
+            Debug.log(.ERROR, "Unable to write to device. Error: {any}", .{err});
+        };
+
         const currentLoop = c.CFRunLoopGetCurrent();
         c.CFRunLoopStop(currentLoop);
     }
+}
+
+pub fn write(isoPath: []const u8, devicePath: []const u8) !void {
+    Debug.log(.INFO, "Begin writing prep...", .{});
+    var writeBuffer: [WRITE_BLOCK_SIZE]u8 = undefined;
+
+    const isoFile: std.fs.File = try std.fs.cwd().openFile(isoPath, .{ .mode = .read_only });
+    defer isoFile.close();
+
+    const device = try std.fs.openFileAbsolute(devicePath, .{ .mode = .read_write });
+    defer device.close();
+    const deviceStat = try device.stat();
+
+    const fileStat = try isoFile.stat();
+    const ISO_SIZE = fileStat.size;
+
+    defer Debug.log(.INFO, "Write finished executing...", .{});
+
+    var currentByte: u64 = 0;
+
+    Debug.log(.INFO, "File and device are opened successfully! File size: {d}, device size: {d}", .{ ISO_SIZE, deviceStat.size });
+
+    Debug.log(.INFO, "[*] Writing ISO to device, please wait...\n", .{});
+
+    while (currentByte < ISO_SIZE) {
+        try isoFile.seekTo(currentByte);
+        const bytesRead = try isoFile.read(&writeBuffer);
+
+        if (bytesRead == 0) {
+            Debug.log(.INFO, "[v] End of ISO File reached, final block: {d} at {d}!\n", .{ currentByte / WRITE_BLOCK_SIZE, currentByte });
+            break;
+        }
+
+        // Important to use the slice syntax here, otherwise if writing &writeBuffer
+        // it only writes WRITE_BLOCK_SIZE blocks, meaning if the last block is smaller
+        // then the data will likely be corrupted.
+        const bytesWritten = try device.write(writeBuffer[0..bytesRead]);
+
+        if (bytesWritten != bytesRead or bytesWritten == 0) {
+            Debug.log(.ERROR, "CRITICAL ERROR: failed to correctly write to device. Aborting...", .{});
+            break;
+        }
+
+        currentByte += WRITE_BLOCK_SIZE;
+    }
+
+    try device.sync();
+
+    Debug.log(.INFO, "[v] Finished writing ISO image to device!", .{});
 }
 
 comptime {

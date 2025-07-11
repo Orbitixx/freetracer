@@ -1,4 +1,5 @@
 pub const k = struct {
+    pub const HelperVersionRequest: i32 = 11;
     pub const UnmountDiskRequest: i32 = 101;
     pub const UnmountDiskResponse: i32 = 201;
 
