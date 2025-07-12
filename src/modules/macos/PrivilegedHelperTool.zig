@@ -4,13 +4,13 @@ const env = @import("../../env.zig");
 const debug = @import("../../lib/util/debug.zig");
 const System = @import("../../lib/sys/system.zig");
 
-const shared = @import("../../lib/shared.zig");
+const freetracer_lib = @import("freetracer-lib");
 
-const k = shared.k;
-const HelperReturnCode = shared.HelperReturnCode;
-const HelperInstallCode = shared.HelperInstallCode;
-const HelperUnmountRequestCode = shared.HelperUnmountRequestCode;
-const HelperResponseCode = shared.HelperResponseCode;
+const k = freetracer_lib.k;
+const HelperReturnCode = freetracer_lib.HelperReturnCode;
+const HelperInstallCode = freetracer_lib.HelperInstallCode;
+const HelperUnmountRequestCode = freetracer_lib.HelperUnmountRequestCode;
+const HelperResponseCode = freetracer_lib.HelperResponseCode;
 
 /// MacOS-only
 /// Checks via the SMJobBless system daemon if the privileged helper tool is installed.

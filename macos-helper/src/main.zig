@@ -1,11 +1,10 @@
 const std = @import("std");
 const env = @import("env.zig");
-const time = @import("lib/time.zig");
-const shared = @import("lib/shared.zig");
 
-// Constants struct in MacOS' format
-const k = shared.k;
-const ReturnCode = shared.HelperReturnCode;
+const freetracer_lib = @import("freetracer-lib");
+const Debug = freetracer_lib.Debug;
+const k = freetracer_lib.k;
+const ReturnCode = freetracer_lib.HelperReturnCode;
 
 const c = @cImport({
     @cInclude("CoreFoundation/CoreFoundation.h");
@@ -15,79 +14,6 @@ const c = @cImport({
 var queuedUnmounts: i32 = 0;
 
 pub const WRITE_BLOCK_SIZE = 4096;
-
-pub const Debug = struct {
-    var instance: ?Logger = null;
-
-    pub const SeverityLevel = enum(u8) {
-        DEBUG,
-        INFO,
-        WARNING,
-        ERROR,
-    };
-
-    pub fn log(comptime level: SeverityLevel, comptime fmt: []const u8, args: anytype) void {
-        if (instance) |*inst| {
-            inst.log(level, fmt, args);
-        }
-    }
-
-    pub const Logger = struct {
-        allocator: std.mem.Allocator,
-
-        pub fn log(self: *Logger, comptime level: SeverityLevel, comptime fmt: []const u8, args: anytype) void {
-            const t = time.now();
-
-            comptime var logFn: ?*const fn (comptime format: []const u8, args: anytype) void = null;
-            comptime var severityPrefix: [:0]const u8 = "NONE";
-
-            switch (level) {
-                .DEBUG => {
-                    logFn = std.log.debug;
-                    severityPrefix = "DEBUG";
-                },
-                .INFO => {
-                    logFn = std.log.info;
-                    severityPrefix = "INFO";
-                },
-                .WARNING => {
-                    logFn = std.log.warn;
-                    severityPrefix = "WARNING";
-                },
-                .ERROR => {
-                    logFn = std.log.err;
-                    severityPrefix = "ERROR";
-                },
-            }
-
-            // Create the full message with timestamp and format arguments
-            const full_message = std.fmt.allocPrintZ(self.allocator, "[{d:0>2}/{d:0>2}/{d} {d:0>2}:{d:0>2}:{d:0>2}] {s}: " ++ fmt, .{
-                t.month,
-                t.day,
-                t.year,
-                t.hours,
-                t.minutes,
-                t.seconds,
-                severityPrefix,
-            } ++ args) catch |err| blk: {
-                const msg = "\nlogError(): ERROR occurred attempting to allocPrintZ msg: \n\t{s}\nError: {any}";
-                std.debug.print(msg, .{ fmt, err });
-                Debug.log(.ERROR, msg, .{ fmt, err });
-                break :blk "";
-            };
-
-            defer self.allocator.free(full_message);
-
-            if (full_message.len < 1) return;
-
-            //std.debug.print("{s}", .{full_message});
-
-            if (logFn) |log_fn| {
-                log_fn("{s}", .{full_message});
-            }
-        }
-    };
-};
 
 pub fn main() !void {
     var debugAllocator = std.heap.DebugAllocator(.{ .thread_safe = true }).init;
@@ -99,7 +25,9 @@ pub fn main() !void {
     }
 
     // Initialize Debug singleton
-    Debug.instance = Debug.Logger{ .allocator = allocator };
+    try Debug.init(allocator, -4);
+    defer Debug.deinit();
+
     Debug.log(.DEBUG, "Debug logger initialized.", .{});
 
     const portNameRef: c.CFStringRef = c.CFStringCreateWithCStringNoCopy(
@@ -362,7 +290,7 @@ fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: 
     if (queuedUnmounts == 0) {
         Debug.log(.INFO, "Finished unmounting all volumes for device.", .{});
 
-        write("/Users/cerberus/Downloads/porteus.iso", "/dev/disk4") catch |err| {
+        write("/Users/cerberus/Documents/Projects/freetracer/tinycore.iso", "/dev/disk4") catch |err| {
             Debug.log(.ERROR, "Unable to write to device. Error: {any}", .{err});
         };
 

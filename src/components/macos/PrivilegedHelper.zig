@@ -1,7 +1,8 @@
 const std = @import("std");
 const rl = @import("raylib");
 const debug = @import("../../lib/util/debug.zig");
-const shared = @import("../../lib/shared.zig");
+
+const freetracer_lib = @import("freetracer-lib");
 
 const PrivilegedHelperTool = @import("../../modules/macos/PrivilegedHelperTool.zig");
 
@@ -124,11 +125,11 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
         Events.onUnmountDiskRequest.Hash => {
             const data = Events.onUnmountDiskRequest.getData(event) orelse break :eventLoop;
 
-            const response: shared.HelperUnmountRequestCode = self.requestUnmount(data.targetDisk);
+            const response: freetracer_lib.HelperUnmountRequestCode = self.requestUnmount(data.targetDisk);
 
             debug.printf("PrivilegedHelper Component received response from Privileged Tool: {any}", .{response});
 
-            if (response == shared.HelperUnmountRequestCode.SUCCESS) eventResult.validate(1);
+            if (response == freetracer_lib.HelperUnmountRequestCode.SUCCESS) eventResult.validate(1);
         },
 
         else => {},
@@ -154,21 +155,21 @@ pub fn workerCallback(worker: *ComponentWorker, context: *anyopaque) void {
 
 pub fn dispatchComponentAction(self: *PrivilegedHelper) void {
     //
-    const installCheckResult: shared.HelperInstallCode = PrivilegedHelperTool.isHelperToolInstalled();
+    const installCheckResult: freetracer_lib.HelperInstallCode = PrivilegedHelperTool.isHelperToolInstalled();
 
     self.state.lock();
     defer self.state.unlock();
 
-    if (installCheckResult == shared.HelperInstallCode.SUCCESS) {
+    if (installCheckResult == freetracer_lib.HelperInstallCode.SUCCESS) {
         self.isInstalled = true;
     } else self.isInstalled = false;
 }
 
-fn requestUnmount(self: *PrivilegedHelper, targetDisk: [:0]const u8) shared.HelperUnmountRequestCode {
+fn requestUnmount(self: *PrivilegedHelper, targetDisk: [:0]const u8) freetracer_lib.HelperUnmountRequestCode {
     _ = self;
     // if (!self.isInstalled) {
     const installResult = PrivilegedHelperTool.installPrivilegedHelperTool();
-    if (installResult != shared.HelperInstallCode.SUCCESS) return shared.HelperUnmountRequestCode.FAILURE;
+    if (installResult != freetracer_lib.HelperInstallCode.SUCCESS) return freetracer_lib.HelperUnmountRequestCode.FAILURE;
     // }
 
     return PrivilegedHelperTool.requestPerformUnmount(targetDisk);

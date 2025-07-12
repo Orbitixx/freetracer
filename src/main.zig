@@ -5,6 +5,9 @@ const rl = @import("raylib");
 const osd = @import("osdialog");
 const env = @import("env.zig");
 
+const ftlib = @import("freetracer-lib");
+const Debug = ftlib.Debug;
+
 const Logger = @import("managers/GlobalLogger.zig").LoggerSingleton;
 const ResourceManager = @import("managers/ResourceManager.zig").ResourceManagerSingleton;
 const WindowManager = @import("managers/WindowManager.zig").WindowManagerSingleton;
@@ -50,6 +53,11 @@ pub fn main() !void {
     //----------------------------------------------------------------------------------
     //--- @MANAGERS --------------------------------------------------------------------
     //----------------------------------------------------------------------------------
+
+    try Debug.init(allocator, -4);
+    defer Debug.deinit();
+
+    Debug.log(.INFO, "Debug is initialized via freetracer-lib!", .{});
 
     try Logger.init(allocator);
     defer Logger.deinit();

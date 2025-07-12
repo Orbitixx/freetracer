@@ -56,6 +56,12 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("osdialog", osdialog_dep.module("osdialog"));
     // -------------------------------------------------------------------
 
+    // freetracer-lib module linking
+    // -------------------------------------------------------------------
+    const freetracer_lib = b.dependency("freetracer_lib", .{});
+    exe.root_module.addImport("freetracer-lib", freetracer_lib.module("freetracer-lib"));
+    // -------------------------------------------------------------------
+
     exe.linkLibC();
     exe.linkFramework("CoreFoundation");
     exe.linkFramework("DiskArbitration");

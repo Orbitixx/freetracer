@@ -1,5 +1,4 @@
 const std = @import("std");
-const env = @import("../env.zig");
 
 pub const DateTime = struct {
     month: u4,
@@ -11,11 +10,9 @@ pub const DateTime = struct {
     format: [:0]const u8 = "{d:0>2}/{d:0>2}/{d} {d:0>2}:{d:0>2}:{d:0>2}",
 };
 
-pub fn now() DateTime {
+pub fn now(utcCorrectionHours: i8) DateTime {
     const timestamp = std.time.timestamp();
     const epoch_seconds = @as(u64, @intCast(timestamp));
-
-    const utcCorrectionHours = env.UTC_CORRECTION_HOURS;
 
     // Convert to datetime
     const datetime = std.time.epoch.EpochSeconds{ .secs = epoch_seconds };
@@ -34,7 +31,7 @@ pub fn now() DateTime {
     if (utcHours >= @abs(utcCorrectionHours)) hours += utcCorrectionHours;
 
     if (utcHours <= @abs(utcCorrectionHours)) {
-        const diff = @abs(utcCorrectionHours) - utcHours;
+        const diff: i8 = @intCast(@abs(utcCorrectionHours) - utcHours);
         hours = 24 - diff;
 
         if (day == 1) {

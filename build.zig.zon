@@ -44,6 +44,10 @@
             .url = "git+https://github.com/ttytm/osdialog-zig.git#8ea6ae8eb69b14610f15311de79dd68063321b7e",
             .hash = "osdialog-0.1.0-AAAAAIUUAADnAYgpZBGt7g7mCiEZ3ypLe8afIpFDV52A",
         },
+        .freetracer_lib = .{
+            .path = "./freetracer-lib",
+            // .hash = "freetracer_lib-0.1.0-je5vXFEcAAAlNk59rcyIIslvbI7fuAdEdu1WAIpsSzCA",
+        },
     },
     .paths = .{
         "build.zig",
