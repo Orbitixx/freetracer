@@ -49,6 +49,7 @@ pub fn getUSBStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(USBStor
         var deviceVolumesList = std.ArrayList(MacOS.IOMediaVolume).init(allocator);
         defer deviceVolumesList.deinit();
 
+        // TODO: instead of registry entry name, query kUSBProductString property
         kernReturn = c.IORegistryEntryGetName(ioDevice, &deviceName);
 
         if (kernReturn != c.KERN_SUCCESS) {
@@ -89,7 +90,7 @@ pub fn getUSBStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(USBStor
 
     for (0..usbDevices.items.len) |i| {
         const usbDevice: MacOS.USBDevice = usbDevices.items[i];
-        debug.printf("\nUSB Device with IOMedia volumes ({s} - {d})\n", .{ usbDevice.deviceName, usbDevice.serviceId });
+        debug.printf("\nProcessing USB Device with IOMedia volumes ({s} - {d})\n", .{ usbDevice.deviceName, usbDevice.serviceId });
 
         var usbStorageDevice: USBStorageDevice = .{
             .allocator = allocator,
@@ -104,11 +105,15 @@ pub fn getUSBStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(USBStor
             errdefer ioMediaVolume.deinit();
 
             // Volume is the "parent" disk, e.g. the whole volume (disk4)
-            if (ioMediaVolume.isWhole and !ioMediaVolume.isLeaf and ioMediaVolume.isRemovable) {
+            // Cannot check ofr isLeaf here because devices with ISO burned onto them
+            // have no leaf volumes and are themselves considered both whole AND leaf at the same time
+            if (ioMediaVolume.isWhole and ioMediaVolume.isRemovable) {
                 usbStorageDevice.serviceId = ioMediaVolume.serviceId;
                 usbStorageDevice.size = ioMediaVolume.size;
 
                 const deviceNameSlice = std.mem.sliceTo(&usbDevice.deviceName, 0x00);
+
+                debug.printf("\ndeviceNameSlice before array transformation is: {s}", .{deviceNameSlice});
 
                 usbStorageDevice.deviceNameBuf = toArraySentinel(
                     @constCast(deviceNameSlice),
@@ -119,6 +124,8 @@ pub fn getUSBStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(USBStor
                     @constCast(ioMediaVolume.bsdNameBuf[0..ioMediaVolume.bsdNameBuf.len]),
                     USBStorageDevice.kDeviceBsdNameBufferSize,
                 );
+
+                debug.printf("USBStorageDevice:\n\tname: {s}\n\tbsdName: {s}", .{ usbStorageDevice.deviceNameBuf, usbStorageDevice.bsdNameBuf });
 
                 // Volume is a Leaf scenario
             } else if (!ioMediaVolume.isWhole and ioMediaVolume.isLeaf and ioMediaVolume.isRemovable) {

@@ -31,6 +31,10 @@ pub fn workerRun(worker: *DeviceListComponentWorker, context: *anyopaque) void {
         .devices = devices,
     });
 
+    for (devices.items) |device| {
+        debug.printf("{any}", .{device});
+    }
+
     // Important to toggle flag for self-notify override since we're targeting self (DeviceList)
     event.flags.overrideNotifySelfOnSelfOrigin = true;
 

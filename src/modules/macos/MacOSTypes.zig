@@ -46,7 +46,6 @@ pub const USBStorageDevice = struct {
 
     allocator: std.mem.Allocator,
     serviceId: c.io_service_t = undefined,
-    connection: ?c.io_connect_t = null,
     deviceNameBuf: [kDeviceNameBufferSize:0]u8 = undefined,
     bsdNameBuf: [kDeviceBsdNameBufferSize:0]u8 = undefined,
     size: i64 = undefined,
