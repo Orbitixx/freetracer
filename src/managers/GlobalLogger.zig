@@ -17,45 +17,25 @@ pub const LoggerSingleton = struct {
 
             var isError: bool = false;
 
-            // var buffer: [512]u8 = undefined;
-
             if (self.latestLog != null) {
                 self.allocator.free(self.latestLog.?);
                 self.latestLog = null;
             }
 
-            const fmtStr2 = std.fmt.allocPrintZ(self.allocator, msg, args) catch |err| blk: {
+            const fmtStr = std.fmt.allocPrintZ(self.allocator, msg, args) catch |err| blk: {
                 std.log.err("\nLogger.log(): ERROR - failed to print via allocPrint. Aborting print early. Error msg: {any}", .{err});
                 isError = true;
                 break :blk "";
             };
 
-            if (isError or fmtStr2.len < 1) {
-                self.allocator.free(fmtStr2);
+            if (isError or fmtStr.len < 1) {
+                self.allocator.free(fmtStr);
                 return;
             }
 
-            // defer self.allocator.free(fmtStr2);
+            self.latestLog = fmtStr;
 
-            // const fmtStr = std.fmt.bufPrint(&buffer, msg, args) catch blk: {
-            //     std.log.err("Logger.log() failed to print to formatted string. Last message: {s}.", .{msg});
-            //     break :blk "WARNING: BADLY_FORMATTED_STRING: " ++ msg;
-            // };
-            //
-            // const duped = self.allocator.dupeZ(u8, fmtStr) catch |err| {
-            //     std.log.err("Logger.log() failed to allocate sentinel-terminated slice. Last message: {s}. Error: {any}.", .{ msg, err });
-            //     return;
-            // };
-
-            // self.latestLog = duped;
-
-            self.latestLog = fmtStr2;
-
-            // _ = self.file.write("\n") catch |err| {
-            //     std.log.err("Error: Logger.log() unable to write am empty line into the log file. {any}.", .{err});
-            // };
-
-            _ = self.file.write(fmtStr2) catch |err| {
+            _ = self.file.write(fmtStr) catch |err| {
                 std.log.err("Error: Logger.log() caught error during writing. {any}", .{err});
             };
         }

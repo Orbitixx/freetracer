@@ -61,7 +61,7 @@ const DebugInstance = struct {
             std.debug.print("{s}", .{full_message});
         }
 
-        Logger.log("{s}", .{full_message});
+        // Logger.log("{s}", .{full_message});
     }
 
     pub fn logError(self: *DebugInstance, severity: LogSeverity, comptime fmt: []const u8, args: anytype) void {

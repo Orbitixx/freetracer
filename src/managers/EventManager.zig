@@ -1,6 +1,6 @@
 const std = @import("std");
+const Debug = @import("freetracer-lib").Debug;
 const env = @import("../env.zig");
-const debug = @import("../lib/util/debug.zig");
 
 const ComponentFramework = @import("../components/framework/import/index.zig");
 const Component = ComponentFramework.Component;
@@ -25,7 +25,7 @@ pub const EventManagerSingleton = struct {
 
         pub fn subscribe(self: *EventManager, comptime name: []const u8, subscriber: *Component) bool {
             self.subscribers.put(hashComponentName(name), subscriber) catch |err| {
-                debug.printf("EventManager: unable to subscribe component ({any}), error: {any}", .{ subscriber, err });
+                Debug.log(.ERROR, "EventManager: unable to subscribe component ({any}), error: {any}", .{ subscriber, err });
                 return false;
             };
 
@@ -49,7 +49,8 @@ pub const EventManagerSingleton = struct {
                 if (component.value_ptr.* == event.source and event.flags.overrideNotifySelfOnSelfOrigin == false) continue;
 
                 _ = component.value_ptr.*.handleEvent(event) catch |err| {
-                    debug.printf(
+                    Debug.log(
+                        .ERROR,
                         "EventManager: error on broadcasting ({s}) event to ({any}) component. {any}.",
                         .{ event.name, @TypeOf(component.value_ptr.*.parent), err },
                     );
@@ -63,7 +64,7 @@ pub const EventManagerSingleton = struct {
         defer mutex.unlock();
 
         if (instance != null) {
-            std.log.err("Error: attempted to re-initialize an existing EventManager singleton instance.", .{});
+            Debug.log(.ERROR, "EventManager.init(): attempted to re-initialize an existing EventManager singleton instance.", .{});
             return;
         }
 
@@ -81,7 +82,7 @@ pub const EventManagerSingleton = struct {
         if (instance) |*eventManager| {
             return eventManager.subscribe(subscriberName, subscriber);
         } else {
-            debug.print("Error: Attempted to call EventManager.subscribe() before EventManager is initialized!");
+            Debug.log(.ERROR, "EventManager.subscribe(): Attempted to call ubscribe() before EventManager is initialized!", .{});
             return false;
         }
     }
@@ -92,7 +93,7 @@ pub const EventManagerSingleton = struct {
         if (instance) |*eventManager| {
             return eventManager.signal(recipientName, event);
         } else {
-            debug.print("Error: Attempted to call EventManager.broadcast() before EventManager is initialized!");
+            Debug.log(.ERROR, "Attempted to call EventManager.broadcast() before EventManager is initialized!", .{});
             return error.EventManagerCallBeforeInstanceInitialized;
         }
     }
@@ -105,7 +106,7 @@ pub const EventManagerSingleton = struct {
         //
         if (instance) |*eventManager| {
             return eventManager.broadcast(event);
-        } else debug.print("Error: Attempted to call EventManager.broadcast() before EventManager is initialized!");
+        } else Debug.log(.ERROR, "Attempted to call EventManager.broadcast() before EventManager is initialized!", .{});
     }
 
     pub fn deinit() void {

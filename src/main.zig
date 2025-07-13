@@ -53,15 +53,22 @@ pub fn main() !void {
     //----------------------------------------------------------------------------------
     //--- @MANAGERS --------------------------------------------------------------------
     //----------------------------------------------------------------------------------
+    const standaloneLogFileEnabled = true;
 
-    try Debug.init(allocator, -4);
+    try Debug.init(
+        allocator,
+        env.UTC_CORRECTION_HOURS,
+        standaloneLogFileEnabled,
+        env.MAIN_APP_LOGS_PATH,
+    );
     defer Debug.deinit();
 
     Debug.log(.INFO, "Debug is initialized via freetracer-lib!", .{});
 
-    try Logger.init(allocator);
-    defer Logger.deinit();
+    // try Logger.init(allocator);
+    // defer Logger.deinit();
 
+    // TODO: deprecated, to be removed.
     try debug.init(allocator);
     defer debug.deinit();
 
@@ -109,10 +116,29 @@ pub fn main() !void {
 
     try componentRegistry.startAll();
 
-    const logoText = UI.Text.init("freetracer", .{ .x = relX(0.08), .y = relY(0.035) }, .{ .font = .JERSEY10_REGULAR, .fontSize = 40, .textColor = Color.white });
-    const subLogoText = UI.Text.init("free and open-source by orbitixx", .{ .x = relX(0.08), .y = relY(0.035) + 32 }, .{ .font = .JERSEY10_REGULAR, .fontSize = 18, .textColor = Color.secondary });
-    const versionText = UI.Text.init(env.APP_VERSION, .{ .x = relX(0.92), .y = relY(0.05) }, .{ .font = .JERSEY10_REGULAR, .fontSize = 16, .textColor = Color.secondary });
-    var logText = UI.Text.init("", .{ .x = relX(0.02), .y = relY(0.93) }, .{ .font = .ROBOTO_REGULAR, .fontSize = 14, .textColor = Color.lightGray });
+    const logoText = UI.Text.init(
+        "freetracer",
+        .{ .x = relX(0.08), .y = relY(0.035) },
+        .{ .font = .JERSEY10_REGULAR, .fontSize = 40, .textColor = Color.white },
+    );
+
+    const subLogoText = UI.Text.init(
+        "free and open-source by orbitixx",
+        .{ .x = relX(0.08), .y = relY(0.035) + 32 },
+        .{ .font = .JERSEY10_REGULAR, .fontSize = 18, .textColor = Color.secondary },
+    );
+
+    const versionText = UI.Text.init(
+        env.APP_VERSION,
+        .{ .x = relX(0.92), .y = relY(0.05) },
+        .{ .font = .JERSEY10_REGULAR, .fontSize = 16, .textColor = Color.secondary },
+    );
+
+    var logText = UI.Text.init(
+        "",
+        .{ .x = relX(0.02), .y = relY(0.93) },
+        .{ .font = .ROBOTO_REGULAR, .fontSize = 14, .textColor = Color.lightGray },
+    );
 
     const logLineBgRect = UI.Rectangle{
         .transform = .{
@@ -153,7 +179,7 @@ pub fn main() !void {
 
         logLineBgRect.draw();
 
-        logText.value = Logger.getLatestLog();
+        logText.value = Debug.getLatestLog();
         logText.draw();
 
         try componentRegistry.drawAll();
@@ -165,36 +191,4 @@ pub fn main() !void {
         //----------------------------------------------------------------------------------
 
     }
-
-    // try IsoParser.parseIso(&allocator, path);
-    // try IsoWriter.write(path, "/dev/sdb");
-
-    // try IsoParser.parseIso(&allocator, "/Users/cerberus/Documents/Projects/freetracer/alpine.iso");
-    // try IsoParser.parseIso(&allocator, "/Users/cerberus/Documents/Projects/freetracer/tinycore.iso");
-    //
-    //
-
-    // const usbStorageDevices = IOKit.getUSBStorageDevices(&allocator) catch blk: {
-    //     debug.print("WARNING: Unable to capture USB devices. Please make sure a USB flash drive is plugged in.");
-    //     break :blk std.ArrayList(MacOS.USBStorageDevice).init(allocator);
-    // };
-    //
-    // defer usbStorageDevices.deinit();
-    //
-    // if (usbStorageDevices.items.len > 0) {
-    //     if (std.mem.count(u8, usbStorageDevices.items[0].bsdName, "disk4") > 0) {
-    //         debug.print("Found disk4 by literal. Preparing to unmount...");
-    //         DiskArbitration.unmountAllVolumes(&usbStorageDevices.items[0]) catch |err| {
-    //             debug.printf("ERROR: Failed to unmount volumes on {s}. Error message: {any}", .{ usbStorageDevices.items[0].bsdName, err });
-    //         };
-    //     }
-    // }
-    //
-    // defer {
-    //     for (usbStorageDevices.items) |usbStorageDevice| {
-    //         usbStorageDevice.deinit();
-    //     }
-    // }
-
-    debug.print("\n");
 }

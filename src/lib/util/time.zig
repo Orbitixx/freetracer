@@ -34,7 +34,7 @@ pub fn now() DateTime {
     if (utcHours >= @abs(utcCorrectionHours)) hours += utcCorrectionHours;
 
     if (utcHours <= @abs(utcCorrectionHours)) {
-        const diff = @abs(utcCorrectionHours) - utcHours;
+        const diff: i8 = @intCast(@abs(utcCorrectionHours) - utcHours);
         hours = 24 - diff;
 
         if (day == 1) {

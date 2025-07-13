@@ -1,6 +1,6 @@
 const std = @import("std");
 const rl = @import("raylib");
-const debug = @import("../lib/util/debug.zig");
+const Debug = @import("freetracer-lib").Debug;
 const env = @import("../env.zig");
 
 pub const Window = struct {
@@ -19,7 +19,7 @@ pub const Window = struct {
         self.width = @as(f32, @floatFromInt(mWidth)) * env.WINDOW_WIDTH_FACTOR;
         self.height = @as(f32, @floatFromInt(mHeight)) * env.WINDOW_HEIGHT_FACTOR;
 
-        debug.printf("WINDOW INITIALIZED: {d}x{d}\n", .{ self.width, self.height });
+        Debug.log(.INFO, "WINDOW INITIALIZED: {d}x{d}\n", .{ self.width, self.height });
 
         rl.setWindowSize(@as(i32, @intFromFloat(self.width)), @as(i32, @intFromFloat(self.height)));
 
@@ -42,7 +42,7 @@ pub const WindowManagerSingleton = struct {
 
     pub fn init() !void {
         if (instance != null) {
-            debug.print("Error: Attempted to init() a WindowManager/Window instance despite one already initialized.");
+            Debug.log(.ERROR, "Attempted to init() a WindowManager/Window instance despite one already initialized.", .{});
             return WindowManagerError.WindowInstanceAlreadyExistsError;
         }
 
@@ -53,14 +53,14 @@ pub const WindowManagerSingleton = struct {
     pub fn getWindowWidth() f32 {
         if (instance) |inst| return inst.width;
 
-        debug.print("Warning: WindowManager.getWindowWidth() called but no Window instance exists.");
+        Debug.log(.WARNING, "WindowManager.getWindowWidth() called but no Window instance exists.", .{});
         return 0;
     }
 
     pub fn getWindowHeight() f32 {
         if (instance) |inst| return inst.height;
 
-        debug.print("Warning: WindowManager.getWindowHeight() called but no Window instance exists.");
+        Debug.log(.WARNING, "WindowManager.getWindowHeight() called but no Window instance exists.", .{});
         return 0;
     }
 
@@ -69,7 +69,7 @@ pub const WindowManagerSingleton = struct {
         std.debug.assert(x > 0);
         if (instance) |inst| return inst.width * x;
 
-        debug.print("Warning: attempted to obtain relative monitor width without a Window instance.");
+        Debug.log(.WARNING, "Attempted to obtain relative monitor width without a Window instance.", .{});
         return 0;
     }
 
@@ -78,14 +78,14 @@ pub const WindowManagerSingleton = struct {
         std.debug.assert(y > 0);
         if (instance) |inst| return inst.height * y;
 
-        debug.print("Warning: attempted to obtain relative monitor height without a Window instance.");
+        Debug.log(.WARNING, "Attempted to obtain relative monitor height without a Window instance.", .{});
         return 0;
     }
 
     pub fn deinit() void {
         if (instance) |inst| return inst.deinit();
 
-        debug.print("Warning: Attempted to deinit() a WindowManager/Window instance despite no instance being initialized.");
+        Debug.log(.WARNING, "Attempted to deinit() a WindowManager/Window instance despite no instance being initialized.", .{});
         return;
     }
 };

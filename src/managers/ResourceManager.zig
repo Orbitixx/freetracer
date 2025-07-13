@@ -1,6 +1,6 @@
 const std = @import("std");
-const debug = @import("../lib/util/debug.zig");
 const rl = @import("raylib");
+const Debug = @import("freetracer-lib").Debug;
 
 const FONTS_COUNT: usize = 2;
 const TEXTURES_COUNT: usize = 3;
@@ -27,7 +27,7 @@ pub const ResourceManagerSingleton = struct {
     pub fn init(_allocator: std.mem.Allocator) !void {
         allocator = _allocator;
 
-        debug.print("ResourceManager: started initialization...");
+        Debug.log(.DEBUG, "ResourceManager: started initialization...", .{});
 
         const cwd = try std.process.getCwdAlloc(allocator);
         defer allocator.free(cwd);
@@ -36,7 +36,7 @@ pub const ResourceManagerSingleton = struct {
         //-------- *** LOAD FONTS *** ----------//
         //--------------------------------------//
 
-        debug.print("ResourceManager: preparing to load fonts...");
+        Debug.log(.DEBUG, "ResourceManager: preparing to load fonts...", .{});
 
         const robotoFontFile = try getResourcePath(allocator, "Roboto-Regular.ttf");
         defer allocator.free(robotoFontFile);
@@ -50,13 +50,13 @@ pub const ResourceManagerSingleton = struct {
         const jersey10Regular = try rl.loadFontEx(jerseyFontFile, 512, null);
         rl.setTextureFilter(jersey10Regular.texture, .trilinear);
 
-        debug.print("ResourceManager: fonts successfully loaded!");
+        Debug.log(.DEBUG, "ResourceManager: fonts successfully loaded!", .{});
 
         //----------------------------------------//
         //-------- *** LOAD TEXTURES *** ---------//
         //----------------------------------------//
 
-        debug.print("ResourceManager: preparing to load textures...");
+        Debug.log(.DEBUG, "ResourceManager: preparing to load textures...", .{});
 
         const diskTextureFile = try getResourcePath(allocator, "disk_image.png");
         defer allocator.free(diskTextureFile);
@@ -73,7 +73,7 @@ pub const ResourceManagerSingleton = struct {
 
         const reloadIconTexture = try rl.loadTexture(reloadIconTextureFile);
 
-        debug.print("ResourceManager: textures successfully loaded!");
+        Debug.log(.DEBUG, "ResourceManager: textures successfully loaded!", .{});
 
         //----------------------------------------//
         //-------- *** INITIALIZE INSTANCE *** ---//
@@ -93,7 +93,7 @@ pub const ResourceManagerSingleton = struct {
             inst.textures[2] = reloadIconTexture;
         }
 
-        debug.print("ResourceManager: finished initialization!");
+        Debug.log(.INFO, "ResourceManager: finished initialization!", .{});
     }
 
     // TODO: handle unhappy path
@@ -108,7 +108,7 @@ pub const ResourceManagerSingleton = struct {
 
     pub fn deinit() void {
         if (instance == null) {
-            std.log.err("Error: ResourceManager deinit() called on an NULL instance.", .{});
+            Debug.log(.ERROR, "ResourceManager deinit() called on an NULL instance.", .{});
             return;
         }
 

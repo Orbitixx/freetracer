@@ -1,5 +1,5 @@
 const std = @import("std");
-const debug = @import("../../lib/util/debug.zig");
+const Debug = @import("freetracer-lib").Debug;
 
 const isMac: bool = @import("builtin").os.tag == .macos;
 const isLinux: bool = @import("builtin").os.tag == .linux;
@@ -57,10 +57,17 @@ pub const USBStorageDevice = struct {
     }
 
     pub fn print(self: *USBStorageDevice) void {
-        debug.printf("\n- /dev/{s}\t{s}\t({d})", .{ self.getBsdNameSlice(), self.getNameSlice(), std.fmt.fmtIntSizeDec(@intCast(self.size)) });
+        Debug.log(.INFO, "\n- /dev/{s}\t{s}\t({d})", .{
+            self.getBsdNameSlice(),
+            self.getNameSlice(),
+            std.fmt.fmtIntSizeDec(@intCast(self.size)),
+        });
 
         for (self.volumes.items) |volume| {
-            debug.printf("\n\t- /dev/{s}\t({d})", .{ self.getBsdNameSlice(), std.fmt.fmtIntSizeDec(@intCast(volume.size)) });
+            Debug.log(.INFO, "\n\t- /dev/{s}\t({d})", .{
+                self.getBsdNameSlice(),
+                std.fmt.fmtIntSizeDec(@intCast(volume.size)),
+            });
         }
     }
 

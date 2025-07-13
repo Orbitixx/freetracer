@@ -22,7 +22,7 @@ pub fn log(comptime level: SeverityLevel, comptime fmt: []const u8, args: anytyp
     }
 }
 
-pub fn init(allocator: std.mem.Allocator, utcCorrectionHours: i8) !void {
+pub fn init(allocator: std.mem.Allocator, utcCorrectionHours: i8, isLogFileEnabled: bool, logFilePath: ?[]const u8) !void {
     mutex.lock();
     defer mutex.unlock();
 
@@ -30,9 +30,20 @@ pub fn init(allocator: std.mem.Allocator, utcCorrectionHours: i8) !void {
         return; // Already initialized
     }
 
+    if (isLogFileEnabled) {
+        if (logFilePath == null) {
+            std.log.err("Debug.Logger.init(): ERROR: logFilePath is NULL despite logFile flag being enabled!", .{});
+            return error.DebugLoggerLogFilePathIsNull;
+        }
+
+        std.debug.assert(logFilePath != null);
+    }
+
     instance = Logger{
         .allocator = allocator,
         .utcCorrectionHours = if (@abs(utcCorrectionHours) >= 23) -4 else utcCorrectionHours,
+        .isLogFileEnabled = isLogFileEnabled,
+        .logFile = if (isLogFileEnabled) try std.fs.cwd().createFile(logFilePath.?, .{}) else null,
     };
 }
 
@@ -40,12 +51,37 @@ pub fn deinit() void {
     mutex.lock();
     defer mutex.unlock();
 
+    if (instance) |*inst| {
+        if (inst.logFile) |*file| {
+            file.close();
+        }
+
+        if (inst.latestLog) |latestLog| {
+            inst.allocator.free(latestLog);
+            inst.latestLog = null;
+        }
+    }
+
     instance = null;
+}
+
+pub fn getLatestLog() [:0]const u8 {
+    mutex.lock();
+    defer mutex.unlock();
+
+    if (instance) |*inst| {
+        if (inst.latestLog) |latestLog| {
+            return latestLog;
+        } else return "";
+    } else return "";
 }
 
 pub const Logger = struct {
     allocator: std.mem.Allocator,
     utcCorrectionHours: i8 = -4,
+    isLogFileEnabled: bool = true,
+    logFile: ?std.fs.File = null,
+    latestLog: ?[:0]const u8 = null,
 
     pub fn log(self: *Logger, comptime level: SeverityLevel, comptime fmt: []const u8, args: anytype) void {
         const t = time.now(self.utcCorrectionHours);
@@ -82,7 +118,7 @@ pub const Logger = struct {
             t.seconds,
             severityPrefix,
         } ++ args) catch |err| blk: {
-            const msg = "\nlogError(): ERROR occurred attempting to allocPrintZ msg: \n\t{s}\nError: {any}";
+            const msg = "\nlog(): ERROR occurred attempting to allocPrintZ msg: \n\t{s}\nError: {any}";
             std.debug.print(msg, .{ fmt, err });
             Debug.log(.ERROR, msg, .{ fmt, err });
             break :blk "";
@@ -94,6 +130,38 @@ pub const Logger = struct {
 
         if (logFn) |log_fn| {
             log_fn("{s}", .{full_message});
+        }
+
+        if (self.isLogFileEnabled) self.writeLogToFile("{s}", .{full_message});
+    }
+
+    pub fn writeLogToFile(self: *Logger, comptime msg: []const u8, args: anytype) void {
+        var isError: bool = false;
+
+        if (self.latestLog) |latestLog| {
+            self.allocator.free(latestLog);
+            self.latestLog = null;
+        }
+
+        const fmtStr = std.fmt.allocPrintZ(self.allocator, msg, args) catch |err| blk: {
+            std.log.err("\nLogger.log(): ERROR - failed to print via allocPrint. Aborting print early. Error msg: {any}", .{err});
+            isError = true;
+            break :blk "";
+        };
+
+        if (isError or fmtStr.len < 1) {
+            self.allocator.free(fmtStr);
+            return;
+        }
+
+        self.latestLog = fmtStr;
+
+        if (self.logFile) |logFile| {
+            std.log.info("Attempting to write log: {s}", .{fmtStr});
+
+            _ = logFile.write(fmtStr) catch |err| {
+                std.log.err("Error: Logger.log() caught error during writing. {any}", .{err});
+            };
         }
     }
 };

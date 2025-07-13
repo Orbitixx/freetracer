@@ -1,5 +1,14 @@
+// WARNING: ---------------------------------------------------------
+// WARNING: ---------------------------------------------------------
+// WARNING: ---------------------------------------------------------
+// WARNING: DEPRECATED: TO BE REMOVED
+// WARNING: ---------------------------------------------------------
+// WARNING: ---------------------------------------------------------
+// WARNING: ---------------------------------------------------------
+// WARNING: ---------------------------------------------------------
+
 const std = @import("std");
-const debug = @import("../../lib/util/debug.zig");
+const Debug = @import("freetracer-lib").Debug;
 
 const c = @import("../../lib/sys/system.zig").c;
 
@@ -15,9 +24,10 @@ pub fn unmountAllVolumes(pDevice: *const USBStorageDevice) !void {
     const daSession = c.DASessionCreate(c.kCFAllocatorDefault);
 
     if (daSession == null) {
-        debug.print("ERROR: Failed to create DASession\n");
+        Debug.log(.ERROR, "ERROR: Failed to create DASession\n", .{});
         return error.DAFailedToCreateDiskArbitrationSession;
     }
+
     defer _ = c.CFRelease(daSession);
 
     const currentLoop = c.CFRunLoopGetCurrent();
@@ -31,10 +41,10 @@ pub fn unmountAllVolumes(pDevice: *const USBStorageDevice) !void {
     for (pDevice.*.volumes.items) |volume| {
         const daDiskRef: c.DADiskRef = c.DADiskCreateFromBSDName(c.kCFAllocatorDefault, daSession, volume.bsdName.ptr);
 
-        debug.printf("\nRetrieving details for disk: '{s}'.", .{volume.bsdName});
+        Debug.log(.DEBUG, "\nRetrieving details for disk: '{s}'.", .{volume.bsdName});
 
         if (daDiskRef == null) {
-            debug.printf("\nWARNING: Could not create DADiskRef for '{s}', skipping.\n", .{volume.bsdName});
+            Debug.log(.WARNING, "\nWARNING: Could not create DADiskRef for '{s}', skipping.\n", .{volume.bsdName});
             continue;
         }
         defer _ = c.CFRelease(daDiskRef);
@@ -75,16 +85,16 @@ pub fn unmountAllVolumes(pDevice: *const USBStorageDevice) !void {
         // --- @ENDPROP: DeviceInternal
 
         if (isInternalDevice) {
-            debug.printf("\nERROR: internal device detected on disk: {s}. Aborting unmount operations for device.", .{volume.bsdName});
+            Debug.log(.ERROR, "Internal device detected on disk: {s}. Aborting unmount operations for device.", .{volume.bsdName});
             return error.DAUnmountCalledOnInternalDevice;
         }
 
         if (isEfi) {
-            debug.printf("\nWARNING: Skipping unmount because of a potential EFI partition on disk: {s}.", .{volume.bsdName});
+            Debug.log(.WARNING, "Skipping unmount because of a potential EFI partition on disk: {s}.", .{volume.bsdName});
             continue;
         }
 
-        debug.printf("\nInitiating unmount call for disk: {s}", .{volume.bsdName});
+        Debug.log(.INFO, "\nInitiating unmount call for disk: {s}", .{volume.bsdName});
 
         queuedUnmounts += 1;
 
@@ -94,13 +104,13 @@ pub fn unmountAllVolumes(pDevice: *const USBStorageDevice) !void {
     if (queuedUnmounts > 0) {
         c.CFRunLoopRun();
     } else {
-        debug.printf("\nERROR: No valid unmount calls could be initiated for device: {s}.", .{pDevice.*.bsdName});
+        Debug.log(.ERROR, "\nERROR: No valid unmount calls could be initiated for device: {s}.", .{pDevice.*.bsdName});
     }
 }
 
 fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: ?*anyopaque) callconv(.C) void {
     if (context == null) {
-        debug.print("\nERROR: Unmount callback returned NULL context.");
+        Debug.log(.ERROR, "\nERROR: Unmount callback returned NULL context.", .{});
         return;
     }
 
@@ -108,7 +118,7 @@ fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: 
     // _ = context;
     const bsdName = if (c.DADiskGetBSDName(disk)) |name| toSlice(name) else "Unknown Disk";
     if (dissenter != null) {
-        debug.print("\nWARNING: Disk Arbitration Dissenter returned a non-empty status.");
+        Debug.log(.ERROR, "\nWARNING: Disk Arbitration Dissenter returned a non-empty status.", .{});
 
         const status = c.DADissenterGetStatus(dissenter);
         const statusStringRef = c.DADissenterGetStatusString(dissenter);
@@ -117,14 +127,14 @@ fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: 
         if (statusStringRef != null) {
             _ = c.CFStringGetCString(statusStringRef, &statusString, statusString.len, c.kCFStringEncodingUTF8);
         }
-        debug.printf("\nERROR: Failed to unmount {s}. Dissenter status code: {any}, status message: {s}", .{ bsdName, status, statusString });
+        Debug.log(.ERROR, "\nERROR: Failed to unmount {s}. Dissenter status code: {any}, status message: {s}", .{ bsdName, status, statusString });
     } else {
-        debug.printf("\nSuccessfully unmounted disk: {s}", .{bsdName});
+        Debug.log(.ERROR, "\nSuccessfully unmounted disk: {s}", .{bsdName});
         counter_ptr.* -= 1;
     }
 
     if (counter_ptr.* == 0) {
-        debug.print("\nSuccessfully unmounted all volumes for device.");
+        Debug.log(.ERROR, "\nSuccessfully unmounted all volumes for device.", .{});
         const currentLoop = c.CFRunLoopGetCurrent();
         c.CFRunLoopStop(currentLoop);
     }

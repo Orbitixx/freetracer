@@ -1,5 +1,5 @@
 const std = @import("std");
-const debug = @import("../lib/util/debug.zig");
+const Debug = @import("freetracer-lib").Debug;
 const endian = @import("../lib/util/endian.zig");
 const iso9660 = @import("../lib/data/iso9660.zig");
 
@@ -38,7 +38,7 @@ pub fn parseIso(allocator: std.mem.Allocator, isoPath: []const u8) !void {
         \\ISO sectors: {d}
         \\
     ;
-    debug.printf(str, .{ isoPath, std.fmt.fmtIntSizeDec(fileStat.size), isoSectorCount });
+    Debug.log(.DEBUG, str, .{ isoPath, std.fmt.fmtIntSizeDec(fileStat.size), isoSectorCount });
 
     const isoBytesRead = try file.read(&isoBuffer);
 
@@ -49,7 +49,7 @@ pub fn parseIso(allocator: std.mem.Allocator, isoPath: []const u8) !void {
     var sectorBuffer: [ISO_SECTOR_SIZE]u8 = undefined;
 
     for (16..isoSectorCount) |i| {
-        debug.printf(":: IsoParser: Parsing ISO sector:\t{d}", .{i});
+        Debug.log(.DEBUG, "IsoParser: Parsing ISO sector:\t{d}", .{i});
 
         try file.seekTo(ISO_SYS_BYTES_OFFSET + ISO_SECTOR_SIZE * (i - 16));
         const sectorBytesRead = try file.read(&sectorBuffer);
@@ -155,9 +155,8 @@ pub fn parseIso(allocator: std.mem.Allocator, isoPath: []const u8) !void {
     loadRbaSector.print();
 
     try walkDirectories(allocator, &file, @bitCast(endian.readBoth(i32, &rootDirectoryEntry.dataLength)), @bitCast(endian.readBoth(i32, &rootDirectoryEntry.locationOfExtent)));
-
-    debug.print("");
 }
+
 pub const IsoParserError = error{
     IsoSystemBlockTooShort,
     IsoSectorTooShort,
@@ -210,8 +209,8 @@ pub const DirectoryEntry = struct {
 };
 
 pub fn walkDirectories(allocator: std.mem.Allocator, pFile: *const std.fs.File, dataLength: u32, offsetLba: u32) !void {
-    debug.print("\n-------------------- BEGIN DIRECTORY WALKTHROUGH --------------------");
-    debug.printf("\tData Length: {d}\n\tOffset LBA: {d}\n\n", .{ dataLength, offsetLba });
+    Debug.log(.DEBUG, "\n-------------------- BEGIN DIRECTORY WALKTHROUGH --------------------");
+    Debug.log(.DEBUG, "\tData Length: {d}\n\tOffset LBA: {d}\n\n", .{ dataLength, offsetLba });
 
     var buffer: []u8 = try allocator.alloc(u8, dataLength);
     defer allocator.free(buffer);
@@ -260,8 +259,7 @@ pub fn walkDirectories(allocator: std.mem.Allocator, pFile: *const std.fs.File, 
                 \\[{s}] {s} at LBA {d} ({d} bytes)
             ;
 
-            debug.printf(str, .{ dirType, name, lba, size });
-            debug.print("");
+            Debug.log(.DEBUG, str, .{ dirType, name, lba, size });
         }
 
         byteOffset += recordLength;
@@ -315,8 +313,7 @@ pub fn walkDirectory(buffer: *const []u8, dirEntries: *std.ArrayList(DirectoryEn
                 \\[{s}] {s} at LBA {d} ({d} bytes)
             ;
 
-            debug.printf(str, .{ dirType, name, lba, size });
-            debug.print("");
+            Debug.log(.DEBUG, str, .{ dirType, name, lba, size });
         }
 
         byteOffset += recordLength;

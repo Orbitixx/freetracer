@@ -1,5 +1,6 @@
 const std = @import("std");
 const debug = @import("../../lib/util/debug.zig");
+const Debug = @import("freetracer-lib").Debug;
 
 const c = @import("../../lib/sys/system.zig").c;
 
@@ -18,14 +19,14 @@ pub fn getUSBStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(USBStor
     matchingDict = c.IOServiceMatching(c.kIOUSBDeviceClassName);
 
     if (matchingDict == null) {
-        debug.print("\nERROR: Unable to obtain a matching dictionary for USB Device class.");
+        Debug.log(.ERROR, "Unable to obtain a matching dictionary for USB Device class.", .{});
         return error.FailedToObtainMatchingDictionary;
     }
 
     kernReturn = c.IOServiceGetMatchingServices(c.kIOMasterPortDefault, matchingDict, &ioIterator);
 
     if (kernReturn != c.KERN_SUCCESS) {
-        debug.print("\nERROR: Unable to obtain matching services for the provided matching dictionary.");
+        Debug.log(.ERROR, "Unable to obtain matching services for the provided matching dictionary.", .{});
         return error.FailedToObtainUSBServicesFromIORegistry;
     }
 
@@ -53,16 +54,16 @@ pub fn getUSBStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(USBStor
         kernReturn = c.IORegistryEntryGetName(ioDevice, &deviceName);
 
         if (kernReturn != c.KERN_SUCCESS) {
-            debug.print("\nERROR: Unable to obtain USB device name.");
+            Debug.log(.ERROR, "Unable to obtain USB device name.", .{});
             continue;
         }
 
-        debug.printf("\nFound device (service name in IO Registry): {s}\n", .{deviceName});
+        Debug.log(.INFO, "Found device (service name in IO Registry): {s}\n", .{deviceName});
 
         //--- CHILD NODE PROPERTY ITERATION SECTION ----------------------------------
         //----------------------------------------------------------------------------
         getIOMediaVolumesForDevice(ioDevice, allocator, &deviceVolumesList) catch |err| {
-            debug.printf("\n{any}", .{err});
+            Debug.log(.ERROR, "Error occurred while fetching IOMedia volumes for an IOUSBDevice. {any}", .{err});
         };
 
         if (deviceVolumesList.items.len == 0) continue;
@@ -71,11 +72,11 @@ pub fn getUSBStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(USBStor
             .serviceId = ioDevice,
             .deviceName = deviceName,
             .ioMediaVolumes = deviceVolumesList.clone() catch |err| {
-                debug.printf("\nERROR: Unable to deep-copy the devicesVolumesList <ArrayList(MacOS.IOMediaVolume)>. Error message: {any}", .{err});
+                Debug.log(.ERROR, "Unable to deep-copy the devicesVolumesList <ArrayList(MacOS.IOMediaVolume)>. Error message: {any}", .{err});
                 continue;
             },
         }) catch |err| {
-            debug.printf("\nERROR: Unable to append item of type USBDevice to usbDevices ArrayList. Error message: {any}", .{err});
+            Debug.log(.ERROR, "Unable to append item of type USBDevice to usbDevices ArrayList. Error message: {any}", .{err});
             continue;
         };
 
@@ -84,13 +85,13 @@ pub fn getUSBStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(USBStor
     }
 
     if (usbDevices.items.len == 0) {
-        debug.print("\nWARNING: No USB media devices were found with IOMedia volumes.");
+        Debug.log(.WARNING, "No USB media devices were found with IOMedia volumes.", .{});
         return error.FailedToObtainUSBDevicesWithIOMediaServices;
     }
 
     for (0..usbDevices.items.len) |i| {
         const usbDevice: MacOS.USBDevice = usbDevices.items[i];
-        debug.printf("\nProcessing USB Device with IOMedia volumes ({s} - {d})\n", .{ usbDevice.deviceName, usbDevice.serviceId });
+        Debug.log(.INFO, "Processing USB Device with IOMedia volumes ({s} - {d})\n", .{ usbDevice.deviceName, usbDevice.serviceId });
 
         var usbStorageDevice: USBStorageDevice = .{
             .allocator = allocator,
@@ -113,7 +114,7 @@ pub fn getUSBStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(USBStor
 
                 const deviceNameSlice = std.mem.sliceTo(&usbDevice.deviceName, 0x00);
 
-                debug.printf("\ndeviceNameSlice before array transformation is: {s}", .{deviceNameSlice});
+                Debug.log(.INFO, "deviceNameSlice before array transformation is: {s}", .{deviceNameSlice});
 
                 usbStorageDevice.deviceNameBuf = toArraySentinel(
                     @constCast(deviceNameSlice),
@@ -125,23 +126,23 @@ pub fn getUSBStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(USBStor
                     USBStorageDevice.kDeviceBsdNameBufferSize,
                 );
 
-                debug.printf("USBStorageDevice:\n\tname: {s}\n\tbsdName: {s}", .{ usbStorageDevice.deviceNameBuf, usbStorageDevice.bsdNameBuf });
+                Debug.log(.INFO, "USBStorageDevice:\n\tname: {s}\n\tbsdName: {s}", .{ usbStorageDevice.deviceNameBuf, usbStorageDevice.bsdNameBuf });
 
                 // Volume is a Leaf scenario
             } else if (!ioMediaVolume.isWhole and ioMediaVolume.isLeaf and ioMediaVolume.isRemovable) {
                 usbStorageDevice.volumes.append(ioMediaVolume) catch |err| {
-                    debug.printf("\nERROR: Failed to append IOMediaVolume to ArrayList<IOMediaVolume> within USBStorageDevice. Error message: {any}\n", .{err});
+                    Debug.log(.ERROR, "Failed to append IOMediaVolume to ArrayList<IOMediaVolume> within USBStorageDevice. Error message: {any}\n", .{err});
                     break;
                 };
             }
         }
 
         usbStorageDevices.append(usbStorageDevice) catch |err| {
-            debug.printf("\nERROR: Failed to append USBStorageDevice to ArrayList<USBStorageDevice>. Error message: {any}\n", .{err});
+            Debug.log(.ERROR, "Failed to append USBStorageDevice to ArrayList<USBStorageDevice>. Error message: {any}\n", .{err});
             return error.FailedToAppendUSBStorageDevice;
         };
 
-        debug.print("\nDetected the following USB Storage Devices:\n");
+        Debug.log(.INFO, "\nDetected the following USB Storage Devices:\n", .{});
         for (usbStorageDevices.items) |*device| {
             device.print();
         }
@@ -166,7 +167,8 @@ pub fn getIOMediaVolumesForDevice(device: c.io_service_t, allocator: std.mem.All
     kernReturn = c.IORegistryEntryGetChildIterator(device, c.kIOServicePlane, &childIterator);
 
     if (kernReturn != c.KERN_SUCCESS) {
-        debug.print("\nUnable to obtain child iterator for device's registry entry.");
+        Debug.log(.ERROR, "\nUnable to obtain child iterator for device's registry entry.", .{});
+        return error.getIOMediaVolumesForDeviceIsUnableToObtainChildIterator;
     }
 
     while (childService != 0) {
@@ -181,7 +183,7 @@ pub fn getIOMediaVolumesForDevice(device: c.io_service_t, allocator: std.mem.All
             const ioMediaVolume = try getIOMediaVolumeDescription(childService, allocator);
 
             pVolumesList.*.append(ioMediaVolume) catch |err| {
-                debug.printf("\nERROR (IOKit.getIOMediaVolumesForDevice): unable to append child service to volumes list. Error message: {any}", .{err});
+                Debug.log(.ERROR, "(IOKit.getIOMediaVolumesForDevice): unable to append child service to volumes list. Error message: {any}", .{err});
             };
         }
 
@@ -275,7 +277,7 @@ pub fn toCString(allocator: std.mem.Allocator, string: []const u8) ![]u8 {
     if (string.len == 0) return error.OriginalStringMustBeNonZeroLength;
 
     var cString: []u8 = allocator.alloc(u8, string.len + 1) catch |err| {
-        debug.printf("\nERROR (toCString()): Failed to allocate heap memory for C string. Error message: {any}", .{err});
+        Debug.log(.ERROR, "toCString(): Failed to allocate heap memory for C string. Error message: {any}", .{err});
         return error.FailedToCreateCString;
     };
 
@@ -285,7 +287,6 @@ pub fn toCString(allocator: std.mem.Allocator, string: []const u8) ![]u8 {
 
     cString[string.len] = 0;
 
-    // return @ptrCast(cString);
     return cString;
 }
 
@@ -298,7 +299,7 @@ fn toArraySentinel(slice: []u8, comptime size: usize) [size:0]u8 {
     const usefulSlice = std.mem.sliceTo(slice, 0x00);
 
     if (slice.len > size) {
-        debug.printf("\ntoArraySentinel(): WARNING: slice length [{d}] exceeds the buffer size [{d}]", .{ slice.len, size });
+        Debug.log(.WARNING, "toArraySentinel(): slice length [{d}] exceeds the buffer size [{d}]", .{ slice.len, size });
     }
 
     for (0..size) |i| {
@@ -313,7 +314,7 @@ fn toArraySentinel(slice: []u8, comptime size: usize) [size:0]u8 {
         if (i == usefulSlice.len) output[i] = 0x00;
     }
 
-    std.debug.print("\ntoArraySentinel processed: {s}, {any}", .{ output, output });
+    Debug.log(.DEBUG, "toArraySentinel processed: {s}, {any}", .{ output, output });
 
     return output;
 }

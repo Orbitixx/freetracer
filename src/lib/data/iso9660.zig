@@ -1,7 +1,7 @@
 const std = @import("std");
 const eltorito = @import("eltorito.zig");
 const endian = @import("../util/endian.zig");
-const debug = @import("../util/debug.zig");
+const Debug = @import("freetracer-lib").Debug;
 
 pub const PrimaryVolumeDescriptor = struct {
     /// int8
@@ -72,51 +72,51 @@ pub const PrimaryVolumeDescriptor = struct {
     reserved: [653]u8, // Reserved by ISO
 
     pub fn print(self: @This()) void {
-        debug.print("\n\n-------------------------- Primary Volume Descriptor ---------------------------");
-        debug.printf("\n\tType Code:\t\t\t{d}", .{self.typeCode});
-        debug.printf("\n\tStandard Identifier:\t\t{s}", .{self.standardIdentifier});
-        debug.printf("\n\tVersion:\t\t\t{d}", .{self.version});
-        debug.printf("\n\tUnused1:\t\t\t0x{x}", .{self.unused1});
-        debug.printf("\n\tSystem Identifier:\t\t{s}", .{self.systemIdentifier});
-        debug.printf("\n\tVolume Identifier:\t\t{s}", .{self.volumeIdentifier});
-        debug.printf("\n\tUnused2:\t\t\t{any}", .{self.unused2});
-        debug.printf("\n\tVolume Space Size:\t\t{any}", .{self.volumeSpaceSize});
-        debug.printf("\n\tUnused3:\t\t\t{any}", .{self.unused3});
-        debug.printf("\n\tVolume Set Size:\t\t{any}", .{self.volumeSetSize});
-        debug.printf("\n\tVolume Sequence Number:\t{any}", .{self.volumeSequenceNumber});
-        debug.printf("\n\tLogical Block Size:\t{any}", .{self.logicalBlockSize});
-        debug.printf("\n\tPath Table Size:\t\t{any}", .{self.pathTableSize});
-        debug.printf("\n\tLocation of Type-L Path Table:\t\t{any}", .{self.locationOfTypeLPathTable});
-        debug.printf("\n\tLocation of Optional Type-L Path Table:\t\t{any}", .{self.locationOfOptionalTypeLPathTable});
-        debug.printf("\n\tLocation of Type-M Path Table:\t\t{any}", .{self.locationOfTypeMPathTable});
-        debug.printf("\n\tLocation of Optional Type-M Path Table:\t\t{any}", .{self.locationOfOptionalTypeMPathTable});
-        debug.printf("\n\tRoot Directory Entry:\t\t{any}", .{self.rootDirectoryEntry});
-        debug.printf("\n\tVolume Set Identifier:\t\t{s}", .{self.volumeSetIdentifier});
-        debug.printf("\n\tPublisher Identifier:\t\t{s}", .{self.publisherIdentifier});
-        debug.printf("\n\tData Preparer Identifier:\t\t{s}", .{self.dataPreparerIdentifier});
-        debug.printf("\n\tApplication Identifier:\t{s}", .{self.applicationIdentifier});
-        debug.printf("\n\tCopyright File Identifier:\t{s}", .{self.copyrightFileIdentifier});
-        debug.printf("\n\tAbstract File Identifier:\t{s}", .{self.abstractFileIdentifier});
-        debug.printf("\n\tBibliographic File Identifier:\t{s}", .{self.bibliographicFileIdentifier});
-        debug.printf("\n\tVolume Creation Date/Time:\t{s}", .{self.volumeCreationDateTime});
-        debug.printf("\n\tVolume Modification Date/Time:\t{s}", .{self.volumeModificationDateTime});
-        debug.printf("\n\tVolume Expiration Date/Time:\t{s}", .{self.volumeExpirationDateTime});
-        debug.printf("\n\tVolume Effective Date/Time:\t{s}", .{self.volumeEffectiveDateTime});
-        debug.printf("\n\tFile Structure Version:\t{d}", .{self.fileStructureVersion});
-        debug.printf("\n\tUnused4:\t\t\t0x{x}", .{self.unused4});
-        debug.printf("\n\tApplication Used:\t{any}", .{self.applicationUsed});
-        debug.printf("\n\tReserved:\t\t{any}", .{self.reserved});
-        debug.print("\n-------------------------------------------------------------------------------\n");
+        Debug.log(.DEBUG, "-------------------------- Primary Volume Descriptor ---------------------------", .{});
+        Debug.log(.DEBUG, "\tType Code:\t\t\t{d}", .{self.typeCode});
+        Debug.log(.DEBUG, "\tStandard Identifier:\t\t{s}", .{self.standardIdentifier});
+        Debug.log(.DEBUG, "\tVersion:\t\t\t{d}", .{self.version});
+        Debug.log(.DEBUG, "\tUnused1:\t\t\t0x{x}", .{self.unused1});
+        Debug.log(.DEBUG, "\tSystem Identifier:\t\t{s}", .{self.systemIdentifier});
+        Debug.log(.DEBUG, "\tVolume Identifier:\t\t{s}", .{self.volumeIdentifier});
+        Debug.log(.DEBUG, "\tUnused2:\t\t\t{any}", .{self.unused2});
+        Debug.log(.DEBUG, "\tVolume Space Size:\t\t{any}", .{self.volumeSpaceSize});
+        Debug.log(.DEBUG, "\tUnused3:\t\t\t{any}", .{self.unused3});
+        Debug.log(.DEBUG, "\tVolume Set Size:\t\t{any}", .{self.volumeSetSize});
+        Debug.log(.DEBUG, "\tVolume Sequence Number:\t{any}", .{self.volumeSequenceNumber});
+        Debug.log(.DEBUG, "\tLogical Block Size:\t{any}", .{self.logicalBlockSize});
+        Debug.log(.DEBUG, "\tPath Table Size:\t\t{any}", .{self.pathTableSize});
+        Debug.log(.DEBUG, "\tLocation of Type-L Path Table:\t\t{any}", .{self.locationOfTypeLPathTable});
+        Debug.log(.DEBUG, "\tLocation of Optional Type-L Path Table:\t\t{any}", .{self.locationOfOptionalTypeLPathTable});
+        Debug.log(.DEBUG, "\tLocation of Type-M Path Table:\t\t{any}", .{self.locationOfTypeMPathTable});
+        Debug.log(.DEBUG, "\tLocation of Optional Type-M Path Table:\t\t{any}", .{self.locationOfOptionalTypeMPathTable});
+        Debug.log(.DEBUG, "\tRoot Directory Entry:\t\t{any}", .{self.rootDirectoryEntry});
+        Debug.log(.DEBUG, "\tVolume Set Identifier:\t\t{s}", .{self.volumeSetIdentifier});
+        Debug.log(.DEBUG, "\tPublisher Identifier:\t\t{s}", .{self.publisherIdentifier});
+        Debug.log(.DEBUG, "\tData Preparer Identifier:\t\t{s}", .{self.dataPreparerIdentifier});
+        Debug.log(.DEBUG, "\tApplication Identifier:\t{s}", .{self.applicationIdentifier});
+        Debug.log(.DEBUG, "\tCopyright File Identifier:\t{s}", .{self.copyrightFileIdentifier});
+        Debug.log(.DEBUG, "\tAbstract File Identifier:\t{s}", .{self.abstractFileIdentifier});
+        Debug.log(.DEBUG, "\tBibliographic File Identifier:\t{s}", .{self.bibliographicFileIdentifier});
+        Debug.log(.DEBUG, "\tVolume Creation Date/Time:\t{s}", .{self.volumeCreationDateTime});
+        Debug.log(.DEBUG, "\tVolume Modification Date/Time:\t{s}", .{self.volumeModificationDateTime});
+        Debug.log(.DEBUG, "\tVolume Expiration Date/Time:\t{s}", .{self.volumeExpirationDateTime});
+        Debug.log(.DEBUG, "\tVolume Effective Date/Time:\t{s}", .{self.volumeEffectiveDateTime});
+        Debug.log(.DEBUG, "\tFile Structure Version:\t{d}", .{self.fileStructureVersion});
+        Debug.log(.DEBUG, "\tUnused4:\t\t\t0x{x}", .{self.unused4});
+        Debug.log(.DEBUG, "\tApplication Used:\t{any}", .{self.applicationUsed});
+        Debug.log(.DEBUG, "\tReserved:\t\t{any}", .{self.reserved});
+        Debug.log(.DEBUG, "-------------------------------------------------------------------------------\n", .{});
     }
 
     pub fn printAuto(self: @This()) void {
         inline for (std.meta.fields(@TypeOf(self))) |field| {
-            debug.printf("\n\t{s}:\t\t\t\t{any}", .{ field.name, @as(field.type, @field(self, field.name)) });
+            Debug.log(.DEBUG, "\n\t{s}:\t\t\t\t{any}", .{ field.name, @as(field.type, @field(self, field.name)) });
 
             // switch (@typeInfo(field.type)) {
-            //     .Pointer, .Array => debug.printf("{s}", @as(field.type, @field(self, field.name))),
-            //     .Int => debug.printf("{d}", @as(field.type, @field(self, field.name))),
-            //     else => debug.printf("{any}", @as(field.type, @field(self, field.name))),
+            //     .Pointer, .Array => Debug.log(.DEBUG, "{s}", @as(field.type, @field(self, field.name))),
+            //     .Int => Debug.log(.DEBUG, "{d}", @as(field.type, @field(self, field.name))),
+            //     else => Debug.log(.DEBUG, "{any}", @as(field.type, @field(self, field.name))),
             // }
         }
     }
@@ -140,14 +140,14 @@ pub const BootRecord = struct {
     unused: [1973]u8,
 
     pub fn print(self: @This()) void {
-        debug.print("\n\n-------------------------- Boot Record ---------------------------");
-        debug.printf("\n\tType Code:\t\t\t{d}", .{self.typeCode});
-        debug.printf("\n\tIdentifier:\t\t\t{s}", .{self.standardIdentifier});
-        debug.printf("\n\tVersion:\t\t\t{d}", .{self.version});
-        debug.printf("\n\tBoot System Identifier:\t\t{s}", .{self.bootSystemIdentifier});
-        debug.printf("\n\tBoot Identifier:\t\t{s}", .{self.bootIdentifier});
-        debug.printf("\n\tCatalog LBA:\t\t\t{d}\n", .{endian.readLittle(i32, &self.catalogLba)});
-        debug.print("\n-------------------------------------------------------------------------------\n");
+        Debug.log(.DEBUG, "-------------------------- Boot Record ---------------------------", .{});
+        Debug.log(.DEBUG, "\tType Code:\t\t\t{d}", .{self.typeCode});
+        Debug.log(.DEBUG, "\tIdentifier:\t\t\t{s}", .{self.standardIdentifier});
+        Debug.log(.DEBUG, "\tVersion:\t\t\t{d}", .{self.version});
+        Debug.log(.DEBUG, "\tBoot System Identifier:\t\t{s}", .{self.bootSystemIdentifier});
+        Debug.log(.DEBUG, "\tBoot Identifier:\t\t{s}", .{self.bootIdentifier});
+        Debug.log(.DEBUG, "\tCatalog LBA:\t\t\t{d}\n", .{endian.readLittle(i32, &self.catalogLba)});
+        Debug.log(.DEBUG, "-------------------------------------------------------------------------------\n", .{});
     }
 };
 
@@ -174,10 +174,10 @@ pub const VolumeDescriptorSetTerminator = struct {
     version: u8, // Always 0x01
 
     pub fn print(self: @This()) void {
-        debug.print("\n\n-------------------------- Volume Descriptor Set Terminator ---------------------------");
-        debug.printf("\n\tType Code:\t\t\t{d}", .{self.typeCode});
-        debug.printf("\n\tIdentifier:\t\t\t{s}", .{self.standardIdentifier});
-        debug.printf("\n\tVersion:\t\t\t{d}\n", .{self.version});
+        Debug.log(.DEBUG, "\n-------------------------- Volume Descriptor Set Terminator ---------------------------", .{});
+        Debug.log(.DEBUG, "\tType Code:\t\t\t{d}", .{self.typeCode});
+        Debug.log(.DEBUG, "\tIdentifier:\t\t\t{s}", .{self.standardIdentifier});
+        Debug.log(.DEBUG, "\tVersion:\t\t\t{d}\n", .{self.version});
     }
 };
 
@@ -221,15 +221,14 @@ pub fn DirectoryRecord() type {
         }
 
         pub fn print(self: @This()) void {
-            debug.print("\n----------------- Directory Record ---------------------");
-            debug.printf("\n\tLength of Dir Record:\t\t\t{d}", .{self.lengthOfDirectoryRecord});
-            debug.printf("\n\tLength of Ext Attr Record:\t\t{d}", .{self.lengthOfExtendedAttributeRecord});
-            debug.printf("\n\tLocation of Extent:\t\t\t{d}", .{endian.readBoth(i32, &self.locationOfExtent)});
-            debug.printf("\n\tData Length:\t\t\t{d}", .{endian.readBoth(i32, &self.dataLength)});
-            debug.printf("\n\tFile Flags:\t\t\t{b:0>8}", .{self.fileFlags});
-            debug.printf("\n\tLength of File Identifier:\t\t{d}", .{self.lengthOfFileIdentifier});
-            debug.printf("\n\tfileIdentifier:\t\t\t{x}", .{self.fileIdentifier});
-            debug.print("\n");
+            Debug.log(.DEBUG, "----------------- Directory Record ---------------------", .{});
+            Debug.log(.DEBUG, "\tLength of Dir Record:\t\t\t{d}", .{self.lengthOfDirectoryRecord});
+            Debug.log(.DEBUG, "\tLength of Ext Attr Record:\t\t{d}", .{self.lengthOfExtendedAttributeRecord});
+            Debug.log(.DEBUG, "\tLocation of Extent:\t\t\t{d}", .{endian.readBoth(i32, &self.locationOfExtent)});
+            Debug.log(.DEBUG, "\tData Length:\t\t\t{d}", .{endian.readBoth(i32, &self.dataLength)});
+            Debug.log(.DEBUG, "\tFile Flags:\t\t\t{b:0>8}", .{self.fileFlags});
+            Debug.log(.DEBUG, "\tLength of File Identifier:\t\t{d}", .{self.lengthOfFileIdentifier});
+            Debug.log(.DEBUG, "\tfileIdentifier:\t\t\t{x}\n", .{self.fileIdentifier});
         }
     };
 }
