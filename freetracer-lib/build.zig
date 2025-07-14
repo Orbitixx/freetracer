@@ -37,6 +37,13 @@ pub fn build(b: *std.Build) void {
         .root_module = lib_mod,
     });
 
+    lib.linkLibC();
+    lib.linkFramework("CoreFoundation");
+    lib.linkFramework("DiskArbitration");
+    lib.linkFramework("ServiceManagement");
+    lib.linkFramework("Security");
+    addPaths(lib);
+
     // This declares intent for the library to be installed into the standard
     // location when the user invokes the "install" step (the default step when
     // running `zig build`).
@@ -55,4 +62,10 @@ pub fn build(b: *std.Build) void {
     // running the unit tests.
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_lib_unit_tests.step);
+}
+
+pub fn addPaths(step: *std.Build.Step.Compile) void {
+    step.addSystemFrameworkPath(.{ .cwd_relative = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks" });
+    step.addSystemIncludePath(.{ .cwd_relative = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include" });
+    step.addLibraryPath(.{ .cwd_relative = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib" });
 }

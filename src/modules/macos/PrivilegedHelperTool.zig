@@ -1,12 +1,15 @@
 const std = @import("std");
-const c = @import("../../lib/sys/system.zig").c;
 const env = @import("../../env.zig");
 const System = @import("../../lib/sys/system.zig");
 
 const freetracer_lib = @import("freetracer-lib");
-const Debug = freetracer_lib.Debug;
+
+const c = freetracer_lib.c;
 
 const k = freetracer_lib.k;
+const Debug = freetracer_lib.Debug;
+
+const SerializedData = freetracer_lib.SerializedData;
 const HelperReturnCode = freetracer_lib.HelperReturnCode;
 const HelperInstallCode = freetracer_lib.HelperInstallCode;
 const HelperUnmountRequestCode = freetracer_lib.HelperUnmountRequestCode;
@@ -235,14 +238,20 @@ pub fn requestPerformUnmount(targetDisk: []const u8) HelperUnmountRequestCode {
 
     defer _ = c.CFRelease(remoteMessagePort);
 
-    const dataPayload: [*c]const u8 = @ptrCast(targetDisk);
-    const dataLength: i32 = @intCast(targetDisk.len);
+    const requestData = SerializedData{
+        .data = targetDisk,
+    };
 
-    const requestDataRef: c.CFDataRef = c.CFDataCreate(c.kCFAllocatorDefault, dataPayload, dataLength);
+    // const dataPayload: [*c]const u8 = @ptrCast(targetDisk);
+    // const dataLength: i32 = @intCast(targetDisk.len);
+    //
+    // const requestDataRef: c.CFDataRef = c.CFDataCreate(c.kCFAllocatorDefault, dataPayload, dataLength);
+
+    const requestDataRef: c.CFDataRef = @ptrCast(requestData.constructCFDataRef());
     defer _ = c.CFRelease(requestDataRef);
 
+    var responseDataRef: c.CFDataRef = null;
     var helperResponseCode: c.SInt32 = 0;
-    var responseData: c.CFDataRef = null;
 
     helperResponseCode = c.CFMessagePortSendRequest(
         remoteMessagePort,
@@ -251,34 +260,39 @@ pub fn requestPerformUnmount(targetDisk: []const u8) HelperUnmountRequestCode {
         k.SendTimeoutInSeconds,
         k.ReceiveTimeoutInSeconds,
         c.kCFRunLoopDefaultMode,
-        &responseData,
+        &responseDataRef,
     );
 
-    // TODO: Is the responseData == null check effective here?
-    if (helperResponseCode != c.kCFMessagePortSuccess or responseData == null) {
+    if (helperResponseCode != c.kCFMessagePortSuccess or responseDataRef == null) {
         Debug.log(
             .ERROR,
             "Freetracer failed to communicate with Freetracer Helper Tool - received invalid response code ({d}) or null response data ({any})",
-            .{ helperResponseCode, responseData },
+            .{ helperResponseCode, responseDataRef },
         );
         return HelperUnmountRequestCode.FAILURE;
     }
 
-    var result: i32 = -1;
+    // var result: i32 = -1;
 
-    if (c.CFDataGetLength(responseData) >= @sizeOf(i32)) {
-        const dataPtr = c.CFDataGetBytePtr(responseData);
-        const resultPtr: *const i32 = @ptrCast(@alignCast(dataPtr));
-        result = resultPtr.*;
-    }
+    const responseData = SerializedData.destructCFDataRef(@ptrCast(responseDataRef)) catch |err| {
+        Debug.log(.WARNING, "Freetracer received a NULL response from Privileged Helper. Message: {any}", .{err});
+        return HelperUnmountRequestCode.FAILURE;
+    };
 
-    if (result != @as(i32, @intFromEnum(HelperReturnCode.SUCCESS))) {
-        // if (result != 40) {
-        Debug.log(.ERROR, "Freetracer failed to receive a structured response from Freetracer Helper Tool: {d}.", .{result});
+    // if (c.CFDataGetLength(responseData) >= @sizeOf(i32)) {
+    //     const dataPtr = c.CFDataGetBytePtr(responseData);
+    //     const resultPtr: *const i32 = @ptrCast(@alignCast(dataPtr));
+    //     result = resultPtr.*;
+    // }
+
+    const result = SerializedData.deserialize(HelperReturnCode, responseData);
+
+    if (result != HelperReturnCode.SUCCESS) {
+        Debug.log(.ERROR, "Freetracer failed to receive a structured response from Freetracer Helper Tool: {any}.", .{result});
         return HelperUnmountRequestCode.FAILURE;
     }
 
-    Debug.log(.INFO, "Freetracer successfully received response from Freetracer Helper Tool: {d}", .{result});
+    Debug.log(.INFO, "Freetracer successfully received response from Freetracer Helper Tool: {any}", .{result});
 
     return HelperUnmountRequestCode.SUCCESS;
 }

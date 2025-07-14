@@ -1,19 +1,8 @@
 const std = @import("std");
-const Debug = @import("freetracer-lib").Debug;
 
-const isMac: bool = @import("builtin").os.tag == .macos;
-const isLinux: bool = @import("builtin").os.tag == .linux;
-
-const c = if (isMac) @cImport({
-    @cInclude("IOKit/storage/IOMedia.h");
-    @cInclude("IOKit/IOKitLib.h");
-    @cInclude("DiskArbitration/DiskArbitration.h");
-    @cInclude("CoreFoundation/CoreFoundation.h");
-    @cInclude("IOKit/usb/USB.h");
-    @cInclude("IOKit/usb/IOUSBLib.h");
-    @cInclude("IOKit/IOCFPlugIn.h");
-    @cInclude("IOKit/IOBSD.h");
-}) else if (isLinux) @cImport({});
+const freetracer_lib = @import("freetracer-lib");
+const c = freetracer_lib.c;
+const Debug = freetracer_lib.Debug;
 
 pub const IOMediaVolume = struct {
     pub const kVolumeBsdNameBufferSize: usize = 128;

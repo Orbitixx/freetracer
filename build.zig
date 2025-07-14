@@ -62,12 +62,12 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("freetracer-lib", freetracer_lib.module("freetracer-lib"));
     // -------------------------------------------------------------------
 
-    exe.linkLibC();
-    exe.linkFramework("CoreFoundation");
-    exe.linkFramework("DiskArbitration");
-    exe.linkFramework("ServiceManagement");
-    exe.linkFramework("Security");
-    addPaths(exe);
+    // exe.linkLibC();
+    // exe.linkFramework("CoreFoundation");
+    // exe.linkFramework("DiskArbitration");
+    // exe.linkFramework("ServiceManagement");
+    // exe.linkFramework("Security");
+    // addPaths(exe);
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default

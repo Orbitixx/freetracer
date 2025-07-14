@@ -2,14 +2,19 @@ const std = @import("std");
 const env = @import("env.zig");
 
 const freetracer_lib = @import("freetracer-lib");
-const Debug = freetracer_lib.Debug;
-const k = freetracer_lib.k;
-const ReturnCode = freetracer_lib.HelperReturnCode;
 
-const c = @cImport({
-    @cInclude("CoreFoundation/CoreFoundation.h");
-    @cInclude("DiskArbitration/DiskArbitration.h");
-});
+const Debug = freetracer_lib.Debug;
+
+const k = freetracer_lib.k;
+const c = freetracer_lib.c;
+
+const ReturnCode = freetracer_lib.HelperReturnCode;
+const SerializedData = freetracer_lib.SerializedData;
+
+// const c = @cImport({
+//     @cInclude("CoreFoundation/CoreFoundation.h");
+//     @cInclude("DiskArbitration/DiskArbitration.h");
+// });
 
 var queuedUnmounts: i32 = 0;
 
@@ -83,63 +88,66 @@ pub fn messagePortCallback(port: c.CFMessagePortRef, msgId: c.SInt32, data: c.CF
     _ = port;
     _ = info;
 
-    var requestData: ?[*c]const u8 = null;
-    var requestLength: usize = 0;
-    var response: i32 = -1;
+    // var requestData: ?[*c]const u8 = null;
+    // var requestLength: usize = 0;
+    // var response: i32 = -1;
 
-    if (data == null) {
-        Debug.log(.WARNING, "messagePortCallback received NULL data as parameter. Ignoring request...", .{});
+    const requestData = SerializedData.destructCFDataRef(@ptrCast(data)) catch |err| {
+        Debug.log(.WARNING, "messagePortCallback received NULL data as parameter. Error: {any}. Ignoring request...", .{err});
         return returnData;
-    }
+    };
 
-    requestData = c.CFDataGetBytePtr(data);
-    requestLength = @intCast(c.CFDataGetLength(data));
+    // requestData = c.CFDataGetBytePtr(data);
+    // requestLength = @intCast(c.CFDataGetLength(data));
 
-    if (requestData == null) {
-        Debug.log(.WARNING, "The received request data is NULL. Ignoring request...", .{});
-        return returnData;
-    }
+    // if (requestData == null) {
+    //     Debug.log(.WARNING, "The received request data is NULL. Ignoring request...", .{});
+    //     return returnData;
+    // }
 
-    if (requestLength < 1) {
+    if (requestData.data.len < 1) {
         Debug.log(.WARNING, "The received length of the request data is 0.", .{});
         return returnData;
     }
 
-    // Data capture, not a conditional. Data check conditionals must have already passed by this point.
-    if (requestData) |rdata| {
-        Debug.log(.INFO, "Request data received: {s}\n", .{std.mem.sliceTo(rdata, 0x00)});
-    }
+    Debug.log(.DEBUG, "Request data received: {any}\n", .{requestData.data});
+
+    // var responseLength: c.CFIndex = 0;
+
+    var responseData: SerializedData = undefined;
 
     switch (msgId) {
+        //
         k.UnmountDiskRequest => {
             Debug.log(.INFO, "Freetracer Helper Tool received DADiskUnmount() request {d}.", .{k.UnmountDiskRequest});
 
-            if (requestData) |rdata| {
-                // BUG: response appears to be 0 here upon successful unmount. At any rate, 0 is logged
-                // by the "packaged response log"
-                response = @intFromEnum(processDiskUnmountRequest(std.mem.sliceTo(rdata, 0x00)));
-            } else {
-                Debug.log(.WARNING, "Freetracer Helper Tool received a NULL request data in the UnmoutDiskRequest message. Request ignored.", .{});
-            }
+            var responseCode = processDiskUnmountRequest(std.mem.sliceTo(requestData.data, 0x00));
+            responseData = SerializedData.serialize(ReturnCode, &responseCode);
         },
 
         k.HelperVersionRequest => {
-            Debug.log(.INFO, "Freetracer Helper Tool received a version query request {d}.", .{k.UnmountDiskRequest});
-            response = 0;
+            Debug.log(.INFO, "Freetracer Helper Tool received a version query request {d}.", .{k.HelperVersionRequest});
+
+            const versionString = processHelperVersionCheckRequest();
+            responseData = SerializedData{ .data = versionString };
         },
 
         else => {
-            Debug.log(.WARNING, "Freetracer Helper Tool received unknown request. Ignoring response...", .{});
+            Debug.log(.WARNING, "Freetracer Helper Tool received unknown request: {d}. Ignoring request...", .{msgId});
         },
     }
 
-    const responseBytePtr: [*c]const u8 = @ptrCast(&response);
+    // const responseBytePtr: [*c]const u8 = @ptrCast(&response);
+    // returnData = c.CFDataCreate(c.kCFAllocatorDefault, responseBytePtr, responseLength);
+    returnData = @ptrCast(responseData.constructCFDataRef());
 
-    returnData = c.CFDataCreate(c.kCFAllocatorDefault, responseBytePtr, @sizeOf(i32));
-
-    Debug.log(.INFO, "Freetracer Helper Tool successfully packaged response: {d}.", .{response});
+    Debug.log(.INFO, "Freetracer Helper Tool successfully packaged response: {any}.", .{responseData.data});
 
     return returnData;
+}
+
+pub fn processHelperVersionCheckRequest() []const u8 {
+    return env.HELPER_VERSION;
 }
 
 pub fn processDiskUnmountRequest(bsdName: []const u8) ReturnCode {

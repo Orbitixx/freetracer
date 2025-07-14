@@ -3,9 +3,15 @@ const testing = std.testing;
 
 const constants = @import("./constants.zig");
 const debug = @import("./util/debug.zig");
+const types = @import("./types.zig");
+const mach = @import("./macos/mach.zig");
 
-// Expose constants namespance to be included by consumers
+// Expose namespaces to be consumed by users
+pub usingnamespace types;
 pub usingnamespace constants;
 
-// Expose debug namespance to be included by consumers
+// MacOS-only export
+pub usingnamespace if (@import("builtin").os.tag == .macos) mach;
+
+// Expose debug singleton to be consumed by users
 pub const Debug = debug;

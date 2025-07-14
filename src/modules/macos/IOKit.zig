@@ -1,7 +1,11 @@
 const std = @import("std");
-const Debug = @import("freetracer-lib").Debug;
 
-const c = @import("../../lib/sys/system.zig").c;
+const freetracer_lib = @import("freetracer-lib");
+
+const Debug = freetracer_lib.Debug;
+const c = freetracer_lib.c;
+
+// const c = @import("../../lib/sys/system.zig").c;
 
 const System = @import("../../lib/sys/system.zig");
 const USBStorageDevice = System.USBStorageDevice;
