@@ -1,6 +1,6 @@
 const std = @import("std");
-const debug = @import("../../lib/util/debug.zig");
 const rl = @import("raylib");
+const Debug = @import("freetracer-lib").Debug;
 
 const AppConfig = @import("../../config.zig");
 
@@ -249,7 +249,7 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
 
             switch (data.isActive) {
                 true => {
-                    debug.print("DataFlasherUI: setting UI to ACTIVE.");
+                    Debug.log(.DEBUG, "DataFlasherUI: setting UI to ACTIVE.", .{});
 
                     var isoPath: [:0]const u8 = "NULL";
                     var device: ?*System.USBStorageDevice = null;
@@ -295,7 +295,7 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
                 },
 
                 false => {
-                    debug.print("DataFlasherUI: setting UI to INACTIVE.");
+                    Debug.log(.DEBUG, "DataFlasherUI: setting UI to INACTIVE.", .{});
 
                     if (self.headerLabel) |*header| {
                         header.style.textColor = Color.lightGray;
@@ -353,7 +353,7 @@ fn queryDeviceListUIDimensions(self: *DataFlasherUI) !void {
 }
 
 fn recalculateUI(self: *DataFlasherUI, bgRectParams: BgRectParams) void {
-    debug.print("DataFlasherUI: updating bgRect properties!");
+    Debug.log(.DEBUG, "DataFlasherUI: updating bgRect properties!", .{});
 
     if (self.bgRect) |*bgRect| {
         bgRect.transform.w = bgRectParams.width;

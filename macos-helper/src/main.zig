@@ -25,15 +25,7 @@ pub fn main() !void {
     }
 
     // Initialize Debug singleton
-    const standaloneLogFileDisabled = false;
-    const noStandaloneLogFile = null;
-
-    try Debug.init(
-        allocator,
-        env.UTC_CORRECTION_HOURS,
-        standaloneLogFileDisabled,
-        noStandaloneLogFile,
-    );
+    try Debug.init(allocator, .{});
     defer Debug.deinit();
 
     Debug.log(.DEBUG, "Debug logger initialized.", .{});

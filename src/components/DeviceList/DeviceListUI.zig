@@ -1,6 +1,6 @@
 const std = @import("std");
-const debug = @import("../../lib/util/debug.zig");
 const rl = @import("raylib");
+const Debug = @import("freetracer-lib").Debug;
 
 const AppConfig = @import("../../config.zig");
 
@@ -98,17 +98,11 @@ pub const Events = struct {
             transform: UIFramework.Primitives.Transform,
         },
     );
-
-    // pub const onFlashButtonPressed = ComponentFramework.defineEvent(
-    //     "device_list_ui.on_flash_button_pressed",
-    //     struct {},
-    //     struct {},
-    // );
 };
 
 // Creates and returns an instance of DeviceListUI component
 pub fn init(allocator: std.mem.Allocator, parent: *DeviceList) !DeviceListUI {
-    debug.print("DeviceListUI: start() called.");
+    Debug.log(.DEBUG, "DeviceListUI: start() called.", .{});
 
     parent.state.lock();
     defer parent.state.unlock();
@@ -132,7 +126,7 @@ pub fn initComponent(self: *DeviceListUI, parent: ?*Component) !void {
 
 // Called once upon component initialization.
 pub fn start(self: *DeviceListUI) !void {
-    debug.print("DeviceListUI: component start() called.");
+    Debug.log(.DEBUG, "DeviceListUI: component start() called.", .{});
 
     if (self.component == null) try self.initComponent(self.parent.asComponentPtr());
 
@@ -245,11 +239,11 @@ pub fn start(self: *DeviceListUI) !void {
         }
     }
 
-    debug.print("DeviceListUI: component start() finished.");
+    Debug.log(.DEBUG, "DeviceListUI: component start() finished.", .{});
 }
 
 pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
-    debug.printf("DeviceListUI: handleEvent() received an event: \"{s}\"", .{event.name});
+    Debug.log(.INFO, "DeviceListUI: handleEvent() received an event: \"{s}\"", .{event.name});
 
     var eventResult = EventResult.init();
 
@@ -272,7 +266,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
 
             // Dispatch a parent event that the current component already listens to (for simplicity)
             return try self.handleEvent(DeviceList.Events.onDeviceListActiveStateChanged.create(
-                &self.component.?,
+                self.asComponentPtr(),
                 // Set the __opposite__ of the ISOFilePicker active state.
                 &.{ .isActive = !data.isActive },
             ));
@@ -292,7 +286,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
 
             switch (data.isActive) {
                 true => {
-                    debug.print("DeviceListUI: setting UI to ACTIVE.");
+                    Debug.log(.DEBUG, "DeviceListUI: setting UI to ACTIVE.", .{});
 
                     if (self.headerLabel) |*header| {
                         header.style.textColor = Color.white;
@@ -306,7 +300,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
                 },
 
                 false => {
-                    debug.print("DeviceListUI: setting UI to INACTIVE.");
+                    Debug.log(.DEBUG, "DeviceListUI: setting UI to INACTIVE.", .{});
 
                     if (self.headerLabel) |*header| {
                         header.style.textColor = Color.lightGray;
@@ -357,18 +351,18 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
 
         Events.onDevicesReadyToRender.Hash => {
             //
-            debug.print("DeviceListUI: onDevicesReadyToRender() start.");
+            Debug.log(.DEBUG, "DeviceListUI: onDevicesReadyToRender() start.", .{});
 
             // WARNING: General defer is OK here because no other call is coupled here where mutex lock would propagate.
             self.state.lock();
             defer self.state.unlock();
 
             if (self.state.data.devices.items.len < 1) {
-                debug.print("DeviceListUI: onDevicesReadyToRender(): no devices discovered, breaking the event loop.");
+                Debug.log(.WARNING, "DeviceListUI: onDevicesReadyToRender(): no devices discovered, breaking the event loop.", .{});
                 break :eventLoop;
             }
 
-            debug.printf("DeviceListUI: onDevicesReadyToRender(): processing checkboxes for {d} devices.", .{self.state.data.devices.items.len});
+            Debug.log(.DEBUG, "DeviceListUI: onDevicesReadyToRender(): processing checkboxes for {d} devices.", .{self.state.data.devices.items.len});
 
             for (self.state.data.devices.items, 0..) |*device, i| {
                 //
@@ -397,7 +391,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
                     std.debug.panic("{any}", .{err});
                 };
 
-                debug.printf("ComponentUI: formatted string is: {s}", .{deviceStringBuffer});
+                Debug.log(.DEBUG, "ComponentUI: formatted string is: {s}", .{deviceStringBuffer});
 
                 try self.deviceCheckboxes.append(Checkbox.init(
                     @ptrCast(@alignCast(deviceStringBuffer)),
@@ -420,7 +414,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
                     try checkbox.start();
                 }
             }
-            debug.print("DeviceListUI: onDevicesReadyToRender() end.");
+            Debug.log(.DEBUG, "DeviceListUI: onDevicesReadyToRender() end.", .{});
         },
 
         // Fired when a device is selected, e.g. selectedDevice != null
@@ -434,7 +428,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
             defer self.state.unlock();
             self.state.data.selectedDevice = data.selectedDevice;
 
-            std.debug.print("DeviceListUI.handleEvent.onSelectedDeviceNameChanged received selectedDevice: \n{s}\n\n", .{data.selectedDevice.?.getNameSlice()});
+            Debug.log(.DEBUG, "DeviceListUI.handleEvent.onSelectedDeviceNameChanged received selectedDevice: \n{s}\n\n", .{data.selectedDevice.?.getNameSlice()});
 
             if (self.bgRect) |bgRect| {
                 self.deviceNameLabel = Text.init(if (self.state.data.selectedDevice) |*device| device.getNameSlice() else "NULL", .{
@@ -544,7 +538,7 @@ pub fn dispatchComponentAction(self: *DeviceListUI) void {
 }
 
 fn recalculateUI(self: *DeviceListUI, bgRectParams: BgRectParams) void {
-    debug.print("DeviceListUI: updating bgRect properties!");
+    Debug.log(.DEBUG, "DeviceListUI: updating bgRect properties!", .{});
 
     if (self.bgRect) |*bgRect| {
         bgRect.transform.w = bgRectParams.width;

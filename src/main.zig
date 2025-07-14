@@ -5,23 +5,13 @@ const rl = @import("raylib");
 const osd = @import("osdialog");
 const env = @import("env.zig");
 
-const ftlib = @import("freetracer-lib");
-const Debug = ftlib.Debug;
+const freetracer_lib = @import("freetracer-lib");
+const Debug = freetracer_lib.Debug;
 
-const Logger = @import("managers/GlobalLogger.zig").LoggerSingleton;
+// const Logger = @import("managers/GlobalLogger.zig").LoggerSingleton;
 const ResourceManager = @import("managers/ResourceManager.zig").ResourceManagerSingleton;
 const WindowManager = @import("managers/WindowManager.zig").WindowManagerSingleton;
 const EventManager = @import("managers/EventManager.zig").EventManagerSingleton;
-
-const debug = @import("lib/util/debug.zig");
-const strings = @import("lib/util/strings.zig");
-const time = @import("lib/util/time.zig");
-
-const IsoParser = @import("modules/IsoParser.zig");
-const IsoWriter = @import("modules/IsoWriter.zig");
-const MacOS = @import("modules/macos/MacOSTypes.zig");
-const IOKit = @import("modules/macos/IOKit.zig");
-const DiskArbitration = @import("modules/macos/DiskArbitration.zig");
 
 const Font = @import("managers/ResourceManager.zig").FONT;
 const Color = @import("components/ui/Styles.zig").Color;
@@ -53,24 +43,8 @@ pub fn main() !void {
     //----------------------------------------------------------------------------------
     //--- @MANAGERS --------------------------------------------------------------------
     //----------------------------------------------------------------------------------
-    const standaloneLogFileEnabled = true;
-
-    try Debug.init(
-        allocator,
-        env.UTC_CORRECTION_HOURS,
-        standaloneLogFileEnabled,
-        env.MAIN_APP_LOGS_PATH,
-    );
+    try Debug.init(allocator, .{ .standaloneLogFilePath = env.MAIN_APP_LOGS_PATH });
     defer Debug.deinit();
-
-    Debug.log(.INFO, "Debug is initialized via freetracer-lib!", .{});
-
-    // try Logger.init(allocator);
-    // defer Logger.deinit();
-
-    // TODO: deprecated, to be removed.
-    try debug.init(allocator);
-    defer debug.deinit();
 
     try WindowManager.init();
     defer WindowManager.deinit();

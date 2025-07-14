@@ -1,5 +1,4 @@
 const std = @import("std");
-const debug = @import("../../lib/util/debug.zig");
 
 const rl = @import("raylib");
 const ResourceManagerImport = @import("../../managers/ResourceManager.zig");

@@ -1,6 +1,6 @@
 const std = @import("std");
-const debug = @import("../../lib/util/debug.zig");
 const rl = @import("raylib");
+const Debug = @import("freetracer-lib").Debug;
 
 const AppConfig = @import("../../config.zig");
 
@@ -83,7 +83,7 @@ pub const Events = struct {
 };
 
 pub fn init(allocator: std.mem.Allocator, parent: *ISOFilePicker) !ISOFilePickerUI {
-    debug.print("ISOFilePickerUI: start() called.");
+    Debug.log(.DEBUG, "ISOFilePickerUI: start() called.", .{});
 
     return ISOFilePickerUI{
         .allocator = allocator,
@@ -98,7 +98,7 @@ pub fn initComponent(self: *ISOFilePickerUI, parent: ?*Component) !void {
 }
 
 pub fn start(self: *ISOFilePickerUI) !void {
-    debug.print("ISOFilePickerUI: component start() called.");
+    Debug.log(.DEBUG, "ISOFilePickerUI: component start() called.", .{});
 
     if (self.component == null) try self.initComponent(self.parent.asComponentPtr());
 
@@ -165,11 +165,11 @@ pub fn start(self: *ISOFilePickerUI) !void {
         self.isoTitle = Text.init("No ISO selected...", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
     }
 
-    debug.print("ISOFilePickerUI: component start() finished.");
+    Debug.log(.DEBUG, "ISOFilePickerUI: component start() finished.", .{});
 }
 
 pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
-    debug.printf("ISOFilePickerUI: handleEvent() received an event: \"{s}\"", .{event.name});
+    Debug.log(.DEBUG, "ISOFilePickerUI: handleEvent() received an event: \"{s}\"", .{event.name});
 
     var eventResult = EventResult.init();
 
@@ -291,7 +291,7 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
 }
 
 fn recalculateUI(self: *ISOFilePickerUI, bgRectParams: BgRectParams) void {
-    debug.print("IsoFilePickerUI: recalculating UI...");
+    Debug.log(.DEBUG, "IsoFilePickerUI: recalculating UI...", .{});
 
     if (self.bgRect) |*bgRect| {
         bgRect.transform.w = bgRectParams.width;

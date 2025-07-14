@@ -1,8 +1,8 @@
 const std = @import("std");
 const rl = @import("raylib");
-const debug = @import("../../lib/util/debug.zig");
 
 const freetracer_lib = @import("freetracer-lib");
+const Debug = freetracer_lib.Debug;
 
 const PrivilegedHelperTool = @import("../../modules/macos/PrivilegedHelperTool.zig");
 
@@ -94,11 +94,11 @@ pub fn start(self: *PrivilegedHelper) !void {
 
         if (!EventManager.subscribe("privileged_helper", component)) return error.UnableToSubscribeToEventManager;
 
-        std.debug.print("PrivilegedHelper: attempting to initialize children...", .{});
+        Debug.log(.DEBUG, "PrivilegedHelper: attempting to initialize children...", .{});
 
         component.children = std.ArrayList(Component).init(self.allocator);
 
-        std.debug.print("PrivilegedHelper: finished initializing children.", .{});
+        Debug.log(.DEBUG, "PrivilegedHelper: finished initializing children.", .{});
     }
 }
 
@@ -127,7 +127,7 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
 
             const response: freetracer_lib.HelperUnmountRequestCode = self.requestUnmount(data.targetDisk);
 
-            debug.printf("PrivilegedHelper Component received response from Privileged Tool: {any}", .{response});
+            Debug.log(.INFO, "PrivilegedHelper Component received response from Privileged Tool: {any}", .{response});
 
             if (response == freetracer_lib.HelperUnmountRequestCode.SUCCESS) eventResult.validate(1);
         },

@@ -1,5 +1,4 @@
 const std = @import("std");
-const debug = @import("../../lib/util/debug.zig");
 const Debug = @import("freetracer-lib").Debug;
 
 const c = @import("../../lib/sys/system.zig").c;

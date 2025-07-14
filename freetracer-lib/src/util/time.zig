@@ -43,6 +43,8 @@ pub fn now(utcCorrectionHours: i8) DateTime {
         } else day -= 1;
     }
 
+    if (@abs(hours) == 24) hours = 0;
+
     return DateTime{
         .seconds = day_seconds.getSecondsIntoMinute(),
         .minutes = day_seconds.getMinutesIntoHour(),

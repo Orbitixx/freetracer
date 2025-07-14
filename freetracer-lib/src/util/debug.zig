@@ -6,6 +6,12 @@ const Debug = @This();
 var instance: ?Logger = null;
 var mutex: std.Thread.Mutex = .{};
 
+pub const LoggerSettings = struct {
+    utcCorrectionHours: i8 = -4,
+    standaloneLogFilePath: ?[]const u8 = null,
+    envLogSeverityLevel: SeverityLevel = .DEBUG,
+};
+
 pub const SeverityLevel = enum(u8) {
     DEBUG,
     INFO,
@@ -22,7 +28,7 @@ pub fn log(comptime level: SeverityLevel, comptime fmt: []const u8, args: anytyp
     }
 }
 
-pub fn init(allocator: std.mem.Allocator, utcCorrectionHours: i8, isLogFileEnabled: bool, logFilePath: ?[]const u8) !void {
+pub fn init(allocator: std.mem.Allocator, settings: LoggerSettings) !void {
     mutex.lock();
     defer mutex.unlock();
 
@@ -30,20 +36,10 @@ pub fn init(allocator: std.mem.Allocator, utcCorrectionHours: i8, isLogFileEnabl
         return; // Already initialized
     }
 
-    if (isLogFileEnabled) {
-        if (logFilePath == null) {
-            std.log.err("Debug.Logger.init(): ERROR: logFilePath is NULL despite logFile flag being enabled!", .{});
-            return error.DebugLoggerLogFilePathIsNull;
-        }
-
-        std.debug.assert(logFilePath != null);
-    }
-
     instance = Logger{
         .allocator = allocator,
-        .utcCorrectionHours = if (@abs(utcCorrectionHours) >= 23) -4 else utcCorrectionHours,
-        .isLogFileEnabled = isLogFileEnabled,
-        .logFile = if (isLogFileEnabled) try std.fs.cwd().createFile(logFilePath.?, .{}) else null,
+        .utcCorrectionHours = if (@abs(settings.utcCorrectionHours) >= 23) -4 else settings.utcCorrectionHours,
+        .logFile = if (settings.standaloneLogFilePath != null) try std.fs.cwd().createFile(settings.standaloneLogFilePath.?, .{}) else null,
     };
 }
 
@@ -79,7 +75,6 @@ pub fn getLatestLog() [:0]const u8 {
 pub const Logger = struct {
     allocator: std.mem.Allocator,
     utcCorrectionHours: i8 = -4,
-    isLogFileEnabled: bool = true,
     logFile: ?std.fs.File = null,
     latestLog: ?[:0]const u8 = null,
 
@@ -132,7 +127,7 @@ pub const Logger = struct {
             log_fn("{s}", .{full_message});
         }
 
-        if (self.isLogFileEnabled) self.writeLogToFile("{s}", .{full_message});
+        if (self.logFile != null) self.writeLogToFile("\n{s}", .{full_message});
     }
 
     pub fn writeLogToFile(self: *Logger, comptime msg: []const u8, args: anytype) void {
@@ -157,8 +152,6 @@ pub const Logger = struct {
         self.latestLog = fmtStr;
 
         if (self.logFile) |logFile| {
-            std.log.info("Attempting to write log: {s}", .{fmtStr});
-
             _ = logFile.write(fmtStr) catch |err| {
                 std.log.err("Error: Logger.log() caught error during writing. {any}", .{err});
             };
