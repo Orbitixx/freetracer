@@ -217,7 +217,7 @@ pub fn requestHelperVersion() [:0]const u8 {
 /// Sends a CFMessage to the Privileged Helper Tool via a CFPort to request a disk unmount
 /// "Client"-side function, whereas Freetracer acts as the client for the Freetracer Privileged Tool
 /// @Returns HelperUnmountRequestCode = enum(bool) { FAILURE: bool = false, SUCCESS: bool = true}
-pub fn requestPerformUnmount(targetDisk: []const u8) HelperUnmountRequestCode {
+pub fn requestPerformUnmount(targetDisk: [:0]const u8) HelperUnmountRequestCode {
     if (!System.isMac) return HelperUnmountRequestCode.FAILURE;
 
     // Create a CString from the Privileged Tool's Apple App Bundle ID
@@ -238,20 +238,15 @@ pub fn requestPerformUnmount(targetDisk: []const u8) HelperUnmountRequestCode {
 
     defer _ = c.CFRelease(remoteMessagePort);
 
-    const requestData = SerializedData{
-        .data = targetDisk,
-    };
-
-    // const dataPayload: [*c]const u8 = @ptrCast(targetDisk);
-    // const dataLength: i32 = @intCast(targetDisk.len);
-    //
-    // const requestDataRef: c.CFDataRef = c.CFDataCreate(c.kCFAllocatorDefault, dataPayload, dataLength);
+    const requestData = SerializedData.serializeString(targetDisk);
 
     const requestDataRef: c.CFDataRef = @ptrCast(requestData.constructCFDataRef());
     defer _ = c.CFRelease(requestDataRef);
 
     var responseDataRef: c.CFDataRef = null;
     var helperResponseCode: c.SInt32 = 0;
+
+    Debug.log(.INFO, "Freetracer is preparing to send request to Privileged Helper Tool...", .{});
 
     helperResponseCode = c.CFMessagePortSendRequest(
         remoteMessagePort,
@@ -272,23 +267,15 @@ pub fn requestPerformUnmount(targetDisk: []const u8) HelperUnmountRequestCode {
         return HelperUnmountRequestCode.FAILURE;
     }
 
-    // var result: i32 = -1;
-
     const responseData = SerializedData.destructCFDataRef(@ptrCast(responseDataRef)) catch |err| {
         Debug.log(.WARNING, "Freetracer received a NULL response from Privileged Helper. Message: {any}", .{err});
         return HelperUnmountRequestCode.FAILURE;
     };
 
-    // if (c.CFDataGetLength(responseData) >= @sizeOf(i32)) {
-    //     const dataPtr = c.CFDataGetBytePtr(responseData);
-    //     const resultPtr: *const i32 = @ptrCast(@alignCast(dataPtr));
-    //     result = resultPtr.*;
-    // }
-
     const result = SerializedData.deserialize(HelperReturnCode, responseData);
 
     if (result != HelperReturnCode.SUCCESS) {
-        Debug.log(.ERROR, "Freetracer failed to receive a structured response from Freetracer Helper Tool: {any}.", .{result});
+        Debug.log(.ERROR, "Freetracer failed to receive a structured response from Freetracer Helper Tool: {d}.", .{@intFromEnum(result)});
         return HelperUnmountRequestCode.FAILURE;
     }
 

@@ -15,3 +15,8 @@ pub const c = if (isMac) @cImport({
 }) else if (isLinux) @cImport({
     // @cInclude("blkid/blkid.h");
 });
+
+pub const WriteRequestData = struct {
+    devicePath: [:0]const u8,
+    isoPath: [:0]const u8,
+};

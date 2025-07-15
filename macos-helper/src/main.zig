@@ -8,13 +8,11 @@ const Debug = freetracer_lib.Debug;
 const k = freetracer_lib.k;
 const c = freetracer_lib.c;
 
+const MachCommunicator = freetracer_lib.MachCommunicator;
+
 const ReturnCode = freetracer_lib.HelperReturnCode;
 const SerializedData = freetracer_lib.SerializedData;
-
-// const c = @cImport({
-//     @cInclude("CoreFoundation/CoreFoundation.h");
-//     @cInclude("DiskArbitration/DiskArbitration.h");
-// });
+const WriteRequestData = freetracer_lib.WriteRequestData;
 
 var queuedUnmounts: i32 = 0;
 
@@ -35,101 +33,43 @@ pub fn main() !void {
 
     Debug.log(.DEBUG, "Debug logger initialized.", .{});
 
-    const portNameRef: c.CFStringRef = c.CFStringCreateWithCStringNoCopy(
-        c.kCFAllocatorDefault,
-        env.BUNDLE_ID,
-        c.kCFStringEncodingUTF8,
-        c.kCFAllocatorNull,
-    );
-    defer _ = c.CFRelease(portNameRef);
+    var machCommunicator = MachCommunicator.init(allocator, .{
+        .bundleId = env.BUNDLE_ID,
+        .ownerName = "Freetracer Helper Tool",
+        .processMessageFn = processRequestMessage,
+    });
 
-    var messagePortContext: c.CFMessagePortContext = c.CFMessagePortContext{
-        .version = 0,
-        .copyDescription = null,
-        .info = null,
-        .release = null,
-        .retain = null,
-    };
-
-    var shouldFreeInfo: c.Boolean = 0;
-
-    const localMessagePort: c.CFMessagePortRef = c.CFMessagePortCreateLocal(
-        c.kCFAllocatorDefault,
-        portNameRef,
-        messagePortCallback,
-        &messagePortContext,
-        &shouldFreeInfo,
-    );
-
-    if (localMessagePort == null) {
-        Debug.log(.ERROR, "Freetracer Helper Tool unable to create a local message port.", .{});
-        return;
-    }
-
-    defer _ = c.CFRelease(localMessagePort);
-
-    const kRunLoopOrder: c.CFIndex = 0;
-
-    const runLoopSource: c.CFRunLoopSourceRef = c.CFMessagePortCreateRunLoopSource(c.kCFAllocatorDefault, localMessagePort, kRunLoopOrder);
-    defer _ = c.CFRelease(runLoopSource);
-
-    c.CFRunLoopAddSource(c.CFRunLoopGetCurrent(), runLoopSource, c.kCFRunLoopDefaultMode);
-    defer c.CFRunLoopSourceInvalidate(runLoopSource);
-
-    Debug.log(.INFO, "Freetracer Helper Tool started. Awaiting requests...", .{});
-
-    c.CFRunLoopRun();
+    try machCommunicator.start();
+    defer machCommunicator.deinit();
 }
 
-/// Runs once for every CFMessage received from the Freetracer tool
-pub fn messagePortCallback(port: c.CFMessagePortRef, msgId: c.SInt32, data: c.CFDataRef, info: ?*anyopaque) callconv(.C) c.CFDataRef {
-    var returnData: c.CFDataRef = null;
-
-    _ = port;
-    _ = info;
-
-    // var requestData: ?[*c]const u8 = null;
-    // var requestLength: usize = 0;
-    // var response: i32 = -1;
-
-    const requestData = SerializedData.destructCFDataRef(@ptrCast(data)) catch |err| {
-        Debug.log(.WARNING, "messagePortCallback received NULL data as parameter. Error: {any}. Ignoring request...", .{err});
-        return returnData;
-    };
-
-    // requestData = c.CFDataGetBytePtr(data);
-    // requestLength = @intCast(c.CFDataGetLength(data));
-
-    // if (requestData == null) {
-    //     Debug.log(.WARNING, "The received request data is NULL. Ignoring request...", .{});
-    //     return returnData;
-    // }
-
-    if (requestData.data.len < 1) {
-        Debug.log(.WARNING, "The received length of the request data is 0.", .{});
-        return returnData;
-    }
-
-    Debug.log(.DEBUG, "Request data received: {any}\n", .{requestData.data});
-
-    // var responseLength: c.CFIndex = 0;
-
+fn processRequestMessage(msgId: i32, requestData: SerializedData) !SerializedData {
     var responseData: SerializedData = undefined;
 
     switch (msgId) {
         //
-        k.UnmountDiskRequest => {
-            Debug.log(.INFO, "Freetracer Helper Tool received DADiskUnmount() request {d}.", .{k.UnmountDiskRequest});
+        k.HelperVersionRequest => {
+            Debug.log(.INFO, "Freetracer Helper Tool received a version query request [{d}].", .{k.HelperVersionRequest});
 
-            var responseCode = processDiskUnmountRequest(std.mem.sliceTo(requestData.data, 0x00));
+            var versionString = handleHelperVersionCheckRequest();
+            responseData = SerializedData.serialize([]const u8, &versionString);
+        },
+
+        k.UnmountDiskRequest => {
+            Debug.log(.INFO, "Freetracer Helper Tool received DADiskUnmount() request [{d}].", .{k.UnmountDiskRequest});
+
+            var responseCode = handleDiskUnmountRequest(requestData);
+
+            Debug.log(.WARNING, "responseCode is: {d}", .{@intFromEnum(responseCode)});
+
             responseData = SerializedData.serialize(ReturnCode, &responseCode);
         },
 
-        k.HelperVersionRequest => {
-            Debug.log(.INFO, "Freetracer Helper Tool received a version query request {d}.", .{k.HelperVersionRequest});
+        k.WriteISOToDeviceRequest => {
+            Debug.log(.INFO, "Freetracer Helper Tool received WriteISOToDeviceRequest [{d}].", .{k.WriteISOToDeviceRequest});
 
-            const versionString = processHelperVersionCheckRequest();
-            responseData = SerializedData{ .data = versionString };
+            var responseCode = handleWriteISOToDeviceRequest(requestData);
+            responseData = SerializedData.serialize(ReturnCode, &responseCode);
         },
 
         else => {
@@ -137,20 +77,17 @@ pub fn messagePortCallback(port: c.CFMessagePortRef, msgId: c.SInt32, data: c.CF
         },
     }
 
-    // const responseBytePtr: [*c]const u8 = @ptrCast(&response);
-    // returnData = c.CFDataCreate(c.kCFAllocatorDefault, responseBytePtr, responseLength);
-    returnData = @ptrCast(responseData.constructCFDataRef());
-
-    Debug.log(.INFO, "Freetracer Helper Tool successfully packaged response: {any}.", .{responseData.data});
-
-    return returnData;
+    return responseData;
 }
 
-pub fn processHelperVersionCheckRequest() []const u8 {
+fn handleHelperVersionCheckRequest() []const u8 {
     return env.HELPER_VERSION;
 }
 
-pub fn processDiskUnmountRequest(bsdName: []const u8) ReturnCode {
+fn handleDiskUnmountRequest(requestData: SerializedData) ReturnCode {
+    const bsdName = std.mem.sliceTo(&requestData.data, 0x00);
+    // const bsdName = std.mem.sliceTo(dataSlice, 0x00);
+
     Debug.log(.INFO, "Received bsdName: {s}", .{bsdName});
 
     const daSession = c.DASessionCreate(c.kCFAllocatorDefault);
@@ -298,17 +235,25 @@ fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: 
     if (queuedUnmounts == 0) {
         Debug.log(.INFO, "Finished unmounting all volumes for device.", .{});
 
-        write("/Users/cerberus/Documents/Projects/freetracer/tinycore.iso", "/dev/disk4") catch |err| {
-            Debug.log(.ERROR, "Unable to write to device. Error: {any}", .{err});
-        };
-
         const currentLoop = c.CFRunLoopGetCurrent();
         c.CFRunLoopStop(currentLoop);
     }
 }
 
-pub fn write(isoPath: []const u8, devicePath: []const u8) !void {
-    Debug.log(.INFO, "Begin writing prep...", .{});
+fn handleWriteISOToDeviceRequest(requestData: SerializedData) ReturnCode {
+    const data: WriteRequestData = SerializedData.deserialize(WriteRequestData, requestData);
+
+    // TODO: launch on its own thread, such that the main thread may respond to status requests
+    writeISO(data.isoPath, data.devicePath) catch |err| {
+        Debug.log(.ERROR, "Unable to write to device. Error: {any}", .{err});
+        return ReturnCode.FAILED_TO_WRITE_ISO_TO_DEVICE;
+    };
+
+    return ReturnCode.SUCCESS;
+}
+
+fn writeISO(isoPath: []const u8, devicePath: []const u8) !void {
+    Debug.log(.DEBUG, "Begin writing prep...", .{});
     var writeBuffer: [WRITE_BLOCK_SIZE]u8 = undefined;
 
     const isoFile: std.fs.File = try std.fs.cwd().openFile(isoPath, .{ .mode = .read_only });
@@ -316,7 +261,6 @@ pub fn write(isoPath: []const u8, devicePath: []const u8) !void {
 
     const device = try std.fs.openFileAbsolute(devicePath, .{ .mode = .read_write });
     defer device.close();
-    const deviceStat = try device.stat();
 
     const fileStat = try isoFile.stat();
     const ISO_SIZE = fileStat.size;
@@ -325,16 +269,16 @@ pub fn write(isoPath: []const u8, devicePath: []const u8) !void {
 
     var currentByte: u64 = 0;
 
-    Debug.log(.INFO, "File and device are opened successfully! File size: {d}, device size: {d}", .{ ISO_SIZE, deviceStat.size });
+    Debug.log(.INFO, "File and device are opened successfully! File size: {d}", .{ISO_SIZE});
 
-    Debug.log(.INFO, "[*] Writing ISO to device, please wait...\n", .{});
+    Debug.log(.INFO, "Writing ISO to device, please wait...", .{});
 
     while (currentByte < ISO_SIZE) {
         try isoFile.seekTo(currentByte);
         const bytesRead = try isoFile.read(&writeBuffer);
 
         if (bytesRead == 0) {
-            Debug.log(.INFO, "[v] End of ISO File reached, final block: {d} at {d}!\n", .{ currentByte / WRITE_BLOCK_SIZE, currentByte });
+            Debug.log(.INFO, "End of ISO File reached, final block: {d} at {d}!", .{ currentByte / WRITE_BLOCK_SIZE, currentByte });
             break;
         }
 
@@ -353,7 +297,7 @@ pub fn write(isoPath: []const u8, devicePath: []const u8) !void {
 
     try device.sync();
 
-    Debug.log(.INFO, "[v] Finished writing ISO image to device!", .{});
+    Debug.log(.INFO, "Finished writing ISO image to device!", .{});
 }
 
 comptime {

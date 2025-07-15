@@ -19,6 +19,14 @@ pub const SeverityLevel = enum(u8) {
     ERROR,
 };
 
+pub fn getInstance() !*Logger {
+    if (instance) |*inst| {
+        return inst;
+    }
+
+    return error.UnableToReturnDebugInstance;
+}
+
 pub fn log(comptime level: SeverityLevel, comptime fmt: []const u8, args: anytype) void {
     mutex.lock();
     defer mutex.unlock();

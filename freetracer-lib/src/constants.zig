@@ -1,8 +1,12 @@
 /// Collection of MacOS constants, imitating Apple's naming convention
 /// of its own system framework constants
 pub const k = struct {
+    pub const ResponseDataSize: comptime_int = 512;
+
     pub const HelperVersionRequest: i32 = 11;
     pub const UnmountDiskRequest: i32 = 101;
+    pub const WriteISOToDeviceRequest: i32 = 102;
+
     pub const UnmountDiskResponse: i32 = 201;
 
     pub const SendTimeoutInSeconds: f64 = 5.0;
@@ -26,6 +30,8 @@ pub const HelperReturnCode = enum(i32) {
     FAILED_TO_OBTAIN_INTERNAL_DEVICE_KEY_BOOL = 4004,
     UNMOUNT_REQUEST_ON_INTERNAL_DEVICE = 4005,
     SKIPPED_UNMOUNT_ATTEMPT_ON_EFI_PARTITION = 4006,
+
+    FAILED_TO_WRITE_ISO_TO_DEVICE = 4100,
 };
 
 pub const HelperInstallCode = enum(u1) {
