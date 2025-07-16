@@ -51,25 +51,25 @@ fn processRequestMessage(msgId: i32, requestData: SerializedData) !SerializedDat
         k.HelperVersionRequest => {
             Debug.log(.INFO, "Freetracer Helper Tool received a version query request [{d}].", .{k.HelperVersionRequest});
 
-            var versionString = handleHelperVersionCheckRequest();
-            responseData = SerializedData.serialize([]const u8, &versionString);
+            const versionString = handleHelperVersionCheckRequest();
+            responseData = SerializedData.serialize([:0]const u8, @ptrCast(versionString));
         },
 
         k.UnmountDiskRequest => {
             Debug.log(.INFO, "Freetracer Helper Tool received DADiskUnmount() request [{d}].", .{k.UnmountDiskRequest});
 
-            var responseCode = handleDiskUnmountRequest(requestData);
+            const responseCode = handleDiskUnmountRequest(requestData);
 
             Debug.log(.WARNING, "responseCode is: {d}", .{@intFromEnum(responseCode)});
 
-            responseData = SerializedData.serialize(ReturnCode, &responseCode);
+            responseData = SerializedData.serialize(ReturnCode, responseCode);
         },
 
         k.WriteISOToDeviceRequest => {
             Debug.log(.INFO, "Freetracer Helper Tool received WriteISOToDeviceRequest [{d}].", .{k.WriteISOToDeviceRequest});
 
-            var responseCode = handleWriteISOToDeviceRequest(requestData);
-            responseData = SerializedData.serialize(ReturnCode, &responseCode);
+            const responseCode = handleWriteISOToDeviceRequest(requestData);
+            responseData = SerializedData.serialize(ReturnCode, responseCode);
         },
 
         else => {
@@ -80,8 +80,8 @@ fn processRequestMessage(msgId: i32, requestData: SerializedData) !SerializedDat
     return responseData;
 }
 
-fn handleHelperVersionCheckRequest() []const u8 {
-    return env.HELPER_VERSION;
+fn handleHelperVersionCheckRequest() [:0]const u8 {
+    return @ptrCast(env.HELPER_VERSION);
 }
 
 fn handleDiskUnmountRequest(requestData: SerializedData) ReturnCode {

@@ -4,6 +4,7 @@ const c = @import("lib/sys/system.zig").c;
 const rl = @import("raylib");
 const osd = @import("osdialog");
 const env = @import("env.zig");
+const AppConfig = @import("config.zig");
 
 const freetracer_lib = @import("freetracer-lib");
 const Debug = freetracer_lib.Debug;
@@ -103,7 +104,7 @@ pub fn main() !void {
     );
 
     const versionText = UI.Text.init(
-        env.APP_VERSION,
+        AppConfig.APP_VERSION,
         .{ .x = relX(0.92), .y = relY(0.05) },
         .{ .font = .JERSEY10_REGULAR, .fontSize = 16, .textColor = Color.secondary },
     );

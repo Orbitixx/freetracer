@@ -146,8 +146,8 @@ pub fn installPrivilegedHelperTool() HelperInstallCode {
     unreachable;
 }
 
-pub fn requestHelperVersion() [:0]const u8 {
-    if (!System.isMac) return HelperResponseCode.FAILURE;
+pub fn requestHelperVersion() ![k.ResponseDataSize]u8 {
+    if (!System.isMac) return error.CallAllowedOnMacOSOnly;
 
     // Create a CString from the Privileged Tool's Apple App Bundle ID
     const portNameRef: c.CFStringRef = c.CFStringCreateWithCStringNoCopy(
@@ -162,19 +162,19 @@ pub fn requestHelperVersion() [:0]const u8 {
 
     if (remoteMessagePort == null) {
         Debug.log(.ERROR, "Freetracer unable to create a remote message port to Freetracer Helper Tool.", .{});
-        return HelperResponseCode.FAILURE;
+        return error.UnableToCreateRemoteMessagePort;
     }
 
     defer _ = c.CFRelease(remoteMessagePort);
 
-    const dataPayload: [*c]const u8 = null;
-    const dataLength: i32 = 0;
+    // const dataPayload: [*c]const u8 = null;
+    // const dataLength: i32 = 0;
 
-    const requestDataRef: c.CFDataRef = c.CFDataCreate(c.kCFAllocatorDefault, dataPayload, dataLength);
-    defer _ = c.CFRelease(requestDataRef);
+    const requestDataRef: c.CFDataRef = null; //c.CFDataCreate(c.kCFAllocatorDefault, dataPayload, dataLength);
+    // defer _ = c.CFRelease(requestDataRef);
 
     var portResponseCode: c.SInt32 = 0;
-    var responseData: c.CFDataRef = null;
+    var responseDataRef: c.CFDataRef = null;
 
     portResponseCode = c.CFMessagePortSendRequest(
         remoteMessagePort,
@@ -183,34 +183,33 @@ pub fn requestHelperVersion() [:0]const u8 {
         k.SendTimeoutInSeconds,
         k.ReceiveTimeoutInSeconds,
         c.kCFRunLoopDefaultMode,
-        &responseData,
+        &responseDataRef,
     );
 
-    // TODO: Is the responseData == null check effective here?
-    if (portResponseCode != c.kCFMessagePortSuccess or responseData == null) {
+    if (portResponseCode != c.kCFMessagePortSuccess or responseDataRef == null) {
         Debug.log(
             .ERROR,
             "Freetracer failed to communicate with Freetracer Helper Tool - received invalid response code ({d}) or null response data ({any})",
-            .{ portResponseCode, responseData },
+            .{ portResponseCode, responseDataRef },
         );
-        return HelperResponseCode.FAILURE;
+        return error.UnableToCommunicateWithHelperTool;
     }
 
-    var result: [:0]const u8 = undefined;
+    const versionData: SerializedData = SerializedData.destructCFDataRef(@ptrCast(responseDataRef)) catch |err| {
+        Debug.log(.ERROR, "Unable to destruct CFDataRef during Helper Tool version check call. {any}", .{err});
+        return error.UnableToDestructureCFDataRefForResponseData;
+    };
 
-    if (c.CFDataGetLength(responseData) >= 1) {
-        const dataPtr = c.CFDataGetBytePtr(responseData);
-        result = @ptrCast(@alignCast(dataPtr));
-    }
+    const result: [:0]const u8 = @ptrCast(std.mem.sliceTo(&versionData.data, 0x00));
 
     if (result.len < 1) {
         Debug.log(.ERROR, "Freetracer failed to receive a structured response from Freetracer Helper Tool: {s}.", .{result});
-        return HelperResponseCode.FAILURE;
+        return error.FailedToRedceiveStructuredResponse;
     }
 
     Debug.log(.INFO, "Freetracer successfully received response from Freetracer Helper Tool: {s}", .{result});
 
-    return result;
+    return versionData.data;
 }
 
 /// MacOS-only
@@ -238,7 +237,7 @@ pub fn requestPerformUnmount(targetDisk: [:0]const u8) HelperUnmountRequestCode 
 
     defer _ = c.CFRelease(remoteMessagePort);
 
-    const requestData = SerializedData.serializeString(targetDisk);
+    const requestData = SerializedData.serialize(@TypeOf(targetDisk), targetDisk);
 
     const requestDataRef: c.CFDataRef = @ptrCast(requestData.constructCFDataRef());
     defer _ = c.CFRelease(requestDataRef);

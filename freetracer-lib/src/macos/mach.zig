@@ -12,45 +12,43 @@ const NullTerminatedStringType: type = [:0]const u8;
 pub const SerializedData = struct {
     data: [k.ResponseDataSize]u8,
 
-    pub fn serializeString(str: [:0]const u8) SerializedData {
-        std.debug.assert(str.len + 1 <= k.ResponseDataSize); // +1 for null terminator
+    pub fn serialize(comptime T: type, rawData: T) SerializedData {
         var data = std.mem.zeroes([k.ResponseDataSize]u8);
 
-        // Copy the string content (without the null terminator from the slice)
-        @memcpy(data[0..str.len], str);
+        switch (T) {
+            NullTerminatedStringType => {
+                std.debug.assert(rawData.len + 1 <= k.ResponseDataSize); // +1 for null terminator
+                @memcpy(data[0..rawData.len], rawData);
+                data[rawData.len] = 0x00;
+            },
 
-        // Explicitly add null terminator
-        data[str.len] = 0;
-
-        return .{ .data = data };
-    }
-
-    pub fn deserializeString(sData: SerializedData) [:0]const u8 {
-        // Find the null terminator to determine string length
-        const len = std.mem.indexOfScalar(u8, &sData.data, 0) orelse {
-            // If no null terminator found, assume the entire buffer is used
-            // This is a fallback, but ideally strings should be null-terminated
-            std.debug.panic("No null terminator found in serialized string data", .{});
-        };
-
-        // Return a null-terminated slice pointing to the data
-        return sData.data[0..len :0];
-    }
-
-    pub fn serialize(comptime T: type, rdata: *T) SerializedData {
-        std.debug.assert(@sizeOf(T) <= k.ResponseDataSize);
-
-        var data = std.mem.zeroes([k.ResponseDataSize]u8);
-        const bytes = std.mem.asBytes(rdata);
-
-        @memcpy(data[0..bytes.len], bytes);
+            else => {
+                std.debug.assert(@sizeOf(T) <= k.ResponseDataSize);
+                const bytes = std.mem.asBytes(&rawData);
+                @memcpy(data[0..bytes.len], bytes);
+            },
+        }
 
         return .{ .data = data };
     }
 
     pub fn deserialize(comptime T: type, sData: SerializedData) T {
-        var sArray: [k.ResponseDataSize]u8 = sData.data;
-        return std.mem.bytesAsValue(T, &sArray).*;
+        switch (T) {
+            NullTerminatedStringType => {
+                // Find the null terminator to determine string length
+                const len = std.mem.indexOfScalar(u8, &sData.data, 0x00) orelse blk: {
+                    Debug.log(.WARNING, "No null terminator found in serialized string data, using full possible data length.", .{});
+                    break :blk k.ResponseDataSize;
+                };
+
+                return sData.data[0..len :0];
+            },
+
+            else => {
+                var sArray: [k.ResponseDataSize]u8 = sData.data;
+                return std.mem.bytesAsValue(T, &sArray).*;
+            },
+        }
     }
 
     pub fn constructCFDataRef(self: SerializedData) c.CFDataRef {
@@ -158,8 +156,6 @@ pub const MachCommunicator = struct {
         }
 
         Debug.log(.INFO, "{s}: Request data received: {any}\n", .{ AppName, requestData.data });
-
-        // var responseData: SerializedData = SerializedData{ .data = "CRITICAL_ERROR" };
 
         var responseData = processMessageFn(msgId, requestData) catch |err| blk: {
             Debug.log(.ERROR, "{s}: onMessageReceived.processRequestMessage(msgId = {d}) returned an error: {any}", .{ AppName, msgId, err });

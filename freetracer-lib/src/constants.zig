@@ -2,6 +2,7 @@
 /// of its own system framework constants
 pub const k = struct {
     pub const ResponseDataSize: comptime_int = 512;
+    pub const MachPortPacketSize: comptime_int = 512;
 
     pub const HelperVersionRequest: i32 = 11;
     pub const UnmountDiskRequest: i32 = 101;
@@ -39,9 +40,10 @@ pub const HelperInstallCode = enum(u1) {
     SUCCESS = 1,
 };
 
-pub const HelperUnmountRequestCode = enum(u1) {
+pub const HelperUnmountRequestCode = enum(u2) {
     FAILURE = 0,
     SUCCESS = 1,
+    TRY_AGAIN = 2,
 };
 
 pub const HelperResponseCode = enum(u1) {

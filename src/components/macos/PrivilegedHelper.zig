@@ -1,8 +1,10 @@
 const std = @import("std");
 const rl = @import("raylib");
+const AppConfig = @import("../../config.zig");
 
 const freetracer_lib = @import("freetracer-lib");
 const Debug = freetracer_lib.Debug;
+const MachPortPacketSize = freetracer_lib.k.MachPortPacketSize;
 
 const PrivilegedHelperTool = @import("../../modules/macos/PrivilegedHelperTool.zig");
 
@@ -125,7 +127,9 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
         Events.onUnmountDiskRequest.Hash => {
             const data = Events.onUnmountDiskRequest.getData(event) orelse break :eventLoop;
 
-            const response: freetracer_lib.HelperUnmountRequestCode = self.requestUnmount(data.targetDisk);
+            var response: freetracer_lib.HelperUnmountRequestCode = self.requestUnmount(data.targetDisk);
+
+            if (response == freetracer_lib.HelperUnmountRequestCode.TRY_AGAIN) response = self.requestUnmount(data.targetDisk);
 
             Debug.log(.INFO, "PrivilegedHelper Component received response from Privileged Tool: {any}", .{response});
 
@@ -166,11 +170,28 @@ pub fn dispatchComponentAction(self: *PrivilegedHelper) void {
 }
 
 fn requestUnmount(self: *PrivilegedHelper, targetDisk: [:0]const u8) freetracer_lib.HelperUnmountRequestCode {
-    _ = self;
-    // if (!self.isInstalled) {
-    const installResult = PrivilegedHelperTool.installPrivilegedHelperTool();
-    if (installResult != freetracer_lib.HelperInstallCode.SUCCESS) return freetracer_lib.HelperUnmountRequestCode.FAILURE;
-    // }
+    // Install or update the Privileged Helper Tool before sending unmount request
+
+    if (!self.isInstalled) {
+        const installResult = PrivilegedHelperTool.installPrivilegedHelperTool();
+        if (installResult != freetracer_lib.HelperInstallCode.SUCCESS) return freetracer_lib.HelperUnmountRequestCode.FAILURE;
+        return freetracer_lib.HelperUnmountRequestCode.TRY_AGAIN;
+    }
+
+    const helperVersionBuffer = PrivilegedHelperTool.requestHelperVersion() catch |err| blk: {
+        Debug.log(.WARNING, "Unable to retrieve Helper Tool's installed version, re-installing the Helper Tool. Error: {any}", .{err});
+        break :blk std.mem.zeroes([MachPortPacketSize]u8);
+    };
+
+    const helperVersion: [:0]const u8 = @ptrCast(std.mem.sliceTo(&helperVersionBuffer, 0x00));
+
+    Debug.log(.INFO, "Freetracer received confirmation of Helper Tool version [{s}] installed.", .{helperVersion});
+
+    if (!std.mem.eql(u8, AppConfig.PRIVILEGED_TOOL_LATEST_VERSION, helperVersion)) {
+        const installResult = PrivilegedHelperTool.installPrivilegedHelperTool();
+        if (installResult != freetracer_lib.HelperInstallCode.SUCCESS) return freetracer_lib.HelperUnmountRequestCode.FAILURE;
+        return freetracer_lib.HelperUnmountRequestCode.TRY_AGAIN;
+    }
 
     return PrivilegedHelperTool.requestPerformUnmount(targetDisk);
 }
