@@ -12,6 +12,8 @@ pub const c = if (isMac) @cImport({
     @cInclude("IOKit/IOBSD.h");
     @cInclude("ServiceManagement/ServiceManagement.h");
     @cInclude("Security/Authorization.h");
+    @cInclude("bootstrap.h");
+    @cInclude("mach/mach.h");
 }) else if (isLinux) @cImport({
     // @cInclude("blkid/blkid.h");
 });

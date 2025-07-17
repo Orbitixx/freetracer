@@ -1,8 +1,10 @@
 const std = @import("std");
 const rl = @import("raylib");
+const env = @import("../../env.zig");
 const AppConfig = @import("../../config.zig");
 
 const freetracer_lib = @import("freetracer-lib");
+const c = freetracer_lib.c;
 const Debug = freetracer_lib.Debug;
 const MachPortPacketSize = freetracer_lib.k.MachPortPacketSize;
 
@@ -130,17 +132,17 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
 
             var unmountResponse: freetracer_lib.HelperUnmountRequestCode = self.requestUnmount(data.targetDisk);
 
-            Debug.log(.INFO, "1 PrivilegedHelper Component received response from Privileged Tool: {any}", .{unmountResponse});
+            Debug.log(.INFO, "PrivilegedHelper Component first unmount request result: {any}", .{unmountResponse});
 
             if (unmountResponse == freetracer_lib.HelperUnmountRequestCode.TRY_AGAIN) {
-                Debug.log(.INFO, "1.5 Received a try again code, trying again...: {any}", .{unmountResponse});
+                Debug.log(.INFO, "PrivilegedHelper received a try again code, trying again...: {any}", .{unmountResponse});
                 unmountResponse = self.requestUnmount(data.targetDisk);
             }
 
-            Debug.log(.INFO, "2 PrivilegedHelper Component received response from Privileged Tool: {any}", .{unmountResponse});
+            Debug.log(.INFO, "PrivilegedHelper Component result of second unmount request: {any}", .{unmountResponse});
 
             if (unmountResponse != freetracer_lib.HelperUnmountRequestCode.SUCCESS) {
-                Debug.log(.WARNING, "PrivilegedHelper.handleEvent(): interrupting event execution due to error response.", .{});
+                Debug.log(.WARNING, "PrivilegedHelper.handleEvent(): interrupting event processing due to error response.", .{});
                 break :eventLoop;
             }
 
@@ -195,26 +197,56 @@ pub fn dispatchComponentAction(self: *PrivilegedHelper) void {
     } else self.isInstalled = false;
 }
 
+fn waitForHelperToolInstall() void {
+    Debug.log(.INFO, "Waiting to allow Helper Tool be registered with system launch daemon", .{});
+
+    std.time.sleep(3_000_000_000);
+}
+
 fn requestUnmount(self: *PrivilegedHelper, targetDisk: [:0]const u8) freetracer_lib.HelperUnmountRequestCode {
     // Install or update the Privileged Helper Tool before sending unmount request
 
     if (!self.isInstalled) {
         const installResult = PrivilegedHelperTool.installPrivilegedHelperTool();
-        if (installResult != freetracer_lib.HelperInstallCode.SUCCESS) return freetracer_lib.HelperUnmountRequestCode.FAILURE;
+        waitForHelperToolInstall();
+        if (installResult != freetracer_lib.HelperInstallCode.SUCCESS) return freetracer_lib.HelperUnmountRequestCode.FAILURE else self.dispatchComponentAction();
         return freetracer_lib.HelperUnmountRequestCode.TRY_AGAIN;
     }
 
+    const helperPortNameRef: c.CFStringRef = c.CFStringCreateWithCStringNoCopy(
+        c.kCFAllocatorDefault,
+        env.HELPER_BUNDLE_ID,
+        c.kCFStringEncodingUTF8,
+        c.kCFAllocatorNull,
+    );
+
+    const testRemotePort: c.CFMessagePortRef = c.CFMessagePortCreateRemote(c.kCFAllocatorDefault, helperPortNameRef);
+
+    if (testRemotePort == null) {
+        Debug.log(.WARNING, "Failed to establish a test remote port to the Helper Tool.", .{});
+        waitForHelperToolInstall();
+    } else Debug.log(.INFO, "Successfully established a test remote port to the helper tool.", .{});
+
+    _ = c.CFRelease(testRemotePort);
+    _ = c.CFRelease(helperPortNameRef);
+
     const helperVersionBuffer = PrivilegedHelperTool.requestHelperVersion() catch |err| blk: {
-        Debug.log(.WARNING, "Unable to retrieve Helper Tool's installed version, re-installing the Helper Tool. Error: {any}", .{err});
+        Debug.log(.WARNING, "Unable to retrieve Helper Tool's installed version. Error: {any}", .{err});
         break :blk std.mem.zeroes([MachPortPacketSize]u8);
     };
 
     const helperVersion: [:0]const u8 = @ptrCast(std.mem.sliceTo(&helperVersionBuffer, 0x00));
 
+    if (helperVersion.len < 1) {
+        Debug.log(.ERROR, "Helper Tool responded with zero version length response despite just having been installed. Aborting...", .{});
+        return freetracer_lib.HelperUnmountRequestCode.FAILURE;
+    }
+
     Debug.log(.INFO, "Freetracer received confirmation of Helper Tool version [{s}] installed.", .{helperVersion});
 
     if (!std.mem.eql(u8, AppConfig.PRIVILEGED_TOOL_LATEST_VERSION, helperVersion)) {
         const installResult = PrivilegedHelperTool.installPrivilegedHelperTool();
+        waitForHelperToolInstall();
         if (installResult != freetracer_lib.HelperInstallCode.SUCCESS) return freetracer_lib.HelperUnmountRequestCode.FAILURE;
         return freetracer_lib.HelperUnmountRequestCode.TRY_AGAIN;
     }

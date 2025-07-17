@@ -14,43 +14,23 @@ pub fn now(utcCorrectionHours: i8) DateTime {
     const timestamp = std.time.timestamp();
     const epoch_seconds = @as(u64, @intCast(timestamp));
 
-    // Convert to datetime
-    const datetime = std.time.epoch.EpochSeconds{ .secs = epoch_seconds };
+    // Add timezone offset directly to timestamp
+    const offset_seconds = @as(i64, utcCorrectionHours) * 3600;
+    const adjusted_timestamp = @as(i64, @intCast(epoch_seconds)) + offset_seconds;
+    const adjusted_epoch_seconds = @as(u64, @intCast(adjusted_timestamp));
+
+    // Convert adjusted timestamp to datetime
+    const datetime = std.time.epoch.EpochSeconds{ .secs = adjusted_epoch_seconds };
     const year_day = datetime.getEpochDay().calculateYearDay();
     const month_day = year_day.calculateMonthDay();
     const day_seconds = datetime.getDaySeconds();
 
-    const utcHours = day_seconds.getHoursIntoDay();
-    var hours: i8 = @intCast(day_seconds.getHoursIntoDay());
-    var day = month_day.day_index + 1;
-    var month = month_day.month.numeric();
-    var year = year_day.year;
-
-    std.debug.assert(@abs(utcCorrectionHours) < 24);
-
-    if (utcHours >= @abs(utcCorrectionHours)) hours += utcCorrectionHours;
-
-    if (utcHours <= @abs(utcCorrectionHours)) {
-        const diff: i8 = @intCast(@abs(utcCorrectionHours) - utcHours);
-        hours = 24 - diff;
-
-        if (day == 1) {
-            day = 0;
-            if (month == 1) {
-                month = 12;
-                year -= 1;
-            } else month -= 1;
-        } else day -= 1;
-    }
-
-    if (@abs(hours) == 24) hours = 0;
-
     return DateTime{
         .seconds = day_seconds.getSecondsIntoMinute(),
         .minutes = day_seconds.getMinutesIntoHour(),
-        .hours = @intCast(@abs(hours)),
-        .day = day,
-        .month = month,
-        .year = year,
+        .hours = @intCast(day_seconds.getHoursIntoDay()),
+        .day = month_day.day_index + 1,
+        .month = month_day.month.numeric(),
+        .year = year_day.year,
     };
 }

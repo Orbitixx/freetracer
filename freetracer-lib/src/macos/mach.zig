@@ -67,8 +67,6 @@ pub const SerializedData = struct {
     pub fn destructCFDataRef(dataRef: c.CFDataRef) !SerializedData {
         if (dataRef == null) return error.CFDataRefIsNULL;
 
-        Debug.log(.INFO, "destructCFDataRef length: {d}", .{c.CFDataGetLength(dataRef)});
-
         const sourceData = @as([*]const u8, c.CFDataGetBytePtr(dataRef))[0..@intCast(c.CFDataGetLength(dataRef))];
 
         var finalByteArray: [k.MachPortPacketSize]u8 = std.mem.zeroes([k.MachPortPacketSize]u8);
@@ -166,7 +164,7 @@ pub const MachCommunicator = struct {
             return returnData;
         }
 
-        Debug.log(.INFO, "{s}: Request data received: {any}\n", .{ AppName, requestData.data });
+        Debug.log(.INFO, "{s}: Request data received: {any}\n", .{ AppName, std.mem.sliceTo(&requestData.data, 0x00) });
 
         var responseData = processMessageFn(msgId, requestData) catch |err| blk: {
             Debug.log(.ERROR, "{s}: onMessageReceived.processRequestMessage(msgId = {d}) returned an error: {any}", .{ AppName, msgId, err });

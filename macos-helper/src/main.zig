@@ -31,7 +31,7 @@ pub fn main() !void {
     try Debug.init(allocator, .{});
     defer Debug.deinit();
 
-    Debug.log(.DEBUG, "Debug logger initialized.", .{});
+    Debug.log(.INFO, "------------------------------------------------------------------------\nDebug logger initialized.", .{});
 
     var machCommunicator = MachCommunicator.init(allocator, .{
         .bundleId = env.BUNDLE_ID,
@@ -127,7 +127,7 @@ fn handleDiskUnmountRequest(requestData: SerializedData) ReturnCode {
 
     Debug.log(.INFO, "DA Disk Description is successfully obtained/copied.", .{});
 
-    _ = c.CFShow(diskInfo);
+    // _ = c.CFShow(diskInfo);
 
     // NOTE: Not sure that it is appropriate to run an EFI check against a whole device, instead of a leaf.
     // Probably no value in doing so, unless the unmount is processed separately for each leaf volume.
