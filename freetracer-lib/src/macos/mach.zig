@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const k = @import("../constants.zig").k;
 const Debug = @import("../util/debug.zig");
 
@@ -10,42 +11,50 @@ const c = @cImport({
 const NullTerminatedStringType: type = [:0]const u8;
 
 pub const SerializedData = struct {
-    data: [k.ResponseDataSize]u8,
+    data: [k.MachPortPacketSize]u8,
 
-    pub fn serialize(comptime T: type, rawData: T) SerializedData {
-        var data = std.mem.zeroes([k.ResponseDataSize]u8);
+    pub fn serialize(comptime T: type, rawData: T) !SerializedData {
+        var data = std.mem.zeroes([k.MachPortPacketSize]u8);
 
         switch (T) {
             NullTerminatedStringType => {
-                std.debug.assert(rawData.len + 1 <= k.ResponseDataSize); // +1 for null terminator
+                std.debug.assert(rawData.len + 1 <= k.MachPortPacketSize); // +1 for null terminator
                 @memcpy(data[0..rawData.len], rawData);
                 data[rawData.len] = 0x00;
             },
 
+            @TypeOf(null) => {},
+
             else => {
-                std.debug.assert(@sizeOf(T) <= k.ResponseDataSize);
+                std.debug.assert(@sizeOf(T) <= k.MachPortPacketSize);
                 const bytes = std.mem.asBytes(&rawData);
                 @memcpy(data[0..bytes.len], bytes);
             },
         }
 
-        return .{ .data = data };
+        return .{
+            .data = data,
+        };
     }
 
-    pub fn deserialize(comptime T: type, sData: SerializedData) T {
+    pub fn deserialize(comptime T: type, sData: SerializedData) !T {
         switch (T) {
             NullTerminatedStringType => {
-                // Find the null terminator to determine string length
-                const len = std.mem.indexOfScalar(u8, &sData.data, 0x00) orelse blk: {
-                    Debug.log(.WARNING, "No null terminator found in serialized string data, using full possible data length.", .{});
-                    break :blk k.ResponseDataSize;
-                };
+                // // Find the null terminator to determine string length
+                // const len = std.mem.indexOfScalar(u8, &sData.data, 0x00) orelse blk: {
+                //     Debug.log(.WARNING, "No null terminator found in serialized string data, using full possible data length.", .{});
+                //     break :blk k.MachPortPacketSize;
+                // };
 
-                return sData.data[0..len :0];
+                return sData.data;
+            },
+
+            @TypeOf(null) => {
+                return null;
             },
 
             else => {
-                var sArray: [k.ResponseDataSize]u8 = sData.data;
+                var sArray: [k.MachPortPacketSize]u8 = sData.data;
                 return std.mem.bytesAsValue(T, &sArray).*;
             },
         }
@@ -58,9 +67,11 @@ pub const SerializedData = struct {
     pub fn destructCFDataRef(dataRef: c.CFDataRef) !SerializedData {
         if (dataRef == null) return error.CFDataRefIsNULL;
 
+        Debug.log(.INFO, "destructCFDataRef length: {d}", .{c.CFDataGetLength(dataRef)});
+
         const sourceData = @as([*]const u8, c.CFDataGetBytePtr(dataRef))[0..@intCast(c.CFDataGetLength(dataRef))];
 
-        var finalByteArray: [k.ResponseDataSize]u8 = std.mem.zeroes([k.ResponseDataSize]u8);
+        var finalByteArray: [k.MachPortPacketSize]u8 = std.mem.zeroes([k.MachPortPacketSize]u8);
         @memcpy(finalByteArray[0..sourceData.len], sourceData);
 
         return SerializedData{
@@ -159,14 +170,12 @@ pub const MachCommunicator = struct {
 
         var responseData = processMessageFn(msgId, requestData) catch |err| blk: {
             Debug.log(.ERROR, "{s}: onMessageReceived.processRequestMessage(msgId = {d}) returned an error: {any}", .{ AppName, msgId, err });
-            break :blk SerializedData{ .data = std.mem.zeroes([k.ResponseDataSize]u8) };
+            break :blk SerializedData{ .data = std.mem.zeroes([k.MachPortPacketSize]u8) };
         };
-
-        Debug.log(.INFO, "responseData is: {any}", .{responseData.data});
 
         returnData = @ptrCast(responseData.constructCFDataRef());
 
-        Debug.log(.INFO, "{s}: Successfully packaged response: {any}.", .{ AppName, responseData.data });
+        Debug.log(.INFO, "{s}: Successfully packaged response: {any}.", .{ AppName, std.mem.sliceTo(&responseData.data, 0x00) });
 
         return returnData;
     }

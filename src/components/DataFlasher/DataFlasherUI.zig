@@ -74,12 +74,6 @@ pub const Events = struct {
         },
         struct {},
     );
-
-    pub const onSomething = ComponentFramework.defineEvent(
-        "data_flasher.on_",
-        struct {},
-        struct {},
-    );
 };
 
 pub fn init(allocator: std.mem.Allocator, parent: *DataFlasher) !DataFlasherUI {
@@ -312,14 +306,6 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
                     });
                 },
             }
-        },
-
-        Events.onSomething.Hash => {
-            //
-            const data = Events.onSomething.getData(event) orelse break :eventLoop;
-            _ = data;
-
-            eventResult.validate(1);
         },
 
         else => {},

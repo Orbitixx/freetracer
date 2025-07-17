@@ -146,7 +146,7 @@ pub fn installPrivilegedHelperTool() HelperInstallCode {
     unreachable;
 }
 
-pub fn requestHelperVersion() ![k.ResponseDataSize]u8 {
+fn sendMachMessageToRemote(comptime requestType: type, requestData: requestType, msgId: i32, comptime returnType: type) !returnType {
     if (!System.isMac) return error.CallAllowedOnMacOSOnly;
 
     // Create a CString from the Privileged Tool's Apple App Bundle ID
@@ -167,79 +167,9 @@ pub fn requestHelperVersion() ![k.ResponseDataSize]u8 {
 
     defer _ = c.CFRelease(remoteMessagePort);
 
-    // const dataPayload: [*c]const u8 = null;
-    // const dataLength: i32 = 0;
+    const s_requestData = try SerializedData.serialize(requestType, requestData);
 
-    const requestDataRef: c.CFDataRef = null; //c.CFDataCreate(c.kCFAllocatorDefault, dataPayload, dataLength);
-    // defer _ = c.CFRelease(requestDataRef);
-
-    var portResponseCode: c.SInt32 = 0;
-    var responseDataRef: c.CFDataRef = null;
-
-    portResponseCode = c.CFMessagePortSendRequest(
-        remoteMessagePort,
-        k.HelperVersionRequest,
-        requestDataRef,
-        k.SendTimeoutInSeconds,
-        k.ReceiveTimeoutInSeconds,
-        c.kCFRunLoopDefaultMode,
-        &responseDataRef,
-    );
-
-    if (portResponseCode != c.kCFMessagePortSuccess or responseDataRef == null) {
-        Debug.log(
-            .ERROR,
-            "Freetracer failed to communicate with Freetracer Helper Tool - received invalid response code ({d}) or null response data ({any})",
-            .{ portResponseCode, responseDataRef },
-        );
-        return error.UnableToCommunicateWithHelperTool;
-    }
-
-    const versionData: SerializedData = SerializedData.destructCFDataRef(@ptrCast(responseDataRef)) catch |err| {
-        Debug.log(.ERROR, "Unable to destruct CFDataRef during Helper Tool version check call. {any}", .{err});
-        return error.UnableToDestructureCFDataRefForResponseData;
-    };
-
-    const result: [:0]const u8 = @ptrCast(std.mem.sliceTo(&versionData.data, 0x00));
-
-    if (result.len < 1) {
-        Debug.log(.ERROR, "Freetracer failed to receive a structured response from Freetracer Helper Tool: {s}.", .{result});
-        return error.FailedToRedceiveStructuredResponse;
-    }
-
-    Debug.log(.INFO, "Freetracer successfully received response from Freetracer Helper Tool: {s}", .{result});
-
-    return versionData.data;
-}
-
-/// MacOS-only
-/// Sends a CFMessage to the Privileged Helper Tool via a CFPort to request a disk unmount
-/// "Client"-side function, whereas Freetracer acts as the client for the Freetracer Privileged Tool
-/// @Returns HelperUnmountRequestCode = enum(bool) { FAILURE: bool = false, SUCCESS: bool = true}
-pub fn requestPerformUnmount(targetDisk: [:0]const u8) HelperUnmountRequestCode {
-    if (!System.isMac) return HelperUnmountRequestCode.FAILURE;
-
-    // Create a CString from the Privileged Tool's Apple App Bundle ID
-    const portNameRef: c.CFStringRef = c.CFStringCreateWithCStringNoCopy(
-        c.kCFAllocatorDefault,
-        env.HELPER_BUNDLE_ID,
-        c.kCFStringEncodingUTF8,
-        c.kCFAllocatorNull,
-    );
-    defer _ = c.CFRelease(portNameRef);
-
-    const remoteMessagePort: c.CFMessagePortRef = c.CFMessagePortCreateRemote(c.kCFAllocatorDefault, portNameRef);
-
-    if (remoteMessagePort == null) {
-        Debug.log(.ERROR, "Freetracer unable to create a remote message port to Freetracer Helper Tool.", .{});
-        return HelperUnmountRequestCode.FAILURE;
-    }
-
-    defer _ = c.CFRelease(remoteMessagePort);
-
-    const requestData = SerializedData.serialize(@TypeOf(targetDisk), targetDisk);
-
-    const requestDataRef: c.CFDataRef = @ptrCast(requestData.constructCFDataRef());
+    const requestDataRef: c.CFDataRef = @ptrCast(s_requestData.constructCFDataRef());
     defer _ = c.CFRelease(requestDataRef);
 
     var responseDataRef: c.CFDataRef = null;
@@ -249,7 +179,7 @@ pub fn requestPerformUnmount(targetDisk: [:0]const u8) HelperUnmountRequestCode 
 
     helperResponseCode = c.CFMessagePortSendRequest(
         remoteMessagePort,
-        k.UnmountDiskRequest,
+        msgId,
         requestDataRef,
         k.SendTimeoutInSeconds,
         k.ReceiveTimeoutInSeconds,
@@ -263,22 +193,82 @@ pub fn requestPerformUnmount(targetDisk: [:0]const u8) HelperUnmountRequestCode 
             "Freetracer failed to communicate with Freetracer Helper Tool - received invalid response code ({d}) or null response data ({any})",
             .{ helperResponseCode, responseDataRef },
         );
+        return error.FailedToCommunicateWithHelperTool;
+    }
+
+    // Debug.log(.DEBUG, "@sizeOf(responseDataRef) is: {d}", .{@sizeOf(responseDataRef)});
+    const responseData = try SerializedData.destructCFDataRef(@ptrCast(responseDataRef));
+    const deserializedData = try SerializedData.deserialize(returnType, responseData);
+
+    return deserializedData;
+}
+
+/// MacOS-only
+/// Sends a CFMessage to the Privileged Helper Tool via a CFPort to request helper tool's version
+/// "Client"-side function, whereas Freetracer acts as the client for the Freetracer Privileged Tool
+/// @Returns anyeror![k.ResponseDataSize]u8
+pub fn requestHelperVersion() ![k.MachPortPacketSize]u8 {
+    //
+    const response: [k.MachPortPacketSize]u8 = try sendMachMessageToRemote(
+        @TypeOf(null),
+        null,
+        k.HelperVersionRequest,
+        [k.MachPortPacketSize]u8,
+    );
+
+    if (response.len < 1) {
+        Debug.log(.ERROR, "PrivilegedHelperTool.requestHelperVersion(): Freetracer failed to receive a structured response from Freetracer Helper Tool (zero length response).", .{});
+        return error.FailedToRedceiveStructuredResponse;
+    }
+
+    Debug.log(.INFO, "Freetracer successfully received response from Freetracer Helper Tool: {s}", .{std.mem.sliceTo(&response, 0x00)});
+
+    return response;
+}
+
+/// MacOS-only
+/// Sends a CFMessage to the Privileged Helper Tool via a CFPort to request a disk unmount
+/// "Client"-side function, whereas Freetracer acts as the client for the Freetracer Privileged Tool
+/// @Returns anyerror!k.HelperUnmountRequestCode
+pub fn requestPerformUnmount(targetDisk: [:0]const u8) !HelperUnmountRequestCode {
+    //
+    const response: HelperReturnCode = try sendMachMessageToRemote(
+        [:0]const u8,
+        targetDisk,
+        k.UnmountDiskRequest,
+        HelperReturnCode,
+    );
+
+    if (response != HelperReturnCode.SUCCESS) {
+        Debug.log(.ERROR, "Freetracer failed to receive a structured response from Freetracer Helper Tool: {d}.", .{@intFromEnum(response)});
         return HelperUnmountRequestCode.FAILURE;
     }
 
-    const responseData = SerializedData.destructCFDataRef(@ptrCast(responseDataRef)) catch |err| {
-        Debug.log(.WARNING, "Freetracer received a NULL response from Privileged Helper. Message: {any}", .{err});
-        return HelperUnmountRequestCode.FAILURE;
-    };
-
-    const result = SerializedData.deserialize(HelperReturnCode, responseData);
-
-    if (result != HelperReturnCode.SUCCESS) {
-        Debug.log(.ERROR, "Freetracer failed to receive a structured response from Freetracer Helper Tool: {d}.", .{@intFromEnum(result)});
-        return HelperUnmountRequestCode.FAILURE;
-    }
-
-    Debug.log(.INFO, "Freetracer successfully received response from Freetracer Helper Tool: {any}", .{result});
+    Debug.log(.INFO, "Freetracer successfully received response from Freetracer Helper Tool: {any}", .{response});
 
     return HelperUnmountRequestCode.SUCCESS;
+}
+
+/// MacOS-only
+/// Sends a CFMessage to the Privileged Helper Tool via a CFPort to request to flash ISO to disk
+/// "Client"-side function, whereas Freetracer acts as the client for the Freetracer Privileged Tool
+/// @Returns anyerror!k.HelperReturnCode
+pub fn requestWriteISO(requestData: [:0]const u8) !HelperReturnCode {
+    // Debug.log(.DEBUG, "requestWiteISO(): requestData: {any}", .{requestData});
+
+    const response: HelperReturnCode = try sendMachMessageToRemote(
+        [:0]const u8,
+        requestData,
+        k.WriteISOToDeviceRequest,
+        HelperReturnCode,
+    );
+
+    if (response != HelperReturnCode.SUCCESS) {
+        Debug.log(.ERROR, "Freetracer failed to receive a structured response from Freetracer Helper Tool: {d}.", .{@intFromEnum(response)});
+        return error.HelperToolRespondedItFailedToWriteISOToDevice;
+    }
+
+    Debug.log(.INFO, "Freetracer received response that Helper Tool successfully flashed ISO to disk.", .{});
+
+    return response;
 }

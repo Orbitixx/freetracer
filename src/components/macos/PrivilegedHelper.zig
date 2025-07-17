@@ -40,9 +40,10 @@ isInstalled: bool = false,
 
 pub const Events = struct {
     //
-    pub const onUnmountDiskRequest = ComponentFramework.defineEvent(
-        "privileged_helper.on_unmount_disk_request",
+    pub const onWriteISOToDeviceRequest = ComponentFramework.defineEvent(
+        "privileged_helper.on_write_iso_to_device",
         struct {
+            isoPath: [:0]const u8,
             targetDisk: [:0]const u8,
         },
         struct {},
@@ -124,16 +125,41 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
 
     eventLoop: switch (event.hash) {
         //
-        Events.onUnmountDiskRequest.Hash => {
-            const data = Events.onUnmountDiskRequest.getData(event) orelse break :eventLoop;
+        Events.onWriteISOToDeviceRequest.Hash => {
+            const data = Events.onWriteISOToDeviceRequest.getData(event) orelse break :eventLoop;
 
-            var response: freetracer_lib.HelperUnmountRequestCode = self.requestUnmount(data.targetDisk);
+            var unmountResponse: freetracer_lib.HelperUnmountRequestCode = self.requestUnmount(data.targetDisk);
 
-            if (response == freetracer_lib.HelperUnmountRequestCode.TRY_AGAIN) response = self.requestUnmount(data.targetDisk);
+            Debug.log(.INFO, "1 PrivilegedHelper Component received response from Privileged Tool: {any}", .{unmountResponse});
 
-            Debug.log(.INFO, "PrivilegedHelper Component received response from Privileged Tool: {any}", .{response});
+            if (unmountResponse == freetracer_lib.HelperUnmountRequestCode.TRY_AGAIN) {
+                Debug.log(.INFO, "1.5 Received a try again code, trying again...: {any}", .{unmountResponse});
+                unmountResponse = self.requestUnmount(data.targetDisk);
+            }
 
-            if (response == freetracer_lib.HelperUnmountRequestCode.SUCCESS) eventResult.validate(1);
+            Debug.log(.INFO, "2 PrivilegedHelper Component received response from Privileged Tool: {any}", .{unmountResponse});
+
+            if (unmountResponse != freetracer_lib.HelperUnmountRequestCode.SUCCESS) {
+                Debug.log(.WARNING, "PrivilegedHelper.handleEvent(): interrupting event execution due to error response.", .{});
+                break :eventLoop;
+            }
+
+            var diskPath = try self.allocator.alloc(u8, AppConfig.DISK_PREFIX.len + data.targetDisk.len);
+            defer self.allocator.free(diskPath);
+
+            @memcpy(diskPath[0..AppConfig.DISK_PREFIX.len], AppConfig.DISK_PREFIX);
+            @memcpy(diskPath[AppConfig.DISK_PREFIX.len..], data.targetDisk);
+
+            var finalDataString = try self.allocator.allocSentinel(u8, diskPath.len + data.isoPath.len + 1, 0x00);
+            defer self.allocator.free(finalDataString);
+
+            @memcpy(finalDataString[0..data.isoPath.len], data.isoPath);
+            finalDataString[data.isoPath.len] = 0x3b; // semi-colon separator
+            @memcpy(finalDataString[(data.isoPath.len + 1)..], diskPath);
+
+            const writeResponse = requestWrite(@ptrCast(finalDataString));
+
+            if (writeResponse == freetracer_lib.HelperReturnCode.SUCCESS) eventResult.validate(1);
         },
 
         else => {},
@@ -193,7 +219,21 @@ fn requestUnmount(self: *PrivilegedHelper, targetDisk: [:0]const u8) freetracer_
         return freetracer_lib.HelperUnmountRequestCode.TRY_AGAIN;
     }
 
-    return PrivilegedHelperTool.requestPerformUnmount(targetDisk);
+    const returnCode = PrivilegedHelperTool.requestPerformUnmount(targetDisk) catch |err| blk: {
+        Debug.log(.ERROR, "PrivilegedHelper.requestUnmount() caught an error: {any}", .{err});
+        break :blk freetracer_lib.HelperUnmountRequestCode.FAILURE;
+    };
+
+    return returnCode;
+}
+
+pub fn requestWrite(data: [:0]const u8) freetracer_lib.HelperReturnCode {
+    const returnCode = PrivilegedHelperTool.requestWriteISO(data) catch |err| blk: {
+        Debug.log(.ERROR, "PrivilegedHelper.requestWrite() caught an error: {any}", .{err});
+        break :blk freetracer_lib.HelperReturnCode.FAILED_TO_WRITE_ISO_TO_DEVICE;
+    };
+
+    return returnCode;
 }
 
 const ComponentImplementation = ComponentFramework.ImplementComponent(PrivilegedHelper);

@@ -1,7 +1,6 @@
 /// Collection of MacOS constants, imitating Apple's naming convention
 /// of its own system framework constants
 pub const k = struct {
-    pub const ResponseDataSize: comptime_int = 512;
     pub const MachPortPacketSize: comptime_int = 512;
 
     pub const HelperVersionRequest: i32 = 11;

@@ -145,11 +145,13 @@ pub fn dispatchComponentAction(self: *DataFlasher) void {
     // NOTE: Need to be careful with the memory access operations here since targetDisk (and obtained slice below)
     // live/s only within the scope of this function.
     var targetDisk: [:0]const u8 = undefined;
+    var isoPath: [:0]const u8 = undefined;
 
     {
         self.state.lock();
         defer self.state.unlock();
         targetDisk = self.state.data.device.?.getBsdNameSlice();
+        isoPath = self.state.data.isoPath.?;
     }
 
     if (targetDisk.len < 2) {
@@ -160,7 +162,7 @@ pub fn dispatchComponentAction(self: *DataFlasher) void {
     // Send a request to unmount the target disk to the PrivilegedHelper Component, which will communicate with the Helper Tool
     const unmountResult = EventManager.signal(
         "privileged_helper",
-        PrivilegedHelper.Events.onUnmountDiskRequest.create(self.asComponentPtr(), &.{ .targetDisk = targetDisk }),
+        PrivilegedHelper.Events.onWriteISOToDeviceRequest.create(self.asComponentPtr(), &.{ .targetDisk = targetDisk, .isoPath = isoPath }),
     ) catch |err| errBlk: {
         Debug.log(.ERROR, "DataFlasher: Received an error dispatching a disk unmount request. Aborting... Error: {any}", .{err});
         break :errBlk EventResult{ .success = false, .validation = 0 };

@@ -52,7 +52,8 @@ fn processRequestMessage(msgId: i32, requestData: SerializedData) !SerializedDat
             Debug.log(.INFO, "Freetracer Helper Tool received a version query request [{d}].", .{k.HelperVersionRequest});
 
             const versionString = handleHelperVersionCheckRequest();
-            responseData = SerializedData.serialize([:0]const u8, @ptrCast(versionString));
+            Debug.log(.INFO, "Packing size of versionString: {d}", .{@sizeOf(@TypeOf(env.HELPER_VERSION))});
+            responseData = try SerializedData.serialize([:0]const u8, versionString);
         },
 
         k.UnmountDiskRequest => {
@@ -62,14 +63,14 @@ fn processRequestMessage(msgId: i32, requestData: SerializedData) !SerializedDat
 
             Debug.log(.WARNING, "responseCode is: {d}", .{@intFromEnum(responseCode)});
 
-            responseData = SerializedData.serialize(ReturnCode, responseCode);
+            responseData = try SerializedData.serialize(ReturnCode, responseCode);
         },
 
         k.WriteISOToDeviceRequest => {
             Debug.log(.INFO, "Freetracer Helper Tool received WriteISOToDeviceRequest [{d}].", .{k.WriteISOToDeviceRequest});
 
             const responseCode = handleWriteISOToDeviceRequest(requestData);
-            responseData = SerializedData.serialize(ReturnCode, responseCode);
+            responseData = try SerializedData.serialize(ReturnCode, responseCode);
         },
 
         else => {
@@ -81,7 +82,7 @@ fn processRequestMessage(msgId: i32, requestData: SerializedData) !SerializedDat
 }
 
 fn handleHelperVersionCheckRequest() [:0]const u8 {
-    return @ptrCast(env.HELPER_VERSION);
+    return env.HELPER_VERSION;
 }
 
 fn handleDiskUnmountRequest(requestData: SerializedData) ReturnCode {
@@ -241,10 +242,19 @@ fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: 
 }
 
 fn handleWriteISOToDeviceRequest(requestData: SerializedData) ReturnCode {
-    const data: WriteRequestData = SerializedData.deserialize(WriteRequestData, requestData);
+    const data: [k.MachPortPacketSize]u8 = SerializedData.deserialize([k.MachPortPacketSize]u8, requestData) catch |err| {
+        Debug.log(.ERROR, "Unable to deserialize WriteRequestData. Error: {any}", .{err});
+        return ReturnCode.FAILED_TO_WRITE_ISO_TO_DEVICE;
+    };
+
+    const isoPath = std.mem.sliceTo(&data, 0x3b);
+    const remainder = data[isoPath.len + 1 ..];
+    const devicePath = std.mem.sliceTo(remainder, 0x00);
+
+    Debug.log(.INFO, "handleWriteISOToDeviceRequest(): \n\tisoPath: {s}\n\tdevicePath: {s}", .{ isoPath, devicePath });
 
     // TODO: launch on its own thread, such that the main thread may respond to status requests
-    writeISO(data.isoPath, data.devicePath) catch |err| {
+    writeISO(isoPath, devicePath) catch |err| {
         Debug.log(.ERROR, "Unable to write to device. Error: {any}", .{err});
         return ReturnCode.FAILED_TO_WRITE_ISO_TO_DEVICE;
     };
