@@ -197,7 +197,6 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
                     if (data.newPath[i] == 0x2f) lastSlash = i;
                 }
 
-                // TODO: must be released in deinit()
                 newName = data.newPath[lastSlash + 1 .. data.newPath.len :0];
             }
 

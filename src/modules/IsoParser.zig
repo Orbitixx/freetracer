@@ -16,8 +16,30 @@ const VolumeDescriptorsInitialized = struct {
     volumeDescriptorSetTerminator: bool = false,
 };
 
-pub fn parseIso(allocator: std.mem.Allocator, isoPath: []const u8) !void {
-    const file: std.fs.File = try std.fs.cwd().openFile(isoPath, .{ .mode = .read_only });
+pub const ISO_PARSER_RESULT = enum(u8) {
+    ISO_VALID,
+    ISO_SYSTEM_BLOCK_TOO_SHORT,
+    ISO_SECTOR_TOO_SHORT,
+    ISO_BOOT_OR_PVD_SECTOR_TOO_SHORT,
+    ISO_INVALID_REQUIRED_VOLUME_DESCRIPTORS,
+    ISO_INVALID_BOOT_INDICATOR,
+    ISO_INVALID_BOOT_SIGNATURE,
+    ISO_INVALID_BOOT_CATALOG,
+
+    UNABLE_TO_OPEN_ISO_FILE,
+    UNABLE_TO_OBTAIN_ISO_FILE_STAT,
+    UNABLE_TO_READ_ISO_FILE,
+    UNABLE_TO_SEEK_TO_SPECIFIED_SECTOR,
+    INSUFFICIENT_DEVICE_CAPACITY,
+};
+
+pub fn parseIso(allocator: std.mem.Allocator, isoPath: []const u8, deviceSize: i64) ISO_PARSER_RESULT {
+    _ = allocator;
+
+    const file: std.fs.File = std.fs.cwd().openFile(isoPath, .{ .mode = .read_only }) catch |err| {
+        Debug.log(.ERROR, "Unable to open the specified ISO file: {s}. Error: {any}", .{ isoPath, err });
+        return ISO_PARSER_RESULT.UNABLE_TO_OPEN_ISO_FILE;
+    };
     defer file.close();
 
     var isoBuffer: [ISO_SYS_BYTES_OFFSET]u8 = undefined;
@@ -27,7 +49,12 @@ pub fn parseIso(allocator: std.mem.Allocator, isoPath: []const u8) !void {
     var volumeDescriptorSetTerminator: iso9660.VolumeDescriptorSetTerminator = undefined;
     var volumeDescriptorsInitialized: VolumeDescriptorsInitialized = .{};
 
-    const fileStat: std.fs.Dir.Stat = try file.stat();
+    const fileStat: std.fs.Dir.Stat = file.stat() catch |err| {
+        Debug.log(.ERROR, "Unable to ontain ISO file stat: {s}. Error: {any}", .{ isoPath, err });
+        return ISO_PARSER_RESULT.UNABLE_TO_OBTAIN_ISO_FILE_STAT;
+    };
+
+    if (fileStat.size > @as(u64, @intCast(deviceSize))) return ISO_PARSER_RESULT.INSUFFICIENT_DEVICE_CAPACITY;
 
     const isoSectorCount: u64 = fileStat.size / ISO_SECTOR_SIZE;
 
@@ -40,10 +67,14 @@ pub fn parseIso(allocator: std.mem.Allocator, isoPath: []const u8) !void {
     ;
     Debug.log(.DEBUG, str, .{ isoPath, std.fmt.fmtIntSizeDec(fileStat.size), isoSectorCount });
 
-    const isoBytesRead = try file.read(&isoBuffer);
+    const isoBytesRead = file.read(&isoBuffer) catch |err| {
+        Debug.log(.ERROR, "Unable to read the specified ISO file: {s}. Error: {any}", .{ isoPath, err });
+        return ISO_PARSER_RESULT.UNABLE_TO_READ_ISO_FILE;
+    };
 
     if (isoBytesRead < ISO_SYS_BYTES_OFFSET) {
-        return IsoParserError.IsoSystemBlockTooShort;
+        Debug.log(.ERROR, "ISO system block is shorter than ISO 9660 spec.", .{});
+        return ISO_PARSER_RESULT.ISO_SYSTEM_BLOCK_TOO_SHORT;
     }
 
     var sectorBuffer: [ISO_SECTOR_SIZE]u8 = undefined;
@@ -51,11 +82,19 @@ pub fn parseIso(allocator: std.mem.Allocator, isoPath: []const u8) !void {
     for (16..isoSectorCount) |i| {
         Debug.log(.DEBUG, "IsoParser: Parsing ISO sector:\t{d}", .{i});
 
-        try file.seekTo(ISO_SYS_BYTES_OFFSET + ISO_SECTOR_SIZE * (i - 16));
-        const sectorBytesRead = try file.read(&sectorBuffer);
+        file.seekTo(ISO_SYS_BYTES_OFFSET + ISO_SECTOR_SIZE * (i - 16)) catch |err| {
+            Debug.log(.ERROR, "Unable to read the specified ISO file: {s}. Error: {any}", .{ isoPath, err });
+            return ISO_PARSER_RESULT.UNABLE_TO_SEEK_TO_SPECIFIED_SECTOR;
+        };
+
+        const sectorBytesRead = file.read(&sectorBuffer) catch |err| {
+            Debug.log(.ERROR, "Unable to read ISO sector: {d}. Error: {any}", .{ ISO_SYS_BYTES_OFFSET + ISO_SECTOR_SIZE * (i - 16), err });
+            return ISO_PARSER_RESULT.UNABLE_TO_OPEN_ISO_FILE;
+        };
 
         if (sectorBytesRead < ISO_SECTOR_SIZE) {
-            return IsoParserError.IsoSectorTooShort;
+            Debug.log(.ERROR, "ISO Sector bytes read are shorter than the sector size.", .{});
+            return ISO_PARSER_RESULT.ISO_SECTOR_TOO_SHORT;
         }
 
         if (sectorBuffer[0] == 0) {
@@ -131,30 +170,45 @@ pub fn parseIso(allocator: std.mem.Allocator, isoPath: []const u8) !void {
         volumeDescriptorsInitialized.primaryVolumeDescriptor == false or
         volumeDescriptorsInitialized.volumeDescriptorSetTerminator == false)
     {
-        return error.IsoParserUnableToParseIsoMimimumNecessaryDescriptors;
+        return ISO_PARSER_RESULT.ISO_INVALID_REQUIRED_VOLUME_DESCRIPTORS;
     }
 
-    bootCatalog = try readBootCatalog(&file, bootRecordVolumeDescriptor.catalogLba);
+    bootCatalog = readBootCatalog(&file, bootRecordVolumeDescriptor.catalogLba) catch |err| {
+        Debug.log(.ERROR, "ISO has an invalid boot catalog. Error: {any}", .{err});
+        return ISO_PARSER_RESULT.ISO_INVALID_BOOT_CATALOG;
+    };
 
-    assert(bootCatalog.initialDefaultEntry.bootIndicator == 0x88);
-    assert(bootCatalog.validationEntry.signature1 == 0x55 and bootCatalog.validationEntry.signature2 == 0xaa);
+    if (bootCatalog.initialDefaultEntry.bootIndicator != 0x88)
+        return ISO_PARSER_RESULT.ISO_INVALID_BOOT_INDICATOR;
+    if (bootCatalog.validationEntry.signature1 != 0x55 or bootCatalog.validationEntry.signature2 != 0xaa)
+        return ISO_PARSER_RESULT.ISO_INVALID_BOOT_SIGNATURE;
 
-    bootRecordVolumeDescriptor.print();
-    bootCatalog.print();
-    primaryVolumeDescriptor.print();
-    volumeDescriptorSetTerminator.print();
+    // bootRecordVolumeDescriptor.print();
+    // bootCatalog.print();
+    // primaryVolumeDescriptor.print();
+    // volumeDescriptorSetTerminator.print();
 
-    const rootDirectoryEntry = iso9660.DirectoryRecord().init(&primaryVolumeDescriptor.rootDirectoryEntry);
-    rootDirectoryEntry.print();
+    // const rootDirectoryEntry = iso9660.DirectoryRecord().init(&primaryVolumeDescriptor.rootDirectoryEntry);
+    // rootDirectoryEntry.print();
 
     const loadRbaSectorOffset: u32 = @bitCast(endian.readLittle(i32, &bootCatalog.initialDefaultEntry.loadRba) + 16);
-    try file.seekTo(ISO_SECTOR_SIZE * loadRbaSectorOffset);
-    _ = try file.read(&sectorBuffer);
 
-    const loadRbaSector = iso9660.DirectoryRecord().init(&sectorBuffer);
-    loadRbaSector.print();
+    file.seekTo(ISO_SECTOR_SIZE * loadRbaSectorOffset) catch |err| {
+        Debug.log(.ERROR, "Unable to seek to sector [Load RBA Sector Offset]: {d}. Error: {any}", .{ ISO_SECTOR_SIZE * loadRbaSectorOffset, err });
+        return ISO_PARSER_RESULT.UNABLE_TO_SEEK_TO_SPECIFIED_SECTOR;
+    };
 
-    try walkDirectories(allocator, &file, @bitCast(endian.readBoth(i32, &rootDirectoryEntry.dataLength)), @bitCast(endian.readBoth(i32, &rootDirectoryEntry.locationOfExtent)));
+    _ = file.read(&sectorBuffer) catch |err| {
+        Debug.log(.ERROR, "Unable to read ISO sector [Load RBA Sector Offset]: {d}. Error: {any}", .{ ISO_SECTOR_SIZE * loadRbaSectorOffset, err });
+        return ISO_PARSER_RESULT.UNABLE_TO_READ_ISO_FILE;
+    };
+
+    // const loadRbaSector = iso9660.DirectoryRecord().init(&sectorBuffer);
+    // loadRbaSector.print();
+
+    // try walkDirectories(allocator, &file, @bitCast(endian.readBoth(i32, &rootDirectoryEntry.dataLength)), @bitCast(endian.readBoth(i32, &rootDirectoryEntry.locationOfExtent)));
+
+    return ISO_PARSER_RESULT.ISO_VALID;
 }
 
 pub const IsoParserError = error{

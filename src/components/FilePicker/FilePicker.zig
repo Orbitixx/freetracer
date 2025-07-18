@@ -185,8 +185,6 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
                 break :eventLoop;
             }
 
-            eventResult.validate(1);
-
             Debug.log(
                 .INFO,
                 "ISOFilePickerComponent: handleEvent() received: \"{s}\" event, data: newPath = {s}",
@@ -194,13 +192,31 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
             );
 
             if (selectedPath) |newPath| {
-                //
+                const pathUpToDot: []const u8 = std.mem.sliceTo(newPath, 0x2e); // slice to the dot
+                const fileExtension: []const u8 = newPath[pathUpToDot.len..];
+
+                const extVariants: [3][]const u8 = .{ ".iso", ".ISO", ".Iso" };
+
+                var isOKToProceed = false;
+
+                if (!std.mem.eql(u8, fileExtension, extVariants[0]) and !std.mem.eql(u8, fileExtension, extVariants[1]) and !std.mem.eql(u8, fileExtension, extVariants[2])) {
+                    //
+                    isOKToProceed = osd.message("The extension of the selected file does not appear to be '.iso', are you sure you want to proceed?", .{
+                        .level = .warning,
+                        .buttons = .yes_no,
+                    });
+
+                    if (!isOKToProceed) break :eventLoop;
+                }
+
                 // TODO: Review this block again, this seems a bit crazy on the second look to dispatch another event with similar payload.
                 const pathBuffer: [:0]u8 = try self.allocator.dupeZ(u8, newPath);
 
                 const newEvent = ISOFilePickerUI.Events.onISOFilePathChanged.create(self.asComponentPtr(), &.{
                     .newPath = pathBuffer,
                 });
+
+                eventResult.validate(1);
 
                 if (self.uiComponent) |*ui| {
                     const result = try ui.handleEvent(newEvent);

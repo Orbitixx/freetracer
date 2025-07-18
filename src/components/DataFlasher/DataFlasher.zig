@@ -1,13 +1,12 @@
 const std = @import("std");
+const osd = @import("osdialog");
 const Debug = @import("freetracer-lib").Debug;
 
 const System = @import("../../lib/sys/system.zig");
 const USBStorageDevice = System.USBStorageDevice;
 
 const ISOParser = @import("../../modules/IsoParser.zig");
-// const ISOWriter = @import("../../modules/IsoWriter.zig");
-
-const MacOS = @import("../../modules/macos/MacOSTypes.zig");
+const ISO_STATUS = ISOParser.ISO_PARSER_RESULT;
 
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
 
@@ -53,6 +52,11 @@ pub const Events = struct {
         },
         struct {},
     );
+};
+
+pub const DEVICE_SIZE_CHECK = enum(u1) {
+    SIZE_NOT_OK = 0,
+    SIZE_OK = 1,
 };
 
 pub fn init(allocator: std.mem.Allocator) !DataFlasher {
@@ -144,50 +148,71 @@ pub fn dispatchComponentAction(self: *DataFlasher) void {
 
     // NOTE: Need to be careful with the memory access operations here since targetDisk (and obtained slice below)
     // live/s only within the scope of this function.
-    var targetDisk: [:0]const u8 = undefined;
+    var device: USBStorageDevice = undefined;
     var isoPath: [:0]const u8 = undefined;
 
     {
         self.state.lock();
         defer self.state.unlock();
-        targetDisk = self.state.data.device.?.getBsdNameSlice();
+        device = self.state.data.device.?;
         isoPath = self.state.data.isoPath.?;
     }
 
-    if (targetDisk.len < 2) {
+    self.state.lock();
+    errdefer self.state.unlock();
+
+    if (isoPath.len > 3) {
+        Debug.log(.DEBUG, "DataFlasher.dispatchComponentAction(): ISO path is confirmed as: {s}", .{isoPath});
+    } else {
+        Debug.log(.WARNING, "DataFlasher.dispatchComponentAction(): ISO path is NULL! Aborting...", .{});
+        return;
+    }
+
+    if (device.getBsdNameSlice().len < 2) {
         Debug.log(.ERROR, "DataFlasher.dispatchComponentAction: unable to obtain the BSD Name of the target device.", .{});
+        return;
+    }
+
+    Debug.log(.DEBUG, "DataFlasher.dispatchComponentAction(): target device is confirmed as: {s}", .{device.getBsdNameSlice()});
+
+    self.state.unlock();
+
+    const isoParserResult = ISOParser.parseIso(self.allocator, isoPath, device.size);
+
+    if (isoParserResult != ISOParser.ISO_PARSER_RESULT.ISO_VALID) {
+        var message: [*:0]const u8 = "";
+
+        switch (isoParserResult) {
+            ISO_STATUS.INSUFFICIENT_DEVICE_CAPACITY => message = "The selected ISO file is larger than the capacity of the selected device.",
+            ISO_STATUS.ISO_BOOT_OR_PVD_SECTOR_TOO_SHORT => message = "ISO appears corrupted: the Boot Record or the Primary Volume Descriptor are too short.",
+            // TODO: this may be OK and desirable if the ISO is not an OS. Consider allowing to proceed.
+            ISO_STATUS.ISO_INVALID_BOOT_INDICATOR => message = "ISO is not bootable, its boot indicator is set to non-bootable.",
+            ISO_STATUS.ISO_INVALID_BOOT_SIGNATURE => message = "ISO appears corrupted: the boot signature is not correct.",
+            ISO_STATUS.ISO_INVALID_REQUIRED_VOLUME_DESCRIPTORS => message = "ISO appears corrupted: unable to locate either the Primary Volume Descriptor or the Boot Record.",
+            ISO_STATUS.ISO_SYSTEM_BLOCK_TOO_SHORT => message = "ISO appears corrputed: its system block is too short.",
+            ISO_STATUS.UNABLE_TO_OPEN_ISO_FILE => message = "Freetracer is unable to open/read the selected ISO file. Please check permissions.",
+            // TODO: implement remaining status codes
+            else => message = "Unknown/unhandled ISO parser exception.",
+        }
+
+        _ = osd.message(message, .{ .level = .err, .buttons = .ok });
+
         return;
     }
 
     // Send a request to unmount the target disk to the PrivilegedHelper Component, which will communicate with the Helper Tool
     const unmountResult = EventManager.signal(
         "privileged_helper",
-        PrivilegedHelper.Events.onWriteISOToDeviceRequest.create(self.asComponentPtr(), &.{ .targetDisk = targetDisk, .isoPath = isoPath }),
+        PrivilegedHelper.Events.onWriteISOToDeviceRequest.create(self.asComponentPtr(), &.{
+            .targetDisk = device.getBsdNameSlice(),
+            .isoPath = isoPath,
+        }),
     ) catch |err| errBlk: {
         Debug.log(.ERROR, "DataFlasher: Received an error dispatching a disk unmount request. Aborting... Error: {any}", .{err});
         break :errBlk EventResult{ .success = false, .validation = 0 };
     };
 
     if (!unmountResult.success) return;
-
-    Debug.log(.INFO, "DataFlasher.dispatchComponentAction(): recevied response that unmount request succeeded. Ready for next step...", .{});
-
-    self.state.lock();
-    errdefer self.state.unlock();
-
-    if (self.state.data.isoPath) |path| {
-        Debug.log(.DEBUG, "DataFlasher.dispatchComponentAction(): ISO path is confirmed as: {s}", .{path});
-    } else {
-        Debug.log(.WARNING, "DataFlasher.dispatchComponentAction(): ISO path is NULL! Aborting...", .{});
-        return;
-    }
-
-    if (self.state.data.device) |device| {
-        Debug.log(.DEBUG, "DataFlasher.dispatchComponentAction(): target device is confirmed as: {s}", .{device.getBsdNameSlice()});
-    } else {
-        Debug.log(.WARNING, "DataFlasher.dispatchComponentAction(): target device is NULL! Aborting...", .{});
-        return;
-    }
 
     // const isoFilePath: []const u8 = self.state.data.isoPath.?;
     // const device: USBStorageDevice = self.state.data.device.?;
