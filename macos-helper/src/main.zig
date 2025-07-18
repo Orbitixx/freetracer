@@ -1,12 +1,14 @@
 const std = @import("std");
 const env = @import("env.zig");
-
+const testing = std.testing;
 const freetracer_lib = @import("freetracer-lib");
 
 const Debug = freetracer_lib.Debug;
 
 const k = freetracer_lib.k;
 const c = freetracer_lib.c;
+const String = freetracer_lib.String;
+const Character = freetracer_lib.Character;
 
 const MachCommunicator = freetracer_lib.MachCommunicator;
 
@@ -247,14 +249,26 @@ fn handleWriteISOToDeviceRequest(requestData: SerializedData) ReturnCode {
         return ReturnCode.FAILED_TO_WRITE_ISO_TO_DEVICE;
     };
 
-    const isoPath = std.mem.sliceTo(&data, 0x3b);
-    const remainder = data[isoPath.len + 1 ..];
-    const devicePath = std.mem.sliceTo(remainder, 0x00);
+    Debug.log(.INFO, "Received data: {s}", .{requestData.data});
+
+    // Splitting "isoPathString;devicePathString" apart
+    const isoPath: [k.MachPortPacketSize]u8 = String.parseUpToDelimeter(
+        k.MachPortPacketSize,
+        data,
+        Character.SEMICOLON,
+    );
+
+    const devicePath: [k.MachPortPacketSize]u8 = String.parseAfterDelimeter(
+        k.MachPortPacketSize,
+        data,
+        Character.SEMICOLON,
+        Character.NULL,
+    );
 
     Debug.log(.INFO, "handleWriteISOToDeviceRequest(): \n\tisoPath: {s}\n\tdevicePath: {s}", .{ isoPath, devicePath });
 
     // TODO: launch on its own thread, such that the main thread may respond to status requests
-    writeISO(isoPath, devicePath) catch |err| {
+    writeISO(std.mem.sliceTo(&isoPath, Character.NULL), std.mem.sliceTo(&devicePath, Character.NULL)) catch |err| {
         Debug.log(.ERROR, "Unable to write to device. Error: {any}", .{err});
         return ReturnCode.FAILED_TO_WRITE_ISO_TO_DEVICE;
     };
@@ -313,4 +327,42 @@ fn writeISO(isoPath: []const u8, devicePath: []const u8) !void {
 comptime {
     @export(@as([*:0]const u8, @ptrCast(env.INFO_PLIST)), .{ .name = "__info_plist", .section = "__TEXT,__info_plist", .visibility = .default, .linkage = .strong });
     @export(@as([*:0]const u8, @ptrCast(env.LAUNCHD_PLIST)), .{ .name = "__launchd_plist", .section = "__TEXT,__launchd_plist", .visibility = .default, .linkage = .strong });
+}
+
+test "handle helper version check request" {
+    const reportedVersion = handleHelperVersionCheckRequest();
+    try testing.expectEqualSlices(u8, reportedVersion, env.HELPER_VERSION);
+}
+
+test "process request message: version check" {
+
+    // Expected payload is null
+    const requestData: SerializedData = try SerializedData.serialize(@TypeOf(null), null);
+    const serializedResponse: SerializedData = try processRequestMessage(k.HelperVersionRequest, requestData);
+
+    const deserializedData: [k.MachPortPacketSize]u8 = try SerializedData.deserialize([k.MachPortPacketSize]u8, serializedResponse);
+    const nullIndex = std.mem.indexOfScalar(u8, deserializedData[0..], Character.NULL);
+
+    try testing.expect(nullIndex != null);
+    const version: [:0]const u8 = deserializedData[0..nullIndex.? :0];
+    try testing.expectEqualSlices(u8, env.HELPER_VERSION, version);
+}
+
+test "parsing iso + device paths parsing functions" {
+    // const testPathsString: [:0]const u8 = @ptrCast("testIsoString.iso;/dev/testDevicePath");
+    const testPathsString: [:0]const u8 = @ptrCast("/Users/freetracer/Downloads/debian_XX_aarch64.iso;/dev/disk4");
+    const serializedTestString: SerializedData = try SerializedData.serialize([:0]const u8, testPathsString);
+
+    const isoPath: [k.MachPortPacketSize]u8 = String.parseUpToDelimeter(k.MachPortPacketSize, serializedTestString.data, Character.SEMICOLON);
+    const devicePath: [k.MachPortPacketSize]u8 = String.parseAfterDelimeter(k.MachPortPacketSize, serializedTestString.data, Character.SEMICOLON, Character.NULL);
+
+    const expectedISOPath: []const u8 = "/Users/freetracer/Downloads/debian_XX_aarch64.iso";
+    const expectedDevicePath: []const u8 = "/dev/disk4";
+
+    try testing.expectEqualSlices(u8, expectedISOPath, std.mem.sliceTo(&isoPath, Character.NULL));
+    try testing.expectEqualSlices(u8, expectedDevicePath, std.mem.sliceTo(&devicePath, Character.NULL));
+}
+
+test "process request message: write iso request" {
+    // const requestData: SerializedData = try SerializedData.serialize([:0]const u8, @as([:0]const u8, @ptrCast("isoPathString;devicePathString;")));
 }

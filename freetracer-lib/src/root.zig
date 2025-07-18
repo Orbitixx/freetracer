@@ -6,6 +6,7 @@ const debug = @import("./util/debug.zig");
 const types = @import("./types.zig");
 const mach = @import("./macos/mach.zig");
 const time = @import("util/time.zig");
+const string = @import("util/string.zig");
 
 // Expose namespaces to be consumed by users
 pub usingnamespace types;
@@ -18,3 +19,5 @@ pub usingnamespace if (@import("builtin").os.tag == .macos) mach;
 
 // Expose debug singleton to be consumed by users
 pub const Debug = debug;
+
+pub const String = string;
