@@ -40,11 +40,16 @@ pub const EventResult = struct {
     validation: u8 = 0,
     data: ?*anyopaque = null,
 
+pub const ReturnType: enum(u1) {
+FAILURE = 0,
+SUCCESS = 1,
+};
+
     pub fn init() EventResult {
         return EventResult{};
     }
 
-    pub fn validate(self: *EventResult, validation: u8) void {
+    pub fn validate(self: *EventResult, validation: ReturnType) void {
         self.success = true;
         self.validation = validation;
     }
