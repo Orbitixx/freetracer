@@ -1,4 +1,5 @@
 pub const isMac = @import("builtin").os.tag == .macos;
+pub const isMacOS = @import("builtin").os.tag == .macos;
 pub const isLinux = @import("builtin").os.tag == .linux;
 
 pub const c = if (isMac) @cImport({

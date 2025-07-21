@@ -1,12 +1,9 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const k = @import("../constants.zig").k;
+const c = @import("../types.zig").c;
 const Debug = @import("../util/debug.zig");
-
-const c = @cImport({
-    @cInclude("CoreFoundation/CoreFoundation.h");
-    @cInclude("DiskArbitration/DiskArbitration.h");
-});
+const isMacOS = @import("../types.zig").isMacOS;
 
 const NullTerminatedStringType: type = [:0]const u8;
 
@@ -80,7 +77,8 @@ pub const SerializedData = struct {
 
 pub const MachCommunicator = struct {
     pub const MachCommunicatorConfig = struct {
-        bundleId: []const u8,
+        localBundleId: []const u8,
+        remoteBundleId: []const u8,
         ownerName: []const u8,
         processMessageFn: *const fn (msgId: i32, requestData: SerializedData) anyerror!SerializedData,
     };
@@ -109,7 +107,7 @@ pub const MachCommunicator = struct {
     pub fn start(self: *MachCommunicator) !void {
         self.localMessagePortNameRef = c.CFStringCreateWithCStringNoCopy(
             c.kCFAllocatorDefault,
-            @ptrCast(self.config.bundleId),
+            @ptrCast(self.config.localBundleId),
             c.kCFStringEncodingUTF8,
             c.kCFAllocatorNull,
         );
@@ -192,5 +190,62 @@ pub const MachCommunicator = struct {
         _ = requestData;
 
         return error.MachCommunicatorProcessMessageFunctionNotInitialized;
+    }
+
+    pub fn sendMachMessageToRemote(self: MachCommunicator, comptime requestType: type, requestData: requestType, msgId: i32, comptime returnType: type) !returnType {
+        if (!isMacOS) return error.CallAllowedOnMacOSOnly;
+
+        // Create a CString from the Privileged Tool's Apple App Bundle ID
+        const portNameRef: c.CFStringRef = c.CFStringCreateWithCStringNoCopy(
+            c.kCFAllocatorDefault,
+            self.config.remoteBundleId,
+            c.kCFStringEncodingUTF8,
+            c.kCFAllocatorNull,
+        );
+        defer _ = c.CFRelease(portNameRef);
+
+        const remoteMessagePort: c.CFMessagePortRef = c.CFMessagePortCreateRemote(c.kCFAllocatorDefault, portNameRef);
+
+        if (remoteMessagePort == null) {
+            Debug.log(.ERROR, "Freetracer unable to create a remote message port to Freetracer Helper Tool.", .{});
+            return error.UnableToCreateRemoteMessagePort;
+        }
+
+        defer _ = c.CFRelease(remoteMessagePort);
+
+        const s_requestData = try SerializedData.serialize(requestType, requestData);
+
+        const requestDataRef: c.CFDataRef = @ptrCast(s_requestData.constructCFDataRef());
+        defer _ = c.CFRelease(requestDataRef);
+
+        var responseDataRef: c.CFDataRef = null;
+        var helperResponseCode: c.SInt32 = 0;
+
+        Debug.log(.INFO, "Freetracer is preparing to send request to Privileged Helper Tool...", .{});
+
+        helperResponseCode = c.CFMessagePortSendRequest(
+            remoteMessagePort,
+            msgId,
+            requestDataRef,
+            k.SendTimeoutInSeconds,
+            k.ReceiveTimeoutInSeconds,
+            c.kCFRunLoopDefaultMode,
+            &responseDataRef,
+        );
+
+        if (helperResponseCode != c.kCFMessagePortSuccess or responseDataRef == null) {
+            Debug.log(
+                .ERROR,
+                "Freetracer failed to communicate with Freetracer Helper Tool - received invalid response code ({d}) or null response data ({any})",
+                .{ helperResponseCode, responseDataRef },
+            );
+            return error.FailedToCommunicateWithHelperTool;
+        }
+
+        // Debug.log(.DEBUG, "@sizeOf(responseDataRef) is: {d}", .{@sizeOf(responseDataRef)});
+        const responseData = try SerializedData.destructCFDataRef(@ptrCast(responseDataRef));
+        const deserializedData = try SerializedData.deserialize(returnType, responseData);
+
+        return deserializedData;
     }
 };

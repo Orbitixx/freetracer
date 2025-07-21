@@ -36,7 +36,8 @@ pub fn main() !void {
     Debug.log(.INFO, "------------------------------------------------------------------------\nDebug logger initialized.", .{});
 
     var machCommunicator = MachCommunicator.init(allocator, .{
-        .bundleId = env.BUNDLE_ID,
+        .localBundleId = env.BUNDLE_ID,
+        .remoteBundleId = env.MAIN_APP_BUNDLE_ID,
         .ownerName = "Freetracer Helper Tool",
         .processMessageFn = processRequestMessage,
     });

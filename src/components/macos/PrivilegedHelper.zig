@@ -6,13 +6,15 @@ const AppConfig = @import("../../config.zig");
 const freetracer_lib = @import("freetracer-lib");
 const c = freetracer_lib.c;
 const Debug = freetracer_lib.Debug;
+const MachCommunicator = freetracer_lib.MachCommunicator;
+const SerializedData = freetracer_lib.SerializedData;
 const MachPortPacketSize = freetracer_lib.k.MachPortPacketSize;
 
 const PrivilegedHelperTool = @import("../../modules/macos/PrivilegedHelperTool.zig");
 
 const PrivilegedHelperState = struct {
     isActive: bool = false,
-    isInstalled: bool = false,
+    isHelperInstalled: bool = false,
     installedVersion: [:0]const u8 = "-1",
 };
 
@@ -38,7 +40,8 @@ worker: ?ComponentWorker = null,
 
 // Component-specific, unique props
 allocator: std.mem.Allocator,
-isInstalled: bool = false,
+machCommunicator: MachCommunicator,
+isHelperInstalled: bool = false,
 
 pub const Events = struct {
     //
@@ -58,7 +61,13 @@ pub fn init(allocator: std.mem.Allocator) !PrivilegedHelper {
         .state = ComponentState.init(PrivilegedHelperState{
             .isActive = false,
             // Set installed flag to true by default on Linux systems
-            .isInstalled = System.isLinux,
+            .isHelperInstalled = System.isLinux,
+        }),
+        .machCommunicator = MachCommunicator.init(allocator, .{
+            .localBundleId = @ptrCast(env.BUNDLE_ID),
+            .remoteBundleId = @ptrCast(env.HELPER_BUNDLE_ID),
+            .ownerName = "Freetracer Main Process",
+            .processMessageFn = PrivilegedHelper.processMachMessage,
         }),
     };
 }
@@ -91,7 +100,7 @@ pub fn start(self: *PrivilegedHelper) !void {
 
     try self.initWorker();
 
-    // Verify if the Helper Tool is installed and set self.isInstalled flag accordingly
+    // Verify if the Helper Tool is installed and set self.isHelperInstalled flag accordingly
     self.dispatchComponentAction();
 
     if (self.component) |*component| {
@@ -114,7 +123,7 @@ pub fn update(self: *PrivilegedHelper) !void {
 }
 
 pub fn draw(self: *PrivilegedHelper) !void {
-    const isHelperToolInstalled = if (System.isMac) self.isInstalled else if (System.isLinux) true else unreachable;
+    const isHelperToolInstalled = if (System.isMac) self.isHelperInstalled else if (System.isLinux) true else unreachable;
 
     rl.drawCircleV(.{ .x = winRelX(0.9), .y = winRelY(0.065) }, 4.5, if (isHelperToolInstalled) .green else .red);
     rl.drawCircleLinesV(.{ .x = winRelX(0.9), .y = winRelY(0.065) }, 4.5, .white);
@@ -193,8 +202,8 @@ pub fn dispatchComponentAction(self: *PrivilegedHelper) void {
     defer self.state.unlock();
 
     if (installCheckResult == freetracer_lib.HelperInstallCode.SUCCESS) {
-        self.isInstalled = true;
-    } else self.isInstalled = false;
+        self.isHelperInstalled = true;
+    } else self.isHelperInstalled = false;
 }
 
 fn waitForHelperToolInstall() void {
@@ -203,10 +212,15 @@ fn waitForHelperToolInstall() void {
     std.time.sleep(3_000_000_000);
 }
 
+fn processMachMessage(msgId: i32, data: SerializedData) !SerializedData {
+    Debug.log(.INFO, "Received message {any} and data {any}", .{ msgId, data });
+    return SerializedData.serialize([:0]const u8, "Successful response from MAIN APP!");
+}
+
 fn requestUnmount(self: *PrivilegedHelper, targetDisk: [:0]const u8) freetracer_lib.HelperUnmountRequestCode {
     // Install or update the Privileged Helper Tool before sending unmount request
 
-    if (!self.isInstalled) {
+    if (!self.isHelperInstalled) {
         const installResult = PrivilegedHelperTool.installPrivilegedHelperTool();
         waitForHelperToolInstall();
         if (installResult != freetracer_lib.HelperInstallCode.SUCCESS) return freetracer_lib.HelperUnmountRequestCode.FAILURE else self.dispatchComponentAction();
