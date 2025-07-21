@@ -253,7 +253,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
         ISOFilePickerUI.Events.onGetUIDimensions.Hash => {
             //
             const data = ISOFilePickerUI.Events.onGetUIDimensions.getData(event) orelse break :eventLoop;
-            eventResult.validate(1);
+            eventResult.validate(.SUCCESS);
 
             if (self.bgRect) |*bgRect| {
                 bgRect.transform.x = data.transform.x + data.transform.w + 20;
@@ -275,7 +275,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
         DeviceList.Events.onDeviceListActiveStateChanged.Hash => {
             //
             const data = DeviceList.Events.onDeviceListActiveStateChanged.getData(event) orelse break :eventLoop;
-            eventResult.validate(1);
+            eventResult.validate(.SUCCESS);
 
             // Update state in a block with a shorter lifecycle
             {
@@ -329,11 +329,11 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
 
             self.state.data.selectedDevice = null;
 
-            eventResult.validate(1);
+            eventResult.validate(.SUCCESS);
         },
 
         Events.onUITransformQueried.Hash => {
-            eventResult.validate(1);
+            eventResult.validate(.SUCCESS);
 
             const responseDataPtr: *Events.onUITransformQueried.Response = try self.allocator.create(Events.onUITransformQueried.Response);
 
@@ -421,7 +421,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
         Events.onSelectedDeviceNameChanged.Hash => {
             //
             const data = Events.onSelectedDeviceNameChanged.getData(event) orelse break :eventLoop;
-            eventResult.validate(1);
+            eventResult.validate(.SUCCESS);
 
             // WARNING: Mutex lock is used within larger block. OK as of the moment of implementation.
             self.state.lock();

@@ -178,7 +178,7 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
         Events.onISOFilePathChanged.Hash => {
             //
             const data = Events.onISOFilePathChanged.getData(event) orelse break :eventLoop;
-            eventResult.validate(1);
+            eventResult.validate(.SUCCESS);
 
             var newName: [:0]const u8 = @ptrCast("No ISO selected...");
 
@@ -216,7 +216,7 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
             //
             const data = Events.onGetUIDimensions.Data{ .transform = self.bgRect.?.transform };
 
-            eventResult.validate(1);
+            eventResult.validate(.SUCCESS);
 
             const responseEvent = Events.onGetUIDimensions.create(self.asComponentPtr(), &data);
 
@@ -224,7 +224,7 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
         },
 
         Events.onUIDimensionsQueried.Hash => {
-            eventResult.validate(1);
+            eventResult.validate(.SUCCESS);
 
             const responseDataPtr: *Events.onUIDimensionsQueried.Response = try self.allocator.create(Events.onUIDimensionsQueried.Response);
             responseDataPtr.* = .{ .bgRectWidth = if (self.bgRect) |bgRect| bgRect.transform.w else 0 };
@@ -234,7 +234,7 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
         ISOFilePicker.Events.onActiveStateChanged.Hash => {
             //
             const data = ISOFilePicker.Events.onActiveStateChanged.getData(event) orelse break :eventLoop;
-            eventResult.validate(1);
+            eventResult.validate(.SUCCESS);
 
             {
                 self.state.lock();

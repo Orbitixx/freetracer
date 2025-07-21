@@ -132,7 +132,7 @@ pub fn handleEvent(self: *DataFlasher, event: ComponentEvent) !EventResult {
                 });
             }
 
-            eventResult.validate(1);
+            eventResult.validate(.SUCCESS);
 
             // Broadcast component's state change to active
             EventManager.broadcast(Events.onActiveStateChanged.create(self.asComponentPtr(), &.{ .isActive = true }));
@@ -209,7 +209,7 @@ pub fn dispatchComponentAction(self: *DataFlasher) void {
         }),
     ) catch |err| errBlk: {
         Debug.log(.ERROR, "DataFlasher: Received an error dispatching a disk unmount request. Aborting... Error: {any}", .{err});
-        break :errBlk EventResult{ .success = false, .validation = 0 };
+        break :errBlk EventResult{ .success = false, .validation = .FAILURE };
     };
 
     if (!unmountResult.success) return;

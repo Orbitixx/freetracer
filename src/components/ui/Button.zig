@@ -161,9 +161,8 @@ pub fn handleEvent(self: *ButtonComponent, event: Event) !EventResult {
         Events.onButtonToggleEnabled.Hash => {
             //
             const data = Events.onButtonToggleEnabled.getData(event) orelse break :eventLoop;
-            eventResult.validate(1);
-
             if (data.isEnabled) self.state = .NORMAL else self.state = .DISABLED;
+            eventResult.validate(.SUCCESS);
         },
         else => {},
     }

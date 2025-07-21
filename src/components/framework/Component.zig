@@ -84,28 +84,6 @@ pub const Component = struct {
         return self.vtable.draw_fn(self.ptr);
     }
 
-    // TODO: Remove. Unused.
-    /// Deprecated. To be removed.
-    pub fn notifyParent(self: Component, event: ComponentEvent) !void {
-        if (self.parent == null) return error.ComponentFailedToNotifyNullParent;
-
-        if (self.parent) |parent| {
-            return parent.handleEvent(event);
-        }
-    }
-
-    // TODO: Remove. Unused.
-    /// Deprecated. To be removed.
-    pub fn notifyChildren(self: Component, event: ComponentEvent) !void {
-        if (self.children == null) return error.ComponentFailedToNotifyNullChildren;
-
-        if (self.children) |children| {
-            for (children.items) |child| {
-                try child.handleEvent(event);
-            }
-        }
-    }
-
     /// Contains the primary "event loop" of the concrete component and handles
     /// events defined within the pub const Events struct of the concrete component.
     /// @Returns anyerror!EventResult.

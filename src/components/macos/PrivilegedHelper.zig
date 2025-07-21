@@ -161,7 +161,7 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
 
             const writeResponse = requestWrite(@ptrCast(finalDataString));
 
-            if (writeResponse == freetracer_lib.HelperReturnCode.SUCCESS) eventResult.validate(1);
+            if (writeResponse == freetracer_lib.HelperReturnCode.SUCCESS) eventResult.validate(.SUCCESS);
         },
 
         else => {},

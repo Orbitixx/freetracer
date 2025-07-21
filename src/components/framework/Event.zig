@@ -37,19 +37,19 @@ pub const EventHash = u64;
 
 pub const EventResult = struct {
     success: bool = false,
-    validation: u8 = 0,
+    validation: EventValidation = .FAILURE,
     data: ?*anyopaque = null,
 
-pub const ReturnType: enum(u1) {
-FAILURE = 0,
-SUCCESS = 1,
-};
+    pub const EventValidation = enum(u1) {
+        FAILURE = 0,
+        SUCCESS = 1,
+    };
 
     pub fn init() EventResult {
         return EventResult{};
     }
 
-    pub fn validate(self: *EventResult, validation: ReturnType) void {
+    pub fn validate(self: *EventResult, validation: EventValidation) void {
         self.success = true;
         self.validation = validation;
     }

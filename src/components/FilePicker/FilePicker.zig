@@ -161,13 +161,14 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
         ISOFilePickerUI.Events.onGetUIDimensions.Hash => {
             //
             const data = ISOFilePickerUI.Events.onGetUIDimensions.getData(event) orelse break :eventLoop;
-            eventResult.validate(1);
 
             Debug.log(
                 .DEBUG,
                 "ISOFilePickerComponent: handleEvent() received: \"{s}\" event, data: newWidth = {d}",
                 .{ event.name, data.transform.w },
             );
+
+            eventResult.validate(.SUCCESS);
         },
 
         Events.onISOFileSelected.Hash => {
@@ -216,8 +217,6 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
                     .newPath = pathBuffer,
                 });
 
-                eventResult.validate(1);
-
                 if (self.uiComponent) |*ui| {
                     const result = try ui.handleEvent(newEvent);
 
@@ -225,6 +224,8 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
                         Debug.log(.ERROR, "FilePickerUI was not able to handle ISOFileNameChanged event.", .{});
                     }
                 }
+
+                eventResult.validate(.SUCCESS);
             }
 
             const inactivateComponentEvent = Events.onActiveStateChanged.create(
@@ -254,7 +255,7 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
 
             if (path == null or isSelecting == true) {
                 eventResult.success = false;
-                eventResult.validation = 0;
+                eventResult.validation = .FAILURE;
                 eventResult.data = null;
 
                 Debug.log(
@@ -276,7 +277,7 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
                 .isoPath = path.?,
             };
 
-            eventResult.validate(1);
+            eventResult.validate(.SUCCESS);
             eventResult.data = @ptrCast(@constCast(responseDataPtr));
         },
 

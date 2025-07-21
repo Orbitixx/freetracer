@@ -163,7 +163,7 @@ pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResu
         ISOFilePicker.Events.onActiveStateChanged.Hash => {
             //
             const data = ISOFilePicker.Events.onActiveStateChanged.getData(event) orelse break :eventLoop;
-            eventResult.validate(1);
+            eventResult.validate(.SUCCESS);
 
             // If the preceding component is still active - ignore event;
             if (data.isActive) break :eventLoop;
@@ -183,7 +183,7 @@ pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResu
         // Event: Worker finished discovering storage devices
         Events.onDiscoverDevicesEnd.Hash => {
             const data = Events.onDiscoverDevicesEnd.getData(event) orelse break :eventLoop;
-            eventResult.validate(1);
+            eventResult.validate(.SUCCESS);
 
             {
                 self.state.lock();
@@ -239,7 +239,7 @@ pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResu
             const responseDataPtr = try self.allocator.create(Events.onSelectedDeviceQueried.Response);
             responseDataPtr.* = Events.onSelectedDeviceQueried.Response{ .device = self.state.data.selectedDevice.? };
 
-            eventResult.validate(1);
+            eventResult.validate(.SUCCESS);
             eventResult.data = @ptrCast(@alignCast(responseDataPtr));
         },
 

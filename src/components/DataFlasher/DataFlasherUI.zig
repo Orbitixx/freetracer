@@ -221,7 +221,7 @@ fn drawInactive(self: *DataFlasherUI) !void {
 pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
     var eventResult = EventResult{
         .success = false,
-        .validation = 0,
+        .validation = .FAILURE,
     };
 
     eventLoop: switch (event.hash) {
@@ -231,7 +231,7 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
             //
             const data = DataFlasher.Events.onActiveStateChanged.getData(event) orelse break :eventLoop;
 
-            eventResult.validate(1);
+            eventResult.validate(.SUCCESS);
 
             {
                 self.state.lock();
