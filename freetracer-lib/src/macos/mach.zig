@@ -198,7 +198,7 @@ pub const MachCommunicator = struct {
         // Create a CString from the Privileged Tool's Apple App Bundle ID
         const portNameRef: c.CFStringRef = c.CFStringCreateWithCStringNoCopy(
             c.kCFAllocatorDefault,
-            self.config.remoteBundleId,
+            @ptrCast(self.config.remoteBundleId),
             c.kCFStringEncodingUTF8,
             c.kCFAllocatorNull,
         );
@@ -247,5 +247,33 @@ pub const MachCommunicator = struct {
         const deserializedData = try SerializedData.deserialize(returnType, responseData);
 
         return deserializedData;
+    }
+
+    pub fn testRemotePort(self: MachCommunicator) bool {
+        Debug.log(.INFO, "{s} | remoteBundleId is: {s}.", .{ AppName, self.config.remoteBundleId });
+
+        const remotePortNameRef: c.CFStringRef = c.CFStringCreateWithCStringNoCopy(
+            c.kCFAllocatorDefault,
+            @ptrCast(self.config.remoteBundleId),
+            c.kCFStringEncodingUTF8,
+            c.kCFAllocatorNull,
+        );
+
+        Debug.log(.INFO, "{s} | created remotePortNameRef.", .{AppName});
+
+        const remotePort: c.CFMessagePortRef = c.CFMessagePortCreateRemote(c.kCFAllocatorDefault, remotePortNameRef);
+
+        Debug.log(.INFO, "{s} | created remotePortRef.", .{AppName});
+
+        defer _ = c.CFRelease(remotePort);
+        defer _ = c.CFRelease(remotePortNameRef);
+
+        if (remotePort == null) {
+            Debug.log(.WARNING, "{s} | Failed to establish a mach connection to the test remote port.", .{AppName});
+            return false;
+        } else {
+            Debug.log(.INFO, "{s} | Successfully tested the remote port.", .{AppName});
+            return true;
+        }
     }
 };

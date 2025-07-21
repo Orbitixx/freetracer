@@ -33,7 +33,8 @@ pub fn main() !void {
     try Debug.init(allocator, .{});
     defer Debug.deinit();
 
-    Debug.log(.INFO, "------------------------------------------------------------------------\nDebug logger initialized.", .{});
+    Debug.log(.INFO, "------------------------------------------------------------------------------------------", .{});
+    Debug.log(.INFO, "Debug logger is initialized.", .{});
 
     var machCommunicator = MachCommunicator.init(allocator, .{
         .localBundleId = env.BUNDLE_ID,
@@ -42,8 +43,24 @@ pub fn main() !void {
         .processMessageFn = processRequestMessage,
     });
 
-    try machCommunicator.start();
     defer machCommunicator.deinit();
+
+    const MAX_ATTEMPTS = 3;
+
+    for (0..MAX_ATTEMPTS) |i| {
+        const testResult = machCommunicator.testRemotePort();
+
+        if (!testResult) {
+            Debug.log(.WARNING, "Failed to establish a test remote mach port to the MAIN APP. Attempt {d} Retrying...", .{i + 1});
+            // std.time.sleep(3_000_000_000);
+        } else {
+            Debug.log(.INFO, "Successfully tested remote mach port connection. Sending a mach message to remote...", .{});
+            _ = try machCommunicator.sendMachMessageToRemote([:0]const u8, "Ping from Freetracer helper tool!", -1, void);
+            break;
+        }
+    }
+
+    try machCommunicator.start();
 }
 
 fn processRequestMessage(msgId: i32, requestData: SerializedData) !SerializedData {

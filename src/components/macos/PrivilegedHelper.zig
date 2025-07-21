@@ -99,6 +99,7 @@ pub fn start(self: *PrivilegedHelper) !void {
     if (System.isLinux) return;
 
     try self.initWorker();
+    try self.machCommunicator.start();
 
     // Verify if the Helper Tool is installed and set self.isHelperInstalled flag accordingly
     self.dispatchComponentAction();
@@ -227,22 +228,12 @@ fn requestUnmount(self: *PrivilegedHelper, targetDisk: [:0]const u8) freetracer_
         return freetracer_lib.HelperUnmountRequestCode.TRY_AGAIN;
     }
 
-    const helperPortNameRef: c.CFStringRef = c.CFStringCreateWithCStringNoCopy(
-        c.kCFAllocatorDefault,
-        env.HELPER_BUNDLE_ID,
-        c.kCFStringEncodingUTF8,
-        c.kCFAllocatorNull,
-    );
-
-    const testRemotePort: c.CFMessagePortRef = c.CFMessagePortCreateRemote(c.kCFAllocatorDefault, helperPortNameRef);
-
-    if (testRemotePort == null) {
-        Debug.log(.WARNING, "Failed to establish a test remote port to the Helper Tool.", .{});
+    for (0..AppConfig.MACH_PORT_REMOTE_MAX_TEST_ATTEMPTS) |i| {
+        Debug.log(.DEBUG, "Attempting to test remote port to Helper Tool, attempt {d}...", .{i + 1});
+        const testAttemptResult = self.machCommunicator.testRemotePort();
+        if (testAttemptResult) break;
         waitForHelperToolInstall();
-    } else Debug.log(.INFO, "Successfully established a test remote port to the helper tool.", .{});
-
-    _ = c.CFRelease(testRemotePort);
-    _ = c.CFRelease(helperPortNameRef);
+    }
 
     const helperVersionBuffer = PrivilegedHelperTool.requestHelperVersion() catch |err| blk: {
         Debug.log(.WARNING, "Unable to retrieve Helper Tool's installed version. Error: {any}", .{err});
