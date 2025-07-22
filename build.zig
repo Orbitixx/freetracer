@@ -62,6 +62,8 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("freetracer-lib", freetracer_lib.module("freetracer-lib"));
     // -------------------------------------------------------------------
 
+    // exe.want_lto = false;
+    // exe.link_gc_sections = false;
     // exe.linkLibC();
     // exe.linkFramework("CoreFoundation");
     // exe.linkFramework("DiskArbitration");

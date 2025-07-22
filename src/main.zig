@@ -47,6 +47,9 @@ pub fn main() !void {
     try Debug.init(allocator, .{ .standaloneLogFilePath = env.MAIN_APP_LOGS_PATH });
     defer Debug.deinit();
 
+    Debug.log(.INFO, "Sum of 3 and 8 is: {d}", .{freetracer_lib.xpc.testMath(3, 8)});
+    if (true) return;
+
     try WindowManager.init();
     defer WindowManager.deinit();
 
@@ -166,4 +169,11 @@ pub fn main() !void {
         //----------------------------------------------------------------------------------
 
     }
+}
+
+comptime {
+    // @export(
+    //     @as([*:0]const u8, @ptrCast(env.ENTITLEMENTS_PLIST)),
+    //     .{ .name = "__entitlements", .section = "__TEXT,__entitlements", .visibility = .default, .linkage = .strong },
+    // );
 }

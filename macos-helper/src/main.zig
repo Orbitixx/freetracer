@@ -4,6 +4,7 @@ const testing = std.testing;
 const freetracer_lib = @import("freetracer-lib");
 
 const Debug = freetracer_lib.Debug;
+const xpc = freetracer_lib.xpc;
 
 const k = freetracer_lib.k;
 const c = freetracer_lib.c;
@@ -36,32 +37,93 @@ pub fn main() !void {
     Debug.log(.INFO, "------------------------------------------------------------------------------------------", .{});
     Debug.log(.INFO, "Debug logger is initialized.", .{});
 
-    var machCommunicator = MachCommunicator.init(allocator, .{
-        .localBundleId = env.BUNDLE_ID,
-        .remoteBundleId = env.MAIN_APP_BUNDLE_ID,
-        .ownerName = "Freetracer Helper Tool",
-        .processMessageFn = processRequestMessage,
-    });
+    Debug.log(.INFO, "Sum of 3 and 8 is: {d}", .{xpc.testMath(3, 8)});
 
-    defer machCommunicator.deinit();
+    // xpc.start_xpc_server();
 
-    const MAX_ATTEMPTS = 3;
+    // var machCommunicator = MachCommunicator.init(allocator, .{
+    //     .localBundleId = env.BUNDLE_ID,
+    //     .remoteBundleId = env.MAIN_APP_BUNDLE_ID,
+    //     .ownerName = "Freetracer Helper Tool",
+    //     .processMessageFn = processRequestMessage,
+    // });
+    //
+    // defer machCommunicator.deinit();
+    //
+    // std.time.sleep(3_000_000_000);
+    //
+    // const MAX_ATTEMPTS = 3;
+    //
+    // for (0..MAX_ATTEMPTS) |i| {
+    //     const testResult = machCommunicator.testRemotePort();
+    //
+    //     if (!testResult) {
+    //         Debug.log(.WARNING, "Failed to establish a test remote mach port to the MAIN APP. Attempt {d} Retrying...", .{i + 1});
+    //         std.time.sleep(3_000_000_000);
+    //     } else {
+    //         Debug.log(.INFO, "Successfully tested remote mach port connection. Sending a mach message to remote...", .{});
+    //         _ = try machCommunicator.sendMachMessageToRemote([:0]const u8, "Ping from Freetracer helper tool!", -1, void);
+    //         break;
+    //     }
+    // }
+    //
+    // try machCommunicator.start();
 
-    for (0..MAX_ATTEMPTS) |i| {
-        const testResult = machCommunicator.testRemotePort();
-
-        if (!testResult) {
-            Debug.log(.WARNING, "Failed to establish a test remote mach port to the MAIN APP. Attempt {d} Retrying...", .{i + 1});
-            // std.time.sleep(3_000_000_000);
-        } else {
-            Debug.log(.INFO, "Successfully tested remote mach port connection. Sending a mach message to remote...", .{});
-            _ = try machCommunicator.sendMachMessageToRemote([:0]const u8, "Ping from Freetracer helper tool!", -1, void);
-            break;
-        }
-    }
-
-    try machCommunicator.start();
+    // const service: xpc.xpc_connection_t = xpc.xpc_connection_create_mach_service(
+    //     "com.orbitixx.freetracer-helper",
+    //     xpc.dispatch_get_main_queue(),
+    //     xpc.XPC_CONNECTION_MACH_SERVICE_LISTENER,
+    // );
+    //
+    // if (service == null) {
+    //     Debug.log(.ERROR, "Failed to create an XPC service.", .{});
+    // }
+    //
+    // xpc.xpc_connection_set_event_handler(service, &handleConnection);
+    // xpc.xpc_connection_resume(service);
+    // xpc.dispatch_main();
+    //
+    // return 0;
 }
+
+// fn handleConnection(connection: xpc.xpc_object_t) callconv(.C) void {
+//     const conn_type = xpc.xpc_get_type(connection);
+//
+//     if (conn_type.? == xpc.XPC_TYPE_CONNECTION) {
+//         std.log.info("New XPC connection established");
+//
+//         // Set up message handler for this connection
+//         c.xpc_connection_set_event_handler(connection, &handleMessage);
+//         c.xpc_connection_resume(connection);
+//     }
+// }
+//
+// fn handleMessage(message: xpc.xpc_object_t) callconv(.C) void {
+//     const msg_type = xpc.xpc_get_type(message);
+//
+//     if (msg_type.? == xpc.XPC_TYPE_DICTIONARY) {
+//         const command = xpc.xpc_dictionary_get_string(message, "command");
+//         const data = xpc.xpc_dictionary_get_string(message, "data");
+//
+//         if (command != null and data != null) {
+//             std.log.info("Received command: {s}, data: {s}", .{ command, data });
+//
+//             // Create reply
+//             const reply = xpc.xpc_dictionary_create(null, null, 0);
+//             defer xpc.xpc_release(reply);
+//
+//             xpc.xpc_dictionary_set_string(reply, "status", "success");
+//             xpc.xpc_dictionary_set_string(reply, "response", "Message received by helper!");
+//
+//             // Send reply back
+//             xpc.xpc_dictionary_send_reply(reply);
+//         }
+//     } else if (msg_type.? == xpc.XPC_TYPE_ERROR) {
+//         if (message == xpc.XPC_ERROR_CONNECTION_INVALID) {
+//             std.log.info("XPC connection closed");
+//         }
+//     }
+// }
 
 fn processRequestMessage(msgId: i32, requestData: SerializedData) !SerializedData {
     var responseData: SerializedData = undefined;
@@ -343,8 +405,20 @@ fn writeISO(isoPath: []const u8, devicePath: []const u8) !void {
 }
 
 comptime {
-    @export(@as([*:0]const u8, @ptrCast(env.INFO_PLIST)), .{ .name = "__info_plist", .section = "__TEXT,__info_plist", .visibility = .default, .linkage = .strong });
-    @export(@as([*:0]const u8, @ptrCast(env.LAUNCHD_PLIST)), .{ .name = "__launchd_plist", .section = "__TEXT,__launchd_plist", .visibility = .default, .linkage = .strong });
+    @export(
+        @as([*:0]const u8, @ptrCast(env.INFO_PLIST)),
+        .{ .name = "__info_plist", .section = "__TEXT,__info_plist", .visibility = .default, .linkage = .strong },
+    );
+
+    @export(
+        @as([*:0]const u8, @ptrCast(env.LAUNCHD_PLIST)),
+        .{ .name = "__launchd_plist", .section = "__TEXT,__launchd_plist", .visibility = .default, .linkage = .strong },
+    );
+
+    // @export(
+    //     @as([*:0]const u8, @ptrCast(env.ENTITLEMENTS_PLIST)),
+    //     .{ .name = "__entitlements", .section = "__TEXT,__entitlements", .visibility = .default, .linkage = .strong },
+    // );
 }
 
 test "handle helper version check request" {

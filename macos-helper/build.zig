@@ -44,10 +44,12 @@ pub fn build(b: *std.Build) void {
     // exe.linkFramework("DiskArbitration");
     // addPaths(exe);
 
+    // exe.linkSystemLibrary("xpc");
     // freetracer-lib module linking
     // -------------------------------------------------------------------
     const freetracer_lib = b.dependency("freetracer_lib", .{});
     exe.root_module.addImport("freetracer-lib", freetracer_lib.module("freetracer-lib"));
+    // exe.linkLibrary(freetracer_lib.artifact("freetracer-lib"));
     // -------------------------------------------------------------------
 
     //zig build-exe src/main.zig -lc -target x86_64-macos -Wl,-sectcreate,__TEXT,__info_plist,Info.plist

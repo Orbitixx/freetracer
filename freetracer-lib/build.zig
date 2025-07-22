@@ -37,6 +37,9 @@ pub fn build(b: *std.Build) void {
         .root_module = lib_mod,
     });
 
+    lib.addCSourceFile(.{ .file = b.path("src/macos/xpc/xpc_helper.c") });
+    lib.addIncludePath(b.path("src/macos/xpc/"));
+
     lib.linkLibC();
     lib.linkFramework("CoreFoundation");
     lib.linkFramework("DiskArbitration");
