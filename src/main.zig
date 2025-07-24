@@ -50,6 +50,19 @@ pub fn main() !void {
     try Debug.init(allocator, .{ .standaloneLogFilePath = env.MAIN_APP_LOGS_PATH });
     defer Debug.deinit();
 
+    var xpcClient: XPCClient = undefined;
+    defer xpcClient.deinit();
+
+    const installResult = PrivilegedHelperTool.installPrivilegedHelperTool();
+    // std.time.sleep(3_000_000_000);
+
+    if (installResult == freetracer_lib.HelperInstallCode.SUCCESS) {
+        xpcClient = XPCClient.init(@ptrCast(env.HELPER_BUNDLE_ID));
+
+        xpcClient.start();
+        xpcClient.sendMessage("HELLO FROM CLIENT!");
+    }
+
     // Debug.log(.INFO, "Sum of 3 and 8 is: {d}", .{freetracer_lib.xpc.testMath(3, 8)});
     // if (true) return;
 

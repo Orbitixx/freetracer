@@ -22,48 +22,38 @@ var queuedUnmounts: i32 = 0;
 
 pub const WRITE_BLOCK_SIZE = 4096;
 
-// fn XPCMessageHandler(rawEvent: ?*anyopaque) callconv(.c) void {
-//     Debug.log(.INFO, "XPCMessageHandler (from Zig) received a message from the client!", .{});
-//
-//     const event: xpc.xpc_object_t = @ptrCast(rawEvent);
-//
-//     if (xpc.xpc_get_type(event) == xpc.XPC_TYPE_DICTIONARY) {
-//         const received_message = xpc.xpc_dictionary_get_string(event, "message");
-//         Debug.log(.INFO, "Received message: {s}", .{received_message});
-//
-//         // Create a response dictionary
-//         const response: xpc.xpc_object_t = xpc.xpc_dictionary_create(null, null, 0);
-//         xpc.xpc_dictionary_set_string(response, "received", "received");
-//
-//         // Send response
-//         const remote: xpc.xpc_connection_t = xpc.xpc_dictionary_get_remote_connection(event);
-//         xpc.xpc_connection_send_message(remote, response);
-//
-//         // Clean up
-//         xpc.xpc_release(response);
-//     } else {
-//         Debug.log(.WARNING, "XPC Server received an event of unknown type.", .{});
-//     }
-// }
-//
-// fn XPCFailureCallback() callconv(.c) void {
-//     Debug.log(.ERROR, "Freetracer Helper failed to start an XPC service :(", .{});
-// }
-//
-// fn XPCSuccessCallback() callconv(.c) void {
-//     Debug.log(.INFO, "Successfully started an XPC Service!", .{});
-// }
-//
-// fn LogWrapper(level: c_int, rmsg: [*:0]const u8) callconv(.c) void {
-//     const msg = std.mem.span(rmsg);
-//     switch (level) {
-//         1 => Debug.log(.INFO, "{s}", .{msg}),
-//         2 => Debug.log(.WARNING, "{s}", .{msg}),
-//         3 => Debug.log(.ERROR, "{s}", .{msg}),
-//         else => {},
-//     }
-//     // Debug.log(@as(Debug.SeverityLevel, @enumFromInt(level)), @ptrCast(msg), .{});
-// }
+fn messageHandler(connection: xpc.xpc_connection_t, message: xpc.xpc_object_t) callconv(.c) void {
+    Debug.log(.INFO, "SERVER: Message Handler executed!", .{});
+
+    const msg_type = xpc.xpc_get_type(message);
+
+    if (msg_type == xpc.XPC_TYPE_DICTIONARY) {
+        const request = xpc.xpc_dictionary_get_string(message, "request");
+        const data = xpc.xpc_dictionary_get_string(message, "data");
+
+        if (request == null) {
+            Debug.log(.ERROR, "XPCServer received a NULL command from the Helper. Aborting processing response...", .{});
+            return;
+        }
+
+        if (data != null) {
+            Debug.log(.INFO, "Received request: {s}, data: {s}", .{ request, data });
+
+            const reply: xpc.xpc_object_t = xpc.xpc_dictionary_create(null, null, 0);
+            defer xpc.xpc_release(reply);
+
+            xpc.xpc_dictionary_set_string(reply, "status", "success");
+            xpc.xpc_dictionary_set_string(reply, "response", "Message received by helper!");
+
+            Debug.log(.INFO, "Sending a message back!", .{});
+            xpc.xpc_connection_send_message(connection, reply);
+        }
+    } else if (msg_type == xpc.XPC_TYPE_ERROR) {
+        Debug.log(.ERROR, "An error occurred attemting to run a message handler callback.", .{});
+    } else {
+        Debug.log(.ERROR, "XPCServer received an unknown message type.", .{});
+    }
+}
 
 pub fn main() !void {
     var debugAllocator = std.heap.DebugAllocator(.{ .thread_safe = true }).init;
@@ -81,7 +71,10 @@ pub fn main() !void {
     Debug.log(.INFO, "------------------------------------------------------------------------------------------", .{});
     Debug.log(.INFO, "Debug logger is initialized.", .{});
 
-    var xpcServer = XPCServer.init(@ptrCast(env.BUNDLE_ID));
+    var xpcServer = XPCServer.init(
+        @ptrCast(env.BUNDLE_ID),
+        @ptrCast(&messageHandler),
+    );
     defer xpcServer.deinit();
 
     xpcServer.start();
@@ -116,61 +109,7 @@ pub fn main() !void {
     //
     // try machCommunicator.start();
 
-    // const service: xpc.xpc_connection_t = xpc.xpc_connection_create_mach_service(
-    //     "com.orbitixx.freetracer-helper",
-    //     xpc.dispatch_get_main_queue(),
-    //     xpc.XPC_CONNECTION_MACH_SERVICE_LISTENER,
-    // );
-    //
-    // if (service == null) {
-    //     Debug.log(.ERROR, "Failed to create an XPC service.", .{});
-    // }
-    //
-    // xpc.xpc_connection_set_event_handler(service, &handleConnection);
-    // xpc.xpc_connection_resume(service);
-    // xpc.dispatch_main();
-    //
-    // return 0;
 }
-
-// fn handleConnection(connection: xpc.xpc_object_t) callconv(.C) void {
-//     const conn_type = xpc.xpc_get_type(connection);
-//
-//     if (conn_type.? == xpc.XPC_TYPE_CONNECTION) {
-//         std.log.info("New XPC connection established");
-//
-//         // Set up message handler for this connection
-//         c.xpc_connection_set_event_handler(connection, &handleMessage);
-//         c.xpc_connection_resume(connection);
-//     }
-// }
-//
-// fn handleMessage(message: xpc.xpc_object_t) callconv(.C) void {
-//     const msg_type = xpc.xpc_get_type(message);
-//
-//     if (msg_type.? == xpc.XPC_TYPE_DICTIONARY) {
-//         const command = xpc.xpc_dictionary_get_string(message, "command");
-//         const data = xpc.xpc_dictionary_get_string(message, "data");
-//
-//         if (command != null and data != null) {
-//             std.log.info("Received command: {s}, data: {s}", .{ command, data });
-//
-//             // Create reply
-//             const reply = xpc.xpc_dictionary_create(null, null, 0);
-//             defer xpc.xpc_release(reply);
-//
-//             xpc.xpc_dictionary_set_string(reply, "status", "success");
-//             xpc.xpc_dictionary_set_string(reply, "response", "Message received by helper!");
-//
-//             // Send reply back
-//             xpc.xpc_dictionary_send_reply(reply);
-//         }
-//     } else if (msg_type.? == xpc.XPC_TYPE_ERROR) {
-//         if (message == xpc.XPC_ERROR_CONNECTION_INVALID) {
-//             std.log.info("XPC connection closed");
-//         }
-//     }
-// }
 
 fn processRequestMessage(msgId: i32, requestData: SerializedData) !SerializedData {
     var responseData: SerializedData = undefined;

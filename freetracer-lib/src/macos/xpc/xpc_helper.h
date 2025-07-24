@@ -4,7 +4,7 @@
 #include <xpc/xpc.h>
 
 typedef void (*Logger)(int, const char*);
-typedef void (*XPCMessageHandler)(xpc_object_t);
+typedef void (*XPCMessageHandler)(xpc_connection_t, xpc_object_t);
 typedef void (*XPCConnectionHandler)(xpc_object_t connection, XPCMessageHandler handler);
 typedef void (*XPCServiceEventHandler)(xpc_connection_t, xpc_object_t);
 
@@ -16,6 +16,5 @@ void XPCConnectionSetEventHandler(xpc_connection_t connection,
 
 void XPCMessageSetEventHandler(xpc_connection_t connection, XPCMessageHandler msgHandler);
 
-void XPCClientSetEventHandler(xpc_connection_t conn);
 
 #endif
