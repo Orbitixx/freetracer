@@ -1,27 +1,6 @@
 #include "xpc_helper.h"
 #include <xpc/xpc.h>
 
-// void XPCConnectionSetEventHandler(xpc_connection_t connection,
-//                                   XPCConnectionHandler connectionHandler,
-//                                   XPCMessageHandler messageHandler) {
-//   xpc_connection_set_event_handler(connection, ^(xpc_object_t event) {
-//     xpc_type_t type = xpc_get_type(event);
-//
-//     if (type == XPC_TYPE_CONNECTION) {
-//       connectionHandler(event, messageHandler);
-//     }
-//   });
-// }
-//
-// void XPCMessageSetEventHandler(xpc_connection_t connection,
-//                                XPCMessageHandler msgHandler) {
-//   xpc_connection_set_event_handler(connection, ^(xpc_object_t event) {
-//     msgHandler(event);
-//   });
-//
-//   xpc_connection_resume(connection);
-// }
-
 void XPCConnectionSetEventHandler(xpc_connection_t connection,
                                   XPCConnectionHandler connectionHandler,
                                   XPCMessageHandler messageHandler) {
@@ -57,13 +36,12 @@ void XPCServiceSetEventHandler(xpc_connection_t connection,
   xpc_connection_resume(connection);
 }
 
-// void XPCClientSetEventHandler(xpc_connection_t connection,
-//                                   XPCConnectionHandler connectionHandler,
-//                                   XPCMessageHandler messageHandler) {
-// 	xpc_connection_set_event_handler(conn, ^(xpc_object_t event) {
-//         // Handle async errors (like connection problems)
-//         if (xpc_get_type(event) == XPC_TYPE_ERROR) {
-//             fprintf(stderr, "XPC Error: %s\n", xpc_copy_description(event));
-//         }
-//     });
-// }
+
+void XPCProcessDispatchedEvents() {
+    // Process main queue events without blocking
+    dispatch_queue_t main_queue = dispatch_get_main_queue();
+    dispatch_sync(main_queue, ^{
+        // This just ensures any pending main queue work gets processed
+    });
+}
+

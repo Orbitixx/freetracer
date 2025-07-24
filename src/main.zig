@@ -8,8 +8,8 @@ const AppConfig = @import("config.zig");
 
 const freetracer_lib = @import("freetracer-lib");
 const Debug = freetracer_lib.Debug;
-const XPCClient = freetracer_lib.XPCClient;
 const xpc = freetracer_lib.xpc;
+const XPCService = freetracer_lib.XPCService;
 const PrivilegedHelperTool = @import("./modules/macos/PrivilegedHelperTool.zig");
 
 // const Logger = @import("managers/GlobalLogger.zig").LoggerSingleton;
@@ -49,22 +49,6 @@ pub fn main() !void {
     //----------------------------------------------------------------------------------
     try Debug.init(allocator, .{ .standaloneLogFilePath = env.MAIN_APP_LOGS_PATH });
     defer Debug.deinit();
-
-    var xpcClient: XPCClient = undefined;
-    defer xpcClient.deinit();
-
-    const installResult = PrivilegedHelperTool.installPrivilegedHelperTool();
-    // std.time.sleep(3_000_000_000);
-
-    if (installResult == freetracer_lib.HelperInstallCode.SUCCESS) {
-        xpcClient = XPCClient.init(@ptrCast(env.HELPER_BUNDLE_ID));
-
-        xpcClient.start();
-        xpcClient.sendMessage("HELLO FROM CLIENT!");
-    }
-
-    // Debug.log(.INFO, "Sum of 3 and 8 is: {d}", .{freetracer_lib.xpc.testMath(3, 8)});
-    // if (true) return;
 
     try WindowManager.init();
     defer WindowManager.deinit();
@@ -152,6 +136,8 @@ pub fn main() !void {
         //--- @UPDATE COMPONENTS -----------------------------------------------------------
         //----------------------------------------------------------------------------------
 
+        // _ = c.CFRunLoopRunInMode(c.kCFRunLoopDefaultMode, 0.0, c.TRUE);
+
         try componentRegistry.updateAll();
 
         //----------------------------------------------------------------------------------
@@ -178,18 +164,11 @@ pub fn main() !void {
 
         try componentRegistry.drawAll();
 
-        defer rl.endDrawing();
+        rl.endDrawing();
 
         //----------------------------------------------------------------------------------
         //--- @END DRAW --------------------------------------------------------------------
         //----------------------------------------------------------------------------------
 
     }
-}
-
-comptime {
-    // @export(
-    //     @as([*:0]const u8, @ptrCast(env.ENTITLEMENTS_PLIST)),
-    //     .{ .name = "__entitlements", .section = "__TEXT,__entitlements", .visibility = .default, .linkage = .strong },
-    // );
 }

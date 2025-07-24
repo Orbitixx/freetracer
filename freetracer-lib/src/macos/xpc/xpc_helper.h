@@ -16,5 +16,6 @@ void XPCConnectionSetEventHandler(xpc_connection_t connection,
 
 void XPCMessageSetEventHandler(xpc_connection_t connection, XPCMessageHandler msgHandler);
 
+void XPCProcessDispatchedEvents();
 
 #endif

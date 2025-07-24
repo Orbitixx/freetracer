@@ -10,7 +10,7 @@ const MachCommunicator = freetracer_lib.MachCommunicator;
 const SerializedData = freetracer_lib.SerializedData;
 const MachPortPacketSize = freetracer_lib.k.MachPortPacketSize;
 const xpc = freetracer_lib.xpc;
-const XPCClient = freetracer_lib.XPCClient;
+const XPCService = freetracer_lib.XPCService;
 
 const PrivilegedHelperTool = @import("../../modules/macos/PrivilegedHelperTool.zig");
 
@@ -42,7 +42,8 @@ worker: ?ComponentWorker = null,
 
 // Component-specific, unique props
 allocator: std.mem.Allocator,
-machCommunicator: MachCommunicator,
+// machCommunicator: MachCommunicator,
+xpcClient: XPCService,
 isHelperInstalled: bool = false,
 
 pub const Events = struct {
@@ -65,11 +66,17 @@ pub fn init(allocator: std.mem.Allocator) !PrivilegedHelper {
             // Set installed flag to true by default on Linux systems
             .isHelperInstalled = System.isLinux,
         }),
-        .machCommunicator = MachCommunicator.init(allocator, .{
-            .localBundleId = @ptrCast(env.BUNDLE_ID),
-            .remoteBundleId = @ptrCast(env.HELPER_BUNDLE_ID),
-            .ownerName = "Freetracer Main Process",
-            .processMessageFn = PrivilegedHelper.processMachMessage,
+        // .machCommunicator = MachCommunicator.init(allocator, .{
+        //     .localBundleId = @ptrCast(env.BUNDLE_ID),
+        //     .remoteBundleId = @ptrCast(env.HELPER_BUNDLE_ID),
+        //     .ownerName = "Freetracer Main Process",
+        //     .processMessageFn = PrivilegedHelper.processMachMessage,
+        // }),
+        .xpcClient = XPCService.init(.{
+            .isServer = false,
+            .serviceName = "Freetracer XPC Client",
+            .serverBundleId = @ptrCast(env.HELPER_BUNDLE_ID),
+            .requestHandler = @ptrCast(&PrivilegedHelper.messageHandler),
         }),
     };
 }
@@ -101,7 +108,7 @@ pub fn start(self: *PrivilegedHelper) !void {
     if (System.isLinux) return;
 
     try self.initWorker();
-    try self.machCommunicator.start();
+    // try self.machCommunicator.start();
 
     // Verify if the Helper Tool is installed and set self.isHelperInstalled flag accordingly
     self.dispatchComponentAction();
@@ -122,7 +129,7 @@ pub fn start(self: *PrivilegedHelper) !void {
 pub fn update(self: *PrivilegedHelper) !void {
     if (System.isLinux) return;
 
-    _ = self;
+    self.checkAndJoinWorker();
 }
 
 pub fn draw(self: *PrivilegedHelper) !void {
@@ -143,6 +150,8 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
             const data = Events.onWriteISOToDeviceRequest.getData(event) orelse break :eventLoop;
 
             var unmountResponse: freetracer_lib.HelperUnmountRequestCode = self.requestUnmount(data.targetDisk);
+
+            if (true) break :eventLoop;
 
             Debug.log(.INFO, "PrivilegedHelper Component first unmount request result: {any}", .{unmountResponse});
 
@@ -190,6 +199,8 @@ pub fn deinit(self: *PrivilegedHelper) void {
 pub fn workerRun(worker: *ComponentWorker, context: *anyopaque) void {
     _ = worker;
     _ = context;
+
+    // xpc.dispatch_main();
 }
 
 pub fn workerCallback(worker: *ComponentWorker, context: *anyopaque) void {
@@ -209,10 +220,36 @@ pub fn dispatchComponentAction(self: *PrivilegedHelper) void {
     } else self.isHelperInstalled = false;
 }
 
+pub fn checkAndJoinWorker(self: *PrivilegedHelper) void {
+    if (self.worker) |*worker| {
+        if (worker.status == ComponentFramework.WorkerStatus.NEEDS_JOINING) {
+            Debug.log(.DEBUG, "PrivilegedHelper: Worker finished, needs joining...", .{});
+            worker.join();
+            Debug.log(.DEBUG, "PrivilegedHelper: Worker joined.", .{});
+        }
+    }
+}
+
+pub fn messageHandler(connection: xpc.xpc_connection_t, message: xpc.xpc_object_t) callconv(.c) void {
+    _ = connection;
+    Debug.log(.INFO, "CLIENT: Message Handler executed!", .{});
+
+    const reply_type = xpc.xpc_get_type(message);
+
+    if (reply_type == xpc.XPC_TYPE_DICTIONARY) {
+        const status = xpc.xpc_dictionary_get_string(message, "status");
+        const response = xpc.xpc_dictionary_get_string(message, "response");
+
+        if (status != null and response != null) {
+            Debug.log(.INFO, "Helper replied - Status: {s}, Response: {s}", .{ status, response });
+        }
+    }
+}
+
 fn waitForHelperToolInstall() void {
     Debug.log(.INFO, "Waiting to allow Helper Tool be registered with system launch daemon", .{});
 
-    std.time.sleep(3_000_000_000);
+    std.time.sleep(1_000_000_000);
 }
 
 fn processMachMessage(msgId: i32, data: SerializedData) !SerializedData {
@@ -220,33 +257,30 @@ fn processMachMessage(msgId: i32, data: SerializedData) !SerializedData {
     return SerializedData.serialize([:0]const u8, "Successful response from MAIN APP!");
 }
 
-fn LogWrapper(level: c_int, rmsg: [*:0]const u8) callconv(.c) void {
-    const msg = std.mem.span(rmsg);
-    switch (level) {
-        1 => Debug.log(.INFO, "{s}", .{msg}),
-        2 => Debug.log(.WARNING, "{s}", .{msg}),
-        3 => Debug.log(.ERROR, "{s}", .{msg}),
-        else => {},
-    }
-    // Debug.log(@as(Debug.SeverityLevel, @enumFromInt(level)), @ptrCast(msg), .{});
-}
-
 fn requestUnmount(self: *PrivilegedHelper, targetDisk: [:0]const u8) freetracer_lib.HelperUnmountRequestCode {
     // Install or update the Privileged Helper Tool before sending unmount request
     _ = targetDisk;
 
-    var xpcClient: XPCClient = undefined;
-    defer xpcClient.deinit();
+    // var xpcClient: XPCService = undefined;
+    // defer xpcClient.deinit();
 
     if (!self.isHelperInstalled) {
         const installResult = PrivilegedHelperTool.installPrivilegedHelperTool();
-        waitForHelperToolInstall();
+        // waitForHelperToolInstall();
 
         if (installResult == freetracer_lib.HelperInstallCode.SUCCESS) {
-            xpcClient = XPCClient.init(@ptrCast(env.HELPER_BUNDLE_ID));
+            // xpcClient = XPCService.init(.{
+            //     .isServer = false,
+            //     .serviceName = "Freetracer XPC Client",
+            //     .serverBundleId = @ptrCast(env.HELPER_BUNDLE_ID),
+            //     .requestHandler = @ptrCast(&messageHandler),
+            // });
 
-            xpcClient.start();
-            xpcClient.sendMessage("HELLO FROM CLIENT!");
+            self.xpcClient.start();
+
+            self.xpcClient.sendMessage("Hello!");
+            self.xpcClient.sendMessage("Hello again 2!");
+            self.xpcClient.sendMessage("Hello again 33333!");
         }
         // if (installResult != freetracer_lib.HelperInstallCode.SUCCESS) return freetracer_lib.HelperUnmountRequestCode.FAILURE else self.dispatchComponentAction();
         // return freetracer_lib.HelperUnmountRequestCode.TRY_AGAIN;

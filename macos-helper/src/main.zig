@@ -12,7 +12,7 @@ const String = freetracer_lib.String;
 const Character = freetracer_lib.Character;
 
 const MachCommunicator = freetracer_lib.MachCommunicator;
-const XPCServer = freetracer_lib.XPCServer;
+const XPCService = freetracer_lib.XPCService;
 
 const ReturnCode = freetracer_lib.HelperReturnCode;
 const SerializedData = freetracer_lib.SerializedData;
@@ -22,7 +22,7 @@ var queuedUnmounts: i32 = 0;
 
 pub const WRITE_BLOCK_SIZE = 4096;
 
-fn messageHandler(connection: xpc.xpc_connection_t, message: xpc.xpc_object_t) callconv(.c) void {
+fn xpcRequestHandler(connection: xpc.xpc_connection_t, message: xpc.xpc_object_t) callconv(.c) void {
     Debug.log(.INFO, "SERVER: Message Handler executed!", .{});
 
     const msg_type = xpc.xpc_get_type(message);
@@ -32,7 +32,7 @@ fn messageHandler(connection: xpc.xpc_connection_t, message: xpc.xpc_object_t) c
         const data = xpc.xpc_dictionary_get_string(message, "data");
 
         if (request == null) {
-            Debug.log(.ERROR, "XPCServer received a NULL command from the Helper. Aborting processing response...", .{});
+            Debug.log(.ERROR, "XPC Server received a NULL request. Aborting processing response...", .{});
             return;
         }
 
@@ -44,14 +44,14 @@ fn messageHandler(connection: xpc.xpc_connection_t, message: xpc.xpc_object_t) c
 
             xpc.xpc_dictionary_set_string(reply, "status", "success");
             xpc.xpc_dictionary_set_string(reply, "response", "Message received by helper!");
-
+            // _ = connection;
             Debug.log(.INFO, "Sending a message back!", .{});
             xpc.xpc_connection_send_message(connection, reply);
         }
     } else if (msg_type == xpc.XPC_TYPE_ERROR) {
         Debug.log(.ERROR, "An error occurred attemting to run a message handler callback.", .{});
     } else {
-        Debug.log(.ERROR, "XPCServer received an unknown message type.", .{});
+        Debug.log(.ERROR, "XPC Server received an unknown message type.", .{});
     }
 }
 
@@ -71,15 +71,15 @@ pub fn main() !void {
     Debug.log(.INFO, "------------------------------------------------------------------------------------------", .{});
     Debug.log(.INFO, "Debug logger is initialized.", .{});
 
-    var xpcServer = XPCServer.init(
-        @ptrCast(env.BUNDLE_ID),
-        @ptrCast(&messageHandler),
-    );
+    var xpcServer = XPCService.init(.{
+        .isServer = true,
+        .serviceName = "Freetracer Helper XPC Server",
+        .serverBundleId = @ptrCast(env.BUNDLE_ID),
+        .requestHandler = @ptrCast(&xpcRequestHandler),
+    });
     defer xpcServer.deinit();
 
     xpcServer.start();
-
-    // Debug.log(.INFO, "Sum of 3 and 8 is: {d}", .{xpc.testMath(3, 8)});
 
     // var machCommunicator = MachCommunicator.init(allocator, .{
     //     .localBundleId = env.BUNDLE_ID,
@@ -89,24 +89,6 @@ pub fn main() !void {
     // });
     //
     // defer machCommunicator.deinit();
-    //
-    // std.time.sleep(3_000_000_000);
-    //
-    // const MAX_ATTEMPTS = 3;
-    //
-    // for (0..MAX_ATTEMPTS) |i| {
-    //     const testResult = machCommunicator.testRemotePort();
-    //
-    //     if (!testResult) {
-    //         Debug.log(.WARNING, "Failed to establish a test remote mach port to the MAIN APP. Attempt {d} Retrying...", .{i + 1});
-    //         std.time.sleep(3_000_000_000);
-    //     } else {
-    //         Debug.log(.INFO, "Successfully tested remote mach port connection. Sending a mach message to remote...", .{});
-    //         _ = try machCommunicator.sendMachMessageToRemote([:0]const u8, "Ping from Freetracer helper tool!", -1, void);
-    //         break;
-    //     }
-    // }
-    //
     // try machCommunicator.start();
 
 }
