@@ -12,6 +12,7 @@ const String = freetracer_lib.String;
 const Character = freetracer_lib.Character;
 
 const MachCommunicator = freetracer_lib.MachCommunicator;
+const XPCServer = freetracer_lib.XPCServer;
 
 const ReturnCode = freetracer_lib.HelperReturnCode;
 const SerializedData = freetracer_lib.SerializedData;
@@ -20,6 +21,49 @@ const WriteRequestData = freetracer_lib.WriteRequestData;
 var queuedUnmounts: i32 = 0;
 
 pub const WRITE_BLOCK_SIZE = 4096;
+
+// fn XPCMessageHandler(rawEvent: ?*anyopaque) callconv(.c) void {
+//     Debug.log(.INFO, "XPCMessageHandler (from Zig) received a message from the client!", .{});
+//
+//     const event: xpc.xpc_object_t = @ptrCast(rawEvent);
+//
+//     if (xpc.xpc_get_type(event) == xpc.XPC_TYPE_DICTIONARY) {
+//         const received_message = xpc.xpc_dictionary_get_string(event, "message");
+//         Debug.log(.INFO, "Received message: {s}", .{received_message});
+//
+//         // Create a response dictionary
+//         const response: xpc.xpc_object_t = xpc.xpc_dictionary_create(null, null, 0);
+//         xpc.xpc_dictionary_set_string(response, "received", "received");
+//
+//         // Send response
+//         const remote: xpc.xpc_connection_t = xpc.xpc_dictionary_get_remote_connection(event);
+//         xpc.xpc_connection_send_message(remote, response);
+//
+//         // Clean up
+//         xpc.xpc_release(response);
+//     } else {
+//         Debug.log(.WARNING, "XPC Server received an event of unknown type.", .{});
+//     }
+// }
+//
+// fn XPCFailureCallback() callconv(.c) void {
+//     Debug.log(.ERROR, "Freetracer Helper failed to start an XPC service :(", .{});
+// }
+//
+// fn XPCSuccessCallback() callconv(.c) void {
+//     Debug.log(.INFO, "Successfully started an XPC Service!", .{});
+// }
+//
+// fn LogWrapper(level: c_int, rmsg: [*:0]const u8) callconv(.c) void {
+//     const msg = std.mem.span(rmsg);
+//     switch (level) {
+//         1 => Debug.log(.INFO, "{s}", .{msg}),
+//         2 => Debug.log(.WARNING, "{s}", .{msg}),
+//         3 => Debug.log(.ERROR, "{s}", .{msg}),
+//         else => {},
+//     }
+//     // Debug.log(@as(Debug.SeverityLevel, @enumFromInt(level)), @ptrCast(msg), .{});
+// }
 
 pub fn main() !void {
     var debugAllocator = std.heap.DebugAllocator(.{ .thread_safe = true }).init;
@@ -37,9 +81,12 @@ pub fn main() !void {
     Debug.log(.INFO, "------------------------------------------------------------------------------------------", .{});
     Debug.log(.INFO, "Debug logger is initialized.", .{});
 
-    Debug.log(.INFO, "Sum of 3 and 8 is: {d}", .{xpc.testMath(3, 8)});
+    var xpcServer = XPCServer.init(@ptrCast(env.BUNDLE_ID));
+    defer xpcServer.deinit();
 
-    // xpc.start_xpc_server();
+    xpcServer.start();
+
+    // Debug.log(.INFO, "Sum of 3 and 8 is: {d}", .{xpc.testMath(3, 8)});
 
     // var machCommunicator = MachCommunicator.init(allocator, .{
     //     .localBundleId = env.BUNDLE_ID,

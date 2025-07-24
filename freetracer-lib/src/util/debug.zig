@@ -13,10 +13,10 @@ pub const LoggerSettings = struct {
 };
 
 pub const SeverityLevel = enum(u8) {
-    DEBUG,
-    INFO,
-    WARNING,
-    ERROR,
+    DEBUG = 0,
+    INFO = 1,
+    WARNING = 2,
+    ERROR = 3,
 };
 
 pub fn getInstance() !*Logger {

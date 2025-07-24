@@ -1,12 +1,21 @@
 #ifndef XPC_HELPER_H
 #define XPC_HELPER_H
 
-// #include <xpc/xpc.h>
+#include <xpc/xpc.h>
 
-// static void handle_event(xpc_object_t event);
-// static void handle_connection(xpc_connection_t connection);
-// void start_xpc_server();
-//
+typedef void (*Logger)(int, const char*);
+typedef void (*XPCMessageHandler)(xpc_object_t);
+typedef void (*XPCConnectionHandler)(xpc_object_t connection, XPCMessageHandler handler);
+typedef void (*XPCServiceEventHandler)(xpc_connection_t, xpc_object_t);
 
-int testMath(int a, int b);
+void XPCServiceSetEventHandler(xpc_connection_t, XPCServiceEventHandler);
+
+void XPCConnectionSetEventHandler(xpc_connection_t connection,
+                                  XPCConnectionHandler connectionHandler,
+				  XPCMessageHandler messageHandler);
+
+void XPCMessageSetEventHandler(xpc_connection_t connection, XPCMessageHandler msgHandler);
+
+void XPCClientSetEventHandler(xpc_connection_t conn);
+
 #endif

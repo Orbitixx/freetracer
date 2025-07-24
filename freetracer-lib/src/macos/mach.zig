@@ -5,7 +5,168 @@ const c = @import("../types.zig").c;
 const Debug = @import("../util/debug.zig");
 const isMacOS = @import("../types.zig").isMacOS;
 
+const xpc = @cImport(@cInclude("xpc_helper.h"));
 const NullTerminatedStringType: type = [:0]const u8;
+
+pub const XPCServer = struct {
+    service: xpc.xpc_connection_t = undefined,
+    serverBundleId: [*:0]const u8,
+
+    const Self = @This();
+
+    pub fn init(serverBundleId: [*:0]const u8) Self {
+        return Self{
+            .serverBundleId = serverBundleId,
+        };
+    }
+
+    pub fn start(self: *Self) void {
+        self.service = xpc.xpc_connection_create_mach_service(@ptrCast(self.serverBundleId), xpc.dispatch_get_main_queue(), xpc.XPC_CONNECTION_MACH_SERVICE_LISTENER);
+
+        if (self.service == null) {
+            Debug.log(.ERROR, "XPC Server is unable to create a mach service. Aborting...", .{});
+            return;
+        }
+
+        xpc.XPCConnectionSetEventHandler(self.service, @ptrCast(&connectionHandler), @ptrCast(&messageHandler));
+        xpc.xpc_connection_resume(self.service);
+        xpc.dispatch_main();
+
+        Debug.log(.INFO, "XPC service started, listening for connections...", .{});
+    }
+
+    pub fn connectionHandler(connection: xpc.xpc_connection_t, msgHandler: xpc.XPCMessageHandler) callconv(.c) void {
+        const connectionType = xpc.xpc_get_type(connection);
+
+        if (connectionType == xpc.XPC_TYPE_CONNECTION) {
+            Debug.log(.INFO, "New XPC connection established", .{});
+            xpc.XPCMessageSetEventHandler(connection, msgHandler);
+            xpc.xpc_connection_resume(connection);
+        }
+    }
+
+    pub fn messageHandler(message: xpc.xpc_object_t) callconv(.c) void {
+        Debug.log(.INFO, "SERVER: Message Handler executed!", .{});
+
+        const msg_type = xpc.xpc_get_type(message);
+
+        if (msg_type == xpc.XPC_TYPE_DICTIONARY) {
+            const command = xpc.xpc_dictionary_get_string(message, "command");
+            const data = xpc.xpc_dictionary_get_string(message, "data");
+
+            if (command != null and data != null) {
+                std.log.info("Received command: {s}, data: {s}", .{ command, data });
+
+                // Create reply
+                const reply = xpc.xpc_dictionary_create(null, null, 0);
+                defer xpc.xpc_release(reply);
+
+                xpc.xpc_dictionary_set_string(reply, "status", "success");
+                xpc.xpc_dictionary_set_string(reply, "response", "Message received by helper!");
+
+                // Send reply back
+                // xpc.xpc_dictionary_send_reply(reply);
+                // xpc.xpc_connection_send_message(, message: xpc_object_t)
+            }
+        } else if (msg_type == xpc.XPC_TYPE_ERROR) {
+            // if (message == xpc.XPC_ERROR_CONNECTION_INVALID) {
+            //     Debug.log(.ERROR, "SERVER: XPC connection closed.", .{});
+            // }
+        }
+    }
+
+    pub fn runEventLoop(self: *Self) void {
+        _ = self;
+        // Simple event loop - in production you might want something more sophisticated
+        while (true) {
+            std.time.sleep(100 * std.time.ns_per_ms); // 100ms
+        }
+    }
+
+    pub fn deinit(self: *Self) void {
+        xpc.xpc_connection_cancel(self.service);
+        xpc.xpc_release(self.service);
+    }
+};
+
+pub const XPCClient = struct {
+    service: xpc.xpc_connection_t = undefined,
+    clientBundleId: [*:0]const u8,
+
+    const Self = @This();
+
+    pub fn init(clientBundleId: [*:0]const u8) Self {
+        return Self{
+            .clientBundleId = clientBundleId,
+        };
+    }
+
+    pub fn start(self: *Self) void {
+        self.service = xpc.xpc_connection_create_mach_service(@ptrCast(self.clientBundleId), null, xpc.XPC_CONNECTION_MACH_SERVICE_PRIVILEGED);
+        // self.service = xpc.xpc_connection_create(@ptrCast(self.clientBundleId), null);
+
+        if (self.service == null) {
+            Debug.log(.ERROR, "XPC Client is unable to create a mach service. Aborting...", .{});
+            return;
+        }
+
+        xpc.XPCClientSetEventHandler(self.service);
+        xpc.xpc_connection_resume(self.service);
+        self.sendMessage("HELLO TEST TEST");
+        xpc.dispatch_main();
+        Debug.log(.INFO, "XPC client started...", .{});
+    }
+
+    pub fn connectionHandler(connection: xpc.xpc_connection_t, msgHandler: xpc.XPCMessageHandler) callconv(.c) void {
+        const connectionType = xpc.xpc_get_type(connection);
+
+        if (connectionType == xpc.XPC_TYPE_CONNECTION) {
+            Debug.log(.INFO, "New XPC connection established", .{});
+            xpc.XPCMessageSetEventHandler(connection, msgHandler);
+            xpc.xpc_connection_resume(connection);
+        }
+
+        xpc.xpc_connection_resume(connection);
+    }
+
+    pub fn messageHandler(event: xpc.xpc_object_t) callconv(.c) void {
+        _ = event;
+        Debug.log(.INFO, "CLIENT: Message Handler executed!", .{});
+    }
+
+    pub fn sendMessage(self: *Self, message: [*:0]const u8) void {
+        // Create XPC dictionary message
+        const msg: xpc.xpc_object_t = xpc.xpc_dictionary_create(null, null, 0);
+        defer xpc.xpc_release(msg);
+
+        xpc.xpc_dictionary_set_string(msg, "command", "hello");
+        xpc.xpc_dictionary_set_string(msg, "data", message);
+
+        // Send message with reply handler
+        // xpc.xpc_connection_send_message_with_reply(self.connection, msg, null, // reply queue (null = main queue)
+        // &handleReply);
+
+        xpc.xpc_connection_send_message(self.service, msg);
+    }
+
+    fn handleReply(reply: xpc.xpc_object_t) callconv(.C) void {
+        const reply_type = xpc.xpc_get_type(reply);
+
+        if (reply_type == xpc.XPC_TYPE_DICTIONARY) {
+            const status = xpc.xpc_dictionary_get_string(reply, "status");
+            const response = xpc.xpc_dictionary_get_string(reply, "response");
+
+            if (status != null and response != null) {
+                Debug.info(.INFO, "Helper replied - Status: {s}, Response: {s}", .{ status, response });
+            }
+        }
+    }
+
+    pub fn deinit(self: *Self) void {
+        xpc.xpc_connection_cancel(self.service);
+        xpc.xpc_release(self.service);
+    }
+};
 
 pub const SerializedData = struct {
     data: [k.MachPortPacketSize]u8,
