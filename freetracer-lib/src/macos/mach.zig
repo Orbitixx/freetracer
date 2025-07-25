@@ -6,6 +6,9 @@ const Debug = @import("../util/debug.zig");
 const isMacOS = @import("../types.zig").isMacOS;
 
 const xpc = @cImport(@cInclude("xpc_helper.h"));
+
+const HelperRequestCode = @import("../constants.zig").HelperRequestCode;
+
 const NullTerminatedStringType: type = [:0]const u8;
 
 const XPCRequestHandler = *const fn (connection: xpc.xpc_connection_t, message: xpc.xpc_object_t) callconv(.c) void;
@@ -62,7 +65,12 @@ pub const XPCService = struct {
         if (self.config.isServer) xpc.dispatch_main() else {
             // Allow a small gap of time for XPC service to spin up (100ms)
             std.time.sleep(100_000);
-            self.sendMessage("ping");
+            
+            const pingData = xpc.xpc_dictionary_create(null, null, 0);
+            defer xpc.xpc_release(pingData);
+
+            xpc.xpc_dictionary_set_int64(pingData, "request", @intFromEnum(HelperRequestCode.INITIAL_PING));
+            connectionSendMessage(self.service, pingData);
         }
     }
 
@@ -83,7 +91,13 @@ pub const XPCService = struct {
         xpc.xpc_dictionary_set_string(msg, "request", "hello");
         xpc.xpc_dictionary_set_string(msg, "data", message);
 
-        xpc.XPCConnectionSendMessageWithReply(self.service, msg, self.clientDispatchQueue, @ptrCast(self.config.requestHandler));
+        xpc.xpc_connection_send_message(self.service, msg);
+
+        // xpc.XPCConnectionSendMessageWithReply(self.service, msg, self.clientDispatchQueue, @ptrCast(self.config.requestHandler));
+    }
+
+    pub fn connectionSendMessage(connection: xpc.xpc_connection_t, dataDictionary: xpc.xpc_object_t) void {
+        xpc.xpc_connection_send_message(connection, dataDictionary);
     }
 
     pub fn deinit(self: *Self) void {

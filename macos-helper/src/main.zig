@@ -14,6 +14,8 @@ const Character = freetracer_lib.Character;
 const MachCommunicator = freetracer_lib.MachCommunicator;
 const XPCService = freetracer_lib.XPCService;
 
+const HelperRequestCode = freetracer_lib.HelperRequestCode;
+const HelperResponseCode = freetracer_lib.HelperResponseCode;
 const ReturnCode = freetracer_lib.HelperReturnCode;
 const SerializedData = freetracer_lib.SerializedData;
 const WriteRequestData = freetracer_lib.WriteRequestData;
@@ -25,50 +27,48 @@ pub const WRITE_BLOCK_SIZE = 4096;
 fn xpcRequestHandler(connection: xpc.xpc_connection_t, message: xpc.xpc_object_t) callconv(.c) void {
     Debug.log(.INFO, "SERVER: Message Handler executed!", .{});
 
+    if (message == null) {
+        Debug.log(.ERROR, "XPC Server received a NULL request. Aborting processing response...", .{});
+        return;
+    }
+
     const msg_type = xpc.xpc_get_type(message);
 
     if (msg_type == xpc.XPC_TYPE_DICTIONARY) {
-        const request = xpc.xpc_dictionary_get_string(message, "request");
-        const data = xpc.xpc_dictionary_get_string(message, "data");
-
-        if (request == null) {
-            Debug.log(.ERROR, "XPC Server received a NULL request. Aborting processing response...", .{});
-            return;
-        }
-
-        if (data != null) {
-            Debug.log(.INFO, "Received request: {s}, data: {s}", .{ request, data });
-
-            const reply: xpc.xpc_object_t = xpc.xpc_dictionary_create_reply(message);
-            // defer xpc.xpc_release(reply);
-
-            xpc.xpc_dictionary_set_string(reply, "status", "success");
-            xpc.xpc_dictionary_set_string(reply, "response", "Message received by helper!");
-
-            xpc.xpc_connection_send_message(connection, reply);
-            xpc.xpc_release(reply);
-
-            Debug.log(.INFO, "Sending a message back...", .{});
-
-            for (0..5) |i| {
-                Debug.log(.INFO, "Sending progress: {d}...", .{i});
-
-                const progressMsg: xpc.xpc_object_t = xpc.xpc_dictionary_create(null, null, 0);
-                defer xpc.xpc_release(progressMsg);
-
-                xpc.xpc_dictionary_set_string(progressMsg, "status", "success");
-                xpc.xpc_dictionary_set_string(progressMsg, "response", "Progress message!");
-
-                xpc.xpc_connection_send_message(connection, progressMsg);
-            }
-
-            // xpc.xpc_connection_send_message(connection, reply);
-        }
+        processRequestMessage(connection, message);
     } else if (msg_type == xpc.XPC_TYPE_ERROR) {
         Debug.log(.ERROR, "An error occurred attemting to run a message handler callback.", .{});
     } else {
         Debug.log(.ERROR, "XPC Server received an unknown message type.", .{});
     }
+
+    Debug.log(.INFO, "Finished processing request", .{});
+}
+
+fn processRequestMessage(connection: xpc.xpc_connection_t, data: xpc.xpc_object_t) void {
+    const request: HelperRequestCode = @enumFromInt(xpc.xpc_dictionary_get_int64(data, "request"));
+
+    Debug.log(.INFO, "Received request: {any}", .{request});
+
+    switch (request) {
+        .INITIAL_PING => {
+            processInitialPing(connection, data);
+        },
+
+        .GET_HELPER_VERSION => {},
+
+        .UNMOUNT_DISK => {},
+
+        .WRITE_ISO_TO_DEVICE => {},
+    }
+}
+
+fn processInitialPing(connection: xpc.xpc_object_t, data: xpc.xpc_object_t) void {
+    _ = data;
+    const reply: xpc.xpc_object_t = xpc.xpc_dictionary_create(null, null, 0);
+    defer xpc.xpc_release(reply);
+    xpc.xpc_dictionary_set_int64(reply, "response", @intFromEnum(HelperResponseCode.INITIAL_PONG));
+    XPCService.connectionSendMessage(@ptrCast(connection), reply);
 }
 
 pub fn main() !void {
@@ -109,44 +109,44 @@ pub fn main() !void {
 
 }
 
-fn processRequestMessage(msgId: i32, requestData: SerializedData) !SerializedData {
-    var responseData: SerializedData = undefined;
-
-    switch (msgId) {
-        //
-        k.HelperVersionRequest => {
-            Debug.log(.INFO, "Freetracer Helper Tool received a version query request [{d}].", .{k.HelperVersionRequest});
-
-            const versionString = handleHelperVersionCheckRequest();
-            Debug.log(.INFO, "Packing size of versionString: {d}", .{@sizeOf(@TypeOf(env.HELPER_VERSION))});
-            responseData = try SerializedData.serialize([:0]const u8, versionString);
-        },
-
-        k.UnmountDiskRequest => {
-            Debug.log(.INFO, "Freetracer Helper Tool received DADiskUnmount() request [{d}].", .{k.UnmountDiskRequest});
-
-            const responseCode = handleDiskUnmountRequest(requestData);
-
-            Debug.log(.WARNING, "responseCode is: {d}", .{@intFromEnum(responseCode)});
-
-            responseData = try SerializedData.serialize(ReturnCode, responseCode);
-        },
-
-        k.WriteISOToDeviceRequest => {
-            Debug.log(.INFO, "Freetracer Helper Tool received WriteISOToDeviceRequest [{d}].", .{k.WriteISOToDeviceRequest});
-
-            const responseCode = handleWriteISOToDeviceRequest(requestData);
-            responseData = try SerializedData.serialize(ReturnCode, responseCode);
-        },
-
-        else => {
-            Debug.log(.WARNING, "Freetracer Helper Tool received unknown request: {d}. Ignoring request...", .{msgId});
-        },
-    }
-
-    return responseData;
-}
-
+// fn processRequestMessage(msgId: i32, requestData: SerializedData) !SerializedData {
+//     var responseData: SerializedData = undefined;
+//
+//     switch (msgId) {
+//         //
+//         k.HelperVersionRequest => {
+//             Debug.log(.INFO, "Freetracer Helper Tool received a version query request [{d}].", .{k.HelperVersionRequest});
+//
+//             const versionString = handleHelperVersionCheckRequest();
+//             Debug.log(.INFO, "Packing size of versionString: {d}", .{@sizeOf(@TypeOf(env.HELPER_VERSION))});
+//             responseData = try SerializedData.serialize([:0]const u8, versionString);
+//         },
+//
+//         k.UnmountDiskRequest => {
+//             Debug.log(.INFO, "Freetracer Helper Tool received DADiskUnmount() request [{d}].", .{k.UnmountDiskRequest});
+//
+//             const responseCode = handleDiskUnmountRequest(requestData);
+//
+//             Debug.log(.WARNING, "responseCode is: {d}", .{@intFromEnum(responseCode)});
+//
+//             responseData = try SerializedData.serialize(ReturnCode, responseCode);
+//         },
+//
+//         k.WriteISOToDeviceRequest => {
+//             Debug.log(.INFO, "Freetracer Helper Tool received WriteISOToDeviceRequest [{d}].", .{k.WriteISOToDeviceRequest});
+//
+//             const responseCode = handleWriteISOToDeviceRequest(requestData);
+//             responseData = try SerializedData.serialize(ReturnCode, responseCode);
+//         },
+//
+//         else => {
+//             Debug.log(.WARNING, "Freetracer Helper Tool received unknown request: {d}. Ignoring request...", .{msgId});
+//         },
+//     }
+//
+//     return responseData;
+// }
+//
 fn handleHelperVersionCheckRequest() [:0]const u8 {
     return env.HELPER_VERSION;
 }

@@ -21,6 +21,17 @@ pub const k = struct {
     pub const ZeroAuthorizationItemValueLength: usize = 0;
 };
 
+pub const HelperRequestCode = enum(i64) {
+    INITIAL_PING,
+    GET_HELPER_VERSION,
+    UNMOUNT_DISK,
+    WRITE_ISO_TO_DEVICE,
+};
+
+pub const HelperResponseCode = enum(i64) {
+    INITIAL_PONG,
+};
+
 pub const HelperReturnCode = enum(i32) {
     SUCCESS = 40,
     FAILED_TO_CREATE_DA_SESSION = 4000,
@@ -44,8 +55,8 @@ pub const HelperUnmountRequestCode = enum(u2) {
     SUCCESS = 1,
     TRY_AGAIN = 2,
 };
-
-pub const HelperResponseCode = enum(u1) {
-    FAILURE = 0,
-    SUCCESS = 1,
-};
+//
+// pub const HelperResponseCode = enum(u1) {
+//     FAILURE = 0,
+//     SUCCESS = 1,
+// };

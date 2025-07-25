@@ -46,7 +46,9 @@ pub const EventManagerSingleton = struct {
             var iter = self.subscribers.iterator();
 
             while (iter.next()) |component| {
-                if (component.value_ptr.* == event.source and event.flags.overrideNotifySelfOnSelfOrigin == false) continue;
+                if (event.source) |source| {
+                    if (component.value_ptr.* == source and event.flags.overrideNotifySelfOnSelfOrigin == false) continue;
+                }
 
                 _ = component.value_ptr.*.handleEvent(event) catch |err| {
                     Debug.log(

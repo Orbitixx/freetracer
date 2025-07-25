@@ -11,6 +11,8 @@ const SerializedData = freetracer_lib.SerializedData;
 const MachPortPacketSize = freetracer_lib.k.MachPortPacketSize;
 const xpc = freetracer_lib.xpc;
 const XPCService = freetracer_lib.XPCService;
+const HelperRequestCode = freetracer_lib.HelperRequestCode;
+const HelperResponseCode = freetracer_lib.HelperResponseCode;
 
 const PrivilegedHelperTool = @import("../../modules/macos/PrivilegedHelperTool.zig");
 
@@ -54,6 +56,12 @@ pub const Events = struct {
             isoPath: [:0]const u8,
             targetDisk: [:0]const u8,
         },
+        struct {},
+    );
+
+    pub const onHelperToolConfirmedSuccessfulComms = ComponentFramework.defineEvent(
+        "privileged_helper_tool.on_successful_comms_confirmed",
+        struct {},
         struct {},
     );
 };
@@ -147,8 +155,19 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
 
     eventLoop: switch (event.hash) {
         //
+        Events.onHelperToolConfirmedSuccessfulComms.Hash => {
+            Debug.log(.INFO, "YAyayayayayaaaaaaayYYAYAYAayayaya", .{});
+        },
+
         Events.onWriteISOToDeviceRequest.Hash => {
             const data = Events.onWriteISOToDeviceRequest.getData(event) orelse break :eventLoop;
+
+            self.installHelperIfNotInstalled() catch |err| {
+                Debug.log(.ERROR, "An error occurred while trying to install Freetracer Helper Tool. Exiting event loop... {any}", .{err});
+                break :eventLoop;
+            };
+
+            if (true) break :eventLoop;
 
             var unmountResponse: freetracer_lib.HelperUnmountRequestCode = self.requestUnmount(data.targetDisk);
 
@@ -232,19 +251,26 @@ pub fn checkAndJoinWorker(self: *PrivilegedHelper) void {
 }
 
 pub fn messageHandler(connection: xpc.xpc_connection_t, message: xpc.xpc_object_t) callconv(.c) void {
-    _ = connection;
     Debug.log(.INFO, "CLIENT: Message Handler executed!", .{});
 
     const reply_type = xpc.xpc_get_type(message);
 
     if (reply_type == xpc.XPC_TYPE_DICTIONARY) {
-        const status = xpc.xpc_dictionary_get_string(message, "status");
-        const response = xpc.xpc_dictionary_get_string(message, "response");
-
-        if (status != null and response != null) {
-            Debug.log(.INFO, "Helper replied - Status: {s}, Response: {s}", .{ status, response });
-        }
+        processResponseMessage(@ptrCast(connection), message);
     }
+}
+
+fn processResponseMessage(connection: xpc.xpc_connection_t, data: xpc.xpc_object_t) void {
+    const response: HelperResponseCode = @enumFromInt(xpc.xpc_dictionary_get_int64(data, "response"));
+
+    switch (response) {
+        .INITIAL_PONG => {
+            Debug.log(.INFO, "Successfully established connection to Freetracer Helper Tool.", .{});
+            EventManager.broadcast(Events.onHelperToolConfirmedSuccessfulComms.create(null, null));
+        },
+    }
+
+    _ = connection;
 }
 
 fn waitForHelperToolInstall() void {
@@ -257,34 +283,23 @@ fn processMachMessage(msgId: i32, data: SerializedData) !SerializedData {
     return SerializedData.serialize([:0]const u8, "Successful response from MAIN APP!");
 }
 
+fn installHelperIfNotInstalled(self: *PrivilegedHelper) !void {
+    if (!self.isHelperInstalled) {
+        const installResult = PrivilegedHelperTool.installPrivilegedHelperTool();
+        waitForHelperToolInstall();
+
+        if (installResult == freetracer_lib.HelperInstallCode.SUCCESS) {
+            Debug.log(.INFO, "Fretracer Helper Tool is successfully installed!", .{});
+            self.dispatchComponentAction();
+            self.xpcClient.start();
+        } else return error.FailedToInstallPrivilegedHelperTool;
+    } else Debug.log(.INFO, "Determined that Freetracer Helper Tool is already installed.", .{});
+}
+
 fn requestUnmount(self: *PrivilegedHelper, targetDisk: [:0]const u8) freetracer_lib.HelperUnmountRequestCode {
     // Install or update the Privileged Helper Tool before sending unmount request
     _ = targetDisk;
-
-    // var xpcClient: XPCService = undefined;
-    // defer xpcClient.deinit();
-
-    if (!self.isHelperInstalled) {
-        const installResult = PrivilegedHelperTool.installPrivilegedHelperTool();
-        // waitForHelperToolInstall();
-
-        if (installResult == freetracer_lib.HelperInstallCode.SUCCESS) {
-            // xpcClient = XPCService.init(.{
-            //     .isServer = false,
-            //     .serviceName = "Freetracer XPC Client",
-            //     .serverBundleId = @ptrCast(env.HELPER_BUNDLE_ID),
-            //     .requestHandler = @ptrCast(&messageHandler),
-            // });
-
-            self.xpcClient.start();
-
-            // self.xpcClient.sendMessage("Hello!");
-            // self.xpcClient.sendMessage("Hello again 2!");
-            // self.xpcClient.sendMessage("Hello again 33333!");
-        }
-        // if (installResult != freetracer_lib.HelperInstallCode.SUCCESS) return freetracer_lib.HelperUnmountRequestCode.FAILURE else self.dispatchComponentAction();
-        // return freetracer_lib.HelperUnmountRequestCode.TRY_AGAIN;
-    }
+    _ = self;
 
     // for (0..AppConfig.MACH_PORT_REMOTE_MAX_TEST_ATTEMPTS) |i| {
     //     Debug.log(.DEBUG, "Attempting to test remote port to Helper Tool, attempt {d}...", .{i + 1});

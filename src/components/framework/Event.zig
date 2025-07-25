@@ -4,7 +4,7 @@ const Component = @import("./import/index.zig").Component;
 pub const EventCreationParams = struct {
     name: []const u8,
     hash: EventHash,
-    source: *Component,
+    source: ?*Component,
     target: ?*Component = null,
     data: ?*const anyopaque = null,
 };
@@ -16,7 +16,7 @@ pub const EventFlags = struct {
 pub const ComponentEvent = struct {
     name: []const u8,
     hash: EventHash,
-    source: *Component,
+    source: ?*Component,
     target: ?*Component = null,
     data: ?*const anyopaque = null,
     handled: bool = false,
@@ -66,7 +66,7 @@ pub fn defineEvent(comptime name: []const u8, comptime DataType: type, comptime 
         pub const Response = ResponseType;
         pub const Name = name;
 
-        pub fn create(source: *Component, data: ?*const Data) ComponentEvent {
+        pub fn create(source: ?*Component, data: ?*const Data) ComponentEvent {
             return ComponentEvent.create(.{
                 .name = Name,
                 .hash = Hash,
