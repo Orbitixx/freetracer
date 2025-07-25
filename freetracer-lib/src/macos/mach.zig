@@ -13,19 +13,22 @@ const XPCRequestHandler = *const fn (connection: xpc.xpc_connection_t, message: 
 const XPCServiceConfig = struct {
     isServer: bool = false,
     serverBundleId: []const u8,
+    clientBundleId: []const u8 = undefined,
     serviceName: []const u8,
     requestHandler: XPCRequestHandler,
 };
 
 pub const XPCService = struct {
     service: xpc.xpc_connection_t = undefined,
-    client_queue: ?xpc.dispatch_queue_t = null,
+    clientDispatchQueue: xpc.dispatch_queue_t = undefined,
     config: XPCServiceConfig,
 
     const Self = @This();
 
-    pub fn init(config: XPCServiceConfig) Self {
-        Debug.log(.INFO, "Initializing XPC Service...", .{});
+    pub fn init(config: XPCServiceConfig) !Self {
+        Debug.log(.INFO, "{s}: Initializing XPC Service...", .{config.serviceName});
+
+        if (!config.isServer and config.clientBundleId.len < 1) return error.ClientMustSpecifyCliendBundleIdInXPCConfig;
 
         return Self{
             .config = config,
@@ -44,19 +47,23 @@ pub const XPCService = struct {
             return;
         }
 
-        if (self.config.isServer)
-            xpc.XPCConnectionSetEventHandler(self.service, @ptrCast(&connectionHandler), @ptrCast(self.config.requestHandler))
-        else {
-            self.client_queue = xpc.dispatch_queue_create("com.orbitixx.freetracer.xpc-queue", null);
-            xpc.XPCMessageSetEventHandler(self.service, @ptrCast(&self.config.requestHandler));
-            xpc.xpc_connection_set_target_queue(self.service, self.client_queue.?);
+        xpc.XPCConnectionSetEventHandler(self.service, @ptrCast(&connectionHandler), @ptrCast(self.config.requestHandler));
+
+        if (!self.config.isServer) {
+            xpc.XPCMessageSetEventHandler(self.service, @ptrCast(self.config.requestHandler));
+            self.clientDispatchQueue = xpc.dispatch_queue_create("com.orbitixx.freetracer", null);
+            xpc.xpc_connection_set_target_queue(self.service, self.clientDispatchQueue.?);
         }
 
         xpc.xpc_connection_resume(self.service);
 
         Debug.log(.INFO, "{s}: Service started, listening for connections...", .{self.config.serviceName});
 
-        if (self.config.isServer) xpc.dispatch_main() else self.sendMessage("ping");
+        if (self.config.isServer) xpc.dispatch_main() else {
+            // Allow a small gap of time for XPC service to spin up (100ms)
+            std.time.sleep(100_000);
+            self.sendMessage("ping");
+        }
     }
 
     pub fn connectionHandler(connection: xpc.xpc_connection_t, msgHandler: xpc.XPCMessageHandler) callconv(.c) void {
@@ -76,79 +83,14 @@ pub const XPCService = struct {
         xpc.xpc_dictionary_set_string(msg, "request", "hello");
         xpc.xpc_dictionary_set_string(msg, "data", message);
 
-        xpc.xpc_connection_send_message(self.service, msg);
+        xpc.XPCConnectionSendMessageWithReply(self.service, msg, self.clientDispatchQueue, @ptrCast(self.config.requestHandler));
     }
 
     pub fn deinit(self: *Self) void {
         xpc.xpc_connection_cancel(self.service);
         xpc.xpc_release(self.service);
-
-        if (!self.config.isServer and self.client_queue != null) {
-            // xpc.dispatch_release(self.client_queue.?);
-        }
     }
 };
-
-// pub const XPCClient = struct {
-//     service: xpc.xpc_connection_t = undefined,
-//     clientBundleId: [*:0]const u8,
-//
-//     const Self = @This();
-//
-//     pub fn init(clientBundleId: [*:0]const u8) Self {
-//         return Self{
-//             .clientBundleId = clientBundleId,
-//         };
-//     }
-//
-//     pub fn start(self: *Self) void {
-//         self.service = xpc.xpc_connection_create_mach_service(@ptrCast(self.clientBundleId), null, xpc.XPC_CONNECTION_MACH_SERVICE_PRIVILEGED);
-//
-//         if (self.service == null) {
-//             Debug.log(.ERROR, "XPC Client is unable to create a mach service. Aborting...", .{});
-//             return;
-//         }
-//
-//         xpc.XPCMessageSetEventHandler(self.service, @ptrCast(&messageHandler));
-//         xpc.xpc_connection_resume(self.service);
-//         self.sendMessage("HELLO TEST TEST");
-//
-//         Debug.log(.INFO, "XPC client started...", .{});
-//
-//         xpc.dispatch_main();
-//     }
-//
-//     pub fn messageHandler(connection: xpc.xpc_connection_t, message: xpc.xpc_object_t) callconv(.c) void {
-//         _ = connection;
-//         Debug.log(.INFO, "CLIENT: Message Handler executed!", .{});
-//
-//         const reply_type = xpc.xpc_get_type(message);
-//
-//         if (reply_type == xpc.XPC_TYPE_DICTIONARY) {
-//             const status = xpc.xpc_dictionary_get_string(message, "status");
-//             const response = xpc.xpc_dictionary_get_string(message, "response");
-//
-//             if (status != null and response != null) {
-//                 Debug.log(.INFO, "Helper replied - Status: {s}, Response: {s}", .{ status, response });
-//             }
-//         }
-//     }
-//
-//     pub fn sendMessage(self: *Self, message: [*:0]const u8) void {
-//         const msg: xpc.xpc_object_t = xpc.xpc_dictionary_create(null, null, 0);
-//         defer xpc.xpc_release(msg);
-//
-//         xpc.xpc_dictionary_set_string(msg, "request", "hello");
-//         xpc.xpc_dictionary_set_string(msg, "data", message);
-//
-//         xpc.xpc_connection_send_message(self.service, msg);
-//     }
-//
-//     pub fn deinit(self: *Self) void {
-//         xpc.xpc_connection_cancel(self.service);
-//         xpc.xpc_release(self.service);
-//     }
-// };
 
 pub const SerializedData = struct {
     data: [k.MachPortPacketSize]u8,

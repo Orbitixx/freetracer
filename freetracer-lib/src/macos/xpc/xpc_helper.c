@@ -20,11 +20,21 @@ void XPCMessageSetEventHandler(xpc_connection_t connection,
     if (type == XPC_TYPE_DICTIONARY) {
       msgHandler(connection, event);
     } else if (type == XPC_TYPE_ERROR) {
-      // Handle connection errors
       fprintf(stderr, "XPC Connection Error: %s\n", xpc_copy_description(event));
     }
   });
-  // Don't call resume here - let the caller handle it
+}
+
+void XPCConnectionSendMessageWithReply(xpc_connection_t connection, xpc_object_t msg, dispatch_queue_t queue, XPCMessageHandler msgHandler) {
+xpc_connection_send_message_with_reply(
+        connection, 
+        msg, 
+        queue, 
+        ^(xpc_object_t reply) {
+            // This block will be called when server responds
+            msgHandler(connection, reply);
+        }
+    );
 }
 
 void XPCServiceSetEventHandler(xpc_connection_t connection,
@@ -35,6 +45,8 @@ void XPCServiceSetEventHandler(xpc_connection_t connection,
 
   xpc_connection_resume(connection);
 }
+
+
 
 
 void XPCProcessDispatchedEvents() {

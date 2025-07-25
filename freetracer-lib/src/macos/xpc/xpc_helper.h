@@ -18,4 +18,6 @@ void XPCMessageSetEventHandler(xpc_connection_t connection, XPCMessageHandler ms
 
 void XPCProcessDispatchedEvents();
 
+void XPCConnectionSendMessageWithReply(xpc_connection_t connection, xpc_object_t msg, dispatch_queue_t queue, XPCMessageHandler msgHandler);
+
 #endif

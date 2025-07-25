@@ -39,14 +39,30 @@ fn xpcRequestHandler(connection: xpc.xpc_connection_t, message: xpc.xpc_object_t
         if (data != null) {
             Debug.log(.INFO, "Received request: {s}, data: {s}", .{ request, data });
 
-            const reply: xpc.xpc_object_t = xpc.xpc_dictionary_create(null, null, 0);
-            defer xpc.xpc_release(reply);
+            const reply: xpc.xpc_object_t = xpc.xpc_dictionary_create_reply(message);
+            // defer xpc.xpc_release(reply);
 
             xpc.xpc_dictionary_set_string(reply, "status", "success");
             xpc.xpc_dictionary_set_string(reply, "response", "Message received by helper!");
-            // _ = connection;
-            Debug.log(.INFO, "Sending a message back!", .{});
+
             xpc.xpc_connection_send_message(connection, reply);
+            xpc.xpc_release(reply);
+
+            Debug.log(.INFO, "Sending a message back...", .{});
+
+            for (0..5) |i| {
+                Debug.log(.INFO, "Sending progress: {d}...", .{i});
+
+                const progressMsg: xpc.xpc_object_t = xpc.xpc_dictionary_create(null, null, 0);
+                defer xpc.xpc_release(progressMsg);
+
+                xpc.xpc_dictionary_set_string(progressMsg, "status", "success");
+                xpc.xpc_dictionary_set_string(progressMsg, "response", "Progress message!");
+
+                xpc.xpc_connection_send_message(connection, progressMsg);
+            }
+
+            // xpc.xpc_connection_send_message(connection, reply);
         }
     } else if (msg_type == xpc.XPC_TYPE_ERROR) {
         Debug.log(.ERROR, "An error occurred attemting to run a message handler callback.", .{});
@@ -71,7 +87,7 @@ pub fn main() !void {
     Debug.log(.INFO, "------------------------------------------------------------------------------------------", .{});
     Debug.log(.INFO, "Debug logger is initialized.", .{});
 
-    var xpcServer = XPCService.init(.{
+    var xpcServer = try XPCService.init(.{
         .isServer = true,
         .serviceName = "Freetracer Helper XPC Server",
         .serverBundleId = @ptrCast(env.BUNDLE_ID),

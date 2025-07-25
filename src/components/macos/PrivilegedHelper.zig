@@ -72,10 +72,11 @@ pub fn init(allocator: std.mem.Allocator) !PrivilegedHelper {
         //     .ownerName = "Freetracer Main Process",
         //     .processMessageFn = PrivilegedHelper.processMachMessage,
         // }),
-        .xpcClient = XPCService.init(.{
+        .xpcClient = try XPCService.init(.{
             .isServer = false,
             .serviceName = "Freetracer XPC Client",
             .serverBundleId = @ptrCast(env.HELPER_BUNDLE_ID),
+            .clientBundleId = @ptrCast(env.BUNDLE_ID),
             .requestHandler = @ptrCast(&PrivilegedHelper.messageHandler),
         }),
     };
@@ -248,7 +249,6 @@ pub fn messageHandler(connection: xpc.xpc_connection_t, message: xpc.xpc_object_
 
 fn waitForHelperToolInstall() void {
     Debug.log(.INFO, "Waiting to allow Helper Tool be registered with system launch daemon", .{});
-
     std.time.sleep(1_000_000_000);
 }
 
@@ -278,9 +278,9 @@ fn requestUnmount(self: *PrivilegedHelper, targetDisk: [:0]const u8) freetracer_
 
             self.xpcClient.start();
 
-            self.xpcClient.sendMessage("Hello!");
-            self.xpcClient.sendMessage("Hello again 2!");
-            self.xpcClient.sendMessage("Hello again 33333!");
+            // self.xpcClient.sendMessage("Hello!");
+            // self.xpcClient.sendMessage("Hello again 2!");
+            // self.xpcClient.sendMessage("Hello again 33333!");
         }
         // if (installResult != freetracer_lib.HelperInstallCode.SUCCESS) return freetracer_lib.HelperUnmountRequestCode.FAILURE else self.dispatchComponentAction();
         // return freetracer_lib.HelperUnmountRequestCode.TRY_AGAIN;
