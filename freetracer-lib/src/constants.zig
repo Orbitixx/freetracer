@@ -30,6 +30,7 @@ pub const HelperRequestCode = enum(i64) {
 
 pub const HelperResponseCode = enum(i64) {
     INITIAL_PONG,
+    HELPER_VERSION_OBTAINED,
 };
 
 pub const HelperReturnCode = enum(i32) {

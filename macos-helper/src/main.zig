@@ -13,6 +13,8 @@ const Character = freetracer_lib.Character;
 
 const MachCommunicator = freetracer_lib.MachCommunicator;
 const XPCService = freetracer_lib.XPCService;
+const XPCConnection = freetracer_lib.XPCConnection;
+const XPCObject = freetracer_lib.XPCObject;
 
 const HelperRequestCode = freetracer_lib.HelperRequestCode;
 const HelperResponseCode = freetracer_lib.HelperResponseCode;
@@ -24,7 +26,7 @@ var queuedUnmounts: i32 = 0;
 
 pub const WRITE_BLOCK_SIZE = 4096;
 
-fn xpcRequestHandler(connection: xpc.xpc_connection_t, message: xpc.xpc_object_t) callconv(.c) void {
+fn xpcRequestHandler(connection: XPCConnection, message: XPCObject) callconv(.c) void {
     Debug.log(.INFO, "SERVER: Message Handler executed!", .{});
 
     if (message == null) {
@@ -45,30 +47,30 @@ fn xpcRequestHandler(connection: xpc.xpc_connection_t, message: xpc.xpc_object_t
     Debug.log(.INFO, "Finished processing request", .{});
 }
 
-fn processRequestMessage(connection: xpc.xpc_connection_t, data: xpc.xpc_object_t) void {
-    const request: HelperRequestCode = @enumFromInt(xpc.xpc_dictionary_get_int64(data, "request"));
+fn processRequestMessage(connection: XPCConnection, data: XPCObject) void {
+    const request: HelperRequestCode = XPCService.parseRequest(data);
 
     Debug.log(.INFO, "Received request: {any}", .{request});
 
     switch (request) {
-        .INITIAL_PING => {
-            processInitialPing(connection, data);
-        },
-
-        .GET_HELPER_VERSION => {},
-
+        .INITIAL_PING => processInitialPing(connection),
+        .GET_HELPER_VERSION => processGetHelperVersion(connection),
         .UNMOUNT_DISK => {},
-
         .WRITE_ISO_TO_DEVICE => {},
     }
 }
 
-fn processInitialPing(connection: xpc.xpc_object_t, data: xpc.xpc_object_t) void {
-    _ = data;
-    const reply: xpc.xpc_object_t = xpc.xpc_dictionary_create(null, null, 0);
-    defer xpc.xpc_release(reply);
-    xpc.xpc_dictionary_set_int64(reply, "response", @intFromEnum(HelperResponseCode.INITIAL_PONG));
-    XPCService.connectionSendMessage(@ptrCast(connection), reply);
+fn processInitialPing(connection: XPCConnection) void {
+    const reply = XPCService.createResponse(.INITIAL_PONG);
+    defer XPCService.releaseObject(reply);
+    XPCService.connectionSendMessage(connection, reply);
+}
+
+fn processGetHelperVersion(connection: XPCConnection) void {
+    const reply = XPCService.createResponse(.HELPER_VERSION_OBTAINED);
+    defer XPCService.releaseObject(reply);
+    XPCService.createString(reply, "version", @ptrCast(env.HELPER_VERSION));
+    XPCService.connectionSendMessage(connection, reply);
 }
 
 pub fn main() !void {

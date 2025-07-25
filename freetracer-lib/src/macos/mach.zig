@@ -7,7 +7,11 @@ const isMacOS = @import("../types.zig").isMacOS;
 
 const xpc = @cImport(@cInclude("xpc_helper.h"));
 
+pub const XPCConnection = xpc.xpc_connection_t;
+pub const XPCObject = xpc.xpc_object_t;
+
 const HelperRequestCode = @import("../constants.zig").HelperRequestCode;
+const HelperResponseCode = @import("../constants.zig").HelperResponseCode;
 
 const NullTerminatedStringType: type = [:0]const u8;
 
@@ -54,8 +58,8 @@ pub const XPCService = struct {
 
         if (!self.config.isServer) {
             xpc.XPCMessageSetEventHandler(self.service, @ptrCast(self.config.requestHandler));
-            self.clientDispatchQueue = xpc.dispatch_queue_create("com.orbitixx.freetracer", null);
-            xpc.xpc_connection_set_target_queue(self.service, self.clientDispatchQueue.?);
+            self.clientDispatchQueue = xpc.dispatch_queue_create(@ptrCast(self.config.clientBundleId), null);
+            xpc.xpc_connection_set_target_queue(self.service, self.clientDispatchQueue);
         }
 
         xpc.xpc_connection_resume(self.service);
@@ -65,12 +69,7 @@ pub const XPCService = struct {
         if (self.config.isServer) xpc.dispatch_main() else {
             // Allow a small gap of time for XPC service to spin up (100ms)
             std.time.sleep(100_000);
-            
-            const pingData = xpc.xpc_dictionary_create(null, null, 0);
-            defer xpc.xpc_release(pingData);
-
-            xpc.xpc_dictionary_set_int64(pingData, "request", @intFromEnum(HelperRequestCode.INITIAL_PING));
-            connectionSendMessage(self.service, pingData);
+            pingServer(self.service);
         }
     }
 
@@ -96,13 +95,51 @@ pub const XPCService = struct {
         // xpc.XPCConnectionSendMessageWithReply(self.service, msg, self.clientDispatchQueue, @ptrCast(self.config.requestHandler));
     }
 
-    pub fn connectionSendMessage(connection: xpc.xpc_connection_t, dataDictionary: xpc.xpc_object_t) void {
+    pub fn connectionSendMessage(connection: XPCConnection, dataDictionary: XPCObject) void {
         xpc.xpc_connection_send_message(connection, dataDictionary);
     }
 
     pub fn deinit(self: *Self) void {
         xpc.xpc_connection_cancel(self.service);
         xpc.xpc_release(self.service);
+    }
+
+    pub fn pingServer(connection: XPCConnection) void {
+        const ping = createRequest(.INITIAL_PING);
+        defer releaseObject(ping);
+        connectionSendMessage(connection, ping);
+    }
+
+    pub fn createRequest(value: HelperRequestCode) XPCObject {
+        const dict: xpc.xpc_object_t = xpc.xpc_dictionary_create(null, null, 0);
+        xpc.xpc_dictionary_set_int64(dict, "request", @intFromEnum(value));
+        return dict;
+    }
+
+    pub fn parseRequest(dict: XPCObject) HelperRequestCode {
+        return @enumFromInt(xpc.xpc_dictionary_get_int64(dict, "request"));
+    }
+
+    pub fn createResponse(value: HelperResponseCode) XPCObject {
+        const dict: xpc.xpc_object_t = xpc.xpc_dictionary_create(null, null, 0);
+        xpc.xpc_dictionary_set_int64(dict, "response", @intFromEnum(value));
+        return dict;
+    }
+
+    pub fn parseResponse(dict: XPCObject) HelperResponseCode {
+        return @enumFromInt(xpc.xpc_dictionary_get_int64(dict, "response"));
+    }
+
+    pub fn createString(dict: XPCObject, key: []const u8, value: []const u8) void {
+        xpc.xpc_dictionary_set_string(dict, @ptrCast(key), @ptrCast(value));
+    }
+
+    pub fn parseString(dict: XPCObject, key: []const u8) []const u8 {
+        return std.mem.span(xpc.xpc_dictionary_get_string(dict, @ptrCast(key)));
+    }
+
+    pub fn releaseObject(obj: XPCObject) void {
+        xpc.xpc_release(obj);
     }
 };
 

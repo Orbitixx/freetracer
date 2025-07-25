@@ -11,6 +11,8 @@ const SerializedData = freetracer_lib.SerializedData;
 const MachPortPacketSize = freetracer_lib.k.MachPortPacketSize;
 const xpc = freetracer_lib.xpc;
 const XPCService = freetracer_lib.XPCService;
+const XPCConnection = freetracer_lib.XPCConnection;
+const XPCObject = freetracer_lib.XPCObject;
 const HelperRequestCode = freetracer_lib.HelperRequestCode;
 const HelperResponseCode = freetracer_lib.HelperResponseCode;
 
@@ -44,9 +46,12 @@ worker: ?ComponentWorker = null,
 
 // Component-specific, unique props
 allocator: std.mem.Allocator,
-// machCommunicator: MachCommunicator,
+
 xpcClient: XPCService,
 isHelperInstalled: bool = false,
+
+isoPath: [:0]const u8,
+targetDisk: [:0]const u8,
 
 pub const Events = struct {
     //
@@ -62,6 +67,14 @@ pub const Events = struct {
     pub const onHelperToolConfirmedSuccessfulComms = ComponentFramework.defineEvent(
         "privileged_helper_tool.on_successful_comms_confirmed",
         struct {},
+        struct {},
+    );
+
+    pub const onHelperVersionReceived = ComponentFramework.defineEvent(
+        "privileged_helper_tool.on_helper_version_received",
+        struct {
+            shouldHelperUpdate: bool,
+        },
         struct {},
     );
 };
@@ -156,16 +169,43 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
     eventLoop: switch (event.hash) {
         //
         Events.onHelperToolConfirmedSuccessfulComms.Hash => {
-            Debug.log(.INFO, "YAyayayayayaaaaaaayYYAYAYAayayaya", .{});
+            const request: XPCObject = XPCService.createRequest(.GET_HELPER_VERSION);
+            defer XPCService.releaseObject(request);
+            XPCService.connectionSendMessage(self.xpcClient.service, request);
+        },
+
+        // TODO: Count internally number of attempts to avoid being stuck in an inifinite loop here
+        Events.onHelperVersionReceived.Hash => {
+            const eventData = Events.onHelperVersionReceived.getData(event) orelse break :eventLoop;
+
+            if (eventData.shouldHelperUpdate) {
+                const installResult = PrivilegedHelperTool.installPrivilegedHelperTool();
+
+                if (installResult != freetracer_lib.HelperInstallCode.SUCCESS) {
+                    Debug.log(.ERROR, "Unable to update Freetracer Helper Tool... Aborting.", .{});
+                    return error.UnableToUpdateHelperTool;
+                }
+
+                self.dispatchComponentAction();
+                XPCService.pingServer(self.xpcClient.service);
+                break :eventLoop;
+            }
+
+            self.requestUnmount(self.targetDisk);
         },
 
         Events.onWriteISOToDeviceRequest.Hash => {
             const data = Events.onWriteISOToDeviceRequest.getData(event) orelse break :eventLoop;
 
+            self.isoPath = data.isoPath;
+            self.targetDisk = data.targetDisk;
+
             self.installHelperIfNotInstalled() catch |err| {
                 Debug.log(.ERROR, "An error occurred while trying to install Freetracer Helper Tool. Exiting event loop... {any}", .{err});
                 break :eventLoop;
             };
+
+            self.xpcClient.start();
 
             if (true) break :eventLoop;
 
@@ -256,31 +296,41 @@ pub fn messageHandler(connection: xpc.xpc_connection_t, message: xpc.xpc_object_
     const reply_type = xpc.xpc_get_type(message);
 
     if (reply_type == xpc.XPC_TYPE_DICTIONARY) {
-        processResponseMessage(@ptrCast(connection), message);
+        processResponseMessage(connection, message);
     }
 }
 
-fn processResponseMessage(connection: xpc.xpc_connection_t, data: xpc.xpc_object_t) void {
-    const response: HelperResponseCode = @enumFromInt(xpc.xpc_dictionary_get_int64(data, "response"));
+fn processResponseMessage(connection: XPCConnection, data: XPCObject) void {
+    const response: HelperResponseCode = XPCService.parseResponse(data);
 
     switch (response) {
         .INITIAL_PONG => {
             Debug.log(.INFO, "Successfully established connection to Freetracer Helper Tool.", .{});
             EventManager.broadcast(Events.onHelperToolConfirmedSuccessfulComms.create(null, null));
         },
+
+        .HELPER_VERSION_OBTAINED => {
+            Debug.log(.INFO, "Successfully received Helper version response from the Helper.", .{});
+            Debug.log(.INFO, "Should helper update: {any}", .{shouldHelperUpdate(data)});
+            EventManager.broadcast(Events.onHelperVersionReceived.create(
+                null,
+                Events.onHelperVersionReceived.Data{ .shouldHelperUpdate = shouldHelperUpdate(data) },
+            ));
+        },
     }
 
     _ = connection;
 }
 
+fn shouldHelperUpdate(dict: XPCObject) bool {
+    const version = XPCService.parseString(dict, "version");
+    Debug.log(.INFO, "Helper reported version is: {s}", .{version});
+    return !std.mem.eql(u8, version, AppConfig.PRIVILEGED_TOOL_LATEST_VERSION);
+}
+
 fn waitForHelperToolInstall() void {
     Debug.log(.INFO, "Waiting to allow Helper Tool be registered with system launch daemon", .{});
     std.time.sleep(1_000_000_000);
-}
-
-fn processMachMessage(msgId: i32, data: SerializedData) !SerializedData {
-    Debug.log(.INFO, "Received message {any} and data {any}", .{ msgId, data });
-    return SerializedData.serialize([:0]const u8, "Successful response from MAIN APP!");
 }
 
 fn installHelperIfNotInstalled(self: *PrivilegedHelper) !void {
@@ -291,7 +341,6 @@ fn installHelperIfNotInstalled(self: *PrivilegedHelper) !void {
         if (installResult == freetracer_lib.HelperInstallCode.SUCCESS) {
             Debug.log(.INFO, "Fretracer Helper Tool is successfully installed!", .{});
             self.dispatchComponentAction();
-            self.xpcClient.start();
         } else return error.FailedToInstallPrivilegedHelperTool;
     } else Debug.log(.INFO, "Determined that Freetracer Helper Tool is already installed.", .{});
 }
@@ -336,6 +385,11 @@ fn requestUnmount(self: *PrivilegedHelper, targetDisk: [:0]const u8) freetracer_
     // return returnCode;
 
     return freetracer_lib.HelperUnmountRequestCode.SUCCESS;
+}
+
+fn processMachMessage(msgId: i32, data: SerializedData) !SerializedData {
+    Debug.log(.INFO, "Received message {any} and data {any}", .{ msgId, data });
+    return SerializedData.serialize([:0]const u8, "Successful response from MAIN APP!");
 }
 
 pub fn requestWrite(data: [:0]const u8) freetracer_lib.HelperReturnCode {
