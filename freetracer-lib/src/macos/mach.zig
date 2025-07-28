@@ -8,6 +8,7 @@ const isMacOS = @import("../types.zig").isMacOS;
 const xpc = @cImport(@cInclude("xpc_helper.h"));
 
 pub const XPCConnection = xpc.xpc_connection_t;
+pub const XPCDispatchQueue = xpc.dispatch_queue_t;
 pub const XPCObject = xpc.xpc_object_t;
 
 const HelperRequestCode = @import("../constants.zig").HelperRequestCode;
@@ -26,8 +27,8 @@ const XPCServiceConfig = struct {
 };
 
 pub const XPCService = struct {
-    service: xpc.xpc_connection_t = undefined,
-    clientDispatchQueue: xpc.dispatch_queue_t = undefined,
+    service: XPCConnection = undefined,
+    clientDispatchQueue: XPCDispatchQueue = undefined,
     config: XPCServiceConfig,
 
     const Self = @This();
@@ -54,6 +55,10 @@ pub const XPCService = struct {
             return;
         }
 
+        // TODO: within the connection event handler -- interrogate the client and its identity
+        // use Security framework (such as SecCodeCopyGuestWithAttributes and SecCodeCheckValidity) to evaluate
+        // the code signature of the client associated with the audit token
+        // verify developer id AND bundle identifier associated with the token
         xpc.XPCConnectionSetEventHandler(self.service, @ptrCast(&connectionHandler), @ptrCast(self.config.requestHandler));
 
         if (!self.config.isServer) {
@@ -97,6 +102,57 @@ pub const XPCService = struct {
 
     pub fn connectionSendMessage(connection: XPCConnection, dataDictionary: XPCObject) void {
         xpc.xpc_connection_send_message(connection, dataDictionary);
+    }
+
+    pub fn authenticateMessage(message: XPCObject, authenticClientBundleId: [:0]const u8) bool {
+        var secCodeRef: c.SecCodeRef = null;
+        var operationStatus: c.OSStatus = c.SecCodeCreateWithXPCMessage(message, c.kSecCSDefaultFlags, &secCodeRef);
+
+        if (operationStatus != c.errSecSuccess or secCodeRef == null) {
+            Debug.log(.ERROR, "Failed to obtain security code reference to running code. Invalidating message...", .{});
+            return false;
+        }
+
+        defer c.CFRelease(secCodeRef);
+
+        operationStatus = c.SecCodeCheckValidity(secCodeRef, c.kSecCSDefaultFlags, null);
+
+        if (operationStatus != c.errSecSuccess) {
+            Debug.log(.ERROR, "Failed to verify the validity of the requester's code signature. Invalidating message...", .{});
+            return false;
+        }
+
+        var codeSigningInfo: c.CFDictionaryRef = null;
+        operationStatus = c.SecCodeCopySigningInformation(secCodeRef, c.kSecCSSigningInformation, &codeSigningInfo);
+
+        if (operationStatus != c.errSecSuccess or codeSigningInfo == null) {
+            Debug.log(.ERROR, "Failed to obtain code signing information. Invalidating message...", .{});
+            return false;
+        }
+
+        defer c.CFRelease(codeSigningInfo);
+
+        // Pre-allocate a large enough buffer to avoid stack overflow vector of attack
+        var actualBundleIdBuf: [512]u8 = std.mem.zeroes([512]u8);
+
+        const actualBundleIdRef: c.CFStringRef = @ptrCast(c.CFDictionaryGetValue(codeSigningInfo, c.kSecCodeInfoIdentifier));
+        const result: c.Boolean = c.CFStringGetCString(actualBundleIdRef, &actualBundleIdBuf, actualBundleIdBuf.len, c.kCFStringEncodingUTF8);
+
+        if (result != c.TRUE) {
+            Debug.log(.ERROR, "Unable to retreive requestor's bundle id. Invalidating message...", .{});
+            return false;
+        }
+
+        const actualBundleId: [:0]const u8 = @ptrCast(std.mem.sliceTo(&actualBundleIdBuf, 0x00));
+
+        if (actualBundleId.len < 2) {
+            Debug.log(.ERROR, "Requester has a malformed bundle id: '{s}'. Invalidating message...", .{actualBundleId});
+            return false;
+        }
+
+        const isValidBundleId = std.mem.eql(u8, actualBundleId, authenticClientBundleId);
+
+        return isValidBundleId;
     }
 
     pub fn deinit(self: *Self) void {

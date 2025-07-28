@@ -6,15 +6,23 @@ pub const c = if (isMac) @cImport({
     @cInclude("IOKit/storage/IOMedia.h");
     @cInclude("IOKit/IOKitLib.h");
     @cInclude("DiskArbitration/DiskArbitration.h");
+    @cInclude("CoreFoundation/CFBase.h");
     @cInclude("CoreFoundation/CoreFoundation.h");
     @cInclude("IOKit/usb/USB.h");
     @cInclude("IOKit/usb/IOUSBLib.h");
     @cInclude("IOKit/IOCFPlugIn.h");
     @cInclude("IOKit/IOBSD.h");
+    // --- Privileged Helper Tool: SMJobBless
     @cInclude("ServiceManagement/ServiceManagement.h");
+    // --- DADiskRef Authorization
     @cInclude("Security/Authorization.h");
-    @cInclude("bootstrap.h");
-    @cInclude("mach/mach.h");
+    // --- XPC Connection/Message validation
+    @cInclude("Security/CSCommon.h");
+    @cInclude("Security/SecBase.h");
+    @cInclude("Security/SecCode.h");
+    @cInclude("Security/Security.h");
+    // @cInclude("bootstrap.h");
+    // @cInclude("mach/mach.h");
 }) else if (isLinux) @cImport({
     // @cInclude("blkid/blkid.h");
 });

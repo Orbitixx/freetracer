@@ -177,6 +177,10 @@ pub fn dispatchComponentAction(self: *DataFlasher) void {
 
     self.state.unlock();
 
+    // TODO: Since the application's function is to perform a raw, block-for-block write of the image to the device,
+    // it has no need to understand the internal filesystem structure of the ISO file. Therefore, the most secure approach
+    // is to avoid parsing the ISO 9660 filesystem structure entirely.
+
     const isoParserResult = ISOParser.parseIso(self.allocator, isoPath, device.size);
 
     if (isoParserResult != ISOParser.ISO_PARSER_RESULT.ISO_VALID) {

@@ -41,6 +41,7 @@ pub fn build(b: *std.Build) void {
     lib.addIncludePath(b.path("src/macos/xpc/"));
 
     lib.linkLibC();
+    lib.linkFramework("IOKit");
     lib.linkFramework("CoreFoundation");
     lib.linkFramework("DiskArbitration");
     lib.linkFramework("ServiceManagement");

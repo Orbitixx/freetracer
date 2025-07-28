@@ -3,6 +3,7 @@
 
 #include <xpc/xpc.h>
 
+
 typedef void (*Logger)(int, const char*);
 typedef void (*XPCMessageHandler)(xpc_connection_t, xpc_object_t);
 typedef void (*XPCConnectionHandler)(xpc_object_t connection, XPCMessageHandler handler);
@@ -19,5 +20,7 @@ void XPCMessageSetEventHandler(xpc_connection_t connection, XPCMessageHandler ms
 void XPCProcessDispatchedEvents();
 
 void XPCConnectionSendMessageWithReply(xpc_connection_t connection, xpc_object_t msg, dispatch_queue_t queue, XPCMessageHandler msgHandler);
+
+bool XPCSecurityValidateConnection(xpc_object_t message);
 
 #endif

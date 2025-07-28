@@ -200,7 +200,10 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
             }
 
             const targetDisk: [:0]const u8 = self.state.data.targetDisk.?;
+            Debug.log(.INFO, "targetDisk local set to the state value of: {s}", .{self.state.data.targetDisk.?});
             self.state.unlock();
+
+            Debug.log(.INFO, "Sending target disk: {s}", .{targetDisk});
 
             self.requestUnmount(targetDisk);
         },
@@ -208,12 +211,7 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
         Events.onWriteISOToDeviceRequest.Hash => {
             const data = Events.onWriteISOToDeviceRequest.getData(event) orelse break :eventLoop;
 
-            {
-                self.state.lock();
-                defer self.state.unlock();
-                self.state.data.isoPath = data.isoPath;
-                self.state.data.targetDisk = data.targetDisk;
-            }
+            try self.acquireStateDataOwnership(data.isoPath, data.targetDisk);
 
             self.installHelperIfNotInstalled() catch |err| {
                 Debug.log(.ERROR, "An error occurred while trying to install Freetracer Helper Tool. Exiting event loop... {any}", .{err});
@@ -268,7 +266,7 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
 
 pub fn deinit(self: *PrivilegedHelper) void {
     //
-    _ = self;
+    self.cleanupComponentState();
 }
 
 pub fn workerRun(worker: *ComponentWorker, context: *anyopaque) void {
@@ -368,6 +366,13 @@ fn installHelperIfNotInstalled(self: *PrivilegedHelper) !void {
 fn requestUnmount(self: *PrivilegedHelper, targetDisk: [:0]const u8) void {
     // Install or update the Privileged Helper Tool before sending unmount request
 
+    Debug.log(.DEBUG, "requestUnmount received targetDisk: {s}", .{targetDisk});
+
+    if (targetDisk.len < 2) {
+        Debug.log(.ERROR, "PrivilegedHelper.requestUnmount(): malformed targetDisk ('{any}') Aborting...", .{targetDisk});
+        return;
+    }
+
     const request = XPCService.createRequest(.UNMOUNT_DISK);
     defer XPCService.releaseObject(request);
     XPCService.createString(request, "disk", targetDisk);
@@ -408,6 +413,23 @@ fn requestUnmount(self: *PrivilegedHelper, targetDisk: [:0]const u8) void {
     // return returnCode;
 
     // return freetracer_lib.HelperUnmountRequestCode.SUCCESS;
+}
+
+fn acquireStateDataOwnership(self: *PrivilegedHelper, isoPath: [:0]const u8, targetDisk: [:0]const u8) !void {
+    self.cleanupComponentState();
+    self.state.lock();
+    defer self.state.unlock();
+    self.state.data.isoPath = try self.allocator.dupeZ(u8, isoPath);
+    self.state.data.targetDisk = try self.allocator.dupeZ(u8, targetDisk);
+    Debug.log(.INFO, "Set to state: \n\tISO Path: {s}\n\ttargetDisk: {s}", .{ self.state.data.isoPath.?, self.state.data.targetDisk.? });
+}
+
+fn cleanupComponentState(self: *PrivilegedHelper) void {
+    self.state.lock();
+    defer self.state.unlock();
+
+    if (self.state.data.isoPath) |path| self.allocator.free(path);
+    if (self.state.data.targetDisk) |disk| self.allocator.free(disk);
 }
 
 fn processMachMessage(msgId: i32, data: SerializedData) !SerializedData {

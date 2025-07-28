@@ -27,7 +27,14 @@ var queuedUnmounts: i32 = 0;
 pub const WRITE_BLOCK_SIZE = 4096;
 
 fn xpcRequestHandler(connection: XPCConnection, message: XPCObject) callconv(.c) void {
-    Debug.log(.INFO, "SERVER: Message Handler executed!", .{});
+    Debug.log(.INFO, "Helper received a new message over XPC bridge. Attempting to authenticate requester...", .{});
+
+    const isConnectionAuthentic: bool = XPCService.authenticateMessage(message, @ptrCast(env.MAIN_APP_BUNDLE_ID));
+
+    if (!isConnectionAuthentic) {
+        Debug.log(.ERROR, "XPC message failed authentication. Dropping request...", .{});
+        return;
+    } else Debug.log(.INFO, "Successfully authenticated incoming message...", .{});
 
     if (message == null) {
         Debug.log(.ERROR, "XPC Server received a NULL request. Aborting processing response...", .{});
@@ -74,6 +81,11 @@ fn processGetHelperVersion(connection: XPCConnection) void {
 }
 
 fn processRequestUnmount(connection: XPCConnection, data: XPCObject) void {
+
+    // TODO: validate and sanitize disk input
+    // string conforms to /dev/diskX or /dev/rdiskX format
+    // wihtin unmount: ensure disk is 1) external and 2) safe to unmount/eject
+
     const disk = XPCService.parseString(data, "disk");
     const result = handleDiskUnmountRequest(disk);
 
@@ -85,6 +97,23 @@ fn processRequestUnmount(connection: XPCConnection, data: XPCObject) void {
     } else response = XPCService.createResponse(.DISK_UNMOUNT_SUCCESS);
 
     XPCService.connectionSendMessage(connection, response);
+}
+
+fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
+    _ = connection;
+    _ = data;
+
+    // TODO: validate and sanitize file input
+    // canonicalize the path to resolve any symbolic links and ensure it does not
+    // point to a sensitive system file (e.g., /etc/passwd, /dev/random).
+
+    // TODO:
+    // use the Disk Arbitration framework to acquire an exclusive lock on the physical disk before writing.
+    //
+    // TODO:
+    // To prevent the operating system from automatically remounting volumes while the raw write is in progress,
+    // the helper should also register a DADissenter for the disk. This temporarily blocks mount attempts from other processes,
+    // ensuring an exclusive lock on the device during the critical write phase.
 }
 
 pub fn main() !void {
@@ -123,6 +152,8 @@ pub fn main() !void {
     // defer machCommunicator.deinit();
     // try machCommunicator.start();
 
+    // TODO:The launchd.plist should be configured for on-demand launch, and the tool should exit after completing its work.
+    Debug.log(.INFO, "Helper tool successfully terminated.", .{});
 }
 
 // fn processRequestMessage(msgId: i32, requestData: SerializedData) !SerializedData {
@@ -169,6 +200,13 @@ fn handleHelperVersionCheckRequest() [:0]const u8 {
 
 // fn handleDiskUnmountRequest(requestData: SerializedData) ReturnCode {
 fn handleDiskUnmountRequest(targetDisk: []const u8) ReturnCode {
+
+    // TODO: perform a check to ensure the device has a kIOMediaRemovableKey key
+
+    if (targetDisk.len < 2) return ReturnCode.FAILED_TO_CREATE_DA_DISK_REF;
+
+    Debug.log(.INFO, "Received bsdName: {s}", .{targetDisk});
+
     // const bsdName = std.mem.sliceTo(&requestData.data, 0x00);
     const bsdName = std.mem.sliceTo(targetDisk, 0x00);
 
@@ -267,6 +305,7 @@ fn handleDiskUnmountRequest(targetDisk: []const u8) ReturnCode {
 
     c.DADiskUnmount(daDiskRef, c.kDADiskUnmountOptionWhole, unmountDiskCallback, &queuedUnmounts);
 
+    // TODO: code below appears to be useless
     queuedUnmounts += 1;
 
     if (queuedUnmounts > 0) {
