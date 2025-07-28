@@ -22,6 +22,8 @@ const PrivilegedHelperState = struct {
     isActive: bool = false,
     isHelperInstalled: bool = false,
     installedVersion: [:0]const u8 = "-1",
+    isoPath: ?[:0]const u8 = null,
+    targetDisk: ?[:0]const u8 = null,
 };
 
 const System = @import("../../lib/sys/system.zig");
@@ -49,9 +51,6 @@ allocator: std.mem.Allocator,
 
 xpcClient: XPCService,
 isHelperInstalled: bool = false,
-
-isoPath: [:0]const u8,
-targetDisk: [:0]const u8,
 
 pub const Events = struct {
     //
@@ -172,6 +171,7 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
             const request: XPCObject = XPCService.createRequest(.GET_HELPER_VERSION);
             defer XPCService.releaseObject(request);
             XPCService.connectionSendMessage(self.xpcClient.service, request);
+            eventResult.validate(.SUCCESS);
         },
 
         // TODO: Count internally number of attempts to avoid being stuck in an inifinite loop here
@@ -191,14 +191,29 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
                 break :eventLoop;
             }
 
-            self.requestUnmount(self.targetDisk);
+            self.state.lock();
+            errdefer self.state.unlock();
+
+            if (self.state.data.targetDisk == null) {
+                Debug.log(.ERROR, "PrivilegedHelper Component's state value of targetDisk is NULL when it should not be. Aborting...", .{});
+                break :eventLoop;
+            }
+
+            const targetDisk: [:0]const u8 = self.state.data.targetDisk.?;
+            self.state.unlock();
+
+            self.requestUnmount(targetDisk);
         },
 
         Events.onWriteISOToDeviceRequest.Hash => {
             const data = Events.onWriteISOToDeviceRequest.getData(event) orelse break :eventLoop;
 
-            self.isoPath = data.isoPath;
-            self.targetDisk = data.targetDisk;
+            {
+                self.state.lock();
+                defer self.state.unlock();
+                self.state.data.isoPath = data.isoPath;
+                self.state.data.targetDisk = data.targetDisk;
+            }
 
             self.installHelperIfNotInstalled() catch |err| {
                 Debug.log(.ERROR, "An error occurred while trying to install Freetracer Helper Tool. Exiting event loop... {any}", .{err});
@@ -303,6 +318,8 @@ pub fn messageHandler(connection: xpc.xpc_connection_t, message: xpc.xpc_object_
 fn processResponseMessage(connection: XPCConnection, data: XPCObject) void {
     const response: HelperResponseCode = XPCService.parseResponse(data);
 
+    Debug.log(.INFO, "Successfully received Helper response: {any}", .{response});
+
     switch (response) {
         .INITIAL_PONG => {
             Debug.log(.INFO, "Successfully established connection to Freetracer Helper Tool.", .{});
@@ -310,13 +327,16 @@ fn processResponseMessage(connection: XPCConnection, data: XPCObject) void {
         },
 
         .HELPER_VERSION_OBTAINED => {
-            Debug.log(.INFO, "Successfully received Helper version response from the Helper.", .{});
             Debug.log(.INFO, "Should helper update: {any}", .{shouldHelperUpdate(data)});
             EventManager.broadcast(Events.onHelperVersionReceived.create(
                 null,
-                Events.onHelperVersionReceived.Data{ .shouldHelperUpdate = shouldHelperUpdate(data) },
+                &Events.onHelperVersionReceived.Data{ .shouldHelperUpdate = shouldHelperUpdate(data) },
             ));
         },
+
+        .DISK_UNMOUNT_SUCCESS => {},
+
+        .DISK_UNMOUNT_FAIL => {},
     }
 
     _ = connection;
@@ -345,10 +365,13 @@ fn installHelperIfNotInstalled(self: *PrivilegedHelper) !void {
     } else Debug.log(.INFO, "Determined that Freetracer Helper Tool is already installed.", .{});
 }
 
-fn requestUnmount(self: *PrivilegedHelper, targetDisk: [:0]const u8) freetracer_lib.HelperUnmountRequestCode {
+fn requestUnmount(self: *PrivilegedHelper, targetDisk: [:0]const u8) void {
     // Install or update the Privileged Helper Tool before sending unmount request
-    _ = targetDisk;
-    _ = self;
+
+    const request = XPCService.createRequest(.UNMOUNT_DISK);
+    defer XPCService.releaseObject(request);
+    XPCService.createString(request, "disk", targetDisk);
+    XPCService.connectionSendMessage(self.xpcClient.service, request);
 
     // for (0..AppConfig.MACH_PORT_REMOTE_MAX_TEST_ATTEMPTS) |i| {
     //     Debug.log(.DEBUG, "Attempting to test remote port to Helper Tool, attempt {d}...", .{i + 1});
@@ -384,7 +407,7 @@ fn requestUnmount(self: *PrivilegedHelper, targetDisk: [:0]const u8) freetracer_
     // };
     // return returnCode;
 
-    return freetracer_lib.HelperUnmountRequestCode.SUCCESS;
+    // return freetracer_lib.HelperUnmountRequestCode.SUCCESS;
 }
 
 fn processMachMessage(msgId: i32, data: SerializedData) !SerializedData {

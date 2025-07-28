@@ -55,7 +55,7 @@ fn processRequestMessage(connection: XPCConnection, data: XPCObject) void {
     switch (request) {
         .INITIAL_PING => processInitialPing(connection),
         .GET_HELPER_VERSION => processGetHelperVersion(connection),
-        .UNMOUNT_DISK => {},
+        .UNMOUNT_DISK => processRequestUnmount(connection, data),
         .WRITE_ISO_TO_DEVICE => {},
     }
 }
@@ -71,6 +71,20 @@ fn processGetHelperVersion(connection: XPCConnection) void {
     defer XPCService.releaseObject(reply);
     XPCService.createString(reply, "version", @ptrCast(env.HELPER_VERSION));
     XPCService.connectionSendMessage(connection, reply);
+}
+
+fn processRequestUnmount(connection: XPCConnection, data: XPCObject) void {
+    const disk = XPCService.parseString(data, "disk");
+    const result = handleDiskUnmountRequest(disk);
+
+    var response: XPCObject = undefined;
+
+    if (result != .SUCCESS) {
+        Debug.log(.ERROR, "Failed to unmount specified disk, error code: {any}", .{result});
+        response = XPCService.createResponse(.DISK_UNMOUNT_FAIL);
+    } else response = XPCService.createResponse(.DISK_UNMOUNT_SUCCESS);
+
+    XPCService.connectionSendMessage(connection, response);
 }
 
 pub fn main() !void {
@@ -153,9 +167,10 @@ fn handleHelperVersionCheckRequest() [:0]const u8 {
     return env.HELPER_VERSION;
 }
 
-fn handleDiskUnmountRequest(requestData: SerializedData) ReturnCode {
-    const bsdName = std.mem.sliceTo(&requestData.data, 0x00);
-    // const bsdName = std.mem.sliceTo(dataSlice, 0x00);
+// fn handleDiskUnmountRequest(requestData: SerializedData) ReturnCode {
+fn handleDiskUnmountRequest(targetDisk: []const u8) ReturnCode {
+    // const bsdName = std.mem.sliceTo(&requestData.data, 0x00);
+    const bsdName = std.mem.sliceTo(targetDisk, 0x00);
 
     Debug.log(.INFO, "Received bsdName: {s}", .{bsdName});
 

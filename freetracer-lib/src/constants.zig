@@ -31,6 +31,9 @@ pub const HelperRequestCode = enum(i64) {
 pub const HelperResponseCode = enum(i64) {
     INITIAL_PONG,
     HELPER_VERSION_OBTAINED,
+
+    DISK_UNMOUNT_SUCCESS,
+    DISK_UNMOUNT_FAIL,
 };
 
 pub const HelperReturnCode = enum(i32) {
