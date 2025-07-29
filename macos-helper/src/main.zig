@@ -26,6 +26,7 @@ var queuedUnmounts: i32 = 0;
 
 pub const WRITE_BLOCK_SIZE = 4096;
 
+/// C-convention callback; called anytime a message is received over the XPC connection.
 fn xpcRequestHandler(connection: XPCConnection, message: XPCObject) callconv(.c) void {
     Debug.log(.INFO, "Helper received a new message over XPC bridge. Attempting to authenticate requester...", .{});
 
@@ -54,6 +55,7 @@ fn xpcRequestHandler(connection: XPCConnection, message: XPCObject) callconv(.c)
     Debug.log(.INFO, "Finished processing request", .{});
 }
 
+/// Zig-native message callback processor function, called by the C-conv callback: xpcRequestHandler
 fn processRequestMessage(connection: XPCConnection, data: XPCObject) void {
     const request: HelperRequestCode = XPCService.parseRequest(data);
 
@@ -68,25 +70,26 @@ fn processRequestMessage(connection: XPCConnection, data: XPCObject) void {
 }
 
 fn processInitialPing(connection: XPCConnection) void {
-    const reply = XPCService.createResponse(.INITIAL_PONG);
+    const reply: XPCObject = XPCService.createResponse(.INITIAL_PONG);
     defer XPCService.releaseObject(reply);
     XPCService.connectionSendMessage(connection, reply);
 }
 
 fn processGetHelperVersion(connection: XPCConnection) void {
-    const reply = XPCService.createResponse(.HELPER_VERSION_OBTAINED);
+    const reply: XPCObject = XPCService.createResponse(.HELPER_VERSION_OBTAINED);
     defer XPCService.releaseObject(reply);
     XPCService.createString(reply, "version", @ptrCast(env.HELPER_VERSION));
     XPCService.connectionSendMessage(connection, reply);
 }
 
 fn processRequestUnmount(connection: XPCConnection, data: XPCObject) void {
+    const disk: []const u8 = XPCService.parseString(data, "disk");
 
-    // TODO: validate and sanitize disk input
-    // string conforms to /dev/diskX or /dev/rdiskX format
-    // wihtin unmount: ensure disk is 1) external and 2) safe to unmount/eject
+    if (!isDiskStringValid(disk)) {
+        Debug.log(.ERROR, "Received/parsed disk string is invalid: {s}. Aborting processing request...", .{disk});
+        return;
+    }
 
-    const disk = XPCService.parseString(data, "disk");
     const result = handleDiskUnmountRequest(disk);
 
     var response: XPCObject = undefined;
@@ -114,6 +117,31 @@ fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
     // To prevent the operating system from automatically remounting volumes while the raw write is in progress,
     // the helper should also register a DADissenter for the disk. This temporarily blocks mount attempts from other processes,
     // ensuring an exclusive lock on the device during the critical write phase.
+}
+
+// Security caveat: ensure the received string is like "disk" or "rdisk"
+fn isDiskStringValid(disk: []const u8) bool {
+
+    // Ensure the length fits "diskX" at the very least (5 characters)
+    std.debug.assert(disk.len >= 5);
+
+    const isRawDisk: bool = std.mem.eql(u8, disk[0..5], "rdisk");
+
+    // Capture the "disk" portion of "diskX"
+    const isPrefixValid: bool = std.mem.eql(u8, disk[0..4], "disk") or std.mem.eql(u8, disk[0..5], "rdisk");
+
+    Debug.log(.INFO, "disk[0..4]: {s}, disk[0..5]: {s}", .{ disk[0..4], disk[0..5] });
+
+    // Capture the "X" portion of "diskX"
+    const suffix: u8 = std.fmt.parseInt(u8, if (isRawDisk) disk[5..disk.len] else disk[4..disk.len], 10) catch |err| blk: {
+        Debug.log(.ERROR, "isDiskStringValid(): unable to parse disk suffix, value: {s}. Error: {any}.", .{ disk, err });
+        break :blk 0;
+    };
+
+    // Check if disk number is more than 1 (internal SSD) and under some unlikely arbitrary number like 100
+    const isSuffixValid: bool = suffix > 1 and suffix < 100;
+
+    return isPrefixValid and isSuffixValid;
 }
 
 pub fn main() !void {
@@ -198,19 +226,18 @@ fn handleHelperVersionCheckRequest() [:0]const u8 {
     return env.HELPER_VERSION;
 }
 
-// fn handleDiskUnmountRequest(requestData: SerializedData) ReturnCode {
 fn handleDiskUnmountRequest(targetDisk: []const u8) ReturnCode {
 
     // TODO: perform a check to ensure the device has a kIOMediaRemovableKey key
+    // TODO: refactor code to smalelr functions
 
-    if (targetDisk.len < 2) return ReturnCode.FAILED_TO_CREATE_DA_DISK_REF;
+    if (targetDisk.len < 2) return ReturnCode.MALFORMED_TARGET_DISK_STRING;
 
     Debug.log(.INFO, "Received bsdName: {s}", .{targetDisk});
 
-    // const bsdName = std.mem.sliceTo(&requestData.data, 0x00);
     const bsdName = std.mem.sliceTo(targetDisk, 0x00);
 
-    Debug.log(.INFO, "Received bsdName: {s}", .{bsdName});
+    Debug.log(.INFO, "Sliced bsdName: {s}", .{bsdName});
 
     const daSession = c.DASessionCreate(c.kCFAllocatorDefault);
 
@@ -250,89 +277,26 @@ fn handleDiskUnmountRequest(targetDisk: []const u8) ReturnCode {
 
     // _ = c.CFShow(diskInfo);
 
-    // NOTE: Not sure that it is appropriate to run an EFI check against a whole device, instead of a leaf.
-    // Probably no value in doing so, unless the unmount is processed separately for each leaf volume.
-    //
-    // Debug.log(.DEBUG, "Running a check for an EFI partition...", .{});
-    //
-    // // --- @PROP: Check for EFI parition ---------------------------------------------------
-    // // Do not release efiKey, release causes segmentation fault
-    // const efiKeyRef: c.CFStringRef = @ptrCast(@alignCast(c.CFDictionaryGetValue(diskInfo, c.kDADiskDescriptionVolumeNameKey)));
-    //
-    // if (efiKeyRef == null) return ReturnCode.FAILED_TO_OBTAIN_EFI_KEY_STRING;
-    //
-    // std.log.info("\nEfi Key String: {any}", .{efiKeyRef});
-    //
-    // Debug.log(.DEBUG, "First intermediate EFI check log", .{});
-    //
-    // var efiKeyBuf: [255]u8 = std.mem.zeroes([255]u8);
-    // const efiKeyResult: c.Boolean = c.CFStringGetCString(efiKeyRef, &efiKeyBuf, efiKeyBuf.len, c.kCFStringEncodingUTF8);
-    //
-    // if (efiKeyResult == 0 or efiKeyRef == null or c.CFGetTypeID(efiKeyRef) != c.CFStringGetTypeID()) {
-    //     return ReturnCode.FAILED_TO_OBTAIN_EFI_KEY_STRING;
-    // }
-    //
-    // Debug.log(.DEBUG, "Second intermediate EFI check log", .{});
-    //
-    // const isEfi = std.mem.count(u8, &efiKeyBuf, "EFI") > 0;
-    // // --- @ENDPROP: EFI
-    //
-    // Debug.log(.INFO, "Finished checking for an EFI partition... Checking if the device is an internal device...", .{});
-
-    // --- @PROP: Check for DeviceInternal ---------------------------------------------------
-    const isInternalDeviceRef: c.CFBooleanRef = @ptrCast(c.CFDictionaryGetValue(diskInfo, c.kDADiskDescriptionDeviceInternalKey));
-
-    if (isInternalDeviceRef == null or c.CFGetTypeID(isInternalDeviceRef) != c.CFBooleanGetTypeID()) {
-        return ReturnCode.FAILED_TO_OBTAIN_INTERNAL_DEVICE_KEY_BOOL;
-    }
-
-    const isInternalDevice: bool = (isInternalDeviceRef == c.kCFBooleanTrue);
-    // --- @ENDPROP: DeviceInternal
-
-    Debug.log(.INFO, "Finished checking for an internal device...", .{});
-
-    if (isInternalDevice) {
+    if (isTargetDiskInternalDevice(diskInfo)) {
         Debug.log(.ERROR, "ERROR: internal device detected on disk: {s}. Aborting unmount operations for device.", .{bsdName});
         return ReturnCode.UNMOUNT_REQUEST_ON_INTERNAL_DEVICE;
     }
-
-    // if (isEfi) {
-    //     std.log.warn("Skipping unmount because of a potential EFI partition on disk: {s}.", .{bsdName});
-    //     return ReturnCode.SKIPPED_UNMOUNT_ATTEMPT_ON_EFI_PARTITION;
-    // }
 
     Debug.log(.INFO, "Unmount request passed checks. Initiating unmount call for disk: {s}.", .{bsdName});
 
     c.DADiskUnmount(daDiskRef, c.kDADiskUnmountOptionWhole, unmountDiskCallback, &queuedUnmounts);
 
-    // TODO: code below appears to be useless
-    queuedUnmounts += 1;
-
-    if (queuedUnmounts > 0) {
-        c.CFRunLoopRun();
-    } else {
-        Debug.log(.ERROR, "No valid unmount calls could be initiated for device: {s}.", .{bsdName});
-    }
+    c.CFRunLoopRun();
 
     return ReturnCode.SUCCESS;
 }
 
 fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: ?*anyopaque) callconv(.C) void {
     _ = context;
-    // if (context == null) {
-    //     Debug.log(.ERROR, "\nERROR: Unmount callback returned NULL context.");
-    //     return;
-    // }
-
-    // const counter_ptr: *u8 = @ptrCast(context);
-    // _ = context;
-
-    // const bsdName = if (c.DADiskGetBSDName(disk)) |name| std.mem.sliceTo(name, 0) else "Unknown Disk";
 
     Debug.log(.INFO, "Processing unmountDiskCallback()...", .{});
 
-    const bsdNameCPtr = c.DADiskGetBSDName(disk);
-
+    const bsdNameCPtr: [*c]const u8 = c.DADiskGetBSDName(disk);
     const bsdName: [:0]const u8 = @ptrCast(std.mem.sliceTo(bsdNameCPtr, 0x00));
 
     if (bsdName.len == 0) {
@@ -363,7 +327,63 @@ fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: 
     }
 }
 
+fn isTargetDiskInternalDevice(diskDictionaryRef: c.CFDictionaryRef) bool {
+    const isInternalDeviceRef: c.CFBooleanRef = @ptrCast(c.CFDictionaryGetValue(diskDictionaryRef, c.kDADiskDescriptionDeviceInternalKey));
+
+    if (isInternalDeviceRef == null or c.CFGetTypeID(isInternalDeviceRef) != c.CFBooleanGetTypeID()) {
+        Debug.log(.ERROR, "Failed to obtaine internal device key boolean.", .{});
+        return true;
+    }
+
+    const isDeviceInternal: bool = (isInternalDeviceRef == c.kCFBooleanTrue);
+
+    Debug.log(.INFO, "Finished checking for an internal device... isDeviceInternal: {any}", .{isDeviceInternal});
+
+    return isDeviceInternal;
+}
+
+fn isVolumeAnEFIPartition() bool {
+    // NOTE: Not valuable to run an EFI check against a whole device, instead of a leaf.
+    // Useful of the unmount is processed separately for each leaf volume.
+    //
+    // Debug.log(.DEBUG, "Running a check for an EFI partition...", .{});
+    //
+    // // --- @PROP: Check for EFI parition ---------------------------------------------------
+    // // Do not release efiKey, release causes segmentation fault
+    // const efiKeyRef: c.CFStringRef = @ptrCast(@alignCast(c.CFDictionaryGetValue(diskInfo, c.kDADiskDescriptionVolumeNameKey)));
+    //
+    // if (efiKeyRef == null) return ReturnCode.FAILED_TO_OBTAIN_EFI_KEY_STRING;
+    //
+    // std.log.info("\nEfi Key String: {any}", .{efiKeyRef});
+    //
+    // Debug.log(.DEBUG, "First intermediate EFI check log", .{});
+    //
+    // var efiKeyBuf: [255]u8 = std.mem.zeroes([255]u8);
+    // const efiKeyResult: c.Boolean = c.CFStringGetCString(efiKeyRef, &efiKeyBuf, efiKeyBuf.len, c.kCFStringEncodingUTF8);
+    //
+    // if (efiKeyResult == 0 or efiKeyRef == null or c.CFGetTypeID(efiKeyRef) != c.CFStringGetTypeID()) {
+    //     return ReturnCode.FAILED_TO_OBTAIN_EFI_KEY_STRING;
+    // }
+    //
+    // Debug.log(.DEBUG, "Second intermediate EFI check log", .{});
+    //
+    // const isEfi = std.mem.count(u8, &efiKeyBuf, "EFI") > 0;
+    // // --- @ENDPROP: EFI
+    //
+    // Debug.log(.INFO, "Finished checking for an EFI partition... Checking if the device is an internal device...", .{});
+
+    // if (isEfi) {
+    //     std.log.warn("Skipping unmount because of a potential EFI partition on disk: {s}.", .{bsdName});
+    //     return ReturnCode.SKIPPED_UNMOUNT_ATTEMPT_ON_EFI_PARTITION;
+    // }
+    //
+    return false;
+}
+
 fn handleWriteISOToDeviceRequest(requestData: SerializedData) ReturnCode {
+
+    // TODO: parse the ISO structure again, in case the isoPath was swapped/altered in an attack
+    //
     const data: [k.MachPortPacketSize]u8 = SerializedData.deserialize([k.MachPortPacketSize]u8, requestData) catch |err| {
         Debug.log(.ERROR, "Unable to deserialize WriteRequestData. Error: {any}", .{err});
         return ReturnCode.FAILED_TO_WRITE_ISO_TO_DEVICE;
