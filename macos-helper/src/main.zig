@@ -22,14 +22,13 @@ const ReturnCode = freetracer_lib.HelperReturnCode;
 const SerializedData = freetracer_lib.SerializedData;
 const WriteRequestData = freetracer_lib.WriteRequestData;
 
-var queuedUnmounts: i32 = 0;
-
 pub const WRITE_BLOCK_SIZE = 4096;
 pub var helperShouldTerminate = false;
 
+// TODO: prototype exit status, accept error?
 fn terminateHelperProcess() void {
     helperShouldTerminate = true;
-    // xpc.xpc_connection_cancel(connection);
+    std.process.exit(1);
 }
 
 /// C-convention callback; called anytime a message is received over the XPC connection.
@@ -109,9 +108,15 @@ fn processRequestUnmount(connection: XPCConnection, data: XPCObject) void {
         Debug.log(.ERROR, "Failed to unmount specified disk, error code: {any}", .{result});
         response = XPCService.createResponse(.DISK_UNMOUNT_FAIL);
         terminateHelperProcess();
-    } else response = XPCService.createResponse(.DISK_UNMOUNT_SUCCESS);
+    } else {
+        response = XPCService.createResponse(.DISK_UNMOUNT_SUCCESS);
+    }
+
+    Debug.log(.INFO, "Finished executing unmount task, sending response ({any}) to the client.", .{result});
 
     XPCService.connectionSendMessage(connection, response);
+
+    terminateHelperProcess();
 }
 
 fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
@@ -186,60 +191,10 @@ pub fn main() !void {
 
     xpcServer.start();
 
-    while (!helperShouldTerminate) {}
-
-    // var machCommunicator = MachCommunicator.init(allocator, .{
-    //     .localBundleId = env.BUNDLE_ID,
-    //     .remoteBundleId = env.MAIN_APP_BUNDLE_ID,
-    //     .ownerName = "Freetracer Helper Tool",
-    //     .processMessageFn = processRequestMessage,
-    // });
-    //
-    // defer machCommunicator.deinit();
-    // try machCommunicator.start();
-
     // TODO:The launchd.plist should be configured for on-demand launch, and the tool should exit after completing its work.
     Debug.log(.INFO, "Helper tool successfully terminated.", .{});
 }
 
-// fn processRequestMessage(msgId: i32, requestData: SerializedData) !SerializedData {
-//     var responseData: SerializedData = undefined;
-//
-//     switch (msgId) {
-//         //
-//         k.HelperVersionRequest => {
-//             Debug.log(.INFO, "Freetracer Helper Tool received a version query request [{d}].", .{k.HelperVersionRequest});
-//
-//             const versionString = handleHelperVersionCheckRequest();
-//             Debug.log(.INFO, "Packing size of versionString: {d}", .{@sizeOf(@TypeOf(env.HELPER_VERSION))});
-//             responseData = try SerializedData.serialize([:0]const u8, versionString);
-//         },
-//
-//         k.UnmountDiskRequest => {
-//             Debug.log(.INFO, "Freetracer Helper Tool received DADiskUnmount() request [{d}].", .{k.UnmountDiskRequest});
-//
-//             const responseCode = handleDiskUnmountRequest(requestData);
-//
-//             Debug.log(.WARNING, "responseCode is: {d}", .{@intFromEnum(responseCode)});
-//
-//             responseData = try SerializedData.serialize(ReturnCode, responseCode);
-//         },
-//
-//         k.WriteISOToDeviceRequest => {
-//             Debug.log(.INFO, "Freetracer Helper Tool received WriteISOToDeviceRequest [{d}].", .{k.WriteISOToDeviceRequest});
-//
-//             const responseCode = handleWriteISOToDeviceRequest(requestData);
-//             responseData = try SerializedData.serialize(ReturnCode, responseCode);
-//         },
-//
-//         else => {
-//             Debug.log(.WARNING, "Freetracer Helper Tool received unknown request: {d}. Ignoring request...", .{msgId});
-//         },
-//     }
-//
-//     return responseData;
-// }
-//
 fn handleHelperVersionCheckRequest() [:0]const u8 {
     return env.HELPER_VERSION;
 }
@@ -308,7 +263,7 @@ fn handleDiskUnmountRequest(targetDisk: []const u8) ReturnCode {
 
     Debug.log(.INFO, "Unmount request passed checks. Initiating unmount call for disk: {s}.", .{bsdName});
 
-    c.DADiskUnmount(daDiskRef, c.kDADiskUnmountOptionWhole, unmountDiskCallback, &queuedUnmounts);
+    c.DADiskUnmount(daDiskRef, c.kDADiskUnmountOptionWhole, unmountDiskCallback, null);
 
     c.CFRunLoopRun();
 
@@ -340,10 +295,7 @@ fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: 
         Debug.log(.ERROR, "Failed to unmount {s}. Dissenter status code: {any}, status message: {s}", .{ bsdName, status, statusString });
     } else {
         Debug.log(.INFO, "Successfully unmounted disk: {s}", .{bsdName});
-        queuedUnmounts -= 1;
-    }
 
-    if (queuedUnmounts == 0) {
         Debug.log(.INFO, "Finished unmounting all volumes for device.", .{});
 
         const currentLoop = c.CFRunLoopGetCurrent();

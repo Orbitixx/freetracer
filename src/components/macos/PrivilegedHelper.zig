@@ -332,7 +332,10 @@ fn processResponseMessage(connection: XPCConnection, data: XPCObject) void {
             ));
         },
 
-        .DISK_UNMOUNT_SUCCESS => {},
+        .DISK_UNMOUNT_SUCCESS => {
+            Debug.log(.INFO, "Received a successful unmount response from the helper!", .{});
+            std.time.sleep(1_000_000_000);
+        },
 
         .DISK_UNMOUNT_FAIL => {},
     }
