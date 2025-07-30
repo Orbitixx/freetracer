@@ -25,20 +25,28 @@ const WriteRequestData = freetracer_lib.WriteRequestData;
 var queuedUnmounts: i32 = 0;
 
 pub const WRITE_BLOCK_SIZE = 4096;
+pub var helperShouldTerminate = false;
+
+fn terminateHelperProcess() void {
+    helperShouldTerminate = true;
+    // xpc.xpc_connection_cancel(connection);
+}
 
 /// C-convention callback; called anytime a message is received over the XPC connection.
 fn xpcRequestHandler(connection: XPCConnection, message: XPCObject) callconv(.c) void {
     Debug.log(.INFO, "Helper received a new message over XPC bridge. Attempting to authenticate requester...", .{});
 
-    const isConnectionAuthentic: bool = XPCService.authenticateMessage(message, @ptrCast(env.MAIN_APP_BUNDLE_ID));
+    const isConnectionAuthorized: bool = XPCService.authenticateMessage(message, @ptrCast(env.MAIN_APP_BUNDLE_ID), @ptrCast(env.MAIN_APP_TEAM_ID));
 
-    if (!isConnectionAuthentic) {
+    if (!isConnectionAuthorized) {
         Debug.log(.ERROR, "XPC message failed authentication. Dropping request...", .{});
+        terminateHelperProcess();
         return;
     } else Debug.log(.INFO, "Successfully authenticated incoming message...", .{});
 
     if (message == null) {
         Debug.log(.ERROR, "XPC Server received a NULL request. Aborting processing response...", .{});
+        terminateHelperProcess();
         return;
     }
 
@@ -48,8 +56,10 @@ fn xpcRequestHandler(connection: XPCConnection, message: XPCObject) callconv(.c)
         processRequestMessage(connection, message);
     } else if (msg_type == xpc.XPC_TYPE_ERROR) {
         Debug.log(.ERROR, "An error occurred attemting to run a message handler callback.", .{});
+        terminateHelperProcess();
     } else {
         Debug.log(.ERROR, "XPC Server received an unknown message type.", .{});
+        terminateHelperProcess();
     }
 
     Debug.log(.INFO, "Finished processing request", .{});
@@ -87,6 +97,7 @@ fn processRequestUnmount(connection: XPCConnection, data: XPCObject) void {
 
     if (!isDiskStringValid(disk)) {
         Debug.log(.ERROR, "Received/parsed disk string is invalid: {s}. Aborting processing request...", .{disk});
+        terminateHelperProcess();
         return;
     }
 
@@ -97,6 +108,7 @@ fn processRequestUnmount(connection: XPCConnection, data: XPCObject) void {
     if (result != .SUCCESS) {
         Debug.log(.ERROR, "Failed to unmount specified disk, error code: {any}", .{result});
         response = XPCService.createResponse(.DISK_UNMOUNT_FAIL);
+        terminateHelperProcess();
     } else response = XPCService.createResponse(.DISK_UNMOUNT_SUCCESS);
 
     XPCService.connectionSendMessage(connection, response);
@@ -145,6 +157,8 @@ fn isDiskStringValid(disk: []const u8) bool {
 }
 
 pub fn main() !void {
+
+    // TODO: Add custom run loop and shouldClose controller
     var debugAllocator = std.heap.DebugAllocator(.{ .thread_safe = true }).init;
     const allocator = debugAllocator.allocator();
 
@@ -152,6 +166,8 @@ pub fn main() !void {
         _ = debugAllocator.detectLeaks();
         _ = debugAllocator.deinit();
     }
+
+    helperShouldTerminate = false;
 
     // Initialize Debug singleton
     try Debug.init(allocator, .{});
@@ -169,6 +185,8 @@ pub fn main() !void {
     defer xpcServer.deinit();
 
     xpcServer.start();
+
+    while (!helperShouldTerminate) {}
 
     // var machCommunicator = MachCommunicator.init(allocator, .{
     //     .localBundleId = env.BUNDLE_ID,
@@ -243,6 +261,7 @@ fn handleDiskUnmountRequest(targetDisk: []const u8) ReturnCode {
 
     if (daSession == null) {
         Debug.log(.ERROR, "Failed to create DASession\n", .{});
+        terminateHelperProcess();
         return ReturnCode.FAILED_TO_CREATE_DA_SESSION;
     }
     defer _ = c.CFRelease(daSession);
@@ -262,6 +281,7 @@ fn handleDiskUnmountRequest(targetDisk: []const u8) ReturnCode {
 
     if (daDiskRef == null) {
         Debug.log(.ERROR, "Could not create DADiskRef for '{s}', skipping.\n", .{bsdName});
+        terminateHelperProcess();
         return ReturnCode.FAILED_TO_CREATE_DA_DISK_REF;
     }
     defer _ = c.CFRelease(daDiskRef);
@@ -270,7 +290,10 @@ fn handleDiskUnmountRequest(targetDisk: []const u8) ReturnCode {
 
     const diskInfo: c.CFDictionaryRef = @ptrCast(c.DADiskCopyDescription(daDiskRef));
 
-    if (diskInfo == null) return ReturnCode.FAILED_TO_OBTAIN_DISK_INFO_DICT_REF;
+    if (diskInfo == null) {
+        terminateHelperProcess();
+        return ReturnCode.FAILED_TO_OBTAIN_DISK_INFO_DICT_REF;
+    }
     defer _ = c.CFRelease(diskInfo);
 
     Debug.log(.INFO, "DA Disk Description is successfully obtained/copied.", .{});
@@ -279,6 +302,7 @@ fn handleDiskUnmountRequest(targetDisk: []const u8) ReturnCode {
 
     if (isTargetDiskInternalDevice(diskInfo)) {
         Debug.log(.ERROR, "ERROR: internal device detected on disk: {s}. Aborting unmount operations for device.", .{bsdName});
+        terminateHelperProcess();
         return ReturnCode.UNMOUNT_REQUEST_ON_INTERNAL_DEVICE;
     }
 
@@ -332,6 +356,7 @@ fn isTargetDiskInternalDevice(diskDictionaryRef: c.CFDictionaryRef) bool {
 
     if (isInternalDeviceRef == null or c.CFGetTypeID(isInternalDeviceRef) != c.CFBooleanGetTypeID()) {
         Debug.log(.ERROR, "Failed to obtaine internal device key boolean.", .{});
+        terminateHelperProcess();
         return true;
     }
 

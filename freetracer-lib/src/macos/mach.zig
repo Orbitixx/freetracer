@@ -11,8 +11,11 @@ pub const XPCConnection = xpc.xpc_connection_t;
 pub const XPCDispatchQueue = xpc.dispatch_queue_t;
 pub const XPCObject = xpc.xpc_object_t;
 
-const HelperRequestCode = @import("../constants.zig").HelperRequestCode;
-const HelperResponseCode = @import("../constants.zig").HelperResponseCode;
+const Constants = @import("../constants.zig");
+
+const HelperRequestCode = Constants.HelperRequestCode;
+const HelperResponseCode = Constants.HelperResponseCode;
+const Character = Constants.Character;
 
 const NullTerminatedStringType: type = [:0]const u8;
 
@@ -104,8 +107,9 @@ pub const XPCService = struct {
         xpc.xpc_connection_send_message(connection, dataDictionary);
     }
 
-    pub fn authenticateMessage(message: XPCObject, authenticClientBundleId: [:0]const u8) bool {
+    pub fn authenticateMessage(message: XPCObject, authenticClientBundleId: [:0]const u8, authenticClientTeamId: [:0]const u8) bool {
         var secCodeRef: c.SecCodeRef = null;
+
         var operationStatus: c.OSStatus = c.SecCodeCreateWithXPCMessage(message, c.kSecCSDefaultFlags, &secCodeRef);
 
         if (operationStatus != c.errSecSuccess or secCodeRef == null) {
@@ -123,6 +127,7 @@ pub const XPCService = struct {
         }
 
         var codeSigningInfo: c.CFDictionaryRef = null;
+
         operationStatus = c.SecCodeCopySigningInformation(secCodeRef, c.kSecCSSigningInformation, &codeSigningInfo);
 
         if (operationStatus != c.errSecSuccess or codeSigningInfo == null) {
@@ -132,27 +137,10 @@ pub const XPCService = struct {
 
         defer c.CFRelease(codeSigningInfo);
 
-        // Pre-allocate a large enough buffer to avoid stack overflow vector of attack
-        var actualBundleIdBuf: [512]u8 = std.mem.zeroes([512]u8);
+        const isValidBundleId = validateDictionaryString(codeSigningInfo, c.kSecCodeInfoIdentifier, authenticClientBundleId);
+        const isValidTeamId = validateDictionaryString(codeSigningInfo, c.kSecCodeInfoTeamIdentifier, authenticClientTeamId);
 
-        const actualBundleIdRef: c.CFStringRef = @ptrCast(c.CFDictionaryGetValue(codeSigningInfo, c.kSecCodeInfoIdentifier));
-        const result: c.Boolean = c.CFStringGetCString(actualBundleIdRef, &actualBundleIdBuf, actualBundleIdBuf.len, c.kCFStringEncodingUTF8);
-
-        if (result != c.TRUE) {
-            Debug.log(.ERROR, "Unable to retreive requestor's bundle id. Invalidating message...", .{});
-            return false;
-        }
-
-        const actualBundleId: [:0]const u8 = @ptrCast(std.mem.sliceTo(&actualBundleIdBuf, 0x00));
-
-        if (actualBundleId.len < 2) {
-            Debug.log(.ERROR, "Requester has a malformed bundle id: '{s}'. Invalidating message...", .{actualBundleId});
-            return false;
-        }
-
-        const isValidBundleId = std.mem.eql(u8, actualBundleId, authenticClientBundleId);
-
-        return isValidBundleId;
+        return isValidBundleId and isValidTeamId;
     }
 
     pub fn deinit(self: *Self) void {
@@ -199,6 +187,38 @@ pub const XPCService = struct {
     }
 };
 
+fn validateDictionaryString(dictionary: c.CFDictionaryRef, key: c.CFStringRef, validString: [:0]const u8) bool {
+    const stringBuffer = getStringFromDictionary(dictionary, key) catch |err| {
+        if (err == error.UnableToRetrieveStringFromRef) Debug.log(.ERROR, "Unable to retreive string from Ref... Expected: '{s}'. Error: {any}", .{ validString, err });
+        return false;
+    };
+
+    const finalString: [:0]const u8 = @ptrCast(std.mem.sliceTo(&stringBuffer, Character.NULL));
+
+    Debug.log(.INFO, "validateDictionaryString(): Expected '{s}', retreived: '{s}'.", .{ validString, finalString });
+
+    return std.mem.eql(u8, finalString, validString);
+}
+
+fn getStringFromDictionary(dictionary: c.CFDictionaryRef, key: c.CFStringRef) ![512]u8 {
+    // Pre-allocate a large enough buffer to avoid stack overflow vector of attack
+    var resultBuffer: [512]u8 = std.mem.zeroes([512]u8);
+
+    const resultValueRef: c.CFStringRef = @ptrCast(c.CFDictionaryGetValue(dictionary, key));
+    const stringParsingResult: c.Boolean = c.CFStringGetCString(resultValueRef, &resultBuffer, resultBuffer.len, c.kCFStringEncodingUTF8);
+
+    if (stringParsingResult != c.TRUE) {
+        return error.UnableToRetrieveStringFromRef;
+    }
+
+    if (resultBuffer.len < 2) {
+        Debug.log(.ERROR, "Retrieved string is too short to be meaningful: '{s}'.", .{std.mem.sliceTo(&resultBuffer, Character.NULL)});
+        return error.StringIsTooShortToBeMeaningful;
+    }
+
+    return resultBuffer;
+}
+
 pub const SerializedData = struct {
     data: [k.MachPortPacketSize]u8,
 
@@ -209,7 +229,7 @@ pub const SerializedData = struct {
             NullTerminatedStringType => {
                 std.debug.assert(rawData.len + 1 <= k.MachPortPacketSize); // +1 for null terminator
                 @memcpy(data[0..rawData.len], rawData);
-                data[rawData.len] = 0x00;
+                data[rawData.len] = Character.NULL;
             },
 
             @TypeOf(null) => {},
@@ -230,7 +250,7 @@ pub const SerializedData = struct {
         switch (T) {
             NullTerminatedStringType => {
                 // // Find the null terminator to determine string length
-                // const len = std.mem.indexOfScalar(u8, &sData.data, 0x00) orelse blk: {
+                // const len = std.mem.indexOfScalar(u8, &sData.data, Character.NULL) orelse blk: {
                 //     Debug.log(.WARNING, "No null terminator found in serialized string data, using full possible data length.", .{});
                 //     break :blk k.MachPortPacketSize;
                 // };
@@ -354,7 +374,7 @@ pub const MachCommunicator = struct {
             return returnData;
         }
 
-        Debug.log(.INFO, "{s}: Request data received: {any}\n", .{ AppName, std.mem.sliceTo(&requestData.data, 0x00) });
+        Debug.log(.INFO, "{s}: Request data received: {any}\n", .{ AppName, std.mem.sliceTo(&requestData.data, Character.NULL) });
 
         var responseData = processMessageFn(msgId, requestData) catch |err| blk: {
             Debug.log(.ERROR, "{s}: onMessageReceived.processRequestMessage(msgId = {d}) returned an error: {any}", .{ AppName, msgId, err });
@@ -363,7 +383,7 @@ pub const MachCommunicator = struct {
 
         returnData = @ptrCast(responseData.constructCFDataRef());
 
-        Debug.log(.INFO, "{s}: Successfully packaged response: {any}.", .{ AppName, std.mem.sliceTo(&responseData.data, 0x00) });
+        Debug.log(.INFO, "{s}: Successfully packaged response: {any}.", .{ AppName, std.mem.sliceTo(&responseData.data, Character.NULL) });
 
         return returnData;
     }

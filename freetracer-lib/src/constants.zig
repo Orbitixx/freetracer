@@ -21,6 +21,13 @@ pub const k = struct {
     pub const ZeroAuthorizationItemValueLength: usize = 0;
 };
 
+pub const Character = struct {
+    pub const NULL = 0x00;
+    pub const SEMICOLON = 0x3b;
+    pub const RIGHT_SLASH = 0x2f;
+    pub const DOT = 0x2e;
+};
+
 pub const HelperRequestCode = enum(i64) {
     INITIAL_PING,
     GET_HELPER_VERSION,
