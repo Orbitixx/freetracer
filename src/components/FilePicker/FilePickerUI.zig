@@ -9,6 +9,7 @@ const winRelX = WindowManager.relW;
 const winRelY = WindowManager.relH;
 
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
+const ComponentName = EventManager.ComponentName.ISO_FILE_PICKER_UI;
 
 const ISOFilePicker = @import("./FilePicker.zig");
 
@@ -56,29 +57,27 @@ const BgRectParams = struct {
 
 pub const Events = struct {
     pub const onISOFilePathChanged = ComponentFramework.defineEvent(
-        "iso_file_picker_ui.iso_file_path_changed",
+        EventManager.createEventName(ComponentName, "iso_file_path_changed"),
         struct { newPath: [:0]u8 },
         struct {},
     );
 
     pub const onActiveStateChanged = ComponentFramework.defineEvent(
-        "iso_file_picker_ui.active_state_changed",
+        EventManager.createEventName(ComponentName, "active_state_changed"),
         struct { isActive: bool },
         struct {},
     );
 
     pub const onGetUIDimensions = ComponentFramework.defineEvent(
-        "iso_file_picker_ui.get_ui_width",
+        EventManager.createEventName(ComponentName, "get_ui_width"),
         struct { transform: Transform },
         struct {},
     );
 
     pub const onUIDimensionsQueried = ComponentFramework.defineEvent(
-        "iso_file_picker_ui.get_ui",
+        EventManager.createEventName(ComponentName, "get_ui"),
         struct {},
-        struct {
-            bgRectWidth: f32,
-        },
+        struct { bgRectWidth: f32 },
     );
 };
 
@@ -103,7 +102,7 @@ pub fn start(self: *ISOFilePickerUI) !void {
     if (self.component == null) try self.initComponent(self.parent.asComponentPtr());
 
     if (self.component) |*component| {
-        if (!EventManager.subscribe("iso_file_picker_ui", component)) return error.UnableToSubscribeToEventManager;
+        if (!EventManager.subscribe(ComponentName, component)) return error.UnableToSubscribeToEventManager;
     } else return error.UnableToSubscribeToEventManager;
 
     self.bgRect = Rectangle{

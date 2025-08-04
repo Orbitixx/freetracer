@@ -12,6 +12,7 @@ const winRelX = WindowManager.relW;
 const winRelY = WindowManager.relH;
 
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
+const ComponentName = EventManager.ComponentName.DEVICE_LIST_UI;
 
 const DeviceList = @import("./DeviceList.zig");
 const ISOFilePicker = @import("../FilePicker/FilePicker.zig");
@@ -69,34 +70,30 @@ const BgRectParams = struct {
 pub const Events = struct {
     //
     pub const onDeviceListUIActiveStateChanged = ComponentFramework.defineEvent(
-        "device_list_ui.on_active_state_changed",
-        struct {
-            isActive: bool,
-        },
+        EventManager.createEventName(ComponentName, "on_active_state_changed"),
+        struct { isActive: bool },
         struct {},
     );
 
     pub const onDevicesReadyToRender = ComponentFramework.defineEvent(
-        "device_list_ui.on_devices_ready_to_render",
+        EventManager.createEventName(ComponentName, "on_devices_ready_to_render"),
         struct {},
         struct {},
     );
 
     pub const onSelectedDeviceNameChanged = ComponentFramework.defineEvent(
-        "device_list_ui.on_device_name_changed",
+        EventManager.createEventName(ComponentName, "on_device_name_changed"),
         struct {
-            // Not authoritative data; copy only -- use parent.
+            // Not authoritative data; copy only -- use parent for authoritative.
             selectedDevice: ?USBStorageDevice,
         },
         struct {},
     );
 
     pub const onUITransformQueried = ComponentFramework.defineEvent(
-        "device_list_ui.on_ui_transform_queried",
+        EventManager.createEventName(ComponentName, "on_ui_transform_queried"),
         struct {},
-        struct {
-            transform: UIFramework.Primitives.Transform,
-        },
+        struct { transform: UIFramework.Primitives.Transform },
     );
 };
 
@@ -131,7 +128,7 @@ pub fn start(self: *DeviceListUI) !void {
     if (self.component == null) try self.initComponent(self.parent.asComponentPtr());
 
     if (self.component) |*component| {
-        if (!EventManager.subscribe("device_list_ui", component)) return error.UnableToSubscribeToEventManager;
+        if (!EventManager.subscribe(ComponentName, component)) return error.UnableToSubscribeToEventManager;
     } else return error.UnableToSubscribeToEventManager;
 
     self.bgRect = Rectangle{

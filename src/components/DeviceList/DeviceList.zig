@@ -5,6 +5,7 @@ const System = @import("../../lib/sys/system.zig");
 const USBStorageDevice = System.USBStorageDevice;
 
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
+const ComponentName = EventManager.ComponentName.DEVICE_LIST;
 
 const ComponentFramework = @import("../framework/import/index.zig");
 const WorkerContext = @import("./WorkerContext.zig");
@@ -40,49 +41,43 @@ uiComponent: ?DeviceListUI = null,
 pub const Events = struct {
     // Event: state.data.isActive property changed
     pub const onDeviceListActiveStateChanged = ComponentFramework.defineEvent(
-        "device_list.on_active_state_changed",
-        struct {
-            isActive: bool,
-        },
+        EventManager.createEventName(ComponentName, "on_active_state_changed"),
+        struct { isActive: bool },
         struct {},
     );
 
     // Event: Worker finished discovering storage devices
     pub const onDiscoverDevicesEnd = ComponentFramework.defineEvent(
-        "device_list.on_discover_devices_end",
-        struct {
-            devices: std.ArrayList(USBStorageDevice),
-        },
+        EventManager.createEventName(ComponentName, "on_discover_devices_end"),
+        struct { devices: std.ArrayList(USBStorageDevice) },
         struct {},
     );
 
     pub const onDevicesCleanup = ComponentFramework.defineEvent(
-        "device_list.on_devices_cleanup",
+        EventManager.createEventName(ComponentName, "on_devices_cleanup"),
         struct {},
         struct {},
     );
 
     // Event: User selected a target storage device to be written
     pub const onSelectedDeviceConfirmed = ComponentFramework.defineEvent(
-        "device_list.on_selected_device_confirmed",
+        EventManager.createEventName(ComponentName, "on_selected_device_confirmed"),
         struct {},
         struct {},
     );
 
     // Event: User completed interacting with this component (e.g. clicked "Next")
     pub const onFinishedComponentInteraction = ComponentFramework.defineEvent(
-        "device_list.on_finished_component_interaction",
+        EventManager.createEventName(ComponentName, "on_finished_component_interaction"),
         struct {},
         struct {},
     );
 
     // Event: Another component requested info about selected device
     pub const onSelectedDeviceQueried = ComponentFramework.defineEvent(
-        "device_list.on_selected_device_queried",
+        EventManager.createEventName(ComponentName, "on_selected_device_queried"),
         struct {},
-        struct {
-            device: USBStorageDevice,
-        },
+        struct { device: USBStorageDevice },
     );
 };
 

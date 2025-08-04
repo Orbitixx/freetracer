@@ -9,6 +9,7 @@ const ISOParser = @import("../../modules/IsoParser.zig");
 const ISO_STATUS = ISOParser.ISO_PARSER_RESULT;
 
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
+const ComponentName = EventManager.ComponentName.DATA_FLASHER;
 
 const ComponentFramework = @import("../framework/import/index.zig");
 // const WorkerContext = @import("./WorkerContext.zig", .{});
@@ -46,10 +47,8 @@ pub const Events = struct {
     //
     // Event: component's active state changed
     pub const onActiveStateChanged = ComponentFramework.defineEvent(
-        "data_flasher.on_active_state_changed",
-        struct {
-            isActive: bool,
-        },
+        EventManager.createEventName(ComponentName, "on_active_state_changed"),
+        struct { isActive: bool },
         struct {},
     );
 };
@@ -75,7 +74,7 @@ pub fn start(self: *DataFlasher) !void {
     if (self.component) |*component| {
         if (component.children != null) return error.ComponentAlreadyCalledStartBefore;
 
-        if (!EventManager.subscribe("data_flasher", component)) return error.UnableToSubscribeToEventManager;
+        if (!EventManager.subscribe(ComponentName, component)) return error.UnableToSubscribeToEventManager;
 
         Debug.log(.DEBUG, "DataFlasher: attempting to initialize children...", .{});
 

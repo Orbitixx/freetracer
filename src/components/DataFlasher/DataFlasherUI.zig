@@ -8,6 +8,7 @@ const System = @import("../../lib/sys/system.zig");
 const USBStorageDevice = System.USBStorageDevice;
 
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
+const ComponentName = EventManager.ComponentName.DATA_FLASHER_UI;
 
 const ComponentFramework = @import("../framework/import/index.zig");
 // const WorkerContext = @import("./WorkerContext.zig");
@@ -68,10 +69,8 @@ const BgRectParams = struct {
 
 pub const Events = struct {
     pub const onActiveStateChanged = ComponentFramework.defineEvent(
-        "data_flasher.on_active_state_changed",
-        struct {
-            isActive: bool,
-        },
+        EventManager.createEventName(ComponentName, "on_active_state_changed"),
+        struct { isActive: bool },
         struct {},
     );
 };
@@ -93,7 +92,7 @@ pub fn start(self: *DataFlasherUI) !void {
     if (self.component == null) try self.initComponent(self.parent.asComponentPtr());
 
     if (self.component) |*component| {
-        if (!EventManager.subscribe("data_flasher_ui", component)) return error.UnableToSubscribeToEventManager;
+        if (!EventManager.subscribe(ComponentName, component)) return error.UnableToSubscribeToEventManager;
     } else return error.UnableToSubscribeToEventManager;
 
     self.bgRect = Rectangle{

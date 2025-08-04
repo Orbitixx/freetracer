@@ -3,6 +3,8 @@ const osd = @import("osdialog");
 const Debug = @import("freetracer-lib").Debug;
 
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
+const ComponentName = EventManager.ComponentName.ISO_FILE_PICKER;
+
 const ComponentFramework = @import("../framework/import/index.zig");
 
 const UIFramework = @import("../ui/import/index.zig");
@@ -34,37 +36,30 @@ allocator: std.mem.Allocator,
 uiComponent: ?ISOFilePickerUI = null,
 
 pub const Events = struct {
+
     //
     pub const onActiveStateChanged = ComponentFramework.defineEvent(
-        "iso_file_picker.on_active_state_changed",
-        struct {
-            isActive: bool,
-        },
+        EventManager.createEventName(ComponentName, "on_active_state_changed"),
+        struct { isActive: bool },
         struct {},
     );
 
     pub const onUIWidthChanged = ComponentFramework.defineEvent(
-        "iso_file_picker.on_ui_width_changed",
-        struct {
-            newWidth: f32,
-        },
+        EventManager.createEventName(ComponentName, "on_ui_width_changed"),
+        struct { newWidth: f32 },
         struct {},
     );
 
     pub const onISOFileSelected = ComponentFramework.defineEvent(
-        "iso_file_picker.on_iso_file_selected",
-        struct {
-            newPath: ?[:0]u8 = null,
-        },
+        EventManager.createEventName(ComponentName, "on_iso_file_selected"),
+        struct { newPath: ?[:0]u8 = null },
         struct {},
     );
 
     pub const onISOFilePathQueried = ComponentFramework.defineEvent(
-        "iso_file_picker.on_iso_file_path_queried",
+        EventManager.createEventName(ComponentName, "on_iso_file_path_queried"),
         struct {},
-        struct {
-            isoPath: [:0]u8,
-        },
+        struct { isoPath: [:0]u8 },
     );
 };
 
@@ -111,7 +106,7 @@ pub fn start(self: *ISOFilePickerComponent) !void {
     if (self.component) |*component| {
         if (component.children != null) return error.ComponentAlreadyCalledStartBefore;
 
-        if (!EventManager.subscribe("iso_file_picker", component)) return error.UnableToSubscribeToEventManager;
+        if (!EventManager.subscribe(ComponentName, component)) return error.UnableToSubscribeToEventManager;
 
         Debug.log(.DEBUG, "ISOFilePickerComponent: attempting to initialize children...", .{});
 
@@ -131,22 +126,10 @@ pub fn start(self: *ISOFilePickerComponent) !void {
 }
 
 pub fn update(self: *ISOFilePickerComponent) !void {
-    // Check for file selection changes
-    // const state = self.state.getDataLocked();
-    // defer self.state.unlock();
-
     self.checkAndJoinWorker();
-
-    // Update logic
 }
 
 pub fn draw(self: *ISOFilePickerComponent) !void {
-    // Draw file picker UI
-    // const state = self.state.getDataLocked();
-    // defer self.state.unlock();
-
-    // Draw UI elements
-
     _ = self;
 }
 
@@ -198,16 +181,30 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
 
                 const extVariants: [3][]const u8 = .{ ".iso", ".ISO", ".Iso" };
 
-                var isOKToProceed = false;
+                var isOKToProceedPopupResponse = false;
 
-                if (!std.mem.eql(u8, fileExtension, extVariants[0]) and !std.mem.eql(u8, fileExtension, extVariants[1]) and !std.mem.eql(u8, fileExtension, extVariants[2])) {
+                const isExtensionUnknown: bool = !std.mem.eql(
+                    u8,
+                    fileExtension,
+                    extVariants[0],
+                ) and !std.mem.eql(
+                    u8,
+                    fileExtension,
+                    extVariants[1],
+                ) and !std.mem.eql(
+                    u8,
+                    fileExtension,
+                    extVariants[2],
+                );
+
+                if (isExtensionUnknown) {
                     //
-                    isOKToProceed = osd.message("The extension of the selected file does not appear to be '.iso', are you sure you want to proceed?", .{
+                    isOKToProceedPopupResponse = osd.message("The extension of the selected file does not appear to be '.iso', are you sure you want to proceed?", .{
                         .level = .warning,
                         .buttons = .yes_no,
                     });
 
-                    if (!isOKToProceed) break :eventLoop;
+                    if (!isOKToProceedPopupResponse) break :eventLoop;
                 }
 
                 // TODO: Review this block again, this seems a bit crazy on the second look to dispatch another event with similar payload.

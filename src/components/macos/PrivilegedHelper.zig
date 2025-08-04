@@ -6,9 +6,11 @@ const AppConfig = @import("../../config.zig");
 const freetracer_lib = @import("freetracer-lib");
 const c = freetracer_lib.c;
 const Debug = freetracer_lib.Debug;
+
 const MachCommunicator = freetracer_lib.MachCommunicator;
 const SerializedData = freetracer_lib.SerializedData;
 const MachPortPacketSize = freetracer_lib.k.MachPortPacketSize;
+
 const xpc = freetracer_lib.xpc;
 const XPCService = freetracer_lib.XPCService;
 const XPCConnection = freetracer_lib.XPCConnection;
@@ -37,6 +39,7 @@ const Component = ComponentFramework.Component;
 const ComponentState = ComponentFramework.ComponentState(PrivilegedHelperState);
 const ComponentWorker = ComponentFramework.Worker(PrivilegedHelperState);
 const ComponentEvent = ComponentFramework.Event;
+const ComponentName = EventManager.ComponentName.PRIVILEGED_HELPER;
 const EventResult = ComponentFramework.EventResult;
 
 const PrivilegedHelper = @This();
@@ -48,14 +51,13 @@ worker: ?ComponentWorker = null,
 
 // Component-specific, unique props
 allocator: std.mem.Allocator,
-
 xpcClient: XPCService,
 isHelperInstalled: bool = false,
 
 pub const Events = struct {
     //
     pub const onWriteISOToDeviceRequest = ComponentFramework.defineEvent(
-        "privileged_helper.on_write_iso_to_device",
+        EventManager.createEventName(ComponentName, "on_write_iso_to_device"),
         struct {
             isoPath: [:0]const u8,
             targetDisk: [:0]const u8,
@@ -64,16 +66,14 @@ pub const Events = struct {
     );
 
     pub const onHelperToolConfirmedSuccessfulComms = ComponentFramework.defineEvent(
-        "privileged_helper_tool.on_successful_comms_confirmed",
+        EventManager.createEventName(ComponentName, "on_successful_comms_confirmed"),
         struct {},
         struct {},
     );
 
     pub const onHelperVersionReceived = ComponentFramework.defineEvent(
-        "privileged_helper_tool.on_helper_version_received",
-        struct {
-            shouldHelperUpdate: bool,
-        },
+        EventManager.createEventName(ComponentName, "on_helper_version_received"),
+        struct { shouldHelperUpdate: bool },
         struct {},
     );
 };
@@ -86,12 +86,6 @@ pub fn init(allocator: std.mem.Allocator) !PrivilegedHelper {
             // Set installed flag to true by default on Linux systems
             .isHelperInstalled = System.isLinux,
         }),
-        // .machCommunicator = MachCommunicator.init(allocator, .{
-        //     .localBundleId = @ptrCast(env.BUNDLE_ID),
-        //     .remoteBundleId = @ptrCast(env.HELPER_BUNDLE_ID),
-        //     .ownerName = "Freetracer Main Process",
-        //     .processMessageFn = PrivilegedHelper.processMachMessage,
-        // }),
         .xpcClient = try XPCService.init(.{
             .isServer = false,
             .serviceName = "Freetracer XPC Client",
@@ -129,7 +123,6 @@ pub fn start(self: *PrivilegedHelper) !void {
     if (System.isLinux) return;
 
     try self.initWorker();
-    // try self.machCommunicator.start();
 
     // Verify if the Helper Tool is installed and set self.isHelperInstalled flag accordingly
     self.dispatchComponentAction();
@@ -137,7 +130,7 @@ pub fn start(self: *PrivilegedHelper) !void {
     if (self.component) |*component| {
         if (component.children != null) return error.ComponentAlreadyCalledStartBefore;
 
-        if (!EventManager.subscribe("privileged_helper", component)) return error.UnableToSubscribeToEventManager;
+        if (!EventManager.subscribe(ComponentName, component)) return error.UnableToSubscribeToEventManager;
 
         Debug.log(.DEBUG, "PrivilegedHelper: attempting to initialize children...", .{});
 
