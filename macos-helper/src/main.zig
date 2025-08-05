@@ -5,6 +5,7 @@ const freetracer_lib = @import("freetracer-lib");
 
 const Debug = freetracer_lib.Debug;
 const xpc = freetracer_lib.xpc;
+const ISOParser = freetracer_lib.ISOParser;
 
 const k = freetracer_lib.k;
 const c = freetracer_lib.c;
@@ -22,7 +23,8 @@ const ReturnCode = freetracer_lib.HelperReturnCode;
 const SerializedData = freetracer_lib.SerializedData;
 const WriteRequestData = freetracer_lib.WriteRequestData;
 
-pub const WRITE_BLOCK_SIZE = 4096;
+const WRITE_BLOCK_SIZE = 4096;
+const MAX_PATH_BYTES = 4096;
 
 const TERMINATION_CAUSE = enum(u8) {
     HELPER_SUCCESSFULLY_EXITED,
@@ -39,11 +41,14 @@ const TERMINATION_CAUSE = enum(u8) {
     REQUEST_DISK_UNMOUNT_FAILED_TO_OBTAIN_DISK_INFO_DICT_REF,
     REQUEST_DISK_UNMOUNT_UNMOUNT_REQUEST_ON_INTERNAL_DEVICE,
     REQUEST_DISK_UNMOUNT_FAILED_TO_OBTAIN_INTERNAL_DEVICE_KEY,
+
+    REQUEST_ISO_WRITE_ISO_INVALID,
 };
 
 const TerminationParams: type = struct {
     isError: bool = true,
     cause: TERMINATION_CAUSE,
+    err: anyerror = undefined,
 };
 
 fn terminateHelperProcess(params: TerminationParams) void {
@@ -103,7 +108,7 @@ fn processRequestMessage(connection: XPCConnection, data: XPCObject) void {
         .INITIAL_PING => processInitialPing(connection),
         .GET_HELPER_VERSION => processGetHelperVersion(connection),
         .UNMOUNT_DISK => processRequestUnmount(connection, data),
-        .WRITE_ISO_TO_DEVICE => {},
+        .WRITE_ISO_TO_DEVICE => processRequestWriteISO(connection, data),
     }
 }
 
@@ -129,7 +134,33 @@ fn processRequestUnmount(connection: XPCConnection, data: XPCObject) void {
         return;
     }
 
-    const result = handleDiskUnmountRequest(disk);
+    const result = requestUnmountWithIORegistry(disk);
+
+    var response: XPCObject = undefined;
+
+    if (result != .SUCCESS) {
+        Debug.log(.ERROR, "Failed to unmount specified disk, error code: {any}", .{result});
+        response = XPCService.createResponse(.DISK_UNMOUNT_FAIL);
+        terminateHelperProcess(.{ .cause = .REQUEST_DISK_UNMOUNT_FAILED_TO_UNMOUNT_DISK });
+    } else {
+        response = XPCService.createResponse(.DISK_UNMOUNT_SUCCESS);
+    }
+
+    Debug.log(.INFO, "Finished executing unmount task, sending response ({any}) to the client.", .{result});
+
+    XPCService.connectionSendMessage(connection, response);
+}
+
+fn attemptDiskUnmount(connection: XPCConnection, data: XPCObject) bool {
+    const disk: []const u8 = XPCService.parseString(data, "disk");
+
+    if (!isDiskStringValid(disk)) {
+        Debug.log(.ERROR, "Received/parsed disk string is invalid: {s}. Aborting processing request...", .{disk});
+        terminateHelperProcess(.{ .cause = .REQUEST_DISK_UNMOUNT_DISK_STRING_INVALID });
+        return;
+    }
+
+    const result = requestUnmountWithIORegistry(disk);
 
     var response: XPCObject = undefined;
 
@@ -145,20 +176,34 @@ fn processRequestUnmount(connection: XPCConnection, data: XPCObject) void {
 
     XPCService.connectionSendMessage(connection, response);
 
-    terminateHelperProcess(.{ .isError = false, .cause = .HELPER_SUCCESSFULLY_EXITED });
+    if (result == .SUCCESS) return true else return false;
 }
 
 fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
-    _ = connection;
-    _ = data;
+    //
+    if (!attemptDiskUnmount(connection, data)) return;
+
+    const isoPath: []const u8 = XPCService.parseString(data, "isoPath");
+
+    const isoFile = openFileValidated(isoPath) catch |err| {
+        Debug.log(.ERROR, "Unable to safely open provided ISO file path: {s}, validation error: {any}", .{ isoPath, err });
+        const xpcErrorResponse = XPCService.createResponse(.ISO_FILE_INVALID);
+        defer XPCService.releaseObject(xpcErrorResponse);
+        XPCService.connectionSendMessage(connection, xpcErrorResponse);
+        terminateHelperProcess(.{ .err = err });
+    };
+
+    defer isoFile.close();
+
+    Debug.log(.INFO, "ISO File determined to be valid.", .{});
+    const xpcReply: XPCObject = XPCService.createResponse(.ISO_FILE_VALID);
+    defer XPCService.releaseObject(xpcReply);
+    XPCService.connectionSendMessage(connection, xpcReply);
 
     // TODO: validate and sanitize file input
     // canonicalize the path to resolve any symbolic links and ensure it does not
     // point to a sensitive system file (e.g., /etc/passwd, /dev/random).
 
-    // TODO:
-    // use the Disk Arbitration framework to acquire an exclusive lock on the physical disk before writing.
-    //
     // TODO:
     // To prevent the operating system from automatically remounting volumes while the raw write is in progress,
     // the helper should also register a DADissenter for the disk. This temporarily blocks mount attempts from other processes,
@@ -224,7 +269,7 @@ fn handleHelperVersionCheckRequest() [:0]const u8 {
     return env.HELPER_VERSION;
 }
 
-fn handleDiskUnmountRequest(targetDisk: []const u8) ReturnCode {
+fn requestUnmountWithIORegistry(targetDisk: []const u8) ReturnCode {
 
     // TODO: perform a check to ensure the device has a kIOMediaRemovableKey key
     // TODO: refactor code to smalelr functions
@@ -382,6 +427,103 @@ fn isVolumeAnEFIPartition() bool {
     return false;
 }
 
+fn isFilePathAllowed(pathString: []const u8) bool {
+    const realPathBuffer: [MAX_PATH_BYTES]u8 = std.mem.zeroes([MAX_PATH_BYTES]u8);
+
+    // TODO: add other allowed paths
+    const allowedPaths = [_][]const u8{
+        "~/Desktop/",
+        "~/Documents/",
+        "~/Downloads/",
+    };
+
+    for (0..allowedPaths) |allowedPath| {
+
+        // Buffer overflow protection
+        if (pathString.len > MAX_PATH_BYTES) {
+            Debug.log(.ERROR, "isFilePathAllowed: Provided ISO path is too long (over MAX_PATH_BYTES).", .{});
+            return false;
+        }
+
+        // Canonicalize the path string
+        const realAllowedPath = std.fs.realpath(allowedPath, &realPathBuffer) catch |err| {
+            Debug.log(.ERROR, "isFilePathAllowed: Unable to resolve the real path of the allowed path. Error: {any}", .{ pathString, err });
+            return error.UnableToResolveRealISOPath;
+        };
+
+        if (std.mem.startsWith(u8, pathString, realAllowedPath)) return true;
+    }
+
+    return false;
+}
+
+fn openFileValidated(unsanitizedIsoPath: []const u8) !std.fs.File {
+
+    // Buffer overflow protection
+    if (unsanitizedIsoPath.len > MAX_PATH_BYTES) {
+        Debug.log(.ERROR, "Provided ISO path is too long (over MAX_PATH_BYTES).", .{});
+        return error.ISOFilePathTooLong;
+    }
+
+    var realPathBuffer: [MAX_PATH_BYTES]u8 = std.mem.zeroes([MAX_PATH_BYTES]u8);
+
+    const isoPath = std.fs.realpath(unsanitizedIsoPath, &realPathBuffer) catch |err| {
+        Debug.log(.ERROR, "Unable to resolve the real path of the povided ISO path. Error: {any}", .{ unsanitizedIsoPath, err });
+        return error.UnableToResolveRealISOPath;
+    };
+
+    // Reset and reuse buffer
+    realPathBuffer = std.mem.zeroes([MAX_PATH_BYTES]u8);
+    const printableIsoPath = freetracer_lib.sanitizeString(realPathBuffer, isoPath);
+
+    if (isoPath.len < 8) {
+        Debug.log(.ERROR, "Provided ISO path is less than 8 characters long. Likely invalid, aborting for safety...", .{});
+        return error.ISOFilePathTooShort;
+    }
+
+    const directory = std.fs.path.dirname(isoPath) orelse ".";
+    const fileName = std.fs.path.basename(isoPath);
+
+    if (!isFilePathAllowed(directory)) {
+        Debug.log(.ERROR, "Provided ISO contains a disallowed path: {s}", .{printableIsoPath});
+        return error.ISOFileContainsRestrictedPaths;
+    }
+
+    const dir = std.fs.openDirAbsolute(directory, .{ .no_follow = true }) catch {};
+
+    const isoFile = dir.openFile(fileName, .{ .mode = .read_only, .lock = .exclusive }) catch |err| {
+        Debug.log(.ERROR, "Failed to open ISO file or obtain an exclusive lock. Error: {any}", .{err});
+        return error.UnableToOpenISOFileOrObtainExclusiveLock;
+    };
+
+    // const isoFile: std.fs.File = std.fs.openFileAbsolute(isoPath, .{ .mode = .read_only, .lock = .exclusive }) catch |err| {
+    //     Debug.log(.ERROR, "Failed to open ISO file or obtain an exclusive lock. Error: {any}", .{err});
+    //     return error.UnableToOpenISOFileOrObtainExclusiveLock;
+    // };
+
+    const fileStat = isoFile.stat() catch |err| {
+        Debug.log(.ERROR, "Failed to obtain ISO file stat. Error: {any}", .{err});
+        return error.UnableToObtainISOFileStat;
+    };
+
+    if (fileStat.kind != std.fs.File.Kind.file) {
+        Debug.log(.ERROR, "The provided ISO path is not a recognized file by file system. Symlinks and other types are not allowed. Kind used: {any}", .{fileStat.kind});
+        return error.InvalidISOFileKind;
+    }
+
+    // Minimum ISO system block: 16 sectors by 2048 bytes each + 1 sector for PVD contents.
+    if (fileStat.size < 17 * 2048) return error.InvalidISOSystemStructure;
+
+    const isoValidationResult = ISOParser.validateISOFileStructure(isoFile);
+
+    if (isoValidationResult != .ISO_VALID) {
+        Debug.log(.ERROR, "Invalid ISO file structure detected. Aborting... Error code: {any}", .{isoValidationResult});
+        return error.InvalidISOStructureDoesNotConformToISO9660;
+    }
+
+    return isoFile;
+}
+
 fn handleWriteISOToDeviceRequest(requestData: SerializedData) ReturnCode {
 
     // TODO: parse the ISO structure again, in case the isoPath was swapped/altered in an attack
@@ -422,7 +564,7 @@ fn writeISO(isoPath: []const u8, devicePath: []const u8) !void {
     Debug.log(.DEBUG, "Begin writing prep...", .{});
     var writeBuffer: [WRITE_BLOCK_SIZE]u8 = undefined;
 
-    const isoFile: std.fs.File = try std.fs.cwd().openFile(isoPath, .{ .mode = .read_only });
+    const isoFile: std.fs.File = try std.fs.openFileAbsolute(isoPath, .{ .mode = .read_only, .lock = .exclusive });
     defer isoFile.close();
 
     const device = try std.fs.openFileAbsolute(devicePath, .{ .mode = .read_write });

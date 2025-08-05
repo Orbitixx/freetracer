@@ -23,3 +23,21 @@ pub fn parseAfterDelimeter(comptime length: comptime_int, data: [length]u8, deli
 
     return stringArray;
 }
+
+pub fn sanitizeString(buf: []u8, input: []const u8) []const u8 {
+    var len: usize = 0;
+
+    for (input) |char| {
+        if (len >= buf.len - 1) break;
+        // Allow printable ASCII characters, replace others
+        if (char >= 32 and char <= 126) {
+            buf[len] = char;
+        } else {
+            buf[len] = '.';
+        }
+
+        len += 1;
+    }
+
+    return buf[0..len];
+}

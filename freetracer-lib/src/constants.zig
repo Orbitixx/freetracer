@@ -41,6 +41,11 @@ pub const HelperResponseCode = enum(i64) {
 
     DISK_UNMOUNT_SUCCESS,
     DISK_UNMOUNT_FAIL,
+
+    ISO_FILE_INVALID,
+    ISO_FILE_VALID,
+    ISO_WRITE_SUCCES,
+    ISO_WRITE_FAIL,
 };
 
 pub const HelperReturnCode = enum(i32) {

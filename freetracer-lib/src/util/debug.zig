@@ -123,6 +123,8 @@ pub const Logger = struct {
         } ++ args) catch |err| blk: {
             const msg = "\nlog(): ERROR occurred attempting to allocPrintZ msg: \n\t{s}\nError: {any}";
             std.debug.print(msg, .{ fmt, err });
+
+            // TODO: Huh? Is this OK here? Examine later.
             Debug.log(.ERROR, msg, .{ fmt, err });
             break :blk "";
         };

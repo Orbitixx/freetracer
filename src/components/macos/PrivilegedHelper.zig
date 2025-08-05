@@ -76,6 +76,12 @@ pub const Events = struct {
         struct { shouldHelperUpdate: bool },
         struct {},
     );
+
+    pub const onDiskUnmountConfirmed = ComponentFramework.defineEvent(
+        EventManager.createEventName(ComponentName, "on_disk_unmount_confirmed"),
+        struct {},
+        struct {},
+    );
 };
 
 pub fn init(allocator: std.mem.Allocator) !PrivilegedHelper {
@@ -200,6 +206,8 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
 
             self.requestUnmount(targetDisk);
         },
+
+        Events.onDiskUnmountConfirmed.Hash => {},
 
         Events.onWriteISOToDeviceRequest.Hash => {
             const data = Events.onWriteISOToDeviceRequest.getData(event) orelse break :eventLoop;
@@ -327,10 +335,12 @@ fn processResponseMessage(connection: XPCConnection, data: XPCObject) void {
 
         .DISK_UNMOUNT_SUCCESS => {
             Debug.log(.INFO, "Received a successful unmount response from the helper!", .{});
-            std.time.sleep(1_000_000_000);
+            EventManager.broadcast(Events.onDiskUnmountConfirmed.create(null, null));
         },
 
-        .DISK_UNMOUNT_FAIL => {},
+        .DISK_UNMOUNT_FAIL => {
+            Debug.log(.ERROR, "Helper communicated that it failed to unmount requested disk.", .{});
+        },
     }
 
     _ = connection;
@@ -369,7 +379,7 @@ fn requestUnmount(self: *PrivilegedHelper, targetDisk: [:0]const u8) void {
         return;
     }
 
-    const request = XPCService.createRequest(.UNMOUNT_DISK);
+    const request = XPCService.createRequest(.WRITE_ISO_TO_DEVICE);
     defer XPCService.releaseObject(request);
     XPCService.createString(request, "disk", targetDisk);
     XPCService.connectionSendMessage(self.xpcClient.service, request);

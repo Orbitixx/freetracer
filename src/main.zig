@@ -50,6 +50,19 @@ pub fn main() !void {
     try Debug.init(allocator, .{ .standaloneLogFilePath = env.MAIN_APP_LOGS_PATH });
     defer Debug.deinit();
 
+    // const file = try std.fs.openFileAbsolute("~/Documents/Projects/freetracer/alpine.iso", .{ .mode = .read_only, .lock = .exclusive });
+    // defer file.close();
+
+    // const stat = file.stat();
+    // var buf = std.mem.zeroes([std.fs.max_path_bytes]u8);
+    // var nameBuf = std.mem.zeroes([std.posix.HOST_NAME_MAX]u8);
+
+    const name = std.posix.getenv("HOME") orelse "BLAH BLAH";
+    // const path = try std.fs.realpath("~/Documents/Projects/freetracer/alpine.iso", &buf);
+    Debug.log(.INFO, "name is: {s}", .{name});
+
+    if (true) return;
+
     try WindowManager.init();
     defer WindowManager.deinit();
 
