@@ -1,7 +1,7 @@
 const std = @import("std");
-const Debug = @import("freetracer-lib").Debug;
-const endian = @import("../lib/util/endian.zig");
-const iso9660 = @import("../lib/data/iso9660.zig");
+const Debug = @import("util/debug.zig");
+const endian = @import("util/endian.zig");
+const iso9660 = @import("util/iso9660.zig");
 
 const assert = std.debug.assert;
 
@@ -83,7 +83,7 @@ pub fn validateISOFileStructure(file: std.fs.File) ISO_PARSER_RESULT {
 
     const fileStat: std.fs.Dir.Stat = file.stat() catch |err| {
         Debug.log(.ERROR, "Unable to ontain ISO file stat. Error: {any}", .{err});
-        return error.UNABLE_TO_OBTAIN_ISO_FILE_STAT;
+        return ISO_PARSER_RESULT.UNABLE_TO_OBTAIN_ISO_FILE_STAT;
     };
 
     const isoSectorCount: u64 = fileStat.size / ISO_SECTOR_SIZE;

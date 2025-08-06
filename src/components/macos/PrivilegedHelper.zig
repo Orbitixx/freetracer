@@ -193,21 +193,32 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
             self.state.lock();
             errdefer self.state.unlock();
 
-            if (self.state.data.targetDisk == null) {
-                Debug.log(.ERROR, "PrivilegedHelper Component's state value of targetDisk is NULL when it should not be. Aborting...", .{});
+            if (self.state.data.targetDisk == null or self.state.data.isoPath == null) {
+                Debug.log(.ERROR, "PrivilegedHelper Component's state value of targetDisk or isoPath is NULL when it should not be. Aborting...", .{});
                 break :eventLoop;
             }
 
             const targetDisk: [:0]const u8 = self.state.data.targetDisk.?;
+            const isoPath: [:0]const u8 = self.state.data.isoPath.?;
             Debug.log(.INFO, "targetDisk local set to the state value of: {s}", .{self.state.data.targetDisk.?});
             self.state.unlock();
 
             Debug.log(.INFO, "Sending target disk: {s}", .{targetDisk});
 
-            self.requestUnmount(targetDisk);
+            self.requestUnmount(targetDisk, isoPath);
+
+            eventResult.validate(.SUCCESS);
         },
 
-        Events.onDiskUnmountConfirmed.Hash => {},
+        Events.onDiskUnmountConfirmed.Hash => {
+            const request = XPCService.createRequest(.WRITE_ISO_TO_DEVICE);
+            defer XPCService.releaseObject(request);
+            self.state.lock();
+            defer self.state.unlock();
+            XPCService.createString(request, "isoPath", self.state.data.isoPath.?);
+            XPCService.connectionSendMessage(self.xpcClient.service, request);
+            eventResult.validate(.SUCCESS);
+        },
 
         Events.onWriteISOToDeviceRequest.Hash => {
             const data = Events.onWriteISOToDeviceRequest.getData(event) orelse break :eventLoop;
@@ -341,6 +352,11 @@ fn processResponseMessage(connection: XPCConnection, data: XPCObject) void {
         .DISK_UNMOUNT_FAIL => {
             Debug.log(.ERROR, "Helper communicated that it failed to unmount requested disk.", .{});
         },
+
+        .ISO_FILE_VALID => Debug.log(.INFO, "Helper reported that the ISO file provided is valid.", .{}),
+        .ISO_FILE_INVALID => Debug.log(.ERROR, "Helper reported that the ISO file is INVALID.", .{}),
+        .ISO_WRITE_SUCCESS => Debug.log(.INFO, "Helper reported that it has successfully written the ISO file to device.", .{}),
+        .ISO_WRITE_FAIL => Debug.log(.ERROR, "Helper reported that it failed to write the ISO file.", .{}),
     }
 
     _ = connection;
@@ -369,7 +385,7 @@ fn installHelperIfNotInstalled(self: *PrivilegedHelper) !void {
     } else Debug.log(.INFO, "Determined that Freetracer Helper Tool is already installed.", .{});
 }
 
-fn requestUnmount(self: *PrivilegedHelper, targetDisk: [:0]const u8) void {
+fn requestUnmount(self: *PrivilegedHelper, targetDisk: [:0]const u8, isoPath: [:0]const u8) void {
     // Install or update the Privileged Helper Tool before sending unmount request
 
     Debug.log(.DEBUG, "requestUnmount received targetDisk: {s}", .{targetDisk});
@@ -382,6 +398,7 @@ fn requestUnmount(self: *PrivilegedHelper, targetDisk: [:0]const u8) void {
     const request = XPCService.createRequest(.WRITE_ISO_TO_DEVICE);
     defer XPCService.releaseObject(request);
     XPCService.createString(request, "disk", targetDisk);
+    XPCService.createString(request, "isoPath", isoPath);
     XPCService.connectionSendMessage(self.xpcClient.service, request);
 
     // for (0..AppConfig.MACH_PORT_REMOTE_MAX_TEST_ATTEMPTS) |i| {

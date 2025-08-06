@@ -44,7 +44,7 @@ pub const HelperResponseCode = enum(i64) {
 
     ISO_FILE_INVALID,
     ISO_FILE_VALID,
-    ISO_WRITE_SUCCES,
+    ISO_WRITE_SUCCESS,
     ISO_WRITE_FAIL,
 };
 

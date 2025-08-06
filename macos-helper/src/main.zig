@@ -24,7 +24,7 @@ const SerializedData = freetracer_lib.SerializedData;
 const WriteRequestData = freetracer_lib.WriteRequestData;
 
 const WRITE_BLOCK_SIZE = 4096;
-const MAX_PATH_BYTES = 4096;
+const MAX_PATH_BYTES = std.fs.max_path_bytes;
 
 const TERMINATION_CAUSE = enum(u8) {
     HELPER_SUCCESSFULLY_EXITED,
@@ -47,29 +47,33 @@ const TERMINATION_CAUSE = enum(u8) {
 
 const TerminationParams: type = struct {
     isError: bool = true,
-    cause: TERMINATION_CAUSE,
-    err: anyerror = undefined,
+    cause: ?TERMINATION_CAUSE = null,
+    err: ?anyerror = null,
 };
 
 fn terminateHelperProcess(params: TerminationParams) void {
     if (params.isError) Debug.log(
         .ERROR,
-        "Helper terminated because of an error: {any}.",
-        .{params.cause},
+        "Helper terminated because of an error: {any} or {any}.",
+        .{ params.cause.?, params.err.? },
     ) else Debug.log(
         .INFO,
         "Helper terminated with code: {any}.",
-        .{params.cause},
+        .{params.cause.?},
     );
 
-    std.process.exit(@intFromEnum(params.cause));
+    std.process.exit(if (params.cause) |cause| @intFromEnum(cause) else 99);
 }
 
 /// C-convention callback; called anytime a message is received over the XPC connection.
 fn xpcRequestHandler(connection: XPCConnection, message: XPCObject) callconv(.c) void {
     Debug.log(.INFO, "Helper received a new message over XPC bridge. Attempting to authenticate requester...", .{});
 
-    const isConnectionAuthorized: bool = XPCService.authenticateMessage(message, @ptrCast(env.MAIN_APP_BUNDLE_ID), @ptrCast(env.MAIN_APP_TEAM_ID));
+    const isConnectionAuthorized: bool = XPCService.authenticateMessage(
+        message,
+        @ptrCast(env.MAIN_APP_BUNDLE_ID),
+        @ptrCast(env.MAIN_APP_TEAM_ID),
+    );
 
     if (!isConnectionAuthorized) {
         Debug.log(.ERROR, "XPC message failed authentication. Dropping request...", .{});
@@ -107,7 +111,7 @@ fn processRequestMessage(connection: XPCConnection, data: XPCObject) void {
     switch (request) {
         .INITIAL_PING => processInitialPing(connection),
         .GET_HELPER_VERSION => processGetHelperVersion(connection),
-        .UNMOUNT_DISK => processRequestUnmount(connection, data),
+        .UNMOUNT_DISK => Debug.log(.INFO, "Discrete unmount request received -- dropping request. Deprecated.", .{}),
         .WRITE_ISO_TO_DEVICE => processRequestWriteISO(connection, data),
     }
 }
@@ -157,7 +161,7 @@ fn attemptDiskUnmount(connection: XPCConnection, data: XPCObject) bool {
     if (!isDiskStringValid(disk)) {
         Debug.log(.ERROR, "Received/parsed disk string is invalid: {s}. Aborting processing request...", .{disk});
         terminateHelperProcess(.{ .cause = .REQUEST_DISK_UNMOUNT_DISK_STRING_INVALID });
-        return;
+        return false;
     }
 
     const result = requestUnmountWithIORegistry(disk);
@@ -191,6 +195,7 @@ fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
         defer XPCService.releaseObject(xpcErrorResponse);
         XPCService.connectionSendMessage(connection, xpcErrorResponse);
         terminateHelperProcess(.{ .err = err });
+        return;
     };
 
     defer isoFile.close();
@@ -521,15 +526,14 @@ fn openFileValidated(unsanitizedIsoPath: []const u8) !std.fs.File {
     }
 
     var realPathBuffer: [MAX_PATH_BYTES]u8 = std.mem.zeroes([MAX_PATH_BYTES]u8);
+    var sanitizeStringBuffer: [MAX_PATH_BYTES]u8 = std.mem.zeroes([MAX_PATH_BYTES]u8);
 
     const isoPath = std.fs.realpath(unsanitizedIsoPath, &realPathBuffer) catch |err| {
-        Debug.log(.ERROR, "Unable to resolve the real path of the povided ISO path. Error: {any}", .{ unsanitizedIsoPath, err });
+        Debug.log(.ERROR, "Unable to resolve the real path of the povided ISO path: {s}. Error: {any}", .{ String.sanitizeString(&sanitizeStringBuffer, unsanitizedIsoPath), err });
         return error.UnableToResolveRealISOPath;
     };
 
-    // Reset and reuse buffer
-    realPathBuffer = std.mem.zeroes([MAX_PATH_BYTES]u8);
-    const printableIsoPath = freetracer_lib.sanitizeString(realPathBuffer, isoPath);
+    const printableIsoPath = String.sanitizeString(&sanitizeStringBuffer, isoPath);
 
     if (isoPath.len < 8) {
         Debug.log(.ERROR, "Provided ISO path is less than 8 characters long. Likely invalid, aborting for safety...", .{});
@@ -544,7 +548,10 @@ fn openFileValidated(unsanitizedIsoPath: []const u8) !std.fs.File {
         return error.ISOFileContainsRestrictedPaths;
     }
 
-    const dir = std.fs.openDirAbsolute(directory, .{ .no_follow = true }) catch {};
+    const dir = std.fs.openDirAbsolute(directory, .{ .no_follow = true }) catch |err| {
+        Debug.log(.ERROR, "Unable to open the directory of specified ISO file. Aborting... Error: {any}", .{err});
+        return error.UnableToOpenDirectoryOfSpecificedISOFile;
+    };
 
     const isoFile = dir.openFile(fileName, .{ .mode = .read_only, .lock = .exclusive }) catch |err| {
         Debug.log(.ERROR, "Failed to open ISO file or obtain an exclusive lock. Error: {any}", .{err});
@@ -567,7 +574,7 @@ fn openFileValidated(unsanitizedIsoPath: []const u8) !std.fs.File {
     }
 
     // Minimum ISO system block: 16 sectors by 2048 bytes each + 1 sector for PVD contents.
-    if (fileStat.size < 17 * 2048) return error.InvalidISOSystemStructure;
+    if (fileStat.size < 16 * 2048 + 1) return error.InvalidISOSystemStructure;
 
     const isoValidationResult = ISOParser.validateISOFileStructure(isoFile);
 
