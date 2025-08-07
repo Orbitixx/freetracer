@@ -21,6 +21,8 @@ pub const c = if (isMac) @cImport({
     @cInclude("Security/SecBase.h");
     @cInclude("Security/SecCode.h");
     @cInclude("Security/Security.h");
+    // --- For getpwuid()
+    @cInclude("pwd.h");
     // @cInclude("bootstrap.h");
     // @cInclude("mach/mach.h");
 }) else if (isLinux) @cImport({

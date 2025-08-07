@@ -216,6 +216,7 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
             self.state.lock();
             defer self.state.unlock();
             XPCService.createString(request, "isoPath", self.state.data.isoPath.?);
+            XPCService.createString(request, "targetDisk", self.state.data.targetDisk.?);
             XPCService.connectionSendMessage(self.xpcClient.service, request);
             eventResult.validate(.SUCCESS);
         },
@@ -355,6 +356,10 @@ fn processResponseMessage(connection: XPCConnection, data: XPCObject) void {
 
         .ISO_FILE_VALID => Debug.log(.INFO, "Helper reported that the ISO file provided is valid.", .{}),
         .ISO_FILE_INVALID => Debug.log(.ERROR, "Helper reported that the ISO file is INVALID.", .{}),
+        .ISO_WRITE_PROGRESS => {
+            const progress = XPCService.getInt64(data, "write_progress");
+            Debug.log(.INFO, "Write progress is: {d}", .{progress});
+        },
         .ISO_WRITE_SUCCESS => Debug.log(.INFO, "Helper reported that it has successfully written the ISO file to device.", .{}),
         .ISO_WRITE_FAIL => Debug.log(.ERROR, "Helper reported that it failed to write the ISO file.", .{}),
     }

@@ -45,6 +45,18 @@ const TERMINATION_CAUSE = enum(u8) {
     REQUEST_ISO_WRITE_ISO_INVALID,
 };
 
+comptime {
+    @export(
+        @as([*:0]const u8, @ptrCast(env.INFO_PLIST)),
+        .{ .name = "__info_plist", .section = "__TEXT,__info_plist", .visibility = .default, .linkage = .strong },
+    );
+
+    @export(
+        @as([*:0]const u8, @ptrCast(env.LAUNCHD_PLIST)),
+        .{ .name = "__launchd_plist", .section = "__TEXT,__launchd_plist", .visibility = .default, .linkage = .strong },
+    );
+}
+
 const TerminationParams: type = struct {
     isError: bool = true,
     cause: ?TERMINATION_CAUSE = null,
@@ -129,31 +141,31 @@ fn processGetHelperVersion(connection: XPCConnection) void {
     XPCService.connectionSendMessage(connection, reply);
 }
 
-fn processRequestUnmount(connection: XPCConnection, data: XPCObject) void {
-    const disk: []const u8 = XPCService.parseString(data, "disk");
-
-    if (!isDiskStringValid(disk)) {
-        Debug.log(.ERROR, "Received/parsed disk string is invalid: {s}. Aborting processing request...", .{disk});
-        terminateHelperProcess(.{ .cause = .REQUEST_DISK_UNMOUNT_DISK_STRING_INVALID });
-        return;
-    }
-
-    const result = requestUnmountWithIORegistry(disk);
-
-    var response: XPCObject = undefined;
-
-    if (result != .SUCCESS) {
-        Debug.log(.ERROR, "Failed to unmount specified disk, error code: {any}", .{result});
-        response = XPCService.createResponse(.DISK_UNMOUNT_FAIL);
-        terminateHelperProcess(.{ .cause = .REQUEST_DISK_UNMOUNT_FAILED_TO_UNMOUNT_DISK });
-    } else {
-        response = XPCService.createResponse(.DISK_UNMOUNT_SUCCESS);
-    }
-
-    Debug.log(.INFO, "Finished executing unmount task, sending response ({any}) to the client.", .{result});
-
-    XPCService.connectionSendMessage(connection, response);
-}
+// fn processRequestUnmount(connection: XPCConnection, data: XPCObject) void {
+//     const disk: []const u8 = XPCService.parseString(data, "disk");
+//
+//     if (!isDiskStringValid(disk)) {
+//         Debug.log(.ERROR, "Received/parsed disk string is invalid: {s}. Aborting processing request...", .{disk});
+//         terminateHelperProcess(.{ .cause = .REQUEST_DISK_UNMOUNT_DISK_STRING_INVALID });
+//         return;
+//     }
+//
+//     const result = requestUnmountWithIORegistry(disk);
+//
+//     var response: XPCObject = undefined;
+//
+//     if (result != .SUCCESS) {
+//         Debug.log(.ERROR, "Failed to unmount specified disk, error code: {any}", .{result});
+//         response = XPCService.createResponse(.DISK_UNMOUNT_FAIL);
+//         terminateHelperProcess(.{ .cause = .REQUEST_DISK_UNMOUNT_FAILED_TO_UNMOUNT_DISK });
+//     } else {
+//         response = XPCService.createResponse(.DISK_UNMOUNT_SUCCESS);
+//     }
+//
+//     Debug.log(.INFO, "Finished executing unmount task, sending response ({any}) to the client.", .{result});
+//
+//     XPCService.connectionSendMessage(connection, response);
+// }
 
 fn attemptDiskUnmount(connection: XPCConnection, data: XPCObject) bool {
     const disk: []const u8 = XPCService.parseString(data, "disk");
@@ -188,8 +200,18 @@ fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
     if (!attemptDiskUnmount(connection, data)) return;
 
     const isoPath: []const u8 = XPCService.parseString(data, "isoPath");
+    const deviceBsdName: []const u8 = XPCService.parseString(data, "disk");
 
-    const isoFile = openFileValidated(isoPath) catch |err| {
+    const userHomePath: []const u8 = XPCService.getUserHomePath(connection) catch |err| {
+        Debug.log(.ERROR, "Unable to retrieve user home path. Error: {any}", .{err});
+        const xpcErrorResponse = XPCService.createResponse(.ISO_WRITE_FAIL);
+        defer XPCService.releaseObject(xpcErrorResponse);
+        XPCService.connectionSendMessage(connection, xpcErrorResponse);
+        terminateHelperProcess(.{ .err = err });
+        return;
+    };
+
+    const isoFile = openFileValidated(isoPath, .{ .userHomePath = userHomePath }) catch |err| {
         Debug.log(.ERROR, "Unable to safely open provided ISO file path: {s}, validation error: {any}", .{ isoPath, err });
         const xpcErrorResponse = XPCService.createResponse(.ISO_FILE_INVALID);
         defer XPCService.releaseObject(xpcErrorResponse);
@@ -200,10 +222,30 @@ fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
 
     defer isoFile.close();
 
-    Debug.log(.INFO, "ISO File determined to be valid.", .{});
+    Debug.log(.INFO, "ISO File is determined to be valid.", .{});
     const xpcReply: XPCObject = XPCService.createResponse(.ISO_FILE_VALID);
     defer XPCService.releaseObject(xpcReply);
     XPCService.connectionSendMessage(connection, xpcReply);
+
+    var diskPathBuffer: [std.fs.max_name_bytes]u8 = std.mem.zeroes([std.fs.max_name_bytes]u8);
+    const diskPathPrefix = "/dev/";
+
+    if (diskPathPrefix.len + deviceBsdName.len > std.fs.max_name_bytes) {
+        Debug.log(.ERROR, "Device path + name is too long. Path: `{s}{s}`. Aborting...", .{ diskPathPrefix, deviceBsdName });
+        return;
+    }
+
+    @memcpy(diskPathBuffer[0..diskPathPrefix.len], diskPathPrefix);
+    @memcpy(diskPathBuffer[diskPathPrefix.len .. diskPathPrefix.len + deviceBsdName.len], deviceBsdName);
+
+    writeISO(connection, isoFile, std.mem.sliceTo(&diskPathBuffer, Character.NULL)) catch |err| {
+        Debug.log(.ERROR, "Unable to safely open provided ISO file path: {s}, validation error: {any}", .{ isoPath, err });
+        const xpcErrorResponse = XPCService.createResponse(.ISO_FILE_INVALID);
+        defer XPCService.releaseObject(xpcErrorResponse);
+        XPCService.connectionSendMessage(connection, xpcErrorResponse);
+        terminateHelperProcess(.{ .err = err });
+        return;
+    };
 
     // TODO: validate and sanitize file input
     // canonicalize the path to resolve any symbolic links and ensure it does not
@@ -394,51 +436,8 @@ fn isTargetDiskInternalDevice(diskDictionaryRef: c.CFDictionaryRef) bool {
     return isDeviceInternal;
 }
 
-fn isVolumeAnEFIPartition() bool {
-    // NOTE: Not valuable to run an EFI check against a whole device, instead of a leaf.
-    // Useful of the unmount is processed separately for each leaf volume.
-    //
-    // Debug.log(.DEBUG, "Running a check for an EFI partition...", .{});
-    //
-    // // --- @PROP: Check for EFI parition ---------------------------------------------------
-    // // Do not release efiKey, release causes segmentation fault
-    // const efiKeyRef: c.CFStringRef = @ptrCast(@alignCast(c.CFDictionaryGetValue(diskInfo, c.kDADiskDescriptionVolumeNameKey)));
-    //
-    // if (efiKeyRef == null) return ReturnCode.FAILED_TO_OBTAIN_EFI_KEY_STRING;
-    //
-    // std.log.info("\nEfi Key String: {any}", .{efiKeyRef});
-    //
-    // Debug.log(.DEBUG, "First intermediate EFI check log", .{});
-    //
-    // var efiKeyBuf: [255]u8 = std.mem.zeroes([255]u8);
-    // const efiKeyResult: c.Boolean = c.CFStringGetCString(efiKeyRef, &efiKeyBuf, efiKeyBuf.len, c.kCFStringEncodingUTF8);
-    //
-    // if (efiKeyResult == 0 or efiKeyRef == null or c.CFGetTypeID(efiKeyRef) != c.CFStringGetTypeID()) {
-    //     return ReturnCode.FAILED_TO_OBTAIN_EFI_KEY_STRING;
-    // }
-    //
-    // Debug.log(.DEBUG, "Second intermediate EFI check log", .{});
-    //
-    // const isEfi = std.mem.count(u8, &efiKeyBuf, "EFI") > 0;
-    // // --- @ENDPROP: EFI
-    //
-    // Debug.log(.INFO, "Finished checking for an EFI partition... Checking if the device is an internal device...", .{});
-
-    // if (isEfi) {
-    //     std.log.warn("Skipping unmount because of a potential EFI partition on disk: {s}.", .{bsdName});
-    //     return ReturnCode.SKIPPED_UNMOUNT_ATTEMPT_ON_EFI_PARTITION;
-    // }
-    //
-    return false;
-}
-
-fn isFilePathAllowed(pathString: []const u8) bool {
+fn isFilePathAllowed(userHomePath: []const u8, pathString: []const u8) bool {
     var realPathBuffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
-
-    const userDir = std.posix.getenv("HOME") orelse {
-        Debug.log(.ERROR, "Posix call to retrieve `HOME` environment variable returned NULL.", .{});
-        return false;
-    };
 
     // TODO: add other allowed paths
     const allowedPathsRelative = [_][]u8{
@@ -450,8 +449,8 @@ fn isFilePathAllowed(pathString: []const u8) bool {
     var allowedPaths = std.mem.zeroes([allowedPathsRelative.len][std.fs.max_path_bytes]u8);
 
     for (allowedPathsRelative, 0..allowedPathsRelative.len) |pathRel, i| {
-        @memcpy(allowedPaths[i][0..userDir.len], userDir);
-        @memcpy(allowedPaths[i][userDir.len .. userDir.len + pathRel.len], pathRel);
+        @memcpy(allowedPaths[i][0..userHomePath.len], userHomePath);
+        @memcpy(allowedPaths[i][userHomePath.len .. userHomePath.len + pathRel.len], pathRel);
     }
 
     for (allowedPaths) |allowedPath| {
@@ -483,47 +482,15 @@ fn unwrapUserHomePath(buffer: *[std.fs.max_path_bytes]u8, restOfPath: []const u8
     return buffer[0 .. userDir.len + restOfPath.len];
 }
 
-test "unwrapping user home path generates a correct path" {
-    var buffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
-    const expectedOutput = std.posix.getenv("HOME");
-    try std.testing.expect(expectedOutput != null);
-
-    const result: [:0]const u8 = @ptrCast(try unwrapUserHomePath(&buffer, ""));
-    try std.testing.expect(std.mem.eql(u8, expectedOutput.?, result));
-}
-
-test "selecting an ISO in Documents folder is allowed" {
-    var buffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
-    const path = try unwrapUserHomePath(&buffer, "/Documents/Projects/freetracer/alpine.iso");
-    try std.testing.expect(isFilePathAllowed(path) == true);
-}
-
-test "selecting an file in other directories is disallowed" {
-    var buffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
-
-    const path1: []const u8 = "/etc/sudoers";
-    try std.testing.expect(isFilePathAllowed(path1) == false);
-
-    const path2: []const u8 = "/dev/zero";
-    try std.testing.expect(isFilePathAllowed(path2) == false);
-
-    const path3: []const u8 = "/Library/LaunchDaemons/";
-    try std.testing.expect(isFilePathAllowed(path3) == false);
-
-    const path4: []const u8 = try unwrapUserHomePath(&buffer, "/Applications/");
-    try std.testing.expect(isFilePathAllowed(path4) == false);
-
-    const path5: []const u8 = try unwrapUserHomePath(&buffer, "/Notes/");
-    try std.testing.expect(isFilePathAllowed(path5) == false);
-}
-
-fn openFileValidated(unsanitizedIsoPath: []const u8) !std.fs.File {
+fn openFileValidated(unsanitizedIsoPath: []const u8, params: struct { userHomePath: []const u8 }) !std.fs.File {
 
     // Buffer overflow protection
     if (unsanitizedIsoPath.len > MAX_PATH_BYTES) {
         Debug.log(.ERROR, "Provided ISO path is too long (over MAX_PATH_BYTES).", .{});
         return error.ISOFilePathTooLong;
     }
+
+    if (params.userHomePath.len < 3) return error.UserHomePathTooShort;
 
     var realPathBuffer: [MAX_PATH_BYTES]u8 = std.mem.zeroes([MAX_PATH_BYTES]u8);
     var sanitizeStringBuffer: [MAX_PATH_BYTES]u8 = std.mem.zeroes([MAX_PATH_BYTES]u8);
@@ -543,7 +510,7 @@ fn openFileValidated(unsanitizedIsoPath: []const u8) !std.fs.File {
     const directory = std.fs.path.dirname(isoPath) orelse ".";
     const fileName = std.fs.path.basename(isoPath);
 
-    if (!isFilePathAllowed(directory)) {
+    if (!isFilePathAllowed(params.userHomePath, directory)) {
         Debug.log(.ERROR, "Provided ISO contains a disallowed path: {s}", .{printableIsoPath});
         return error.ISOFileContainsRestrictedPaths;
     }
@@ -557,11 +524,6 @@ fn openFileValidated(unsanitizedIsoPath: []const u8) !std.fs.File {
         Debug.log(.ERROR, "Failed to open ISO file or obtain an exclusive lock. Error: {any}", .{err});
         return error.UnableToOpenISOFileOrObtainExclusiveLock;
     };
-
-    // const isoFile: std.fs.File = std.fs.openFileAbsolute(isoPath, .{ .mode = .read_only, .lock = .exclusive }) catch |err| {
-    //     Debug.log(.ERROR, "Failed to open ISO file or obtain an exclusive lock. Error: {any}", .{err});
-    //     return error.UnableToOpenISOFileOrObtainExclusiveLock;
-    // };
 
     const fileStat = isoFile.stat() catch |err| {
         Debug.log(.ERROR, "Failed to obtain ISO file stat. Error: {any}", .{err});
@@ -622,13 +584,11 @@ fn handleWriteISOToDeviceRequest(requestData: SerializedData) ReturnCode {
     return ReturnCode.SUCCESS;
 }
 
-fn writeISO(isoPath: []const u8, devicePath: []const u8) !void {
+fn writeISO(connection: XPCConnection, isoFile: std.fs.File, devicePath: []const u8) !void {
     Debug.log(.DEBUG, "Begin writing prep...", .{});
     var writeBuffer: [WRITE_BLOCK_SIZE]u8 = undefined;
 
-    const isoFile: std.fs.File = try std.fs.openFileAbsolute(isoPath, .{ .mode = .read_only, .lock = .exclusive });
-    defer isoFile.close();
-
+    // TODO: redo this with verification of block device (?) and canonicalize path
     const device = try std.fs.openFileAbsolute(devicePath, .{ .mode = .read_write });
     defer device.close();
 
@@ -638,12 +598,15 @@ fn writeISO(isoPath: []const u8, devicePath: []const u8) !void {
     defer Debug.log(.INFO, "Write finished executing...", .{});
 
     var currentByte: u64 = 0;
+    var previousProgress: i64 = 0;
+    var currentProgress: i64 = 0;
 
     Debug.log(.INFO, "File and device are opened successfully! File size: {d}", .{ISO_SIZE});
-
     Debug.log(.INFO, "Writing ISO to device, please wait...", .{});
 
     while (currentByte < ISO_SIZE) {
+        previousProgress = currentProgress;
+
         try isoFile.seekTo(currentByte);
         const bytesRead = try isoFile.read(&writeBuffer);
 
@@ -663,6 +626,17 @@ fn writeISO(isoPath: []const u8, devicePath: []const u8) !void {
         }
 
         currentByte += WRITE_BLOCK_SIZE;
+        currentProgress = @as(i64, @intCast((currentByte * 100) / ISO_SIZE));
+
+        // Only send an XPC message if the progress moved at least 1%
+        if (currentProgress - previousProgress < 1) continue;
+
+        Debug.log(.INFO, "Sending progress update to client... Progress: {d}", .{currentProgress});
+
+        const progressUpdate = XPCService.createResponse(.ISO_WRITE_PROGRESS);
+        defer XPCService.releaseObject(progressUpdate);
+        XPCService.createInt64(progressUpdate, "write_progress", currentProgress);
+        XPCService.connectionSendMessage(connection, progressUpdate);
     }
 
     try device.sync();
@@ -670,57 +644,57 @@ fn writeISO(isoPath: []const u8, devicePath: []const u8) !void {
     Debug.log(.INFO, "Finished writing ISO image to device!", .{});
 }
 
-comptime {
-    @export(
-        @as([*:0]const u8, @ptrCast(env.INFO_PLIST)),
-        .{ .name = "__info_plist", .section = "__TEXT,__info_plist", .visibility = .default, .linkage = .strong },
-    );
-
-    @export(
-        @as([*:0]const u8, @ptrCast(env.LAUNCHD_PLIST)),
-        .{ .name = "__launchd_plist", .section = "__TEXT,__launchd_plist", .visibility = .default, .linkage = .strong },
-    );
-
-    // @export(
-    //     @as([*:0]const u8, @ptrCast(env.ENTITLEMENTS_PLIST)),
-    //     .{ .name = "__entitlements", .section = "__TEXT,__entitlements", .visibility = .default, .linkage = .strong },
-    // );
+test "handle helper version check request" {
+    const reportedVersion = handleHelperVersionCheckRequest();
+    try std.testing.expectEqualSlices(u8, reportedVersion, env.HELPER_VERSION);
 }
 
-// test "handle helper version check request" {
-//     const reportedVersion = handleHelperVersionCheckRequest();
-//     try testing.expectEqualSlices(u8, reportedVersion, env.HELPER_VERSION);
-// }
-//
-// test "process request message: version check" {
-//
-//     // Expected payload is null
-//     const requestData: SerializedData = try SerializedData.serialize(@TypeOf(null), null);
-//     const serializedResponse: SerializedData = try processRequestMessage(k.HelperVersionRequest, requestData);
-//
-//     const deserializedData: [k.MachPortPacketSize]u8 = try SerializedData.deserialize([k.MachPortPacketSize]u8, serializedResponse);
-//     const nullIndex = std.mem.indexOfScalar(u8, deserializedData[0..], Character.NULL);
-//
-//     try testing.expect(nullIndex != null);
-//     const version: [:0]const u8 = deserializedData[0..nullIndex.? :0];
-//     try testing.expectEqualSlices(u8, env.HELPER_VERSION, version);
-// }
-//
-// test "parsing iso + device paths parsing functions" {
-//     // const testPathsString: [:0]const u8 = @ptrCast("testIsoString.iso;/dev/testDevicePath");
-//     const testPathsString: [:0]const u8 = @ptrCast("/Users/freetracer/Downloads/debian_XX_aarch64.iso;/dev/disk4");
-//     const serializedTestString: SerializedData = try SerializedData.serialize([:0]const u8, testPathsString);
-//
-//     const isoPath: [k.MachPortPacketSize]u8 = String.parseUpToDelimeter(k.MachPortPacketSize, serializedTestString.data, Character.SEMICOLON);
-//     const devicePath: [k.MachPortPacketSize]u8 = String.parseAfterDelimeter(k.MachPortPacketSize, serializedTestString.data, Character.SEMICOLON, Character.NULL);
-//
-//     const expectedISOPath: []const u8 = "/Users/freetracer/Downloads/debian_XX_aarch64.iso";
-//     const expectedDevicePath: []const u8 = "/dev/disk4";
-//
-//     try testing.expectEqualSlices(u8, expectedISOPath, std.mem.sliceTo(&isoPath, Character.NULL));
-//     try testing.expectEqualSlices(u8, expectedDevicePath, std.mem.sliceTo(&devicePath, Character.NULL));
-// }
-//
-// test "process request message: write iso request" {
-//     // const requestData: SerializedData = try SerializedData.serialize([:0]const u8, @as([:0]const u8, @ptrCast("isoPathString;devicePathString;")));
-// }
+test "unwrapping user home path generates a correct path" {
+    var buffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
+    const expectedOutput = std.posix.getenv("HOME");
+    try std.testing.expect(expectedOutput != null);
+
+    const result: [:0]const u8 = @ptrCast(try unwrapUserHomePath(&buffer, ""));
+    try std.testing.expect(std.mem.eql(u8, expectedOutput.?, result));
+}
+
+test "selecting an ISO in Documents folder is allowed" {
+    var buffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
+    const userHomePath = std.posix.getenv("HOME") orelse return error.UserHomePathIsNULL;
+    const path = try unwrapUserHomePath(&buffer, env.TEST_ISO_FILE_PATH);
+    try std.testing.expect(isFilePathAllowed(userHomePath, path) == true);
+}
+
+test "selecting an file in other directories is disallowed" {
+    var buffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
+
+    const userHomePath = std.posix.getenv("HOME") orelse return error.UserHomePathIsNULL;
+
+    const path1: []const u8 = "/etc/sudoers";
+    try std.testing.expect(isFilePathAllowed(userHomePath, path1) == false);
+
+    const path2: []const u8 = "/dev/zero";
+    try std.testing.expect(isFilePathAllowed(userHomePath, path2) == false);
+
+    const path3: []const u8 = "/Library/LaunchDaemons/";
+    try std.testing.expect(isFilePathAllowed(userHomePath, path3) == false);
+
+    const path4: []const u8 = try unwrapUserHomePath(&buffer, "/Applications/");
+    try std.testing.expect(isFilePathAllowed(userHomePath, path4) == false);
+
+    const path5: []const u8 = try unwrapUserHomePath(&buffer, "/Notes/");
+    try std.testing.expect(isFilePathAllowed(userHomePath, path5) == false);
+}
+
+test "calling openFileValidated returns a valid file handle" {
+    const isoFile = try openFileValidated(
+        // Simulated; during runtime, provided by the XPC client.
+        env.USER_HOME_PATH ++ env.TEST_ISO_FILE_PATH,
+        // Simulated; during runtime, provided securily by XPCService.getUserHomePath()
+        .{ .userHomePath = std.posix.getenv("HOME") orelse return error.UserHomePathIsNULL },
+    );
+
+    defer isoFile.close();
+
+    try std.testing.expect(@TypeOf(isoFile) == std.fs.File);
+}

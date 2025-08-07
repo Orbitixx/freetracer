@@ -107,6 +107,18 @@ pub const XPCService = struct {
         xpc.xpc_connection_send_message(connection, dataDictionary);
     }
 
+    pub fn getUserHomePath(connection: XPCConnection) ![]const u8 {
+        const euid: c_uint = c.xpc_connection_get_euid(@ptrCast(connection));
+
+        if (euid == 0) return error.ClientApplicationIsRunningAsRootIsDisallowedBySecurityPolicy;
+
+        const userEntry = c.getpwuid(euid);
+
+        if (userEntry == null) return error.UnableToMapUserToEUID;
+
+        return std.mem.span(userEntry.*.pw_dir);
+    }
+
     pub fn authenticateMessage(message: XPCObject, authenticClientBundleId: [:0]const u8, authenticClientTeamId: [:0]const u8) bool {
         var secCodeRef: c.SecCodeRef = null;
 
@@ -180,6 +192,14 @@ pub const XPCService = struct {
 
     pub fn parseString(dict: XPCObject, key: []const u8) []const u8 {
         return std.mem.span(xpc.xpc_dictionary_get_string(dict, @ptrCast(key)));
+    }
+
+    pub fn createInt64(dict: XPCObject, key: []const u8, value: i64) void {
+        xpc.xpc_dictionary_set_int64(dict, @ptrCast(key), value);
+    }
+
+    pub fn getInt64(dict: XPCObject, key: []const u8) i64 {
+        return xpc.xpc_dictionary_get_int64(dict, @ptrCast(key));
     }
 
     pub fn releaseObject(obj: XPCObject) void {

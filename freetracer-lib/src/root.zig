@@ -7,8 +7,8 @@ const constants = @import("./constants.zig");
 const debug = @import("./util/debug.zig");
 const types = @import("./types.zig");
 const mach = @import("./macos/mach.zig");
-const time = @import("util/time.zig");
-const string = @import("util/string.zig");
+const time = @import("./util/time.zig");
+const string = @import("./util/string.zig");
 
 // Expose namespaces to be consumed by users
 pub usingnamespace types;
@@ -23,4 +23,4 @@ pub const Debug = debug;
 pub const String = string;
 
 pub const xpc = c_xpc;
-pub const ISOParser = @import("ISOParser.zig");
+pub const ISOParser = @import("./ISOParser.zig");
