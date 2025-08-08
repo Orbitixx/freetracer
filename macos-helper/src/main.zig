@@ -201,6 +201,7 @@ fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
 
     const isoPath: []const u8 = XPCService.parseString(data, "isoPath");
     const deviceBsdName: []const u8 = XPCService.parseString(data, "disk");
+    const deviceServiceId: u64 = XPCService.getUInt64(data, "deviceServiceId");
 
     const userHomePath: []const u8 = XPCService.getUserHomePath(connection) catch |err| {
         Debug.log(.ERROR, "Unable to retrieve user home path. Error: {any}", .{err});
@@ -227,18 +228,15 @@ fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
     defer XPCService.releaseObject(xpcReply);
     XPCService.connectionSendMessage(connection, xpcReply);
 
-    var diskPathBuffer: [std.fs.max_name_bytes]u8 = std.mem.zeroes([std.fs.max_name_bytes]u8);
-    const diskPathPrefix = "/dev/";
-
-    if (diskPathPrefix.len + deviceBsdName.len > std.fs.max_name_bytes) {
-        Debug.log(.ERROR, "Device path + name is too long. Path: `{s}{s}`. Aborting...", .{ diskPathPrefix, deviceBsdName });
+    // var diskPathBuffer: [std.fs.max_name_bytes]u8 = std.mem.zeroes([std.fs.max_name_bytes]u8);
+    // const diskPathPrefix = "/dev/";
+    //
+    if (deviceBsdName.len > std.fs.max_name_bytes or deviceBsdName.len < 2) {
+        Debug.log(.ERROR, "Device name is too long or too short: {s}", .{deviceBsdName});
         return;
     }
 
-    @memcpy(diskPathBuffer[0..diskPathPrefix.len], diskPathPrefix);
-    @memcpy(diskPathBuffer[diskPathPrefix.len .. diskPathPrefix.len + deviceBsdName.len], deviceBsdName);
-
-    writeISO(connection, isoFile, std.mem.sliceTo(&diskPathBuffer, Character.NULL)) catch |err| {
+    writeISO(connection, isoFile, deviceBsdName, deviceServiceId) catch |err| {
         Debug.log(.ERROR, "Unable to safely open provided ISO file path: {s}, validation error: {any}", .{ isoPath, err });
         const xpcErrorResponse = XPCService.createResponse(.ISO_FILE_INVALID);
         defer XPCService.releaseObject(xpcErrorResponse);
@@ -548,48 +546,28 @@ fn openFileValidated(unsanitizedIsoPath: []const u8, params: struct { userHomePa
     return isoFile;
 }
 
-fn handleWriteISOToDeviceRequest(requestData: SerializedData) ReturnCode {
+fn openDeviceValidated(bsdName: []const u8, serviceId: u64) !std.fs.File {
+    if (bsdName.len < 2) return error.DeviceNameTooShort;
 
-    // TODO: parse the ISO structure again, in case the isoPath was swapped/altered in an attack
-    //
-    const data: [k.MachPortPacketSize]u8 = SerializedData.deserialize([k.MachPortPacketSize]u8, requestData) catch |err| {
-        Debug.log(.ERROR, "Unable to deserialize WriteRequestData. Error: {any}", .{err});
-        return ReturnCode.FAILED_TO_WRITE_ISO_TO_DEVICE;
-    };
+    _ = serviceId;
 
-    Debug.log(.INFO, "Received data: {s}", .{requestData.data});
+    const deviceDir = "/dev/";
+    const directory = try std.fs.openDirAbsolute(deviceDir, .{ .no_follow = true });
+    const device = try directory.openFile(bsdName, .{ .mode = .read_write, .lock = .exclusive });
 
-    // Splitting "isoPathString;devicePathString" apart
-    const isoPath: [k.MachPortPacketSize]u8 = String.parseUpToDelimeter(
-        k.MachPortPacketSize,
-        data,
-        Character.SEMICOLON,
-    );
+    const stat = try device.stat();
 
-    const devicePath: [k.MachPortPacketSize]u8 = String.parseAfterDelimeter(
-        k.MachPortPacketSize,
-        data,
-        Character.SEMICOLON,
-        Character.NULL,
-    );
+    if (stat.kind != std.fs.File.Kind.block_device) return error.FileIsNotABlockDevice;
 
-    Debug.log(.INFO, "handleWriteISOToDeviceRequest(): \n\tisoPath: {s}\n\tdevicePath: {s}", .{ isoPath, devicePath });
-
-    // TODO: launch on its own thread, such that the main thread may respond to status requests
-    writeISO(std.mem.sliceTo(&isoPath, Character.NULL), std.mem.sliceTo(&devicePath, Character.NULL)) catch |err| {
-        Debug.log(.ERROR, "Unable to write to device. Error: {any}", .{err});
-        return ReturnCode.FAILED_TO_WRITE_ISO_TO_DEVICE;
-    };
-
-    return ReturnCode.SUCCESS;
+    return device;
 }
 
-fn writeISO(connection: XPCConnection, isoFile: std.fs.File, devicePath: []const u8) !void {
+fn writeISO(connection: XPCConnection, isoFile: std.fs.File, targetDisk: []const u8, serviceId: u64) !void {
     Debug.log(.DEBUG, "Begin writing prep...", .{});
     var writeBuffer: [WRITE_BLOCK_SIZE]u8 = undefined;
 
     // TODO: redo this with verification of block device (?) and canonicalize path
-    const device = try std.fs.openFileAbsolute(devicePath, .{ .mode = .read_write });
+    const device = try openDeviceValidated(targetDisk, serviceId);
     defer device.close();
 
     const fileStat = try isoFile.stat();
@@ -631,7 +609,7 @@ fn writeISO(connection: XPCConnection, isoFile: std.fs.File, devicePath: []const
         // Only send an XPC message if the progress moved at least 1%
         if (currentProgress - previousProgress < 1) continue;
 
-        Debug.log(.INFO, "Sending progress update to client... Progress: {d}", .{currentProgress});
+        // Debug.log(.INFO, "Sending progress update to client... Progress: {d}", .{currentProgress});
 
         const progressUpdate = XPCService.createResponse(.ISO_WRITE_PROGRESS);
         defer XPCService.releaseObject(progressUpdate);

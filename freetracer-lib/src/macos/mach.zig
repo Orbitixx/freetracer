@@ -202,6 +202,14 @@ pub const XPCService = struct {
         return xpc.xpc_dictionary_get_int64(dict, @ptrCast(key));
     }
 
+    pub fn createUInt64(dict: XPCObject, key: []const u8, value: u64) void {
+        xpc.xpc_dictionary_set_uint64(dict, @ptrCast(key), value);
+    }
+
+    pub fn getUInt64(dict: XPCObject, key: []const u8) u64 {
+        return xpc.xpc_dictionary_get_uint64(dict, @ptrCast(key));
+    }
+
     pub fn releaseObject(obj: XPCObject) void {
         xpc.xpc_release(obj);
     }

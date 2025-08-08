@@ -204,10 +204,11 @@ pub fn dispatchComponentAction(self: *DataFlasher) void {
     }
 
     // Send a request to unmount the target disk to the PrivilegedHelper Component, which will communicate with the Helper Tool
-    const unmountResult = EventManager.signal(
+    const flashResult = EventManager.signal(
         "privileged_helper",
         PrivilegedHelper.Events.onWriteISOToDeviceRequest.create(self.asComponentPtr(), &.{
             .targetDisk = device.getBsdNameSlice(),
+            .device = device,
             .isoPath = isoPath,
         }),
     ) catch |err| errBlk: {
@@ -215,34 +216,7 @@ pub fn dispatchComponentAction(self: *DataFlasher) void {
         break :errBlk EventResult{ .success = false, .validation = .FAILURE };
     };
 
-    if (!unmountResult.success) return;
-
-    // const isoFilePath: []const u8 = self.state.data.isoPath.?;
-    // const device: USBStorageDevice = self.state.data.device.?;
-    //
-    // self.state.unlock();
-    //
-    // ISOParser.parseIso(self.allocator, isoFilePath) catch |err| {
-    //     Debug.log(.DEBUG, "DataFlasher.dispatchComponentAction(): ISOParser.parseIso returned an error: {any}", .{err});
-    //     return;
-    // };
-
-    // const devicePathPrefix: [:0]const u8 = "/dev/";
-    // const deviceBsdName = device.getBsdNameSlice();
-    //
-    // const finalDevicePath = self.allocator.alloc(u8, devicePathPrefix.len + deviceBsdName.len) catch |err| {
-    //     Debug.log(.DEBUG, "DataFlasher.dispatchComponentAction(): failed to allocate memory for device path. Error: {any}", .{err});
-    //     return;
-    // };
-    // defer self.allocator.free(finalDevicePath);
-    //
-    // @memcpy(finalDevicePath[0..devicePathPrefix.len], devicePathPrefix);
-    // @memcpy(finalDevicePath[devicePathPrefix.len..], deviceBsdName);
-    //
-    // std.debug.assert(finalDevicePath.len == devicePathPrefix.len + deviceBsdName.len);
-    //
-    // Debug.log(.DEBUG, "DataFlasher: final device path is: {s}", .{finalDevicePath});
-
+    if (!flashResult.success) return;
 }
 pub fn deinit(self: *DataFlasher) void {
     _ = self;

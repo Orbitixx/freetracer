@@ -26,6 +26,7 @@ const PrivilegedHelperState = struct {
     installedVersion: [:0]const u8 = "-1",
     isoPath: ?[:0]const u8 = null,
     targetDisk: ?[:0]const u8 = null,
+    device: ?System.USBStorageDevice = null,
 };
 
 const System = @import("../../lib/sys/system.zig");
@@ -61,6 +62,7 @@ pub const Events = struct {
         struct {
             isoPath: [:0]const u8,
             targetDisk: [:0]const u8,
+            device: System.USBStorageDevice,
         },
         struct {},
     );
@@ -200,31 +202,33 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
 
             const targetDisk: [:0]const u8 = self.state.data.targetDisk.?;
             const isoPath: [:0]const u8 = self.state.data.isoPath.?;
+            const deviceServiceId: c_uint = self.state.data.device.?.serviceId;
+
             Debug.log(.INFO, "targetDisk local set to the state value of: {s}", .{self.state.data.targetDisk.?});
             self.state.unlock();
 
             Debug.log(.INFO, "Sending target disk: {s}", .{targetDisk});
 
-            self.requestUnmount(targetDisk, isoPath);
+            self.requestWrite(targetDisk, isoPath, deviceServiceId);
 
             eventResult.validate(.SUCCESS);
         },
 
         Events.onDiskUnmountConfirmed.Hash => {
-            const request = XPCService.createRequest(.WRITE_ISO_TO_DEVICE);
-            defer XPCService.releaseObject(request);
-            self.state.lock();
-            defer self.state.unlock();
-            XPCService.createString(request, "isoPath", self.state.data.isoPath.?);
-            XPCService.createString(request, "targetDisk", self.state.data.targetDisk.?);
-            XPCService.connectionSendMessage(self.xpcClient.service, request);
+            // const request = XPCService.createRequest(.WRITE_ISO_TO_DEVICE);
+            // defer XPCService.releaseObject(request);
+            // self.state.lock();
+            // defer self.state.unlock();
+            // XPCService.createString(request, "isoPath", self.state.data.isoPath.?);
+            // XPCService.createString(request, "targetDisk", self.state.data.targetDisk.?);
+            // XPCService.connectionSendMessage(self.xpcClient.service, request);
             eventResult.validate(.SUCCESS);
         },
 
         Events.onWriteISOToDeviceRequest.Hash => {
             const data = Events.onWriteISOToDeviceRequest.getData(event) orelse break :eventLoop;
 
-            try self.acquireStateDataOwnership(data.isoPath, data.targetDisk);
+            try self.acquireStateDataOwnership(data.isoPath, data.targetDisk, data.device);
 
             self.installHelperIfNotInstalled() catch |err| {
                 Debug.log(.ERROR, "An error occurred while trying to install Freetracer Helper Tool. Exiting event loop... {any}", .{err});
@@ -233,42 +237,7 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
 
             self.xpcClient.start();
 
-            if (true) break :eventLoop;
-
-            var unmountResponse: freetracer_lib.HelperUnmountRequestCode = self.requestUnmount(data.targetDisk);
-
-            if (true) break :eventLoop;
-
-            Debug.log(.INFO, "PrivilegedHelper Component first unmount request result: {any}", .{unmountResponse});
-
-            if (unmountResponse == freetracer_lib.HelperUnmountRequestCode.TRY_AGAIN) {
-                Debug.log(.INFO, "PrivilegedHelper received a try again code, trying again...: {any}", .{unmountResponse});
-                unmountResponse = self.requestUnmount(data.targetDisk);
-            }
-
-            Debug.log(.INFO, "PrivilegedHelper Component result of second unmount request: {any}", .{unmountResponse});
-
-            if (unmountResponse != freetracer_lib.HelperUnmountRequestCode.SUCCESS) {
-                Debug.log(.WARNING, "PrivilegedHelper.handleEvent(): interrupting event processing due to error response.", .{});
-                break :eventLoop;
-            }
-
-            var diskPath = try self.allocator.alloc(u8, AppConfig.DISK_PREFIX.len + data.targetDisk.len);
-            defer self.allocator.free(diskPath);
-
-            @memcpy(diskPath[0..AppConfig.DISK_PREFIX.len], AppConfig.DISK_PREFIX);
-            @memcpy(diskPath[AppConfig.DISK_PREFIX.len..], data.targetDisk);
-
-            var finalDataString = try self.allocator.allocSentinel(u8, diskPath.len + data.isoPath.len + 1, 0x00);
-            defer self.allocator.free(finalDataString);
-
-            @memcpy(finalDataString[0..data.isoPath.len], data.isoPath);
-            finalDataString[data.isoPath.len] = 0x3b; // semi-colon separator
-            @memcpy(finalDataString[(data.isoPath.len + 1)..], diskPath);
-
-            const writeResponse = requestWrite(@ptrCast(finalDataString));
-
-            if (writeResponse == freetracer_lib.HelperReturnCode.SUCCESS) eventResult.validate(.SUCCESS);
+            eventResult.validate(.SUCCESS);
         },
 
         else => {},
@@ -285,8 +254,6 @@ pub fn deinit(self: *PrivilegedHelper) void {
 pub fn workerRun(worker: *ComponentWorker, context: *anyopaque) void {
     _ = worker;
     _ = context;
-
-    // xpc.dispatch_main();
 }
 
 pub fn workerCallback(worker: *ComponentWorker, context: *anyopaque) void {
@@ -390,13 +357,13 @@ fn installHelperIfNotInstalled(self: *PrivilegedHelper) !void {
     } else Debug.log(.INFO, "Determined that Freetracer Helper Tool is already installed.", .{});
 }
 
-fn requestUnmount(self: *PrivilegedHelper, targetDisk: [:0]const u8, isoPath: [:0]const u8) void {
+fn requestWrite(self: *PrivilegedHelper, targetDisk: [:0]const u8, isoPath: [:0]const u8, deviceServiceId: c_uint) void {
     // Install or update the Privileged Helper Tool before sending unmount request
 
-    Debug.log(.DEBUG, "requestUnmount received targetDisk: {s}", .{targetDisk});
+    Debug.log(.DEBUG, "requestWrite() received targetDisk: {s}", .{targetDisk});
 
     if (targetDisk.len < 2) {
-        Debug.log(.ERROR, "PrivilegedHelper.requestUnmount(): malformed targetDisk ('{any}') Aborting...", .{targetDisk});
+        Debug.log(.ERROR, "PrivilegedHelper.requestWrite(): malformed targetDisk ('{any}') Aborting...", .{targetDisk});
         return;
     }
 
@@ -404,51 +371,17 @@ fn requestUnmount(self: *PrivilegedHelper, targetDisk: [:0]const u8, isoPath: [:
     defer XPCService.releaseObject(request);
     XPCService.createString(request, "disk", targetDisk);
     XPCService.createString(request, "isoPath", isoPath);
+    XPCService.createUInt64(request, "deviceServiceId", deviceServiceId);
     XPCService.connectionSendMessage(self.xpcClient.service, request);
-
-    // for (0..AppConfig.MACH_PORT_REMOTE_MAX_TEST_ATTEMPTS) |i| {
-    //     Debug.log(.DEBUG, "Attempting to test remote port to Helper Tool, attempt {d}...", .{i + 1});
-    //     const testAttemptResult = self.machCommunicator.testRemotePort();
-    //     if (testAttemptResult) break;
-    //     waitForHelperToolInstall();
-    // }
-    //
-    // const helperVersionBuffer = PrivilegedHelperTool.requestHelperVersion() catch |err| blk: {
-    //     Debug.log(.WARNING, "Unable to retrieve Helper Tool's installed version. Error: {any}", .{err});
-    //     break :blk std.mem.zeroes([MachPortPacketSize]u8);
-    // };
-    //
-    // const helperVersion: [:0]const u8 = @ptrCast(std.mem.sliceTo(&helperVersionBuffer, 0x00));
-    //
-    // if (helperVersion.len < 1) {
-    //     Debug.log(.ERROR, "Helper Tool responded with zero version length response despite just having been installed. Aborting...", .{});
-    //     return freetracer_lib.HelperUnmountRequestCode.FAILURE;
-    // }
-    //
-    // Debug.log(.INFO, "Freetracer received confirmation of Helper Tool version [{s}] installed.", .{helperVersion});
-    //
-    // if (!std.mem.eql(u8, AppConfig.PRIVILEGED_TOOL_LATEST_VERSION, helperVersion)) {
-    //     const installResult = PrivilegedHelperTool.installPrivilegedHelperTool();
-    //     waitForHelperToolInstall();
-    //     if (installResult != freetracer_lib.HelperInstallCode.SUCCESS) return freetracer_lib.HelperUnmountRequestCode.FAILURE;
-    //     return freetracer_lib.HelperUnmountRequestCode.TRY_AGAIN;
-    // }
-    //
-    // const returnCode = PrivilegedHelperTool.requestPerformUnmount(targetDisk) catch |err| blk: {
-    //     Debug.log(.ERROR, "PrivilegedHelper.requestUnmount() caught an error: {any}", .{err});
-    //     break :blk freetracer_lib.HelperUnmountRequestCode.FAILURE;
-    // };
-    // return returnCode;
-
-    // return freetracer_lib.HelperUnmountRequestCode.SUCCESS;
 }
 
-fn acquireStateDataOwnership(self: *PrivilegedHelper, isoPath: [:0]const u8, targetDisk: [:0]const u8) !void {
+fn acquireStateDataOwnership(self: *PrivilegedHelper, isoPath: [:0]const u8, targetDisk: [:0]const u8, device: System.USBStorageDevice) !void {
     self.cleanupComponentState();
     self.state.lock();
     defer self.state.unlock();
     self.state.data.isoPath = try self.allocator.dupeZ(u8, isoPath);
     self.state.data.targetDisk = try self.allocator.dupeZ(u8, targetDisk);
+    self.state.data.device = device;
     Debug.log(.INFO, "Set to state: \n\tISO Path: {s}\n\ttargetDisk: {s}", .{ self.state.data.isoPath.?, self.state.data.targetDisk.? });
 }
 
@@ -460,19 +393,19 @@ fn cleanupComponentState(self: *PrivilegedHelper) void {
     if (self.state.data.targetDisk) |disk| self.allocator.free(disk);
 }
 
-fn processMachMessage(msgId: i32, data: SerializedData) !SerializedData {
-    Debug.log(.INFO, "Received message {any} and data {any}", .{ msgId, data });
-    return SerializedData.serialize([:0]const u8, "Successful response from MAIN APP!");
-}
-
-pub fn requestWrite(data: [:0]const u8) freetracer_lib.HelperReturnCode {
-    const returnCode = PrivilegedHelperTool.requestWriteISO(data) catch |err| blk: {
-        Debug.log(.ERROR, "PrivilegedHelper.requestWrite() caught an error: {any}", .{err});
-        break :blk freetracer_lib.HelperReturnCode.FAILED_TO_WRITE_ISO_TO_DEVICE;
-    };
-
-    return returnCode;
-}
+// fn processMachMessage(msgId: i32, data: SerializedData) !SerializedData {
+//     Debug.log(.INFO, "Received message {any} and data {any}", .{ msgId, data });
+//     return SerializedData.serialize([:0]const u8, "Successful response from MAIN APP!");
+// }
+//
+// pub fn requestWrite(data: [:0]const u8) freetracer_lib.HelperReturnCode {
+//     const returnCode = PrivilegedHelperTool.requestWriteISO(data) catch |err| blk: {
+//         Debug.log(.ERROR, "PrivilegedHelper.requestWrite() caught an error: {any}", .{err});
+//         break :blk freetracer_lib.HelperReturnCode.FAILED_TO_WRITE_ISO_TO_DEVICE;
+//     };
+//
+//     return returnCode;
+// }
 
 const ComponentImplementation = ComponentFramework.ImplementComponent(PrivilegedHelper);
 pub const asComponent = ComponentImplementation.asComponent;
