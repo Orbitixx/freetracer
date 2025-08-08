@@ -141,32 +141,6 @@ fn processGetHelperVersion(connection: XPCConnection) void {
     XPCService.connectionSendMessage(connection, reply);
 }
 
-// fn processRequestUnmount(connection: XPCConnection, data: XPCObject) void {
-//     const disk: []const u8 = XPCService.parseString(data, "disk");
-//
-//     if (!isDiskStringValid(disk)) {
-//         Debug.log(.ERROR, "Received/parsed disk string is invalid: {s}. Aborting processing request...", .{disk});
-//         terminateHelperProcess(.{ .cause = .REQUEST_DISK_UNMOUNT_DISK_STRING_INVALID });
-//         return;
-//     }
-//
-//     const result = requestUnmountWithIORegistry(disk);
-//
-//     var response: XPCObject = undefined;
-//
-//     if (result != .SUCCESS) {
-//         Debug.log(.ERROR, "Failed to unmount specified disk, error code: {any}", .{result});
-//         response = XPCService.createResponse(.DISK_UNMOUNT_FAIL);
-//         terminateHelperProcess(.{ .cause = .REQUEST_DISK_UNMOUNT_FAILED_TO_UNMOUNT_DISK });
-//     } else {
-//         response = XPCService.createResponse(.DISK_UNMOUNT_SUCCESS);
-//     }
-//
-//     Debug.log(.INFO, "Finished executing unmount task, sending response ({any}) to the client.", .{result});
-//
-//     XPCService.connectionSendMessage(connection, response);
-// }
-
 fn attemptDiskUnmount(connection: XPCConnection, data: XPCObject) bool {
     const disk: []const u8 = XPCService.parseString(data, "disk");
 
@@ -197,11 +171,9 @@ fn attemptDiskUnmount(connection: XPCConnection, data: XPCObject) bool {
 
 fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
     //
-    if (!attemptDiskUnmount(connection, data)) return;
-
     const isoPath: []const u8 = XPCService.parseString(data, "isoPath");
     const deviceBsdName: []const u8 = XPCService.parseString(data, "disk");
-    const deviceServiceId: u64 = XPCService.getUInt64(data, "deviceServiceId");
+    // const deviceServiceId: u64 = XPCService.getUInt64(data, "deviceServiceId");
 
     const userHomePath: []const u8 = XPCService.getUserHomePath(connection) catch |err| {
         Debug.log(.ERROR, "Unable to retrieve user home path. Error: {any}", .{err});
@@ -228,15 +200,19 @@ fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
     defer XPCService.releaseObject(xpcReply);
     XPCService.connectionSendMessage(connection, xpcReply);
 
-    // var diskPathBuffer: [std.fs.max_name_bytes]u8 = std.mem.zeroes([std.fs.max_name_bytes]u8);
-    // const diskPathPrefix = "/dev/";
-    //
-    if (deviceBsdName.len > std.fs.max_name_bytes or deviceBsdName.len < 2) {
-        Debug.log(.ERROR, "Device name is too long or too short: {s}", .{deviceBsdName});
+    const device = openDeviceValidated(deviceBsdName) catch |err| {
+        // TODO: sanitize device name before logging
+        Debug.log(.ERROR, "Unable to safely open device: {s}, validation error: {any}", .{ deviceBsdName, err });
+        const xpcErrorResponse = XPCService.createResponse(.DEVICE_INVALID);
+        defer XPCService.releaseObject(xpcErrorResponse);
+        XPCService.connectionSendMessage(connection, xpcErrorResponse);
+        terminateHelperProcess(.{ .err = err });
         return;
-    }
+    };
 
-    writeISO(connection, isoFile, deviceBsdName, deviceServiceId) catch |err| {
+    defer device.close();
+
+    writeISO(connection, isoFile, device) catch |err| {
         Debug.log(.ERROR, "Unable to safely open provided ISO file path: {s}, validation error: {any}", .{ isoPath, err });
         const xpcErrorResponse = XPCService.createResponse(.ISO_FILE_INVALID);
         defer XPCService.releaseObject(xpcErrorResponse);
@@ -244,10 +220,6 @@ fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
         terminateHelperProcess(.{ .err = err });
         return;
     };
-
-    // TODO: validate and sanitize file input
-    // canonicalize the path to resolve any symbolic links and ensure it does not
-    // point to a sensitive system file (e.g., /etc/passwd, /dev/random).
 
     // TODO:
     // To prevent the operating system from automatically remounting volumes while the raw write is in progress,
@@ -494,7 +466,10 @@ fn openFileValidated(unsanitizedIsoPath: []const u8, params: struct { userHomePa
     var sanitizeStringBuffer: [MAX_PATH_BYTES]u8 = std.mem.zeroes([MAX_PATH_BYTES]u8);
 
     const isoPath = std.fs.realpath(unsanitizedIsoPath, &realPathBuffer) catch |err| {
-        Debug.log(.ERROR, "Unable to resolve the real path of the povided ISO path: {s}. Error: {any}", .{ String.sanitizeString(&sanitizeStringBuffer, unsanitizedIsoPath), err });
+        Debug.log(.ERROR, "Unable to resolve the real path of the povided ISO path: {s}. Error: {any}", .{
+            String.sanitizeString(&sanitizeStringBuffer, unsanitizedIsoPath),
+            err,
+        });
         return error.UnableToResolveRealISOPath;
     };
 
@@ -529,7 +504,11 @@ fn openFileValidated(unsanitizedIsoPath: []const u8, params: struct { userHomePa
     };
 
     if (fileStat.kind != std.fs.File.Kind.file) {
-        Debug.log(.ERROR, "The provided ISO path is not a recognized file by file system. Symlinks and other types are not allowed. Kind used: {any}", .{fileStat.kind});
+        Debug.log(
+            .ERROR,
+            "The provided ISO path is not a recognized file by file system. Symlinks and other kinds are not allowed. Kind used: {any}",
+            .{fileStat.kind},
+        );
         return error.InvalidISOFileKind;
     }
 
@@ -546,34 +525,48 @@ fn openFileValidated(unsanitizedIsoPath: []const u8, params: struct { userHomePa
     return isoFile;
 }
 
-fn openDeviceValidated(bsdName: []const u8, serviceId: u64) !std.fs.File {
+fn openDeviceValidated(bsdName: []const u8) !std.fs.File {
     if (bsdName.len < 2) return error.DeviceNameTooShort;
-
-    _ = serviceId;
+    if (bsdName.len > std.fs.max_name_bytes) return error.DeviceNameTooLong;
 
     const deviceDir = "/dev/";
+
+    // Accept flat filename only (i.e. same level as directory)
+    if (std.mem.count(u8, bsdName, "/") > 0) return error.DeviceBSDNameIsNotAFlatFilename;
+
+    // Replace non-printable characters in the BSD name
+    var sanitizedBuffer: [std.fs.max_name_bytes]u8 = std.mem.zeroes([std.fs.max_name_bytes]u8);
+    const sanitizedBsdName = String.sanitizeString(&sanitizedBuffer, bsdName);
+
+    // This performs a check via Disk Arbitration on whether or not the device is internal or removable
+    const unmountResult = requestUnmountWithIORegistry(sanitizedBsdName);
+    if (unmountResult != .SUCCESS) return error.UnableToUnmountDevice;
+
+    // Open directory without following symlinks
     const directory = try std.fs.openDirAbsolute(deviceDir, .{ .no_follow = true });
-    const device = try directory.openFile(bsdName, .{ .mode = .read_write, .lock = .exclusive });
 
-    const stat = try device.stat();
+    // Open device and ensure it's a block device and not a character device or another kind
+    const device = try directory.openFile(sanitizedBsdName, .{ .mode = .read_write, .lock = .exclusive });
+    errdefer device.close();
+    const deviceStat = try device.stat();
+    if (deviceStat.kind != std.fs.File.Kind.block_device) return error.FileIsNotABlockDevice;
 
-    if (stat.kind != std.fs.File.Kind.block_device) return error.FileIsNotABlockDevice;
+    // Ensure device is not the same as the "/" root filesystem
+    const rootFs = try std.fs.openFileAbsolute("/", .{ .lock = .none, .mode = .read_only });
+    defer rootFs.close();
+    const rootFsStat = try rootFs.stat();
+
+    if (deviceStat.inode == rootFsStat.inode) return error.DeviceCannotBeActiveRootFileSystem;
 
     return device;
 }
 
-fn writeISO(connection: XPCConnection, isoFile: std.fs.File, targetDisk: []const u8, serviceId: u64) !void {
+fn writeISO(connection: XPCConnection, isoFile: std.fs.File, device: std.fs.File) !void {
     Debug.log(.DEBUG, "Begin writing prep...", .{});
     var writeBuffer: [WRITE_BLOCK_SIZE]u8 = undefined;
 
-    // TODO: redo this with verification of block device (?) and canonicalize path
-    const device = try openDeviceValidated(targetDisk, serviceId);
-    defer device.close();
-
     const fileStat = try isoFile.stat();
     const ISO_SIZE = fileStat.size;
-
-    defer Debug.log(.INFO, "Write finished executing...", .{});
 
     var currentByte: u64 = 0;
     var previousProgress: i64 = 0;
@@ -608,8 +601,6 @@ fn writeISO(connection: XPCConnection, isoFile: std.fs.File, targetDisk: []const
 
         // Only send an XPC message if the progress moved at least 1%
         if (currentProgress - previousProgress < 1) continue;
-
-        // Debug.log(.INFO, "Sending progress update to client... Progress: {d}", .{currentProgress});
 
         const progressUpdate = XPCService.createResponse(.ISO_WRITE_PROGRESS);
         defer XPCService.releaseObject(progressUpdate);

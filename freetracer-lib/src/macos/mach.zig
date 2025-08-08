@@ -223,7 +223,7 @@ fn validateDictionaryString(dictionary: c.CFDictionaryRef, key: c.CFStringRef, v
 
     const finalString: [:0]const u8 = @ptrCast(std.mem.sliceTo(&stringBuffer, Character.NULL));
 
-    Debug.log(.INFO, "validateDictionaryString(): Expected '{s}', retreived: '{s}'.", .{ validString, finalString });
+    // Debug.log(.INFO, "validateDictionaryString(): Expected '{s}', retreived: '{s}'.", .{ validString, finalString });
 
     return std.mem.eql(u8, finalString, validString);
 }

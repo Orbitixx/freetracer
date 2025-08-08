@@ -323,6 +323,7 @@ fn processResponseMessage(connection: XPCConnection, data: XPCObject) void {
 
         .ISO_FILE_VALID => Debug.log(.INFO, "Helper reported that the ISO file provided is valid.", .{}),
         .ISO_FILE_INVALID => Debug.log(.ERROR, "Helper reported that the ISO file is INVALID.", .{}),
+        .DEVICE_INVALID => Debug.log(.ERROR, "Helper reported that the selected device is INVALID.", .{}),
         .ISO_WRITE_PROGRESS => {
             const progress = XPCService.getInt64(data, "write_progress");
             Debug.log(.INFO, "Write progress is: {d}", .{progress});
