@@ -63,6 +63,17 @@ const TerminationParams: type = struct {
     err: ?anyerror = null,
 };
 
+fn exitFunction(context: ?*anyopaque) callconv(.c) void {
+    _ = context;
+
+    globalShutdownManager.xpcService.deinit();
+    Debug.deinit();
+    _ = globalShutdownManager.allocator.detectLeaks();
+    _ = globalShutdownManager.allocator.deinit();
+
+    std.process.exit(0);
+}
+
 fn terminateHelperProcess(params: TerminationParams) void {
     if (params.isError) Debug.log(
         .ERROR,
@@ -74,7 +85,9 @@ fn terminateHelperProcess(params: TerminationParams) void {
         .{params.cause.?},
     );
 
-    std.process.exit(if (params.cause) |cause| @intFromEnum(cause) else 99);
+    xpc.dispatch_async_f(xpc.dispatch_get_main_queue(), null, &exitFunction);
+
+    // std.process.exit(if (params.cause) |cause| @intFromEnum(cause) else 99);
 }
 
 /// C-convention callback; called anytime a message is received over the XPC connection.
@@ -221,6 +234,8 @@ fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
         return;
     };
 
+    terminateHelperProcess(.{ .isError = false, .cause = .HELPER_SUCCESSFULLY_EXITED });
+
     // TODO:
     // To prevent the operating system from automatically remounting volumes while the raw write is in progress,
     // the helper should also register a DADissenter for the disk. This temporarily blocks mount attempts from other processes,
@@ -252,9 +267,18 @@ fn isDiskStringValid(disk: []const u8) bool {
     return isPrefixValid and isSuffixValid;
 }
 
+const GlobalShutdownManager = struct {
+    allocator: *std.heap.DebugAllocator(.{ .thread_safe = true }) = undefined,
+    xpcService: *XPCService = undefined,
+};
+
+var globalShutdownManager: GlobalShutdownManager = .{};
+
 pub fn main() !void {
     var debugAllocator = std.heap.DebugAllocator(.{ .thread_safe = true }).init;
     const allocator = debugAllocator.allocator();
+
+    //TODO: swap out debug allocator
 
     defer {
         _ = debugAllocator.detectLeaks();
@@ -275,6 +299,11 @@ pub fn main() !void {
         .requestHandler = @ptrCast(&xpcRequestHandler),
     });
     defer xpcServer.deinit();
+
+    globalShutdownManager = .{
+        .allocator = &debugAllocator,
+        .xpcService = &xpcServer,
+    };
 
     xpcServer.start();
 
