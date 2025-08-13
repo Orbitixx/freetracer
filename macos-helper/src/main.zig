@@ -236,3 +236,4 @@ test "handle helper version check request" {
     const reportedVersion = handleHelperVersionCheckRequest();
     try std.testing.expectEqualSlices(u8, reportedVersion, env.HELPER_VERSION);
 }
+//
