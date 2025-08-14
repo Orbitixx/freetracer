@@ -137,34 +137,6 @@ fn processGetHelperVersion(connection: XPCConnection) void {
     XPCService.connectionSendMessage(connection, reply);
 }
 
-// fn attemptDiskUnmount(connection: XPCConnection, data: XPCObject) bool {
-//     const disk: []const u8 = XPCService.parseString(data, "disk");
-//
-//     if (!str.isDiskStringValid(disk)) {
-//         Debug.log(.ERROR, "Received/parsed disk string is invalid: {s}. Aborting processing request...", .{disk});
-//         ShutdownManager.terminateWithError(error.REQUEST_DISK_UNMOUNT_DISK_STRING_INVALID);
-//         return false;
-//     }
-//
-//     const result = dev.requestUnmountWithIORegistry(disk);
-//
-//     var response: XPCObject = undefined;
-//
-//     if (result != .SUCCESS) {
-//         Debug.log(.ERROR, "Failed to unmount specified disk, error code: {any}", .{result});
-//         response = XPCService.createResponse(.DISK_UNMOUNT_FAIL);
-//         ShutdownManager.terminateWithError(error.REQUEST_DISK_UNMOUNT_FAILED_TO_UNMOUNT_DISK);
-//     } else {
-//         response = XPCService.createResponse(.DISK_UNMOUNT_SUCCESS);
-//     }
-//
-//     Debug.log(.INFO, "Finished executing unmount task, sending response ({any}) to the client.", .{result});
-//
-//     XPCService.connectionSendMessage(connection, response);
-//
-//     if (result == .SUCCESS) return true else return false;
-// }
-
 fn respondWithErrorAndTerminate(
     err: struct { err: anyerror, message: []const u8 },
     response: struct { xpcConnection: XPCConnection, xpcResponseCode: HelperResponseCode },
