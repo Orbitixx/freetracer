@@ -43,6 +43,8 @@ const ComponentEvent = ComponentFramework.Event;
 const ComponentName = EventManager.ComponentName.PRIVILEGED_HELPER;
 const EventResult = ComponentFramework.EventResult;
 
+const DataFlasherUI = @import("../DataFlasher/DataFlasherUI.zig");
+
 const PrivilegedHelper = @This();
 
 // Component-agnostic props
@@ -326,6 +328,12 @@ fn processResponseMessage(connection: XPCConnection, data: XPCObject) void {
         .DEVICE_INVALID => Debug.log(.ERROR, "Helper reported that the selected device is INVALID.", .{}),
         .ISO_WRITE_PROGRESS => {
             const progress = XPCService.getInt64(data, "write_progress");
+
+            EventManager.broadcast(DataFlasherUI.Events.onISOWriteProgressChanged.create(
+                null,
+                &DataFlasherUI.Events.onISOWriteProgressChanged.Data{ .newProgress = progress },
+            ));
+
             Debug.log(.INFO, "Write progress is: {d}", .{progress});
         },
         .ISO_WRITE_SUCCESS => Debug.log(.INFO, "Helper reported that it has successfully written the ISO file to device.", .{}),

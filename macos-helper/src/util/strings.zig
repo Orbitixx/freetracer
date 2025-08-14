@@ -1,10 +1,10 @@
 const std = @import("std");
-const env = @import("env.zig");
+const env = @import("../env.zig");
 const freetracer_lib = @import("freetracer-lib");
 const Debug = freetracer_lib.Debug;
 
 // Security caveat: ensure the received string is like "disk" or "rdisk"
-fn isDiskStringValid(disk: []const u8) bool {
+pub fn isDiskStringValid(disk: []const u8) bool {
 
     // Ensure the length fits "diskX" at the very least (5 characters)
     std.debug.assert(disk.len >= 5);

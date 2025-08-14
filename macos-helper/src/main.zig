@@ -29,9 +29,6 @@ const ReturnCode = freetracer_lib.HelperReturnCode;
 const SerializedData = freetracer_lib.SerializedData;
 const WriteRequestData = freetracer_lib.WriteRequestData;
 
-const WRITE_BLOCK_SIZE = 4096;
-const MAX_PATH_BYTES = std.fs.max_path_bytes;
-
 // NOTE: Critical compile-time .plist symbol exports
 // Apple requires these to be linked into the binary in their respective sections
 // in order for the helper to be correctly registered and launched by the system daemon.
@@ -140,36 +137,43 @@ fn processGetHelperVersion(connection: XPCConnection) void {
     XPCService.connectionSendMessage(connection, reply);
 }
 
-fn handleHelperVersionCheckRequest() [:0]const u8 {
-    return env.HELPER_VERSION;
-}
+// fn attemptDiskUnmount(connection: XPCConnection, data: XPCObject) bool {
+//     const disk: []const u8 = XPCService.parseString(data, "disk");
+//
+//     if (!str.isDiskStringValid(disk)) {
+//         Debug.log(.ERROR, "Received/parsed disk string is invalid: {s}. Aborting processing request...", .{disk});
+//         ShutdownManager.terminateWithError(error.REQUEST_DISK_UNMOUNT_DISK_STRING_INVALID);
+//         return false;
+//     }
+//
+//     const result = dev.requestUnmountWithIORegistry(disk);
+//
+//     var response: XPCObject = undefined;
+//
+//     if (result != .SUCCESS) {
+//         Debug.log(.ERROR, "Failed to unmount specified disk, error code: {any}", .{result});
+//         response = XPCService.createResponse(.DISK_UNMOUNT_FAIL);
+//         ShutdownManager.terminateWithError(error.REQUEST_DISK_UNMOUNT_FAILED_TO_UNMOUNT_DISK);
+//     } else {
+//         response = XPCService.createResponse(.DISK_UNMOUNT_SUCCESS);
+//     }
+//
+//     Debug.log(.INFO, "Finished executing unmount task, sending response ({any}) to the client.", .{result});
+//
+//     XPCService.connectionSendMessage(connection, response);
+//
+//     if (result == .SUCCESS) return true else return false;
+// }
 
-fn attemptDiskUnmount(connection: XPCConnection, data: XPCObject) bool {
-    const disk: []const u8 = XPCService.parseString(data, "disk");
-
-    if (!str.isDiskStringValid(disk)) {
-        Debug.log(.ERROR, "Received/parsed disk string is invalid: {s}. Aborting processing request...", .{disk});
-        ShutdownManager.terminateWithError(error.REQUEST_DISK_UNMOUNT_DISK_STRING_INVALID);
-        return false;
-    }
-
-    const result = dev.requestUnmountWithIORegistry(disk);
-
-    var response: XPCObject = undefined;
-
-    if (result != .SUCCESS) {
-        Debug.log(.ERROR, "Failed to unmount specified disk, error code: {any}", .{result});
-        response = XPCService.createResponse(.DISK_UNMOUNT_FAIL);
-        ShutdownManager.terminateWithError(error.REQUEST_DISK_UNMOUNT_FAILED_TO_UNMOUNT_DISK);
-    } else {
-        response = XPCService.createResponse(.DISK_UNMOUNT_SUCCESS);
-    }
-
-    Debug.log(.INFO, "Finished executing unmount task, sending response ({any}) to the client.", .{result});
-
-    XPCService.connectionSendMessage(connection, response);
-
-    if (result == .SUCCESS) return true else return false;
+fn respondWithErrorAndTerminate(
+    err: struct { err: anyerror, message: []const u8 },
+    response: struct { xpcConnection: XPCConnection, xpcResponseCode: HelperResponseCode },
+) void {
+    Debug.log(.ERROR, "{s} Error: {any}", .{ err.message, err.err });
+    const xpcErrorResponse = XPCService.createResponse(response.xpcResponseCode);
+    defer XPCService.releaseObject(xpcErrorResponse);
+    XPCService.connectionSendMessage(response.xpcConnection, xpcErrorResponse);
+    ShutdownManager.terminateWithError(err.err);
 }
 
 fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
@@ -179,20 +183,18 @@ fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
     // const deviceServiceId: u64 = XPCService.getUInt64(data, "deviceServiceId");
 
     const userHomePath: []const u8 = XPCService.getUserHomePath(connection) catch |err| {
-        Debug.log(.ERROR, "Unable to retrieve user home path. Error: {any}", .{err});
-        const xpcErrorResponse = XPCService.createResponse(.ISO_WRITE_FAIL);
-        defer XPCService.releaseObject(xpcErrorResponse);
-        XPCService.connectionSendMessage(connection, xpcErrorResponse);
-        ShutdownManager.terminateWithError(err);
+        respondWithErrorAndTerminate(
+            .{ .err = err, .message = "Unable to retrieve user home path." },
+            .{ .xpcConnection = connection, .xpcResponseCode = .ISO_WRITE_FAIL },
+        );
         return;
     };
 
     const isoFile = fs.openFileValidated(isoPath, .{ .userHomePath = userHomePath }) catch |err| {
-        Debug.log(.ERROR, "Unable to safely open provided ISO file path: {s}, validation error: {any}", .{ isoPath, err });
-        const xpcErrorResponse = XPCService.createResponse(.ISO_FILE_INVALID);
-        defer XPCService.releaseObject(xpcErrorResponse);
-        XPCService.connectionSendMessage(connection, xpcErrorResponse);
-        ShutdownManager.terminateWithError(err);
+        respondWithErrorAndTerminate(
+            .{ .err = err, .message = "Unable to retrieve user home path." },
+            .{ .xpcConnection = connection, .xpcResponseCode = .ISO_FILE_INVALID },
+        );
         return;
     };
 
@@ -204,23 +206,20 @@ fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
     XPCService.connectionSendMessage(connection, xpcReply);
 
     const device = dev.openDeviceValidated(deviceBsdName) catch |err| {
-        // TODO: sanitize device name before logging
-        Debug.log(.ERROR, "Unable to safely open device: {s}, validation error: {any}", .{ deviceBsdName, err });
-        const xpcErrorResponse = XPCService.createResponse(.DEVICE_INVALID);
-        defer XPCService.releaseObject(xpcErrorResponse);
-        XPCService.connectionSendMessage(connection, xpcErrorResponse);
-        ShutdownManager.terminateWithError(err);
+        respondWithErrorAndTerminate(
+            .{ .err = err, .message = "Unable to safely open specified device, validation error." },
+            .{ .xpcConnection = connection, .xpcResponseCode = .DEVICE_INVALID },
+        );
         return;
     };
 
     defer device.close();
 
     fs.writeISO(connection, isoFile, device) catch |err| {
-        Debug.log(.ERROR, "Unable to safely open provided ISO file path: {s}, validation error: {any}", .{ isoPath, err });
-        const xpcErrorResponse = XPCService.createResponse(.ISO_FILE_INVALID);
-        defer XPCService.releaseObject(xpcErrorResponse);
-        XPCService.connectionSendMessage(connection, xpcErrorResponse);
-        ShutdownManager.terminateWithError(err);
+        respondWithErrorAndTerminate(
+            .{ .err = err, .message = "Unable to write ISO to device." },
+            .{ .xpcConnection = connection, .xpcResponseCode = .ISO_WRITE_FAIL },
+        );
         return;
     };
 
@@ -231,9 +230,3 @@ fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
     // the helper should also register a DADissenter for the disk. This temporarily blocks mount attempts from other processes,
     // ensuring an exclusive lock on the device during the critical write phase.
 }
-
-test "handle helper version check request" {
-    const reportedVersion = handleHelperVersionCheckRequest();
-    try std.testing.expectEqualSlices(u8, reportedVersion, env.HELPER_VERSION);
-}
-//

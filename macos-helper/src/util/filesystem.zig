@@ -1,9 +1,9 @@
 const std = @import("std");
-const env = @import("env.zig");
+const env = @import("../env.zig");
 const testing = std.testing;
 const freetracer_lib = @import("freetracer-lib");
 
-const ShutdownManager = @import("./managers/ShutdownManager.zig").ShutdownManagerSingleton;
+const ShutdownManager = @import("../managers/ShutdownManager.zig").ShutdownManagerSingleton;
 const Debug = freetracer_lib.Debug;
 const xpc = freetracer_lib.xpc;
 const ISOParser = freetracer_lib.ISOParser;

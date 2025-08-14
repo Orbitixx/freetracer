@@ -1,17 +1,17 @@
 const std = @import("std");
-const env = @import("env.zig");
+const env = @import("../env.zig");
 const freetracer_lib = @import("freetracer-lib");
 const Debug = freetracer_lib.Debug;
 
 const c = freetracer_lib.c;
 
-const ShutdownManager = @import("./managers/ShutdownManager.zig").ShutdownManagerSingleton;
+const ShutdownManager = @import("../managers/ShutdownManager.zig").ShutdownManagerSingleton;
 const da = @import("./diskarbitration.zig");
 
 const String = freetracer_lib.String;
 const ReturnCode = freetracer_lib.HelperReturnCode;
 
-fn openDeviceValidated(bsdName: []const u8) !std.fs.File {
+pub fn openDeviceValidated(bsdName: []const u8) !std.fs.File {
     if (bsdName.len < 2) return error.DeviceNameTooShort;
     if (bsdName.len > std.fs.max_name_bytes) return error.DeviceNameTooLong;
 
@@ -47,7 +47,7 @@ fn openDeviceValidated(bsdName: []const u8) !std.fs.File {
     return device;
 }
 
-fn requestUnmountWithIORegistry(targetDisk: []const u8) ReturnCode {
+pub fn requestUnmountWithIORegistry(targetDisk: []const u8) ReturnCode {
 
     // TODO: perform a check to ensure the device has a kIOMediaRemovableKey key
     // TODO: refactor code to smalelr functions
@@ -118,7 +118,7 @@ fn requestUnmountWithIORegistry(targetDisk: []const u8) ReturnCode {
     return ReturnCode.SUCCESS;
 }
 
-fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: ?*anyopaque) callconv(.C) void {
+pub fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: ?*anyopaque) callconv(.C) void {
     _ = context;
 
     Debug.log(.INFO, "Processing unmountDiskCallback()...", .{});

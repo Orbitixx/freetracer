@@ -60,6 +60,8 @@ moduleImg: ?Texture = null,
 button: ?Button = null,
 isoText: ?Text = null,
 deviceText: ?Text = null,
+writeProgress: i64 = 0,
+writeProgressRect: ?Rectangle = null,
 
 const BgRectParams = struct {
     width: f32,
@@ -71,6 +73,12 @@ pub const Events = struct {
     pub const onActiveStateChanged = ComponentFramework.defineEvent(
         EventManager.createEventName(ComponentName, "on_active_state_changed"),
         struct { isActive: bool },
+        struct {},
+    );
+
+    pub const onISOWriteProgressChanged = ComponentFramework.defineEvent(
+        EventManager.createEventName(ComponentName, "on_iso_write_progress_changed"),
+        struct { newProgress: i64 },
         struct {},
     );
 };
@@ -153,6 +161,22 @@ pub fn start(self: *DataFlasherUI) !void {
             .textColor = Styles.Color.white,
         });
 
+        self.writeProgressRect = Rectangle{
+            .bordered = true,
+            .rounded = false,
+            .style = .{
+                .color = Color.white,
+                .borderStyle = .{ .color = Color.white, .thickness = 2.00 },
+            },
+            .transform = .{
+                .x = bgRect.transform.relX(0.2),
+                .y = bgRect.transform.relY(0.7),
+                .h = 18.0,
+                .w = 0.0,
+            },
+        };
+
+        // self.writeProgress = Text.init("", bgRect.transform.relX(0.), style: TextStyle)
         self.moduleImg = Texture.init(.DISK_IMAGE, .{ .x = 0, .y = 0 });
 
         if (self.moduleImg) |*img| {
@@ -205,6 +229,12 @@ fn drawActive(self: *DataFlasherUI) !void {
     if (self.deviceText) |*text| {
         text.draw();
     }
+
+    // if (self.writeProgress > 0) {
+    if (self.writeProgressRect) |rect| {
+        rect.draw();
+    }
+    // }
 
     if (self.button) |*button| {
         try button.draw();
@@ -305,6 +335,22 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
                     });
                 },
             }
+        },
+
+        Events.onISOWriteProgressChanged.Hash => {
+            const data = Events.onISOWriteProgressChanged.getData(event) orelse break :eventLoop;
+
+            self.writeProgress = data.newProgress;
+
+            Debug.log(.INFO, "Progress is: {d}", .{data.newProgress});
+
+            if (self.writeProgressRect) |*rect| {
+                rect.transform.x = self.bgRect.?.transform.relX(0.05);
+                rect.transform.w = @divFloor(@as(f32, @floatFromInt(data.newProgress)), 100) * 0.9 * self.bgRect.?.transform.getWidth();
+                rect.draw();
+            }
+
+            eventResult.validate(.SUCCESS);
         },
 
         else => {},

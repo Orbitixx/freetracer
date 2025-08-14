@@ -1,10 +1,10 @@
 const freetracer_lib = @import("freetracer-lib");
 
-const ShutdownManager = @import("./managers/ShutdownManager.zig").ShutdownManagerSingleton;
+const ShutdownManager = @import("../managers/ShutdownManager.zig").ShutdownManagerSingleton;
 const Debug = freetracer_lib.Debug;
 const c = freetracer_lib.c;
 
-fn isTargetDiskInternalDevice(diskDictionaryRef: c.CFDictionaryRef) bool {
+pub fn isTargetDiskInternalDevice(diskDictionaryRef: c.CFDictionaryRef) bool {
     const isInternalDeviceRef: c.CFBooleanRef = @ptrCast(c.CFDictionaryGetValue(diskDictionaryRef, c.kDADiskDescriptionDeviceInternalKey));
 
     if (isInternalDeviceRef == null or c.CFGetTypeID(isInternalDeviceRef) != c.CFBooleanGetTypeID()) {
