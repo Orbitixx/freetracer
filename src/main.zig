@@ -50,6 +50,17 @@ pub fn main() !void {
     try Debug.init(allocator, .{ .standaloneLogFilePath = env.MAIN_APP_LOGS_PATH });
     defer Debug.deinit();
 
+    var devices = try freetracer_lib.getStorageDevices(allocator);
+    defer devices.deinit();
+
+    Debug.log(.INFO, "Found {d} storage devices:", .{devices.items.len});
+
+    for (devices.items) |*device| {
+        device.print();
+    }
+
+    if (true) return;
+
     try WindowManager.init();
     defer WindowManager.deinit();
 

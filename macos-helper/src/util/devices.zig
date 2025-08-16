@@ -67,7 +67,7 @@ pub fn requestUnmountWithIORegistry(targetDisk: []const u8) ReturnCode {
         ShutdownManager.terminateWithError(error.REQUEST_DISK_UNMOUNT_FAILED_TO_CREATE_DA_DISK_SESSION);
         return ReturnCode.FAILED_TO_CREATE_DA_SESSION;
     }
-    defer _ = c.CFRelease(daSession);
+    defer c.CFRelease(daSession);
 
     Debug.log(.INFO, "Successfully started a blank DASession.", .{});
 
@@ -87,7 +87,7 @@ pub fn requestUnmountWithIORegistry(targetDisk: []const u8) ReturnCode {
         ShutdownManager.terminateWithError(error.REQUEST_DISK_UNMOUNT_FAILED_TO_CREATE_DA_DISK_REF);
         return ReturnCode.FAILED_TO_CREATE_DA_DISK_REF;
     }
-    defer _ = c.CFRelease(daDiskRef);
+    defer c.CFRelease(daDiskRef);
 
     Debug.log(.INFO, "DA Disk refererence is successfuly created for the provided device BSD name.", .{});
 
@@ -97,7 +97,7 @@ pub fn requestUnmountWithIORegistry(targetDisk: []const u8) ReturnCode {
         ShutdownManager.terminateWithError(error.REQUEST_DISK_UNMOUNT_FAILED_TO_OBTAIN_DISK_INFO_DICT_REF);
         return ReturnCode.FAILED_TO_OBTAIN_DISK_INFO_DICT_REF;
     }
-    defer _ = c.CFRelease(diskInfo);
+    defer c.CFRelease(diskInfo);
 
     Debug.log(.INFO, "DA Disk Description is successfully obtained/copied.", .{});
 
