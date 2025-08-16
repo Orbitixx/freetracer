@@ -20,6 +20,7 @@ pub fn getUSBStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(USBStor
     var ioDevice: c.io_service_t = 1;
 
     matchingDict = c.IOServiceMatching(c.kIOUSBDeviceClassName);
+    // matchingDict = c.IOServiceMatching(c.kIOBlockStorageDeviceClass);
 
     if (matchingDict == null) {
         Debug.log(.ERROR, "Unable to obtain a matching dictionary for USB Device class.", .{});
@@ -179,8 +180,7 @@ pub fn getIOMediaVolumesForDevice(device: c.io_service_t, allocator: std.mem.All
         if (childService == 0) break;
         defer _ = c.IOObjectRelease(childService);
 
-        const ioMediaCString = "IOMedia";
-        const isIOMedia: bool = c.IOObjectConformsTo(childService, ioMediaCString) != 0;
+        const isIOMedia: bool = c.IOObjectConformsTo(childService, "IOStorage") != 0;
 
         if (isIOMedia) {
             const ioMediaVolume = try getIOMediaVolumeDescription(childService, allocator);

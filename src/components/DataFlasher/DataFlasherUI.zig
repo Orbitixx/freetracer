@@ -54,14 +54,14 @@ worker: ?ComponentWorker = null,
 // Component-specific, unique props
 allocator: std.mem.Allocator,
 parent: *DataFlasher,
-bgRect: ?Rectangle = null,
-headerLabel: ?Text = null,
-moduleImg: ?Texture = null,
-button: ?Button = null,
-isoText: ?Text = null,
-deviceText: ?Text = null,
+bgRect: Rectangle = undefined,
+headerLabel: Text = undefined,
+moduleImg: Texture = undefined,
+button: Button = undefined,
+isoText: Text = undefined,
+deviceText: Text = undefined,
+writeProgressRect: Rectangle = undefined,
 writeProgress: i64 = 0,
-writeProgressRect: ?Rectangle = null,
 
 const BgRectParams = struct {
     width: f32,
@@ -123,126 +123,99 @@ pub fn start(self: *DataFlasherUI) !void {
     // Get initial width of the preceding UI element
     try self.queryDeviceListUIDimensions();
 
-    if (self.bgRect) |bgRect| {
-        self.button = Button.init(
-            "Flash",
-            bgRect.transform.getPosition(),
-            .Primary,
-            .{
-                .context = self.parent,
-                .function = DataFlasher.flashISOtoDeviceWrapper.call,
-            },
-        );
+    self.button = Button.init(
+        "Flash",
+        self.bgRect.transform.getPosition(),
+        .Primary,
+        .{
+            .context = self.parent,
+            .function = DataFlasher.flashISOtoDeviceWrapper.call,
+        },
+    );
 
-        if (self.button) |*button| {
-            button.setEnabled(false);
-        }
+    self.button.setEnabled(false);
 
-        self.isoText = Text.init("NULL", .{
-            .x = bgRect.transform.relX(0.05),
-            .y = bgRect.transform.relY(0.1),
-        }, .{
-            .fontSize = 14,
-        });
+    self.isoText = Text.init("NULL", .{
+        .x = self.bgRect.transform.relX(0.05),
+        .y = self.bgRect.transform.relY(0.1),
+    }, .{
+        .fontSize = 14,
+    });
 
-        self.deviceText = Text.init("NULL", .{
-            .x = bgRect.transform.relX(0.05),
-            .y = bgRect.transform.relY(0.15),
-        }, .{
-            .fontSize = 14,
-        });
+    self.deviceText = Text.init("NULL", .{
+        .x = self.bgRect.transform.relX(0.05),
+        .y = self.bgRect.transform.relY(0.15),
+    }, .{
+        .fontSize = 14,
+    });
 
-        self.headerLabel = Text.init("flash", .{
-            .x = bgRect.transform.x + 12,
-            .y = bgRect.transform.relY(0.01),
-        }, .{
-            .font = .JERSEY10_REGULAR,
-            .fontSize = 34,
-            .textColor = Styles.Color.white,
-        });
+    self.headerLabel = Text.init("flash", .{
+        .x = self.bgRect.transform.x + 12,
+        .y = self.bgRect.transform.relY(0.01),
+    }, .{
+        .font = .JERSEY10_REGULAR,
+        .fontSize = 34,
+        .textColor = Styles.Color.white,
+    });
 
-        self.writeProgressRect = Rectangle{
-            .bordered = true,
-            .rounded = false,
-            .style = .{
-                .color = Color.white,
-                .borderStyle = .{ .color = Color.white, .thickness = 2.00 },
-            },
-            .transform = .{
-                .x = bgRect.transform.relX(0.2),
-                .y = bgRect.transform.relY(0.7),
-                .h = 18.0,
-                .w = 0.0,
-            },
-        };
+    self.writeProgressRect = Rectangle{
+        .bordered = true,
+        .rounded = false,
+        .style = .{
+            .color = Color.white,
+            .borderStyle = .{ .color = Color.white, .thickness = 2.00 },
+        },
+        .transform = .{
+            .x = self.bgRect.transform.relX(0.2),
+            .y = self.bgRect.transform.relY(0.7),
+            .h = 18.0,
+            .w = 0.0,
+        },
+    };
 
-        // self.writeProgress = Text.init("", bgRect.transform.relX(0.), style: TextStyle)
-        self.moduleImg = Texture.init(.DISK_IMAGE, .{ .x = 0, .y = 0 });
+    // self.writeProgress = Text.init("", bgRect.transform.relX(0.), style: TextStyle)
+    self.moduleImg = Texture.init(.DISK_IMAGE, .{ .x = 0, .y = 0 });
 
-        if (self.moduleImg) |*img| {
-            img.transform.scale = 0.5;
-            img.transform.x = bgRect.transform.relX(0.5) - img.transform.getWidth() / 2;
-            img.transform.y = bgRect.transform.relY(0.5) - img.transform.getHeight() / 2;
-            img.tint = .{ .r = 255, .g = 255, .b = 255, .a = 150 };
-        }
+    self.moduleImg.transform.scale = 0.5;
+    self.moduleImg.transform.x = self.bgRect.transform.relX(0.5) - self.moduleImg.transform.getWidth() / 2;
+    self.moduleImg.transform.y = self.bgRect.transform.relY(0.5) - self.moduleImg.transform.getHeight() / 2;
+    self.moduleImg.tint = .{ .r = 255, .g = 255, .b = 255, .a = 150 };
 
-        if (self.button) |*button| {
-            try button.start();
+    try self.button.start();
 
-            button.setPosition(.{
-                .x = bgRect.transform.relX(0.5) - @divTrunc(button.rect.transform.getWidth(), 2),
-                .y = bgRect.transform.relY(0.9) - @divTrunc(button.rect.transform.getHeight(), 2),
-            });
+    self.button.setPosition(.{
+        .x = self.bgRect.transform.relX(0.5) - @divTrunc(self.button.rect.transform.getWidth(), 2),
+        .y = self.bgRect.transform.relY(0.9) - @divTrunc(self.button.rect.transform.getHeight(), 2),
+    });
 
-            button.rect.rounded = true;
-        }
-    }
+    self.button.rect.rounded = true;
 }
 
 pub fn update(self: *DataFlasherUI) !void {
-    if (self.button) |*button| {
-        try button.update();
-    }
+    try self.button.update();
 }
 
 pub fn draw(self: *DataFlasherUI) !void {
     self.state.lock();
+    errdefer self.state.unlock();
     const isActive = self.state.data.isActive;
     self.state.unlock();
 
-    if (self.bgRect) |bgRect| {
-        bgRect.draw();
-    }
-
-    if (self.headerLabel) |label| {
-        label.draw();
-    }
-
-    if (self.writeProgressRect) |rect| {
-        rect.draw();
-    }
+    self.bgRect.draw();
+    self.headerLabel.draw();
 
     if (isActive) try self.drawActive() else try self.drawInactive();
 }
 
 fn drawActive(self: *DataFlasherUI) !void {
-    if (self.isoText) |*text| {
-        text.draw();
-    }
-
-    if (self.deviceText) |*text| {
-        text.draw();
-    }
-
-    if (self.button) |*button| {
-        try button.draw();
-    }
+    self.isoText.draw();
+    self.deviceText.draw();
+    self.writeProgressRect.draw();
+    try self.button.draw();
 }
 
 fn drawInactive(self: *DataFlasherUI) !void {
-    if (self.moduleImg) |img| {
-        img.draw();
-    }
+    self.moduleImg.draw();
 }
 
 pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
@@ -290,23 +263,12 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
                         }
                     }
 
-                    if (self.isoText) |*text| {
-                        text.value = isoPath;
-                    }
+                    self.isoText.value = isoPath;
+                    self.deviceText.value = device.?.getBsdNameSlice();
 
-                    if (self.deviceText) |*text| {
-                        text.value = device.?.getBsdNameSlice();
-                    }
+                    if (areStateParamsAvailable) self.button.setEnabled(true);
 
-                    if (areStateParamsAvailable) {
-                        if (self.button) |*button| {
-                            button.setEnabled(true);
-                        }
-                    }
-
-                    if (self.headerLabel) |*header| {
-                        header.style.textColor = Color.white;
-                    }
+                    self.headerLabel.style.textColor = Color.white;
 
                     self.recalculateUI(.{
                         .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
@@ -318,13 +280,8 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
                 false => {
                     Debug.log(.DEBUG, "DataFlasherUI: setting UI to INACTIVE.", .{});
 
-                    if (self.headerLabel) |*header| {
-                        header.style.textColor = Color.lightGray;
-                    }
-
-                    if (self.button) |*button| {
-                        button.setEnabled(false);
-                    }
+                    self.headerLabel.style.textColor = Color.lightGray;
+                    self.button.setEnabled(false);
 
                     self.recalculateUI(.{
                         .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
@@ -342,11 +299,9 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
 
             Debug.log(.INFO, "Progress is: {d}", .{data.newProgress});
 
-            if (self.writeProgressRect) |*rect| {
-                const width: f32 = self.bgRect.?.transform.getWidth();
-                const progress: f32 = @floatFromInt(data.newProgress);
-                rect.transform.w = (progress / 100) * 0.9 * width;
-            }
+            const width: f32 = self.bgRect.transform.getWidth();
+            const progress: f32 = @floatFromInt(data.newProgress);
+            self.writeProgressRect.transform.w = (progress / 100) * 0.9 * width;
 
             eventResult.validate(.SUCCESS);
         },
@@ -372,11 +327,7 @@ fn queryDeviceListUIDimensions(self: *DataFlasherUI) !void {
 
     if (eventResult.data) |dimensionsData| {
         const deviceListUIData: *DeviceListUI.Events.onUITransformQueried.Response = @ptrCast(@alignCast(dimensionsData));
-
-        if (self.bgRect) |*bgRect| {
-            bgRect.transform.x = deviceListUIData.transform.x + deviceListUIData.transform.getWidth() + 20;
-        }
-
+        self.bgRect.transform.x = deviceListUIData.transform.x + deviceListUIData.transform.getWidth() + 20;
         self.allocator.destroy(deviceListUIData);
     }
 }
@@ -384,42 +335,28 @@ fn queryDeviceListUIDimensions(self: *DataFlasherUI) !void {
 fn recalculateUI(self: *DataFlasherUI, bgRectParams: BgRectParams) void {
     Debug.log(.DEBUG, "DataFlasherUI: updating bgRect properties!", .{});
 
-    if (self.bgRect) |*bgRect| {
-        bgRect.transform.w = bgRectParams.width;
-        bgRect.style.color = bgRectParams.color;
-        bgRect.style.borderStyle.color = bgRectParams.borderColor;
+    self.bgRect.transform.w = bgRectParams.width;
+    self.bgRect.style.color = bgRectParams.color;
+    self.bgRect.style.borderStyle.color = bgRectParams.borderColor;
 
-        if (self.headerLabel) |*headerLabel| {
-            headerLabel.transform.x = bgRect.transform.x + 12;
-            headerLabel.transform.y = bgRect.transform.relY(0.01);
-        }
+    self.headerLabel.transform.x = self.bgRect.transform.x + 12;
+    self.headerLabel.transform.y = self.bgRect.transform.relY(0.01);
 
-        if (self.moduleImg) |*image| {
-            image.transform.x = bgRect.transform.relX(0.5) - image.transform.getWidth() / 2;
-            image.transform.y = bgRect.transform.relY(0.5) - image.transform.getHeight() / 2;
-        }
+    self.moduleImg.transform.x = self.bgRect.transform.relX(0.5) - self.moduleImg.transform.getWidth() / 2;
+    self.moduleImg.transform.y = self.bgRect.transform.relY(0.5) - self.moduleImg.transform.getHeight() / 2;
 
-        if (self.isoText) |*isoText| {
-            isoText.transform.x = bgRect.transform.relX(0.05);
-            isoText.transform.y = bgRect.transform.relY(0.13);
+    self.isoText.transform.x = self.bgRect.transform.relX(0.05);
+    self.isoText.transform.y = self.bgRect.transform.relY(0.13);
 
-            if (self.deviceText) |*deviceText| {
-                deviceText.transform.x = bgRect.transform.relX(0.05);
-                deviceText.transform.y = isoText.transform.y + isoText.transform.getHeight() + 10;
-            }
-        }
+    self.deviceText.transform.x = self.bgRect.transform.relX(0.05);
+    self.deviceText.transform.y = self.isoText.transform.y + self.isoText.transform.getHeight() + 10;
 
-        if (self.writeProgressRect) |*rect| {
-            rect.transform.x = bgRect.transform.relX(0.05);
-        }
+    self.writeProgressRect.transform.x = self.bgRect.transform.relX(0.05);
 
-        if (self.button) |*btn| {
-            btn.setPosition(.{
-                .x = bgRect.transform.relX(0.5) - btn.rect.transform.getWidth() / 2,
-                .y = btn.rect.transform.y,
-            });
-        }
-    }
+    self.button.setPosition(.{
+        .x = self.bgRect.transform.relX(0.5) - self.button.rect.transform.getWidth() / 2,
+        .y = self.button.rect.transform.y,
+    });
 }
 
 pub const ComponentImplementation = ComponentFramework.ImplementComponent(DataFlasherUI);
