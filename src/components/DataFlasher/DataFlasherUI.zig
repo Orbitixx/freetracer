@@ -218,6 +218,10 @@ pub fn draw(self: *DataFlasherUI) !void {
         label.draw();
     }
 
+    if (self.writeProgressRect) |rect| {
+        rect.draw();
+    }
+
     if (isActive) try self.drawActive() else try self.drawInactive();
 }
 
@@ -229,12 +233,6 @@ fn drawActive(self: *DataFlasherUI) !void {
     if (self.deviceText) |*text| {
         text.draw();
     }
-
-    // if (self.writeProgress > 0) {
-    if (self.writeProgressRect) |rect| {
-        rect.draw();
-    }
-    // }
 
     if (self.button) |*button| {
         try button.draw();
@@ -345,9 +343,9 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
             Debug.log(.INFO, "Progress is: {d}", .{data.newProgress});
 
             if (self.writeProgressRect) |*rect| {
-                rect.transform.x = self.bgRect.?.transform.relX(0.05);
-                rect.transform.w = @divFloor(@as(f32, @floatFromInt(data.newProgress)), 100) * 0.9 * self.bgRect.?.transform.getWidth();
-                rect.draw();
+                const width: f32 = self.bgRect.?.transform.getWidth();
+                const progress: f32 = @floatFromInt(data.newProgress);
+                rect.transform.w = (progress / 100) * 0.9 * width;
             }
 
             eventResult.validate(.SUCCESS);
@@ -409,6 +407,10 @@ fn recalculateUI(self: *DataFlasherUI, bgRectParams: BgRectParams) void {
                 deviceText.transform.x = bgRect.transform.relX(0.05);
                 deviceText.transform.y = isoText.transform.y + isoText.transform.getHeight() + 10;
             }
+        }
+
+        if (self.writeProgressRect) |*rect| {
+            rect.transform.x = bgRect.transform.relX(0.05);
         }
 
         if (self.button) |*btn| {
