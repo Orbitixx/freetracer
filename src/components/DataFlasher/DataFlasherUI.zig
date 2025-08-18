@@ -1,11 +1,11 @@
 const std = @import("std");
 const rl = @import("raylib");
-const Debug = @import("freetracer-lib").Debug;
+const freetracer_lib = @import("freetracer-lib");
+const Debug = freetracer_lib.Debug;
 
 const AppConfig = @import("../../config.zig");
 
-const System = @import("../../lib/sys/system.zig");
-const USBStorageDevice = System.USBStorageDevice;
+const StorageDevice = freetracer_lib.StorageDevice;
 
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
 const ComponentName = EventManager.ComponentName.DATA_FLASHER_UI;
@@ -20,7 +20,7 @@ const DeviceListUI = @import("../DeviceList/DeviceListUI.zig");
 const DataFlasherUIState = struct {
     isActive: bool = false,
     isoPath: ?[:0]const u8 = null,
-    device: ?USBStorageDevice = null,
+    device: ?StorageDevice = null,
 };
 
 const DataFlasherUI = @This();
@@ -246,7 +246,7 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
                     Debug.log(.DEBUG, "DataFlasherUI: setting UI to ACTIVE.", .{});
 
                     var isoPath: [:0]const u8 = "NULL";
-                    var device: ?*System.USBStorageDevice = null;
+                    var device: ?*StorageDevice = null;
                     var areStateParamsAvailable: bool = false;
 
                     {

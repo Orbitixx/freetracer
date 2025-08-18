@@ -1,14 +1,10 @@
 const std = @import("std");
-const Debug = @import("freetracer-lib").Debug;
-
-const System = @import("../../lib/sys/system.zig");
-const USBStorageDevice = System.USBStorageDevice;
-
-const MacOS = @import("../../modules/macos/MacOSTypes.zig");
-const IOKit = @import("../../modules/macos/IOKit.zig");
+const freetracer_lib = @import("freetracer-lib");
+const Debug = freetracer_lib.Debug;
 
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
 
+const StorageDevice = freetracer_lib.StorageDevice;
 const DeviceListComponent = @import("./DeviceList.zig");
 const DeviceListComponentWorker = @import("./DeviceList.zig").ComponentWorker;
 
@@ -20,9 +16,9 @@ pub fn workerRun(worker: *DeviceListComponentWorker, context: *anyopaque) void {
     // worker.state.lock();
     // worker.state.unlock();
 
-    const devices = IOKit.getUSBStorageDevices(deviceList.allocator) catch blk: {
+    const devices = freetracer_lib.getStorageDevices(deviceList.allocator) catch blk: {
         Debug.log(.WARNING, "Unable to capture USB devices. Please make sure a USB flash drive is plugged in.", .{});
-        break :blk std.ArrayList(USBStorageDevice).init(deviceList.allocator);
+        break :blk std.ArrayList(StorageDevice).init(deviceList.allocator);
     };
 
     Debug.log(.INFO, "DeviceList Worker: finished finding USB Storage devices, found: {d}", .{devices.items.len});

@@ -19,13 +19,18 @@ pub const k = struct {
     pub const EmptyAuthotizationFlags: u32 = 0;
     pub const EmptyAuthorizationItemFlags: u32 = 0;
     pub const ZeroAuthorizationItemValueLength: usize = 0;
+
+    pub const DefaultDeviceName = "Untitled Device";
 };
 
 pub const Character = struct {
     pub const NULL = 0x00;
-    pub const SEMICOLON = 0x3b;
-    pub const RIGHT_SLASH = 0x2f;
-    pub const DOT = 0x2e;
+    pub const SEMICOLON = 0x3B;
+    pub const RIGHT_SLASH = 0x2F;
+    pub const DOT = 0x2E;
+
+    pub const FIRST_PRINTABLE_CHARACTER = 0x20;
+    pub const LAST_PRINTABLE_CHARACTER = 0x7F;
 };
 
 pub const HelperRequestCode = enum(i64) {

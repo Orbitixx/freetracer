@@ -1,74 +1,15 @@
 const std = @import("std");
-const c = @import("../types.zig").c;
+const types = @import("../types.zig");
 const Debug = @import("../util/debug.zig");
-const Character = @import("../constants.zig").Character;
+const constants = @import("../constants.zig");
 
-pub const MAX_BSD_NAME: usize = 64;
-pub const MAX_DEVICE_NAME: usize = std.fs.max_name_bytes;
+const c = types.c;
+const StorageDevice = types.StorageDevice;
+const MAX_BSD_NAME = types.MAX_BSD_NAME;
+const MAX_DEVICE_NAME = types.MAX_DEVICE_NAME;
 
-pub const StorageDevice = struct {
-    serviceId: c.io_service_t,
-    deviceName: [std.fs.max_name_bytes:0]u8,
-    bsdName: [MAX_BSD_NAME:0]u8,
-    size: i64,
-
-    pub fn print(self: *const StorageDevice) void {
-        Debug.log(.INFO, "Storage Device: {s} ({s}) - Size: {d} bytes", .{ self.deviceName, self.bsdName, self.size });
-    }
-};
-
-fn getBoolFromIOService(service: c.io_service_t, key: [*c]const u8) !bool {
-    const keyRef = c.CFStringCreateWithCString(c.kCFAllocatorDefault, key, c.kCFStringEncodingUTF8);
-    defer _ = c.CFRelease(keyRef);
-
-    const valueRef = c.IORegistryEntryCreateCFProperty(service, keyRef, c.kCFAllocatorDefault, 0);
-    if (valueRef == null) return error.FailedToGetBoolFromIOService;
-    defer _ = c.CFRelease(valueRef);
-
-    const boolRef: c.CFBooleanRef = @ptrCast(valueRef);
-    return c.CFBooleanGetValue(boolRef) != 0;
-}
-
-fn getStringFromIOService(service: c.io_service_t, key: [*c]const u8, comptime size: usize) ![size:0]u8 {
-    const stringNameKey = c.CFStringCreateWithCString(c.kCFAllocatorDefault, key, c.kCFStringEncodingUTF8);
-    defer _ = c.CFRelease(stringNameKey);
-
-    const stringNameRef = c.IORegistryEntryCreateCFProperty(service, stringNameKey, c.kCFAllocatorDefault, 0);
-    if (stringNameRef == null) return error.FailedToGetStringFromIOService;
-    defer _ = c.CFRelease(stringNameRef);
-
-    var stringNameBuf: [size:0]u8 = std.mem.zeroes([size:0]u8);
-    const stringNameCFString: c.CFStringRef = @ptrCast(stringNameRef);
-
-    if (c.CFStringGetCString(stringNameCFString, &stringNameBuf, size, c.kCFStringEncodingUTF8) == 0) {
-        return error.FailedToConvertStringFromIOService;
-    }
-
-    return stringNameBuf;
-}
-
-fn getNumberFromIOService(service: c.io_service_t, key: [*c]const u8, numberType: c_int, comptime zigType: type) !i64 {
-    const numberNameKey = c.CFStringCreateWithCString(c.kCFAllocatorDefault, key, c.kCFStringEncodingUTF8);
-    defer _ = c.CFRelease(numberNameKey);
-
-    const numberKeyRef = c.IORegistryEntryCreateCFProperty(service, numberNameKey, c.kCFAllocatorDefault, 0);
-    if (numberKeyRef == null) return error.FailedToGetNumberFromIOService;
-    defer _ = c.CFRelease(numberKeyRef);
-
-    const numberCFNumRef: c.CFNumberRef = @ptrCast(numberKeyRef);
-    var numberValue: zigType = 0;
-
-    if (c.CFNumberGetValue(numberCFNumRef, numberType, &numberValue) == 0) return error.FailedToConvertNumberFromIOService;
-
-    return numberValue;
-}
-
-/// Helper function to copy C string to sentinel-terminated array
-fn copyToSentinelArray(comptime size: usize, source: [*c]const u8, dest: *[size:0]u8) void {
-    const sourceSlice = std.mem.span(source);
-    const copyLength = @min(sourceSlice.len, size - 1);
-    @memcpy(dest[0..copyLength], sourceSlice[0..copyLength]);
-}
+const Character = constants.Character;
+const DefaultNameString = constants.k.DefaultDeviceName;
 
 pub fn getStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(StorageDevice) {
     var storageDevices = std.ArrayList(StorageDevice).init(allocator);
@@ -113,7 +54,7 @@ fn getStorageDeviceFromService(service: c.io_service_t) !StorageDevice {
     const size: i64 = try getNumberFromIOService(service, c.kIOMediaSizeKey, c.kCFNumberSInt64Type, i64);
 
     var defaultDeviceName: [MAX_DEVICE_NAME:0]u8 = std.mem.zeroes([MAX_DEVICE_NAME:0]u8);
-    @memcpy(defaultDeviceName[0..15], "Untitled Device");
+    @memcpy(defaultDeviceName[0..DefaultNameString.len], DefaultNameString);
 
     const deviceName: [MAX_DEVICE_NAME:0]u8 = try getVolumeNameFromBSDName(bsdNameSlice) orelse defaultDeviceName;
 
@@ -164,4 +105,50 @@ fn getVolumeNameFromBSDName(bsdName: []const u8) !?[MAX_DEVICE_NAME:0]u8 {
     if (result != c.TRUE) return null;
 
     return nameBuffer;
+}
+
+fn getBoolFromIOService(service: c.io_service_t, key: [*c]const u8) !bool {
+    const keyRef = c.CFStringCreateWithCString(c.kCFAllocatorDefault, key, c.kCFStringEncodingUTF8);
+    defer _ = c.CFRelease(keyRef);
+
+    const valueRef = c.IORegistryEntryCreateCFProperty(service, keyRef, c.kCFAllocatorDefault, 0);
+    if (valueRef == null) return error.FailedToGetBoolFromIOService;
+    defer _ = c.CFRelease(valueRef);
+
+    const boolRef: c.CFBooleanRef = @ptrCast(valueRef);
+    return c.CFBooleanGetValue(boolRef) != 0;
+}
+
+fn getStringFromIOService(service: c.io_service_t, key: [*c]const u8, comptime size: usize) ![size:0]u8 {
+    const stringNameKey = c.CFStringCreateWithCString(c.kCFAllocatorDefault, key, c.kCFStringEncodingUTF8);
+    defer _ = c.CFRelease(stringNameKey);
+
+    const stringNameRef = c.IORegistryEntryCreateCFProperty(service, stringNameKey, c.kCFAllocatorDefault, 0);
+    if (stringNameRef == null) return error.FailedToGetStringFromIOService;
+    defer _ = c.CFRelease(stringNameRef);
+
+    var stringNameBuf: [size:0]u8 = std.mem.zeroes([size:0]u8);
+    const stringNameCFString: c.CFStringRef = @ptrCast(stringNameRef);
+
+    if (c.CFStringGetCString(stringNameCFString, &stringNameBuf, size, c.kCFStringEncodingUTF8) == 0) {
+        return error.FailedToConvertStringFromIOService;
+    }
+
+    return stringNameBuf;
+}
+
+fn getNumberFromIOService(service: c.io_service_t, key: [*c]const u8, numberType: c_int, comptime zigType: type) !i64 {
+    const numberNameKey = c.CFStringCreateWithCString(c.kCFAllocatorDefault, key, c.kCFStringEncodingUTF8);
+    defer _ = c.CFRelease(numberNameKey);
+
+    const numberKeyRef = c.IORegistryEntryCreateCFProperty(service, numberNameKey, c.kCFAllocatorDefault, 0);
+    if (numberKeyRef == null) return error.FailedToGetNumberFromIOService;
+    defer _ = c.CFRelease(numberKeyRef);
+
+    const numberCFNumRef: c.CFNumberRef = @ptrCast(numberKeyRef);
+    var numberValue: zigType = 0;
+
+    if (c.CFNumberGetValue(numberCFNumRef, numberType, &numberValue) == 0) return error.FailedToConvertNumberFromIOService;
+
+    return numberValue;
 }

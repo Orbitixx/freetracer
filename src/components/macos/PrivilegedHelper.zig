@@ -6,10 +6,9 @@ const AppConfig = @import("../../config.zig");
 const freetracer_lib = @import("freetracer-lib");
 const c = freetracer_lib.c;
 const Debug = freetracer_lib.Debug;
-
-const MachCommunicator = freetracer_lib.MachCommunicator;
-const SerializedData = freetracer_lib.SerializedData;
-const MachPortPacketSize = freetracer_lib.k.MachPortPacketSize;
+const StorageDevice = freetracer_lib.StorageDevice;
+const isLinux = freetracer_lib.isLinux;
+const isMacOS = freetracer_lib.isMacOS;
 
 const xpc = freetracer_lib.xpc;
 const XPCService = freetracer_lib.XPCService;
@@ -26,10 +25,9 @@ const PrivilegedHelperState = struct {
     installedVersion: [:0]const u8 = "-1",
     isoPath: ?[:0]const u8 = null,
     targetDisk: ?[:0]const u8 = null,
-    device: ?System.USBStorageDevice = null,
+    device: ?StorageDevice = null,
 };
 
-const System = @import("../../lib/sys/system.zig");
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
 const WindowManager = @import("../../managers/WindowManager.zig").WindowManagerSingleton;
 const winRelX = WindowManager.relW;
@@ -64,7 +62,7 @@ pub const Events = struct {
         struct {
             isoPath: [:0]const u8,
             targetDisk: [:0]const u8,
-            device: System.USBStorageDevice,
+            device: StorageDevice,
         },
         struct {},
     );
@@ -94,7 +92,7 @@ pub fn init(allocator: std.mem.Allocator) !PrivilegedHelper {
         .state = ComponentState.init(PrivilegedHelperState{
             .isActive = false,
             // Set installed flag to true by default on Linux systems
-            .isHelperInstalled = System.isLinux,
+            .isHelperInstalled = isLinux,
         }),
         .xpcClient = try XPCService.init(.{
             .isServer = false,
@@ -130,7 +128,7 @@ pub fn initWorker(self: *PrivilegedHelper) !void {
 }
 
 pub fn start(self: *PrivilegedHelper) !void {
-    if (System.isLinux) return;
+    if (isLinux) return;
 
     try self.initWorker();
 
@@ -151,13 +149,13 @@ pub fn start(self: *PrivilegedHelper) !void {
 }
 
 pub fn update(self: *PrivilegedHelper) !void {
-    if (System.isLinux) return;
+    if (isLinux) return;
 
     self.checkAndJoinWorker();
 }
 
 pub fn draw(self: *PrivilegedHelper) !void {
-    const isHelperToolInstalled = if (System.isMac) self.isHelperInstalled else if (System.isLinux) true else unreachable;
+    const isHelperToolInstalled = if (isMacOS) self.isHelperInstalled else if (isLinux) true else unreachable;
 
     rl.drawCircleV(.{ .x = winRelX(0.9), .y = winRelY(0.065) }, 4.5, if (isHelperToolInstalled) .green else .red);
     rl.drawCircleLinesV(.{ .x = winRelX(0.9), .y = winRelY(0.065) }, 4.5, .white);
@@ -166,7 +164,7 @@ pub fn draw(self: *PrivilegedHelper) !void {
 pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult {
     var eventResult = EventResult.init();
 
-    if (System.isLinux) return eventResult;
+    if (isLinux) return eventResult;
 
     eventLoop: switch (event.hash) {
         //
@@ -217,13 +215,6 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
         },
 
         Events.onDiskUnmountConfirmed.Hash => {
-            // const request = XPCService.createRequest(.WRITE_ISO_TO_DEVICE);
-            // defer XPCService.releaseObject(request);
-            // self.state.lock();
-            // defer self.state.unlock();
-            // XPCService.createString(request, "isoPath", self.state.data.isoPath.?);
-            // XPCService.createString(request, "targetDisk", self.state.data.targetDisk.?);
-            // XPCService.connectionSendMessage(self.xpcClient.service, request);
             eventResult.validate(.SUCCESS);
         },
 
@@ -384,7 +375,7 @@ fn requestWrite(self: *PrivilegedHelper, targetDisk: [:0]const u8, isoPath: [:0]
     XPCService.connectionSendMessage(self.xpcClient.service, request);
 }
 
-fn acquireStateDataOwnership(self: *PrivilegedHelper, isoPath: [:0]const u8, targetDisk: [:0]const u8, device: System.USBStorageDevice) !void {
+fn acquireStateDataOwnership(self: *PrivilegedHelper, isoPath: [:0]const u8, targetDisk: [:0]const u8, device: StorageDevice) !void {
     self.cleanupComponentState();
     self.state.lock();
     defer self.state.unlock();
@@ -401,20 +392,6 @@ fn cleanupComponentState(self: *PrivilegedHelper) void {
     if (self.state.data.isoPath) |path| self.allocator.free(path);
     if (self.state.data.targetDisk) |disk| self.allocator.free(disk);
 }
-
-// fn processMachMessage(msgId: i32, data: SerializedData) !SerializedData {
-//     Debug.log(.INFO, "Received message {any} and data {any}", .{ msgId, data });
-//     return SerializedData.serialize([:0]const u8, "Successful response from MAIN APP!");
-// }
-//
-// pub fn requestWrite(data: [:0]const u8) freetracer_lib.HelperReturnCode {
-//     const returnCode = PrivilegedHelperTool.requestWriteISO(data) catch |err| blk: {
-//         Debug.log(.ERROR, "PrivilegedHelper.requestWrite() caught an error: {any}", .{err});
-//         break :blk freetracer_lib.HelperReturnCode.FAILED_TO_WRITE_ISO_TO_DEVICE;
-//     };
-//
-//     return returnCode;
-// }
 
 const ComponentImplementation = ComponentFramework.ImplementComponent(PrivilegedHelper);
 pub const asComponent = ComponentImplementation.asComponent;

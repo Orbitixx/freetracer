@@ -1,11 +1,12 @@
 const std = @import("std");
 const rl = @import("raylib");
-const Debug = @import("freetracer-lib").Debug;
+const freetracer_lib = @import("freetracer-lib");
+const Debug = freetracer_lib.Debug;
+const Character = freetracer_lib.Character;
 
 const AppConfig = @import("../../config.zig");
 
-const System = @import("../../lib/sys/system.zig");
-const USBStorageDevice = System.USBStorageDevice;
+const StorageDevice = freetracer_lib.StorageDevice;
 
 const WindowManager = @import("../../managers/WindowManager.zig").WindowManagerSingleton;
 const winRelX = WindowManager.relW;
@@ -35,8 +36,8 @@ const Color = UIFramework.Styles.Color;
 
 pub const DeviceListUIState = struct {
     isActive: bool = false,
-    devices: *std.ArrayList(USBStorageDevice),
-    selectedDevice: ?USBStorageDevice = null,
+    devices: *std.ArrayList(StorageDevice),
+    selectedDevice: ?StorageDevice = null,
 };
 
 pub const ComponentState = ComponentFramework.ComponentState(DeviceListUIState);
@@ -85,7 +86,7 @@ pub const Events = struct {
         EventManager.createEventName(ComponentName, "on_device_name_changed"),
         struct {
             // Not authoritative data; copy only -- use parent for authoritative.
-            selectedDevice: ?USBStorageDevice,
+            selectedDevice: ?StorageDevice,
         },
         struct {},
     );
@@ -320,10 +321,6 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
             self.state.lock();
             defer self.state.unlock();
 
-            if (self.state.data.selectedDevice) |*device| {
-                device.deinit();
-            }
-
             self.state.data.selectedDevice = null;
 
             eventResult.validate(.SUCCESS);
@@ -372,7 +369,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
                 };
 
                 // Buffered display string in a predefined format
-                const deviceStringBuffer = self.allocator.allocSentinel(u8, 254, 0x00) catch |err| {
+                const deviceStringBuffer = self.allocator.allocSentinel(u8, 254, Character.NULL) catch |err| {
                     std.debug.panic("{any}", .{err});
                 };
 
@@ -380,7 +377,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
                     deviceStringBuffer,
                     "{s} - {s} ({d:.0}GB)",
                     .{
-                        std.mem.sliceTo(device.deviceNameBuf[0..device.deviceNameBuf.len], 0x00),
+                        std.mem.sliceTo(device.deviceName[0..device.deviceName.len], Character.NULL),
                         device.getBsdNameSlice(),
                         @divTrunc(device.size, 1_000_000_000),
                     },

@@ -1,7 +1,8 @@
 const std = @import("std");
-const Debug = @import("freetracer-lib").Debug;
-const endian = @import("../lib/util/endian.zig");
-const iso9660 = @import("../lib/data/iso9660.zig");
+const freetracer_lib = @import("freetracer-lib");
+const Debug = freetracer_lib.Debug;
+const endian = freetracer_lib.endian;
+const iso9660 = freetracer_lib.iso9660;
 
 const assert = std.debug.assert;
 

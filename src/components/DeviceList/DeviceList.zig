@@ -1,8 +1,8 @@
 const std = @import("std");
-const Debug = @import("freetracer-lib").Debug;
+const freetracer_lib = @import("freetracer-lib");
+const Debug = freetracer_lib.Debug;
 
-const System = @import("../../lib/sys/system.zig");
-const USBStorageDevice = System.USBStorageDevice;
+const StorageDevice = freetracer_lib.StorageDevice;
 
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
 const ComponentName = EventManager.ComponentName.DEVICE_LIST;
@@ -14,8 +14,8 @@ const DeviceListUI = @import("./DeviceListUI.zig");
 
 const DeviceListState = struct {
     isActive: bool = false,
-    devices: std.ArrayList(USBStorageDevice),
-    selectedDevice: ?USBStorageDevice = null,
+    devices: std.ArrayList(StorageDevice),
+    selectedDevice: ?StorageDevice = null,
 };
 
 const DeviceListComponent = @This();
@@ -49,7 +49,7 @@ pub const Events = struct {
     // Event: Worker finished discovering storage devices
     pub const onDiscoverDevicesEnd = ComponentFramework.defineEvent(
         EventManager.createEventName(ComponentName, "on_discover_devices_end"),
-        struct { devices: std.ArrayList(USBStorageDevice) },
+        struct { devices: std.ArrayList(StorageDevice) },
         struct {},
     );
 
@@ -77,14 +77,14 @@ pub const Events = struct {
     pub const onSelectedDeviceQueried = ComponentFramework.defineEvent(
         EventManager.createEventName(ComponentName, "on_selected_device_queried"),
         struct {},
-        struct { device: USBStorageDevice },
+        struct { device: StorageDevice },
     );
 };
 
 pub fn init(allocator: std.mem.Allocator) !DeviceListComponent {
     return .{
         .state = ComponentState.init(DeviceListState{
-            .devices = std.ArrayList(USBStorageDevice).init(allocator),
+            .devices = std.ArrayList(StorageDevice).init(allocator),
         }),
         .allocator = allocator,
     };
@@ -190,7 +190,7 @@ pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResu
 
             EventManager.broadcast(responseEvent);
 
-            Debug.log(.DEBUG, "DeviceList: Component processed USBStorageDevices from Worker", .{});
+            Debug.log(.DEBUG, "DeviceList: Component processed StorageDevices from Worker", .{});
         },
 
         // Event: User is finished interacting with DeviceList component
@@ -248,10 +248,6 @@ pub fn deinit(self: *DeviceListComponent) void {
     self.state.lock();
     defer self.state.unlock();
 
-    for (self.state.data.devices.items) |*device| {
-        device.deinit();
-    }
-
     self.state.data.devices.deinit();
 }
 
@@ -269,10 +265,6 @@ fn discoverDevices(self: *DeviceListComponent) !void {
         const eventResult = try EventManager.signal("device_list_ui", Events.onDevicesCleanup.create(self.asComponentPtr(), null));
 
         if (!eventResult.success) return error.DeviceListCouldNotCleanUpDevicesBeforeDiscoveringNewOnes;
-
-        for (devices.items) |*device| {
-            device.deinit();
-        }
 
         devices.clearAndFree();
     }
@@ -299,7 +291,7 @@ pub const dispatchComponentFinishedAction = struct {
 
 pub const SelectDeviceCallbackContext = struct {
     component: *DeviceListComponent,
-    selectedDevice: USBStorageDevice,
+    selectedDevice: StorageDevice,
 };
 
 pub const selectDeviceActionWrapper = struct {

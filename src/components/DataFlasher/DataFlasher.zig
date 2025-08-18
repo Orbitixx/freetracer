@@ -1,10 +1,9 @@
 const std = @import("std");
 const osd = @import("osdialog");
-const Debug = @import("freetracer-lib").Debug;
+const freetracer_lib = @import("freetracer-lib");
+const Debug = freetracer_lib.Debug;
 
-const System = @import("../../lib/sys/system.zig");
-const USBStorageDevice = System.USBStorageDevice;
-
+const StorageDevice = freetracer_lib.StorageDevice;
 const ISOParser = @import("../../modules/IsoParser.zig");
 const ISO_STATUS = ISOParser.ISO_PARSER_RESULT;
 
@@ -19,7 +18,7 @@ const DataFlasherUI = @import("./DataFlasherUI.zig");
 const DataFlasherState = struct {
     isActive: bool = false,
     isoPath: ?[:0]const u8 = null,
-    device: ?USBStorageDevice = null,
+    device: ?StorageDevice = null,
 };
 
 const DataFlasher = @This();
@@ -123,7 +122,7 @@ pub fn handleEvent(self: *DataFlasher, event: ComponentEvent) !EventResult {
                 self.state.data.isActive = true;
 
                 std.debug.assert(self.state.data.isoPath != null and self.state.data.isoPath.?.len > 2);
-                std.debug.assert(self.state.data.device != null and @TypeOf(self.state.data.device.?) == USBStorageDevice);
+                std.debug.assert(self.state.data.device != null and @TypeOf(self.state.data.device.?) == StorageDevice);
 
                 Debug.log(.DEBUG, "DataFlasher received:\n\tisoPath: {s}\n\tdevice: {s}\n", .{
                     self.state.data.isoPath.?,
@@ -147,7 +146,7 @@ pub fn dispatchComponentAction(self: *DataFlasher) void {
 
     // NOTE: Need to be careful with the memory access operations here since targetDisk (and obtained slice below)
     // live/s only within the scope of this function.
-    var device: USBStorageDevice = undefined;
+    var device: StorageDevice = undefined;
     var isoPath: [:0]const u8 = undefined;
 
     {

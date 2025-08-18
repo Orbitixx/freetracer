@@ -8,6 +8,8 @@ const debug = @import("./util/debug.zig");
 const types = @import("./types.zig");
 const time = @import("./util/time.zig");
 const string = @import("./util/string.zig");
+pub const endian = @import("./util/endian.zig");
+pub const iso9660 = @import("./util/iso9660.zig");
 const Mach = @import("./macos/Mach.zig");
 const IOKit = @import("./macos/IOKit.zig");
 
