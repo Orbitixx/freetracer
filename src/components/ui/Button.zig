@@ -30,6 +30,10 @@ pub const ButtonState = enum {
     DISABLED,
 };
 
+pub const ButtonParams = struct {
+    disableOnClick: bool = false,
+};
+
 pub const ButtonHandler = struct {
     function: *const fn (ctx: *anyopaque) void,
     context: *anyopaque,
@@ -50,6 +54,7 @@ text: Text,
 styles: ButtonStyles,
 state: ButtonState = ButtonState.NORMAL,
 clickHandler: ButtonHandler,
+params: ButtonParams = .{},
 
 pub const Events = struct {
     pub const onButtonToggleEnabled = defineEvent(
@@ -121,6 +126,7 @@ pub fn update(self: *ButtonComponent) !void {
 
     if (isButtonHovered and isButtonClicked) {
         self.state = ButtonState.ACTIVE;
+        if (self.params.disableOnClick) self.setEnabled(false);
         self.clickHandler.handle();
     } else if (isButtonHovered) {
         self.state = ButtonState.HOVER;

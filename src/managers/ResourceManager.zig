@@ -5,6 +5,8 @@ const Debug = @import("freetracer-lib").Debug;
 const FONTS_COUNT: usize = 2;
 const TEXTURES_COUNT: usize = 3;
 
+pub const Texture = rl.Texture2D;
+
 pub const ResourceManagerSingleton = struct {
     var allocator: std.mem.Allocator = undefined;
     var instance: ?ResourceManager = null;

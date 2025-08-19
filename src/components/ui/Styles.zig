@@ -1,10 +1,14 @@
 const rl = @import("raylib");
-const AppFont = @import("../../managers/ResourceManager.zig").FONT;
+const ResourceManager = @import("../../managers/ResourceManager.zig");
+const AppFont = ResourceManager.FONT;
+const Texture = ResourceManager.Texture;
 
 pub const Color = struct {
     pub const white = rl.Color.white;
     pub const offWhite = rl.Color{ .r = 190, .g = 190, .b = 190, .a = 255 };
     pub const black = rl.Color.black;
+    pub const red = rl.Color.red;
+    pub const green = rl.Color.green;
     pub const violet = rl.Color{ .r = 248, .g = 135, .b = 255, .a = 43 };
     pub const darkViolet = rl.Color{ .r = 248, .g = 135, .b = 255, .a = 20 };
     pub const blueGray = rl.Color{ .r = 49, .g = 85, .b = 100, .a = 255 };
@@ -56,4 +60,15 @@ pub const CheckboxStyles = struct {
     normal: CheckboxStyle,
     hover: CheckboxStyle,
     checked: CheckboxStyle,
+};
+
+pub const StatusboxStyle = struct {
+    outerRectStyle: RectangleStyle = .{},
+    innerRectStyle: RectangleStyle = .{},
+};
+
+pub const StatusboxStyles = struct {
+    none: StatusboxStyle,
+    success: StatusboxStyle,
+    failute: StatusboxStyle,
 };

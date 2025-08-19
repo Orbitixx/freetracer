@@ -254,7 +254,7 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
 fn displayNeedPermissionsDialog(context: ?*anyopaque) callconv(.c) void {
     _ = context;
 
-    const result = osd.message("Writing to the device failed. Apple's security policy requires 'Full Disk Access' for an app to write directly to a drive.\n\nFreetracer will only use this to write your selected ISO file to the selected device. Your other data will not be accessed.\n\nTo grant access:\n\nOpen System Settings > Privacy & Security > Full Disk Access.\nClick the (+) button and add Freetracer from the /Applications folder.", .{ .level = .info, .buttons = .ok_cancel });
+    const result = osd.message("Writing to the device failed. MacOS' security policy requires 'Full Disk Access' for an app to write directly to a drive.\n\nFreetracer will only use this to write your selected ISO file to the selected device. Your other data will not be accessed.\n\nTo grant access:\n\nOpen System Settings > Privacy & Security > Full Disk Access.\nClick the (+) button and add Freetracer from the /Applications folder.", .{ .level = .warning, .buttons = .ok_cancel });
 
     if (result) freetracer_lib.openPrivacySettings();
 }
