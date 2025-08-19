@@ -148,6 +148,13 @@ fn respondWithErrorAndTerminate(
     ShutdownManager.terminateWithError(err.err);
 }
 
+fn sendXPCReply(connection: XPCConnection, reply: HelperResponseCode, comptime logMessage: []const u8) void {
+    Debug.log(.INFO, logMessage, .{});
+    const replyObject = XPCService.createResponse(reply);
+    XPCService.connectionSendMessage(connection, replyObject);
+    XPCService.releaseObject(replyObject);
+}
+
 fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
     //
     const isoPath: []const u8 = XPCService.parseString(data, "isoPath");
@@ -164,7 +171,7 @@ fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
 
     const isoFile = fs.openFileValidated(isoPath, .{ .userHomePath = userHomePath }) catch |err| {
         respondWithErrorAndTerminate(
-            .{ .err = err, .message = "Unable to retrieve user home path." },
+            .{ .err = err, .message = "Unable to open ISO file or its directory." },
             .{ .xpcConnection = connection, .xpcResponseCode = .ISO_FILE_INVALID },
         );
         return;
@@ -172,17 +179,27 @@ fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
 
     defer isoFile.close();
 
-    Debug.log(.INFO, "ISO File is determined to be valid.", .{});
-    const xpcReply: XPCObject = XPCService.createResponse(.ISO_FILE_VALID);
-    defer XPCService.releaseObject(xpcReply);
-    XPCService.connectionSendMessage(connection, xpcReply);
+    sendXPCReply(connection, .ISO_FILE_VALID, "ISO File is determined to be valid.");
 
     const device = dev.openDeviceValidated(deviceBsdName) catch |err| {
-        respondWithErrorAndTerminate(
-            .{ .err = err, .message = "Unable to safely open specified device, validation error." },
-            .{ .xpcConnection = connection, .xpcResponseCode = .DEVICE_INVALID },
-        );
-        return;
+        switch (err) {
+            error.AccessDenied => {
+                // sendXPCReply(connection, .NEED_DISK_PERMISSIONS, "Helper requires disk access permissions.");
+                // return;
+                respondWithErrorAndTerminate(
+                    .{ .err = err, .message = "Helper required disk access permissions." },
+                    .{ .xpcConnection = connection, .xpcResponseCode = .NEED_DISK_PERMISSIONS },
+                );
+                return;
+            },
+            else => {
+                respondWithErrorAndTerminate(
+                    .{ .err = err, .message = "Unable to safely open specified device, validation error." },
+                    .{ .xpcConnection = connection, .xpcResponseCode = .DEVICE_INVALID },
+                );
+                return;
+            },
+        }
     };
 
     defer device.close();
@@ -194,6 +211,18 @@ fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
         );
         return;
     };
+
+    sendXPCReply(connection, .ISO_WRITE_SUCCESS, "ISO image successfully written to device!");
+
+    fs.verifyWrittenBytes(connection, isoFile, device) catch |err| {
+        respondWithErrorAndTerminate(
+            .{ .err = err, .message = "Unable to verify written ISO image." },
+            .{ .xpcConnection = connection, .xpcResponseCode = .WRITE_VERIFICATION_FAIL },
+        );
+        return;
+    };
+
+    sendXPCReply(connection, .WRITE_VERIFICATION_SUCCESS, "Written ISO image successfully verified!");
 
     ShutdownManager.exitSuccessfully();
 

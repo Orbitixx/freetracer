@@ -4,8 +4,6 @@ const freetracer_lib = @import("freetracer-lib");
 const Debug = freetracer_lib.Debug;
 
 const StorageDevice = freetracer_lib.StorageDevice;
-const ISOParser = @import("../../modules/IsoParser.zig");
-const ISO_STATUS = ISOParser.ISO_PARSER_RESULT;
 
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
 const ComponentName = EventManager.ComponentName.DATA_FLASHER;
@@ -175,32 +173,33 @@ pub fn dispatchComponentAction(self: *DataFlasher) void {
 
     self.state.unlock();
 
-    // TODO: Since the application's function is to perform a raw, block-for-block write of the image to the device,
+    // NOTE: Since the application's function is to perform a raw, block-for-block write of the image to the device,
     // it has no need to understand the internal filesystem structure of the ISO file. Therefore, the most secure approach
     // is to avoid parsing the ISO 9660 filesystem structure entirely.
 
-    const isoParserResult = ISOParser.parseIso(self.allocator, isoPath, device.size);
-
-    if (isoParserResult != ISOParser.ISO_PARSER_RESULT.ISO_VALID) {
-        var message: [*:0]const u8 = "";
-
-        switch (isoParserResult) {
-            ISO_STATUS.INSUFFICIENT_DEVICE_CAPACITY => message = "The selected ISO file is larger than the capacity of the selected device.",
-            ISO_STATUS.ISO_BOOT_OR_PVD_SECTOR_TOO_SHORT => message = "ISO appears corrupted: the Boot Record or the Primary Volume Descriptor are too short.",
-            // TODO: this may be OK and desirable if the ISO is not an OS. Consider allowing to proceed.
-            ISO_STATUS.ISO_INVALID_BOOT_INDICATOR => message = "ISO is not bootable, its boot indicator is set to non-bootable.",
-            ISO_STATUS.ISO_INVALID_BOOT_SIGNATURE => message = "ISO appears corrupted: the boot signature is not correct.",
-            ISO_STATUS.ISO_INVALID_REQUIRED_VOLUME_DESCRIPTORS => message = "ISO appears corrupted: unable to locate either the Primary Volume Descriptor or the Boot Record.",
-            ISO_STATUS.ISO_SYSTEM_BLOCK_TOO_SHORT => message = "ISO appears corrputed: its system block is too short.",
-            ISO_STATUS.UNABLE_TO_OPEN_ISO_FILE => message = "Freetracer is unable to open/read the selected ISO file. Please check permissions.",
-            // TODO: implement remaining status codes
-            else => message = "Unknown/unhandled ISO parser exception.",
-        }
-
-        _ = osd.message(message, .{ .level = .err, .buttons = .ok });
-
-        return;
-    }
+    // const isoParserResult = ISOParser.parseIso(self.allocator, isoPath, device.size);
+    //
+    // if (isoParserResult != ISOParser.ISO_PARSER_RESULT.ISO_VALID) {
+    //     var message: [*:0]const u8 = "";
+    //
+    //     switch (isoParserResult) {
+    //         ISO_STATUS.INSUFFICIENT_DEVICE_CAPACITY => message = "The selected ISO file is larger than the capacity of the selected device.",
+    //         ISO_STATUS.ISO_BOOT_OR_PVD_SECTOR_TOO_SHORT => message = "ISO appears corrupted: the Boot Record or the Primary Volume Descriptor are too short.",
+    //         // NOTE: this may be OK and desirable if the ISO is not an OS. Consider allowing to proceed.
+    //
+    //         ISO_STATUS.ISO_INVALID_BOOT_INDICATOR => message = "ISO is not bootable, its boot indicator is set to non-bootable.",
+    //         ISO_STATUS.ISO_INVALID_BOOT_SIGNATURE => message = "ISO appears corrupted: the boot signature is not correct.",
+    //         ISO_STATUS.ISO_INVALID_REQUIRED_VOLUME_DESCRIPTORS => message = "ISO appears corrupted: unable to locate either the Primary Volume Descriptor or the Boot Record.",
+    //         ISO_STATUS.ISO_SYSTEM_BLOCK_TOO_SHORT => message = "ISO appears corrputed: its system block is too short.",
+    //         ISO_STATUS.UNABLE_TO_OPEN_ISO_FILE => message = "Freetracer is unable to open/read the selected ISO file. Please check permissions.",
+    //         // TODO: implement remaining status codes
+    //         else => message = "Unknown/unhandled ISO parser exception.",
+    //     }
+    //
+    //     _ = osd.message(message, .{ .level = .err, .buttons = .ok });
+    //
+    //     return;
+    // }
 
     // Send a request to unmount the target disk to the PrivilegedHelper Component, which will communicate with the Helper Tool
     const flashResult = EventManager.signal(
@@ -211,7 +210,7 @@ pub fn dispatchComponentAction(self: *DataFlasher) void {
             .isoPath = isoPath,
         }),
     ) catch |err| errBlk: {
-        Debug.log(.ERROR, "DataFlasher: Received an error dispatching a disk unmount request. Aborting... Error: {any}", .{err});
+        Debug.log(.ERROR, "DataFlasher: Received an error dispatching a disk write request. Aborting... Error: {any}", .{err});
         break :errBlk EventResult{ .success = false, .validation = .FAILURE };
     };
 

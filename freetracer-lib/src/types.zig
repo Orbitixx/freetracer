@@ -10,6 +10,8 @@ pub const c = if (isMac) @cImport({
     @cInclude("DiskArbitration/DiskArbitration.h");
     @cInclude("CoreFoundation/CFBase.h");
     @cInclude("CoreFoundation/CoreFoundation.h");
+    // -- For CFLaunch serivces (opening Settings app)
+    @cInclude("CoreServices/CoreServices.h");
     // -- IOKit constants, methods
     @cInclude("IOKit/usb/USB.h");
     @cInclude("IOKit/usb/IOUSBLib.h");

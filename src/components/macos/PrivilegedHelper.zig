@@ -1,5 +1,6 @@
 const std = @import("std");
 const rl = @import("raylib");
+const osd = @import("osdialog");
 const env = @import("../../env.zig");
 const AppConfig = @import("../../config.zig");
 
@@ -81,6 +82,12 @@ pub const Events = struct {
 
     pub const onDiskUnmountConfirmed = ComponentFramework.defineEvent(
         EventManager.createEventName(ComponentName, "on_disk_unmount_confirmed"),
+        struct {},
+        struct {},
+    );
+
+    pub const onHelperNeedsDiskPermissions = ComponentFramework.defineEvent(
+        "on_helper_needs_disk_permissions",
         struct {},
         struct {},
     );
@@ -233,10 +240,23 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
             eventResult.validate(.SUCCESS);
         },
 
+        Events.onHelperNeedsDiskPermissions.Hash => {
+            Debug.log(.INFO, "Helper tool requires disk access permissions, alerting user.", .{});
+            c.dispatch_async_f(c.dispatch_get_main_queue(), null, displayNeedPermissionsDialog);
+        },
+
         else => {},
     }
 
     return eventResult;
+}
+
+fn displayNeedPermissionsDialog(context: ?*anyopaque) callconv(.c) void {
+    _ = context;
+
+    const result = osd.message("Writing to the device failed. Apple's security policy requires 'Full Disk Access' for an app to write directly to a drive.\n\nFreetracer will only use this to write your selected ISO file to the selected device. Your other data will not be accessed.\n\nTo grant access:\n\nOpen System Settings > Privacy & Security > Full Disk Access.\nClick the (+) button and add Freetracer from the /Applications folder.", .{ .level = .info, .buttons = .ok_cancel });
+
+    if (result) freetracer_lib.openPrivacySettings();
 }
 
 pub fn deinit(self: *PrivilegedHelper) void {
@@ -316,7 +336,11 @@ fn processResponseMessage(connection: XPCConnection, data: XPCObject) void {
 
         .ISO_FILE_VALID => Debug.log(.INFO, "Helper reported that the ISO file provided is valid.", .{}),
         .ISO_FILE_INVALID => Debug.log(.ERROR, "Helper reported that the ISO file is INVALID.", .{}),
+        .NEED_DISK_PERMISSIONS => {
+            EventManager.broadcast(Events.onHelperNeedsDiskPermissions.create(null, null));
+        },
         .DEVICE_INVALID => Debug.log(.ERROR, "Helper reported that the selected device is INVALID.", .{}),
+
         .ISO_WRITE_PROGRESS => {
             const progress = XPCService.getInt64(data, "write_progress");
 
@@ -329,6 +353,13 @@ fn processResponseMessage(connection: XPCConnection, data: XPCObject) void {
         },
         .ISO_WRITE_SUCCESS => Debug.log(.INFO, "Helper reported that it has successfully written the ISO file to device.", .{}),
         .ISO_WRITE_FAIL => Debug.log(.ERROR, "Helper reported that it failed to write the ISO file.", .{}),
+
+        .WRITE_VERIFICATION_PROGRESS => {
+            const progress = XPCService.getInt64(data, "verification_progress");
+            Debug.log(.INFO, "Verification progress is: {d}", .{progress});
+        },
+        .WRITE_VERIFICATION_SUCCESS => Debug.log(.INFO, "Helper successfully verified the ISO bytes written to device.", .{}),
+        .WRITE_VERIFICATION_FAIL => Debug.log(.ERROR, "Helper failed to verify bytes written to device.", .{}),
     }
 
     _ = connection;

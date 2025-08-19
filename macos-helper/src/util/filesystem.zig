@@ -190,6 +190,53 @@ pub fn writeISO(connection: XPCConnection, isoFile: std.fs.File, device: std.fs.
     Debug.log(.INFO, "Finished writing ISO image to device!", .{});
 }
 
+pub fn verifyWrittenBytes(connection: XPCConnection, isoFile: std.fs.File, device: std.fs.File) !void {
+    var isoByteBuffer: [WRITE_BLOCK_SIZE]u8 = undefined;
+    var deviceByteBuffer: [WRITE_BLOCK_SIZE]u8 = undefined;
+
+    const fileStat = try isoFile.stat();
+    const ISO_SIZE = fileStat.size;
+
+    var currentByte: u64 = 0;
+    var previousProgress: i64 = 0;
+    var currentProgress: i64 = 0;
+
+    Debug.log(.INFO, "File and device are opened successfully! File size: {d}", .{ISO_SIZE});
+    Debug.log(.INFO, "Verifying ISO bytes written to device, please wait...", .{});
+
+    while (currentByte < ISO_SIZE) {
+        previousProgress = currentProgress;
+
+        try isoFile.seekTo(currentByte);
+        const isoBytesRead = try isoFile.read(&isoByteBuffer);
+
+        if (isoBytesRead == 0) {
+            Debug.log(.INFO, "End of ISO File reached, final block: {d} at {d}!", .{ currentByte / WRITE_BLOCK_SIZE, currentByte });
+            break;
+        }
+
+        try device.seekTo(currentByte);
+        const deviceBytesRead = try device.read(&deviceByteBuffer);
+
+        if (deviceBytesRead == 0) break;
+
+        if (!std.mem.eql(u8, &isoByteBuffer, &deviceByteBuffer)) return error.MismatchingISOAndDeviceBytesDetected;
+
+        currentByte += WRITE_BLOCK_SIZE;
+        currentProgress = @as(i64, @intCast((currentByte * 100) / ISO_SIZE));
+
+        // Only send an XPC message if the progress moved at least 1%
+        if (currentProgress - previousProgress < 1) continue;
+
+        const progressUpdate = XPCService.createResponse(.WRITE_VERIFICATION_PROGRESS);
+        defer XPCService.releaseObject(progressUpdate);
+        XPCService.createInt64(progressUpdate, "verification_progress", currentProgress);
+        XPCService.connectionSendMessage(connection, progressUpdate);
+    }
+
+    Debug.log(.INFO, "Finished verifying ISO image written to device!", .{});
+}
+
 test "unwrapping user home path generates a correct path" {
     var buffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
     const expectedOutput = std.posix.getenv("HOME");

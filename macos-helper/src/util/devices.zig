@@ -34,6 +34,7 @@ pub fn openDeviceValidated(bsdName: []const u8) !std.fs.File {
     // Open device and ensure it's a block device and not a character device or another kind
     const device = try directory.openFile(sanitizedBsdName, .{ .mode = .read_write, .lock = .exclusive });
     errdefer device.close();
+
     const deviceStat = try device.stat();
     if (deviceStat.kind != std.fs.File.Kind.block_device) return error.FileIsNotABlockDevice;
 
