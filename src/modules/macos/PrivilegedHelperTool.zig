@@ -20,7 +20,12 @@ const HelperResponseCode = freetracer_lib.HelperResponseCode;
 pub fn isHelperToolInstalled() HelperInstallCode {
     if (!isMacOS) return HelperInstallCode.FAILURE;
 
-    const helperLabel: c.CFStringRef = c.CFStringCreateWithCStringNoCopy(c.kCFAllocatorDefault, env.HELPER_BUNDLE_ID, c.kCFStringEncodingUTF8, c.kCFAllocatorNull);
+    const helperLabel: c.CFStringRef = c.CFStringCreateWithCStringNoCopy(
+        c.kCFAllocatorDefault,
+        env.HELPER_BUNDLE_ID,
+        c.kCFStringEncodingUTF8,
+        c.kCFAllocatorNull,
+    );
     defer _ = c.CFRelease(helperLabel);
 
     const smJobCopyDict = c.SMJobCopyDictionary(c.kSMDomainSystemLaunchd, helperLabel);

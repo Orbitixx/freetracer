@@ -87,7 +87,67 @@ pub const Events = struct {
     );
 
     pub const onHelperNeedsDiskPermissions = ComponentFramework.defineEvent(
-        "on_helper_needs_disk_permissions",
+        EventManager.createEventName(ComponentName, "on_helper_needs_disk_permissions"),
+        struct {},
+        struct {},
+    );
+
+    pub const onHelperISOFileOpenFailed = ComponentFramework.defineEvent(
+        EventManager.createEventName(ComponentName, "on_helper_iso_file_open_failed"),
+        struct {},
+        struct {},
+    );
+
+    pub const onHelperISOFileOpenSuccess = ComponentFramework.defineEvent(
+        EventManager.createEventName(ComponentName, "on_helper_iso_file_open_success"),
+        struct {},
+        struct {},
+    );
+
+    pub const onHelperDeviceOpenFailed = ComponentFramework.defineEvent(
+        EventManager.createEventName(ComponentName, "on_helper_device_open_failed"),
+        struct {},
+        struct {},
+    );
+
+    pub const onHelperDeviceOpenSuccess = ComponentFramework.defineEvent(
+        EventManager.createEventName(ComponentName, "on_helper_device_open_success"),
+        struct {},
+        struct {},
+    );
+
+    pub const onHelperWriteFailed = ComponentFramework.defineEvent(
+        EventManager.createEventName(ComponentName, "on_helper_write_failed"),
+        struct {},
+        struct {},
+    );
+
+    pub const onHelperWriteSuccess = ComponentFramework.defineEvent(
+        EventManager.createEventName(ComponentName, "on_helper_write_success"),
+        struct {},
+        struct {},
+    );
+
+    pub const onISOWriteProgressChanged = ComponentFramework.defineEvent(
+        EventManager.createEventName(ComponentName, "on_iso_write_progress_changed"),
+        struct { newProgress: i64 },
+        struct {},
+    );
+
+    pub const onWriteVerificationProgressChanged = ComponentFramework.defineEvent(
+        EventManager.createEventName(ComponentName, "on_write_verification_progress_changed"),
+        struct { newProgress: i64 },
+        struct {},
+    );
+
+    pub const onHelperVerificationFailed = ComponentFramework.defineEvent(
+        EventManager.createEventName(ComponentName, "on_helper_verification_failed"),
+        struct {},
+        struct {},
+    );
+
+    pub const onHelperVerificationSuccess = ComponentFramework.defineEvent(
+        EventManager.createEventName(ComponentName, "on_helper_verification_success"),
         struct {},
         struct {},
     );
@@ -254,6 +314,8 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
 fn displayNeedPermissionsDialog(context: ?*anyopaque) callconv(.c) void {
     _ = context;
 
+    EventManager.broadcast(Events.onHelperDeviceOpenFailed.create(null, null));
+
     const result = osd.message("Writing to the device failed. MacOS' security policy requires 'Full Disk Access' for an app to write directly to a drive.\n\nFreetracer will only use this to write your selected ISO file to the selected device. Your other data will not be accessed.\n\nTo grant access:\n\nOpen System Settings > Privacy & Security > Full Disk Access.\nClick the (+) button and add Freetracer from the /Applications folder.", .{ .level = .warning, .buttons = .ok_cancel });
 
     if (result) freetracer_lib.openPrivacySettings();
@@ -332,34 +394,70 @@ fn processResponseMessage(connection: XPCConnection, data: XPCObject) void {
 
         .DISK_UNMOUNT_FAIL => {
             Debug.log(.ERROR, "Helper communicated that it failed to unmount requested disk.", .{});
+            EventManager.broadcast(Events.onHelperDeviceOpenFailed.create(null, null));
         },
 
-        .ISO_FILE_VALID => Debug.log(.INFO, "Helper reported that the ISO file provided is valid.", .{}),
-        .ISO_FILE_INVALID => Debug.log(.ERROR, "Helper reported that the ISO file is INVALID.", .{}),
+        .ISO_FILE_VALID => {
+            Debug.log(.INFO, "Helper reported that the ISO file provided is valid.", .{});
+            EventManager.broadcast(Events.onHelperISOFileOpenSuccess.create(null, null));
+        },
+
+        .ISO_FILE_INVALID => {
+            Debug.log(.ERROR, "Helper reported that the ISO file is INVALID.", .{});
+            EventManager.broadcast(Events.onHelperISOFileOpenFailed.create(null, null));
+        },
+
+        .DEVICE_VALID => {
+            Debug.log(.ERROR, "Helper reported that the device is valid and opened.", .{});
+            EventManager.broadcast(Events.onHelperDeviceOpenSuccess.create(null, null));
+        },
+
+        .DEVICE_INVALID => {
+            Debug.log(.ERROR, "Helper reported that the selected device is INVALID.", .{});
+            EventManager.broadcast(Events.onHelperDeviceOpenFailed.create(null, null));
+        },
+
         .NEED_DISK_PERMISSIONS => {
             EventManager.broadcast(Events.onHelperNeedsDiskPermissions.create(null, null));
         },
-        .DEVICE_INVALID => Debug.log(.ERROR, "Helper reported that the selected device is INVALID.", .{}),
 
         .ISO_WRITE_PROGRESS => {
             const progress = XPCService.getInt64(data, "write_progress");
-
-            EventManager.broadcast(DataFlasherUI.Events.onISOWriteProgressChanged.create(
+            EventManager.broadcast(Events.onISOWriteProgressChanged.create(
                 null,
-                &DataFlasherUI.Events.onISOWriteProgressChanged.Data{ .newProgress = progress },
+                &Events.onISOWriteProgressChanged.Data{ .newProgress = progress },
             ));
-
             Debug.log(.INFO, "Write progress is: {d}", .{progress});
         },
-        .ISO_WRITE_SUCCESS => Debug.log(.INFO, "Helper reported that it has successfully written the ISO file to device.", .{}),
-        .ISO_WRITE_FAIL => Debug.log(.ERROR, "Helper reported that it failed to write the ISO file.", .{}),
+
+        .ISO_WRITE_SUCCESS => {
+            Debug.log(.INFO, "Helper reported that it has successfully written the ISO file to device.", .{});
+            EventManager.broadcast(Events.onHelperWriteSuccess.create(null, null));
+        },
+
+        .ISO_WRITE_FAIL => {
+            Debug.log(.ERROR, "Helper reported that it failed to write the ISO file.", .{});
+            EventManager.broadcast(Events.onHelperWriteFailed.create(null, null));
+        },
 
         .WRITE_VERIFICATION_PROGRESS => {
             const progress = XPCService.getInt64(data, "verification_progress");
+            EventManager.broadcast(Events.onWriteVerificationProgressChanged.create(
+                null,
+                &Events.onWriteVerificationProgressChanged.Data{ .newProgress = progress },
+            ));
             Debug.log(.INFO, "Verification progress is: {d}", .{progress});
         },
-        .WRITE_VERIFICATION_SUCCESS => Debug.log(.INFO, "Helper successfully verified the ISO bytes written to device.", .{}),
-        .WRITE_VERIFICATION_FAIL => Debug.log(.ERROR, "Helper failed to verify bytes written to device.", .{}),
+
+        .WRITE_VERIFICATION_SUCCESS => {
+            Debug.log(.INFO, "Helper successfully verified the ISO bytes written to device.", .{});
+            EventManager.broadcast(Events.onHelperVerificationSuccess.create(null, null));
+        },
+
+        .WRITE_VERIFICATION_FAIL => {
+            Debug.log(.ERROR, "Helper failed to verify bytes written to device.", .{});
+            EventManager.broadcast(Events.onHelperVerificationFailed.create(null, null));
+        },
     }
 
     _ = connection;

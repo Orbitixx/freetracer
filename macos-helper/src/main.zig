@@ -179,7 +179,7 @@ fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
 
     defer isoFile.close();
 
-    sendXPCReply(connection, .ISO_FILE_VALID, "ISO File is determined to be valid.");
+    sendXPCReply(connection, .ISO_FILE_VALID, "ISO File is determined to be valid and is successfully opened.");
 
     const device = dev.openDeviceValidated(deviceBsdName) catch |err| {
         switch (err) {
@@ -203,6 +203,8 @@ fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
     };
 
     defer device.close();
+
+    sendXPCReply(connection, .DEVICE_VALID, "Device is determined to be valid and is successfully opened.");
 
     fs.writeISO(connection, isoFile, device) catch |err| {
         respondWithErrorAndTerminate(

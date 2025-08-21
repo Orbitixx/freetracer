@@ -161,6 +161,7 @@ pub const XPCService = struct {
     }
 
     pub fn pingServer(connection: XPCConnection) void {
+        Debug.log(.INFO, "Sending initial ping to the Helper. Awaiting response...", .{});
         const ping = createRequest(.INITIAL_PING);
         defer releaseObject(ping);
         connectionSendMessage(connection, ping);

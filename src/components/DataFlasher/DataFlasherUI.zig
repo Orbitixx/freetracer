@@ -45,6 +45,8 @@ const Text = UIFramework.Primitives.Text;
 const Texture = UIFramework.Primitives.Texture;
 const Statusbox = UIFramework.Statuxbox;
 
+const PrivilegedHelper = @import("../macos/PrivilegedHelper.zig");
+
 const Styles = UIFramework.Styles;
 const Color = UIFramework.Styles.Color;
 
@@ -55,10 +57,13 @@ const winRelY = WindowManager.relH;
 const ProgressBox = struct {
     value: i64 = 0,
     text: Text = undefined,
+    percentTextBuf: [4]u8 = undefined,
+    percentText: Text = undefined,
     rect: Rectangle = undefined,
 
     pub fn draw(self: *ProgressBox) void {
         self.text.draw();
+        self.percentText.draw();
         self.rect.draw();
     }
 
@@ -67,35 +72,33 @@ const ProgressBox = struct {
 
         const width: f32 = referenceRect.transform.getWidth();
         const progress: f32 = @floatFromInt(newValue);
+        self.percentText.value = @ptrCast(std.fmt.bufPrint(&self.percentTextBuf, "{d}%", .{progress}) catch "Err");
         self.rect.transform.w = (progress / 100) * (1 - SECTION_PADDING) * width;
     }
 };
 
-const SpecDimensions = struct { x: f32, y: f32, w: f32, h: f32, gap: f32 };
-
 const StatusIndicator = struct {
     text: Text = undefined,
     box: Statusbox = undefined,
-    dims: SpecDimensions = undefined,
 
-    pub fn init(text: [:0]const u8, dims: SpecDimensions) StatusIndicator {
-        var statusBox = Statusbox.init(.{ .x = 0, .y = 0 }, dims.h, .Primary);
+    pub fn init(text: [:0]const u8, size: f32) StatusIndicator {
+        var statusBox = Statusbox.init(.{ .x = 0, .y = 0 }, size, .Primary);
         statusBox.switchState(.NONE);
 
         return StatusIndicator{
             .text = Text.init(text, .{ .x = 0, .y = 0 }, .{ .fontSize = 14 }),
             .box = statusBox,
-            .dims = dims,
         };
     }
 
-    pub fn calculateUI(self: *StatusIndicator, referenceRect: Rectangle) void {
-        const startX = referenceRect.transform.relX(self.dims.x);
-        const startY = referenceRect.transform.relY(self.dims.y) + if (self.dims.gap > 0) self.dims.h + self.dims.gap else 0;
+    pub fn switchState(self: *StatusIndicator, newState: Statusbox.StatusboxState) void {
+        self.box.switchState(newState);
+    }
 
-        self.text.transform.x = startX;
-        self.text.transform.y = startY + self.dims.h / 2 - self.text.getDimensions().height / 2;
-        self.box.setPosition(.{ .x = startX + referenceRect.transform.getWidth() * self.dims.w - self.dims.h, .y = startY });
+    pub fn calculateUI(self: *StatusIndicator, transform: Transform) void {
+        self.text.transform.x = transform.x;
+        self.text.transform.y = transform.y + transform.h / 2 - self.text.getDimensions().height / 2;
+        self.box.setPosition(.{ .x = transform.x + transform.w - transform.h, .y = transform.y });
     }
 
     pub fn draw(self: *StatusIndicator) !void {
@@ -124,6 +127,7 @@ progressBox: ProgressBox = undefined,
 buffer: [MAX_PATH_DISPLAY_LENGTH]u8 = undefined,
 // operationInProgress: bool = false,
 
+statusSectionHeader: Text = undefined,
 isoStatus: StatusIndicator = undefined,
 deviceStatus: StatusIndicator = undefined,
 permissionsStatus: StatusIndicator = undefined,
@@ -136,22 +140,14 @@ const BgRectParams = struct {
     borderColor: rl.Color,
 };
 
+const statusIndicatorSize: f32 = 20;
+const perc_relPaddingLeft: f32 = 0.05;
+const statusIndicatorGapY: f32 = 8;
+
 pub const Events = struct {
     pub const onActiveStateChanged = ComponentFramework.defineEvent(
         EventManager.createEventName(ComponentName, "on_active_state_changed"),
         struct { isActive: bool },
-        struct {},
-    );
-
-    pub const onISOWriteProgressChanged = ComponentFramework.defineEvent(
-        EventManager.createEventName(ComponentName, "on_iso_write_progress_changed"),
-        struct { newProgress: i64 },
-        struct {},
-    );
-
-    pub const onWriteVerificationProgressChanged = ComponentFramework.defineEvent(
-        EventManager.createEventName(ComponentName, "on_write_verification_progress_changed"),
-        struct { newProgress: i64 },
         struct {},
     );
 };
@@ -226,16 +222,40 @@ pub fn start(self: *DataFlasherUI) !void {
         .textColor = Styles.Color.white,
     });
 
+    self.moduleImg = Texture.init(.DISK_IMAGE, .{ .x = 0, .y = 0 });
+    self.moduleImg.transform.scale = 0.5;
+    self.moduleImg.transform.x = self.bgRect.transform.relX(0.5) - self.moduleImg.transform.getWidth() / 2;
+    self.moduleImg.transform.y = self.bgRect.transform.relY(0.5) - self.moduleImg.transform.getHeight() / 2;
+    self.moduleImg.tint = .{ .r = 255, .g = 255, .b = 255, .a = 150 };
+
+    self.statusSectionHeader = Text.init(
+        "status",
+        .{ .x = self.bgRect.transform.relX(perc_relPaddingLeft), .y = self.bgRect.transform.relY(0.26) },
+        .{ .fontSize = 24, .font = .JERSEY10_REGULAR },
+    );
+
+    self.isoStatus = StatusIndicator.init("ISO validated & stream open...", statusIndicatorSize);
+    self.deviceStatus = StatusIndicator.init("Device validated & stream open...", statusIndicatorSize);
+    self.permissionsStatus = StatusIndicator.init("Freetracer has necessary permissions...", statusIndicatorSize);
+    self.writeStatus = StatusIndicator.init("Write successfully completed...", statusIndicatorSize);
+    self.verificationStatus = StatusIndicator.init("Written bytes successfuly verified...", statusIndicatorSize);
+
     self.progressBox = ProgressBox{
         .text = Text.init("", .{
             .x = self.bgRect.transform.relX(0.05),
-            .y = self.bgRect.transform.relY(0.62),
+            .y = self.bgRect.transform.relY(0.75),
         }, .{
             .font = .ROBOTO_REGULAR,
             .fontSize = 14,
             .textColor = .white,
         }),
+        .percentText = Text.init(
+            "",
+            .{ .x = self.bgRect.transform.relX(PADDING_LEFT), .y = self.bgRect.transform.relY(0.75) },
+            .{ .fontSize = 14 },
+        ),
         .value = 0,
+        .percentTextBuf = std.mem.zeroes([4]u8),
         .rect = .{
             .bordered = true,
             .rounded = true,
@@ -248,61 +268,6 @@ pub fn start(self: *DataFlasherUI) !void {
             },
         },
     };
-
-    self.moduleImg = Texture.init(.DISK_IMAGE, .{ .x = 0, .y = 0 });
-    self.moduleImg.transform.scale = 0.5;
-    self.moduleImg.transform.x = self.bgRect.transform.relX(0.5) - self.moduleImg.transform.getWidth() / 2;
-    self.moduleImg.transform.y = self.bgRect.transform.relY(0.5) - self.moduleImg.transform.getHeight() / 2;
-    self.moduleImg.tint = .{ .r = 255, .g = 255, .b = 255, .a = 150 };
-
-    const size: f32 = 20;
-    const leftPadding: f32 = 0.05;
-    const gap: f32 = 8;
-
-    self.isoStatus = StatusIndicator.init("ISO validated & stream open...", .{
-        .x = leftPadding,
-        .y = 0.24,
-        .w = 1 - SECTION_PADDING,
-        .h = size,
-        .gap = 0,
-    });
-    self.isoStatus.calculateUI(self.bgRect);
-
-    self.deviceStatus = StatusIndicator.init("Device validated & stream open...", .{
-        .x = leftPadding,
-        .y = 0.30,
-        .w = 1 - SECTION_PADDING,
-        .h = size,
-        .gap = gap,
-    });
-    self.deviceStatus.calculateUI(self.bgRect);
-
-    self.permissionsStatus = StatusIndicator.init("Freetracer has necessary permissions...", .{
-        .x = leftPadding,
-        .y = 0.36,
-        .w = 1 - SECTION_PADDING,
-        .h = size,
-        .gap = gap,
-    });
-    self.permissionsStatus.calculateUI(self.bgRect);
-
-    self.writeStatus = StatusIndicator.init("Write successfully completed...", .{
-        .x = leftPadding,
-        .y = 0.42,
-        .w = 1 - SECTION_PADDING,
-        .h = size,
-        .gap = gap,
-    });
-    self.writeStatus.calculateUI(self.bgRect);
-
-    self.verificationStatus = StatusIndicator.init("Written bytes successfuly verified...", .{
-        .x = leftPadding,
-        .y = 0.48,
-        .w = 1 - SECTION_PADDING,
-        .h = size,
-        .gap = gap,
-    });
-    self.verificationStatus.calculateUI(self.bgRect);
 }
 
 pub fn update(self: *DataFlasherUI) !void {
@@ -326,6 +291,7 @@ fn drawActive(self: *DataFlasherUI) !void {
     self.deviceText.draw();
     self.progressBox.draw();
 
+    self.statusSectionHeader.draw();
     try self.isoStatus.draw();
     try self.deviceStatus.draw();
     try self.permissionsStatus.draw();
@@ -425,8 +391,42 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
             }
         },
 
-        Events.onISOWriteProgressChanged.Hash => {
-            const data = Events.onISOWriteProgressChanged.getData(event) orelse break :eventLoop;
+        PrivilegedHelper.Events.onHelperISOFileOpenSuccess.Hash => {
+            self.isoStatus.switchState(.SUCCESS);
+        },
+
+        PrivilegedHelper.Events.onHelperISOFileOpenFailed.Hash => {
+            self.isoStatus.switchState(.FAILURE);
+        },
+
+        PrivilegedHelper.Events.onHelperDeviceOpenSuccess.Hash => {
+            self.deviceStatus.switchState(.SUCCESS);
+            self.permissionsStatus.switchState(.SUCCESS);
+        },
+
+        PrivilegedHelper.Events.onHelperDeviceOpenFailed.Hash => {
+            self.deviceStatus.switchState(.FAILURE);
+            self.permissionsStatus.switchState(.FAILURE);
+        },
+
+        PrivilegedHelper.Events.onHelperWriteSuccess.Hash => {
+            self.writeStatus.switchState(.SUCCESS);
+        },
+
+        PrivilegedHelper.Events.onHelperWriteFailed.Hash => {
+            self.writeStatus.switchState(.FAILURE);
+        },
+
+        PrivilegedHelper.Events.onHelperVerificationSuccess.Hash => {
+            self.verificationStatus.switchState(.SUCCESS);
+        },
+
+        PrivilegedHelper.Events.onHelperVerificationFailed.Hash => {
+            self.verificationStatus.switchState(.FAILURE);
+        },
+
+        PrivilegedHelper.Events.onISOWriteProgressChanged.Hash => {
+            const data = PrivilegedHelper.Events.onISOWriteProgressChanged.getData(event) orelse break :eventLoop;
 
             Debug.log(.INFO, "Write progress is: {d}", .{data.newProgress});
 
@@ -436,8 +436,8 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
             eventResult.validate(.SUCCESS);
         },
 
-        Events.onWriteVerificationProgressChanged.Hash => {
-            const data = Events.onWriteVerificationProgressChanged.getData(event) orelse break :eventLoop;
+        PrivilegedHelper.Events.onWriteVerificationProgressChanged.Hash => {
+            const data = PrivilegedHelper.Events.onWriteVerificationProgressChanged.getData(event) orelse break :eventLoop;
 
             Debug.log(.INFO, "Verification progress is: {d}", .{data.newProgress});
 
@@ -495,14 +495,46 @@ fn recalculateUI(self: *DataFlasherUI, bgRectParams: BgRectParams) void {
     self.deviceText.transform.x = leftPadding;
     self.deviceText.transform.y = self.isoText.transform.y + self.isoText.transform.getHeight() + 10;
 
-    self.isoStatus.calculateUI(self.bgRect);
-    self.deviceStatus.calculateUI(self.bgRect);
-    self.permissionsStatus.calculateUI(self.bgRect);
-    self.writeStatus.calculateUI(self.bgRect);
-    self.verificationStatus.calculateUI(self.bgRect);
+    self.statusSectionHeader.transform.x = self.bgRect.transform.relX(perc_relPaddingLeft);
+
+    self.isoStatus.calculateUI(.{
+        .x = self.bgRect.transform.relX(perc_relPaddingLeft),
+        .y = self.statusSectionHeader.transform.y + self.statusSectionHeader.getDimensions().height + statusIndicatorGapY,
+        .w = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth(),
+        .h = statusIndicatorSize,
+    });
+
+    self.deviceStatus.calculateUI(.{
+        .x = self.bgRect.transform.relX(perc_relPaddingLeft),
+        .y = self.isoStatus.box.transform.y + statusIndicatorSize + statusIndicatorGapY,
+        .w = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth(),
+        .h = statusIndicatorSize,
+    });
+
+    self.permissionsStatus.calculateUI(.{
+        .x = self.bgRect.transform.relX(perc_relPaddingLeft),
+        .y = self.deviceStatus.box.transform.y + statusIndicatorSize + statusIndicatorGapY,
+        .w = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth(),
+        .h = statusIndicatorSize,
+    });
+
+    self.writeStatus.calculateUI(.{
+        .x = self.bgRect.transform.relX(perc_relPaddingLeft),
+        .y = self.permissionsStatus.box.transform.y + statusIndicatorSize + statusIndicatorGapY,
+        .w = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth(),
+        .h = statusIndicatorSize,
+    });
+
+    self.verificationStatus.calculateUI(.{
+        .x = self.bgRect.transform.relX(perc_relPaddingLeft),
+        .y = self.writeStatus.box.transform.y + statusIndicatorSize + statusIndicatorGapY,
+        .w = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth(),
+        .h = statusIndicatorSize,
+    });
 
     self.progressBox.rect.transform.x = leftPadding;
     self.progressBox.text.transform.x = leftPadding;
+    self.progressBox.percentText.transform.x = leftPadding + (1 - SECTION_PADDING) * self.bgRect.transform.getWidth() - self.progressBox.percentText.getDimensions().width;
 
     self.button.setPosition(.{
         .x = centerX - self.button.rect.transform.getWidth() / 2,
