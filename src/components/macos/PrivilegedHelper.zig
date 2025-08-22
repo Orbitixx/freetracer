@@ -55,6 +55,7 @@ worker: ?ComponentWorker = null,
 allocator: std.mem.Allocator,
 xpcClient: XPCService,
 isHelperInstalled: bool = false,
+reinstallAttempts: u8 = 0,
 
 pub const Events = struct {
     //
@@ -219,6 +220,39 @@ pub fn update(self: *PrivilegedHelper) !void {
     if (isLinux) return;
 
     self.checkAndJoinWorker();
+
+    if (self.xpcClient.timer.isTimerSet and self.reinstallAttempts < 1) {
+        if (std.time.timestamp() - self.xpcClient.timer.timeOfLastRequest > 5) {
+            Debug.log(.ERROR, "Failed to communicate with Freetracer Helper Tool...", .{});
+            defer self.xpcClient.timer.reset();
+
+            const shouldReinstallHelper = osd.message(
+                "Hmmm. It seems that Freetracer Helper Tool is not responding to Freetracer. Let's try reinstalling it?",
+                .{ .level = .warning, .buttons = .ok_cancel },
+            );
+
+            if (!shouldReinstallHelper) {
+                // TODO: quit app gracefully
+                Debug.log(.ERROR, "User did not consent to reinstall. Aborting...", .{});
+                return;
+            }
+
+            Debug.log(.ERROR, "User agreed to reinstall. Making reinstall attempt...", .{});
+
+            const installResult = PrivilegedHelperTool.installPrivilegedHelperTool();
+            waitForHelperToolInstall();
+            self.reinstallAttempts += 1;
+
+            if (installResult == freetracer_lib.HelperInstallCode.SUCCESS) {
+                Debug.log(.INFO, "Fretracer Helper Tool is successfully installed!", .{});
+                self.dispatchComponentAction();
+                XPCService.pingServer(self.xpcClient.service);
+            } else return error.FailedToInstallPrivilegedHelperTool;
+        }
+    } else if (self.xpcClient.timer.isTimerSet and self.reinstallAttempts >= 1) {
+        // TODO: quit app gracefully
+        _ = osd.message("Unfortunately, Freetracer still fails to communicate with the Freetracer Helper Tool. Unable to proceed at this stage -- apologies. Please submit a bug report at github.com/obx0/freetracer", .{ .level = .err, .buttons = .ok });
+    }
 }
 
 pub fn draw(self: *PrivilegedHelper) !void {
@@ -255,6 +289,7 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
                 }
 
                 self.dispatchComponentAction();
+                self.xpcClient.timer.start();
                 XPCService.pingServer(self.xpcClient.service);
                 break :eventLoop;
             }

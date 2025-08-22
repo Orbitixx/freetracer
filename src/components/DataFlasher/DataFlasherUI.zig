@@ -72,6 +72,8 @@ const ProgressBox = struct {
 
         const width: f32 = referenceRect.transform.getWidth();
         const progress: f32 = @floatFromInt(newValue);
+        self.percentTextBuf = std.mem.zeroes([4]u8);
+        self.percentText.value = "";
         self.percentText.value = @ptrCast(std.fmt.bufPrint(&self.percentTextBuf, "{d}%", .{progress}) catch "Err");
         self.rect.transform.w = (progress / 100) * (1 - SECTION_PADDING) * width;
     }
@@ -419,6 +421,7 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
 
         PrivilegedHelper.Events.onHelperVerificationSuccess.Hash => {
             self.verificationStatus.switchState(.SUCCESS);
+            self.progressBox.text.value = "Finishing writing ISO. You may now eject the device.";
         },
 
         PrivilegedHelper.Events.onHelperVerificationFailed.Hash => {
@@ -430,8 +433,10 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
 
             Debug.log(.INFO, "Write progress is: {d}", .{data.newProgress});
 
-            self.progressBox.text.value = "Writing ISO...";
+            self.progressBox.text.value = "Writing ISO... Do not eject the device.";
             self.progressBox.setProgressTo(self.bgRect, data.newProgress);
+            self.progressBox.percentText.transform.x = self.bgRect.transform.relX(PADDING_LEFT) +
+                (1 - SECTION_PADDING) * self.bgRect.transform.getWidth() - self.progressBox.percentText.getDimensions().width;
 
             eventResult.validate(.SUCCESS);
         },
@@ -532,9 +537,12 @@ fn recalculateUI(self: *DataFlasherUI, bgRectParams: BgRectParams) void {
         .h = statusIndicatorSize,
     });
 
-    self.progressBox.rect.transform.x = leftPadding;
     self.progressBox.text.transform.x = leftPadding;
+    self.progressBox.text.transform.y = self.verificationStatus.box.transform.y + self.verificationStatus.box.transform.h + 2 * statusIndicatorGapY;
     self.progressBox.percentText.transform.x = leftPadding + (1 - SECTION_PADDING) * self.bgRect.transform.getWidth() - self.progressBox.percentText.getDimensions().width;
+    self.progressBox.percentText.transform.y = self.progressBox.text.transform.y;
+    self.progressBox.rect.transform.x = leftPadding;
+    self.progressBox.rect.transform.y = self.progressBox.text.transform.y + self.progressBox.text.getDimensions().height + 2.5 * statusIndicatorGapY;
 
     self.button.setPosition(.{
         .x = centerX - self.button.rect.transform.getWidth() / 2,

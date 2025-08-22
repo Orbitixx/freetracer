@@ -29,10 +29,26 @@ const XPCServiceConfig = struct {
     requestHandler: XPCRequestHandler,
 };
 
+const XPCRequestTimer = struct {
+    timeOfLastRequest: i64 = 0,
+    isTimerSet: bool = false,
+
+    pub fn start(self: *XPCRequestTimer) void {
+        self.timeOfLastRequest = std.time.timestamp();
+        self.isTimerSet = true;
+    }
+
+    pub fn reset(self: *XPCRequestTimer) void {
+        self.timeOfLastRequest = 0;
+        self.isTimerSet = false;
+    }
+};
+
 pub const XPCService = struct {
     service: XPCConnection = undefined,
     clientDispatchQueue: XPCDispatchQueue = undefined,
     config: XPCServiceConfig,
+    timer: XPCRequestTimer = .{},
 
     const Self = @This();
 
