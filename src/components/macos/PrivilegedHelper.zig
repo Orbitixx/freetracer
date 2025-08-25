@@ -19,6 +19,10 @@ const HelperRequestCode = freetracer_lib.HelperRequestCode;
 const HelperResponseCode = freetracer_lib.HelperResponseCode;
 
 const PrivilegedHelperTool = @import("../../modules/macos/PrivilegedHelperTool.zig");
+const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
+const WindowManager = @import("../../managers/WindowManager.zig").WindowManagerSingleton;
+const winRelX = WindowManager.relW;
+const winRelY = WindowManager.relH;
 
 const PrivilegedHelperState = struct {
     isActive: bool = false,
@@ -28,11 +32,6 @@ const PrivilegedHelperState = struct {
     targetDisk: ?[:0]const u8 = null,
     device: ?StorageDevice = null,
 };
-
-const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
-const WindowManager = @import("../../managers/WindowManager.zig").WindowManagerSingleton;
-const winRelX = WindowManager.relW;
-const winRelY = WindowManager.relH;
 
 const ComponentFramework = @import("../framework/import/index.zig");
 const Component = ComponentFramework.Component;

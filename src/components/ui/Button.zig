@@ -50,6 +50,7 @@ component: ?Component = null,
 
 // Component-specific, unique props
 rect: Rectangle,
+// texture: Texture,
 text: Text,
 styles: ButtonStyles,
 state: ButtonState = ButtonState.NORMAL,
