@@ -1,6 +1,9 @@
 const std = @import("std");
-
 const rl = @import("raylib");
+
+const ResourceManager = @import("../../managers/ResourceManager.zig");
+const Texture = ResourceManager.Texture;
+const TextureResource = ResourceManager.TextureResource;
 
 const ComponentFramework = @import("../framework/import/index.zig");
 const Component = ComponentFramework.Component;
@@ -50,7 +53,7 @@ component: ?Component = null,
 
 // Component-specific, unique props
 rect: Rectangle,
-// texture: Texture,
+texture: ?Texture = null,
 text: Text,
 styles: ButtonStyles,
 state: ButtonState = ButtonState.NORMAL,
@@ -67,7 +70,7 @@ pub const Events = struct {
     );
 };
 
-pub fn init(text: [:0]const u8, position: rl.Vector2, variant: ButtonVariant, clickHandler: ButtonHandler) ButtonComponent {
+pub fn init(text: [:0]const u8, texture: ?TextureResource, position: rl.Vector2, variant: ButtonVariant, clickHandler: ButtonHandler) ButtonComponent {
     const btnText = Text.init(text, position, variant.normal.textStyle);
 
     const textDimensions = btnText.getDimensions();
@@ -76,8 +79,8 @@ pub fn init(text: [:0]const u8, position: rl.Vector2, variant: ButtonVariant, cl
         .transform = .{
             .x = position.x,
             .y = position.y,
-            .w = textDimensions.width + BUTTON_PADDING * 2,
-            .h = textDimensions.height + BUTTON_PADDING,
+            .w = if (text.len > 0) textDimensions.width + BUTTON_PADDING * 2 else BUTTON_PADDING * 2,
+            .h = if (text.len > 0) textDimensions.height + BUTTON_PADDING else BUTTON_PADDING * 2,
         },
         .style = variant.normal.bgStyle,
     };
@@ -92,6 +95,7 @@ pub fn init(text: [:0]const u8, position: rl.Vector2, variant: ButtonVariant, cl
             },
             variant.normal.textStyle,
         ),
+        .texture = if (texture) |resource| ResourceManager.ResourceManagerSingleton.getTexture(resource) else null,
         .styles = variant.asButtonStyles(),
         .clickHandler = clickHandler,
     };
@@ -105,6 +109,11 @@ pub fn initComponent(self: *ButtonComponent, parent: ?*Component) !void {
 /// Called once when Component is fully initialized
 pub fn start(self: *ButtonComponent) !void {
     if (self.component == null) try self.initComponent(null);
+
+    if (self.texture) |*texture| {
+        texture.width = @intFromFloat(self.rect.transform.getWidth() * 0.75);
+        texture.height = @intFromFloat(self.rect.transform.getHeight() * 0.75);
+    }
 }
 
 pub fn setPosition(self: *ButtonComponent, position: rl.Vector2) void {
@@ -158,6 +167,13 @@ pub fn update(self: *ButtonComponent) !void {
 pub fn draw(self: *ButtonComponent) !void {
     self.rect.draw();
     self.text.draw();
+
+    if (self.texture) |*texture| {
+        texture.drawEx(.{
+            .x = self.rect.transform.x + (self.rect.transform.getWidth() / 2) - (@as(f32, @floatFromInt(texture.width)) / 2),
+            .y = self.rect.transform.y + (self.rect.transform.getHeight() / 2) - (@as(f32, @floatFromInt(texture.height)) / 2),
+        }, 0, 1, Color.white);
+    }
 }
 
 pub fn handleEvent(self: *ButtonComponent, event: Event) !EventResult {

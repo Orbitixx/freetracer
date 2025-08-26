@@ -196,6 +196,7 @@ pub fn start(self: *DataFlasherUI) !void {
 
     self.button = Button.init(
         "Flash",
+        null,
         self.bgRect.transform.getPosition(),
         .Primary,
         .{ .context = self.parent, .function = DataFlasher.flashISOtoDeviceWrapper.call },

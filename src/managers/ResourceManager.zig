@@ -2,10 +2,26 @@ const std = @import("std");
 const rl = @import("raylib");
 const Debug = @import("freetracer-lib").Debug;
 
+pub const ResourceError = error{
+    NoFontsLoadedError,
+};
+
+pub const FONT = enum(u8) {
+    ROBOTO_REGULAR = 0,
+    JERSEY10_REGULAR = 1,
+};
+
 const FONTS_COUNT: usize = 2;
 const TEXTURES_COUNT: usize = 3;
 
+pub const TEXTURE = enum(u8) {
+    DISK_IMAGE = 0,
+    USB_IMAGE = 1,
+    RELOAD_ICON = 2,
+};
+
 pub const Texture = rl.Texture2D;
+pub const TextureResource = TEXTURE;
 
 pub const ResourceManagerSingleton = struct {
     var allocator: std.mem.Allocator = undefined;
@@ -62,17 +78,14 @@ pub const ResourceManagerSingleton = struct {
 
         const diskTextureFile = try getResourcePath(allocator, "disk_image.png");
         defer allocator.free(diskTextureFile);
-
         const diskTexture = try rl.loadTexture(diskTextureFile);
 
         const usbTextureFile = try getResourcePath(allocator, "usb_image.png");
         defer allocator.free(usbTextureFile);
-
         const usbTexture = try rl.loadTexture(usbTextureFile);
 
         const reloadIconTextureFile = try getResourcePath(allocator, "reload_icon.png");
         defer allocator.free(reloadIconTextureFile);
-
         const reloadIconTexture = try rl.loadTexture(reloadIconTextureFile);
 
         Debug.log(.DEBUG, "ResourceManager: textures successfully loaded!", .{});
@@ -104,7 +117,7 @@ pub const ResourceManagerSingleton = struct {
     }
 
     // TODO: handle unhappy path
-    pub fn getTexture(texture: TEXTURE) rl.Texture2D {
+    pub fn getTexture(texture: TextureResource) rl.Texture2D {
         return instance.?.getTexture(texture);
     }
 
@@ -127,21 +140,6 @@ pub const ResourceManagerSingleton = struct {
 
         instance = null;
     }
-};
-
-pub const ResourceError = error{
-    NoFontsLoadedError,
-};
-
-pub const FONT = enum(u8) {
-    ROBOTO_REGULAR = 0,
-    JERSEY10_REGULAR = 1,
-};
-
-pub const TEXTURE = enum(u8) {
-    DISK_IMAGE = 0,
-    USB_IMAGE = 1,
-    RELOAD_ICON = 2,
 };
 
 // TODO: Make a Linux adaptation

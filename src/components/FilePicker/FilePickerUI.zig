@@ -138,6 +138,7 @@ pub fn start(self: *ISOFilePickerUI) !void {
 
     self.button = Button.init(
         "SELECT ISO",
+        null,
         self.bgRect.transform.getPosition(),
         .Primary,
         .{
