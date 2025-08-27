@@ -486,7 +486,7 @@ fn recalculateUI(self: *DeviceListUI, bgRectParams: BgRectParams) void {
 
     self.state.lock();
     errdefer self.state.unlock();
-    // BUG: truthy when no devices are found
+    // BUG: appears to be truthy when no devices are found
     const devicesFound = self.state.data.devices.items.len > 0;
     self.state.unlock();
 
