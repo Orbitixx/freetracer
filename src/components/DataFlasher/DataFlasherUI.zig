@@ -237,11 +237,11 @@ pub fn start(self: *DataFlasherUI) !void {
         .{ .fontSize = 24, .font = .JERSEY10_REGULAR },
     );
 
-    self.isoStatus = StatusIndicator.init("ISO validated & stream open...", statusIndicatorSize);
-    self.deviceStatus = StatusIndicator.init("Device validated & stream open...", statusIndicatorSize);
-    self.permissionsStatus = StatusIndicator.init("Freetracer has necessary permissions...", statusIndicatorSize);
-    self.writeStatus = StatusIndicator.init("Write successfully completed...", statusIndicatorSize);
-    self.verificationStatus = StatusIndicator.init("Written bytes successfuly verified...", statusIndicatorSize);
+    self.isoStatus = StatusIndicator.init("ISO validated & stream open", statusIndicatorSize);
+    self.deviceStatus = StatusIndicator.init("Device validated & stream open", statusIndicatorSize);
+    self.permissionsStatus = StatusIndicator.init("Freetracer has necessary permissions", statusIndicatorSize);
+    self.writeStatus = StatusIndicator.init("Write successfully completed", statusIndicatorSize);
+    self.verificationStatus = StatusIndicator.init("Written bytes successfuly verified", statusIndicatorSize);
 
     self.progressBox = ProgressBox{
         .text = Text.init("", .{
@@ -422,7 +422,7 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
 
         PrivilegedHelper.Events.onHelperVerificationSuccess.Hash => {
             self.verificationStatus.switchState(.SUCCESS);
-            self.progressBox.text.value = "Finishing writing ISO. You may now eject the device.";
+            self.progressBox.text.value = "Finished writing ISO. You may now eject the device.";
         },
 
         PrivilegedHelper.Events.onHelperVerificationFailed.Hash => {
