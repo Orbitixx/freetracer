@@ -62,15 +62,6 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("freetracer-lib", freetracer_lib.module("freetracer-lib"));
     // -------------------------------------------------------------------
 
-    // exe.want_lto = false;
-    // exe.link_gc_sections = false;
-    // exe.linkLibC();
-    // exe.linkFramework("CoreFoundation");
-    // exe.linkFramework("DiskArbitration");
-    // exe.linkFramework("ServiceManagement");
-    // exe.linkFramework("Security");
-    // addPaths(exe);
-
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
     // step when running `zig build`).
@@ -114,16 +105,8 @@ pub fn build(b: *std.Build) void {
     exe.step.dependOn(&run_exe_unit_tests.step);
 }
 
-pub fn addPaths(step: *std.Build.Step.Compile) void {
-    step.addSystemFrameworkPath(.{ .cwd_relative = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks" });
-    step.addSystemIncludePath(.{ .cwd_relative = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include" });
-    step.addLibraryPath(.{ .cwd_relative = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib" });
-}
-
-// fn sdkPath(comptime suffix: []const u8) []const u8 {
-//     if (suffix[0] != '/') @compileError("suffix must be an absolute path");
-//     return comptime blk: {
-//         const root_dir = std.fs.path.dirname(@src().file) orelse ".";
-//         break :blk root_dir ++ suffix;
-//     };
+// pub fn addPaths(step: *std.Build.Step.Compile) void {
+//     step.addSystemFrameworkPath(.{ .cwd_relative = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks" });
+//     step.addSystemIncludePath(.{ .cwd_relative = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include" });
+//     step.addLibraryPath(.{ .cwd_relative = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib" });
 // }

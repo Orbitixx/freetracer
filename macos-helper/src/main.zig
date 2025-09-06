@@ -31,17 +31,17 @@ const WriteRequestData = freetracer_lib.WriteRequestData;
 // NOTE: Critical compile-time .plist symbol exports
 // Apple requires these to be linked into the binary in their respective sections
 // in order for the helper to be correctly registered and launched by the system daemon.
-// comptime {
-//     @export(
-//         @as([*:0]const u8, @ptrCast(env.INFO_PLIST)),
-//         .{ .name = "__info_plist", .section = "__TEXT,__info_plist", .visibility = .default, .linkage = .strong },
-//     );
-//
-//     @export(
-//         @as([*:0]const u8, @ptrCast(env.LAUNCHD_PLIST)),
-//         .{ .name = "__launchd_plist", .section = "__TEXT,__launchd_plist", .visibility = .default, .linkage = .strong },
-//     );
-// }
+comptime {
+    @export(
+        @as([*:0]const u8, @ptrCast(env.INFO_PLIST)),
+        .{ .name = "__info_plist", .section = "__TEXT,__info_plist", .visibility = .default, .linkage = .strong },
+    );
+
+    @export(
+        @as([*:0]const u8, @ptrCast(env.LAUNCHD_PLIST)),
+        .{ .name = "__launchd_plist", .section = "__TEXT,__launchd_plist", .visibility = .default, .linkage = .strong },
+    );
+}
 
 // export var info_plist_data: [env.INFO_PLIST.len:0]u8 linksection("__TEXT,__info_plist") = env.INFO_PLIST.*;
 // export var launchd_plist_data: [env.LAUNCHD_PLIST.len:0]u8 linksection("__TEXT,__launchd_plist") = env.LAUNCHD_PLIST.*;

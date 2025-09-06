@@ -36,15 +36,10 @@ pub fn build(b: *std.Build) void {
         .strip = false,
     });
 
+    // Important flags to keep exported symbol sections
     exe.want_lto = false;
     exe.link_gc_sections = false;
 
-    // exe.linkLibC();
-    // exe.linkFramework("CoreFoundation");
-    // exe.linkFramework("DiskArbitration");
-    // addPaths(exe);
-
-    // exe.linkSystemLibrary("xpc");
     // freetracer-lib module linking
     // -------------------------------------------------------------------
     const freetracer_lib = b.dependency("freetracer_lib", .{});
@@ -95,8 +90,8 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_exe_unit_tests.step);
 }
 
-pub fn addPaths(step: *std.Build.Step.Compile) void {
-    step.addSystemFrameworkPath(.{ .cwd_relative = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks" });
-    step.addSystemIncludePath(.{ .cwd_relative = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include" });
-    step.addLibraryPath(.{ .cwd_relative = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib" });
-}
+// pub fn addPaths(step: *std.Build.Step.Compile) void {
+//     step.addSystemFrameworkPath(.{ .cwd_relative = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks" });
+//     step.addSystemIncludePath(.{ .cwd_relative = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include" });
+//     step.addLibraryPath(.{ .cwd_relative = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib" });
+// }
