@@ -522,6 +522,11 @@ fn recalculateUI(self: *DeviceListUI, bgRectParams: BgRectParams) void {
 const refreshDevices = struct {
     fn call(ctx: *anyopaque) void {
         const component = DeviceList.asInstance(ctx);
+
+        if (component.uiComponent) |*ui| {
+            if (ui.deviceCheckboxes.items.len > 0) ui.deviceCheckboxes.clearAndFree();
+        }
+
         component.dispatchComponentAction();
     }
 };
