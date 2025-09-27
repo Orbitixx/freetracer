@@ -282,6 +282,7 @@ fn queryAndSaveSelectedDevice(self: *DataFlasher) !void {
 pub const flashISOtoDeviceWrapper = struct {
     pub fn call(ctx: *anyopaque) void {
         var self = DataFlasher.asInstance(ctx);
+        self.ui.?.flashRequested = true;
         self.dispatchComponentAction();
     }
 };

@@ -12,6 +12,7 @@ const time = @import("./util/time.zig");
 const string = @import("./util/string.zig");
 const MacOSPermissions = @import("./macos/Permissions.zig");
 
+pub const fs = @import("./macos/FileSystem.zig");
 pub const endian = @import("./util/endian.zig");
 pub const iso9660 = @import("./util/iso9660.zig");
 

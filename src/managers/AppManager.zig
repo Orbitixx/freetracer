@@ -2,11 +2,11 @@ const std = @import("std");
 const rl = @import("raylib");
 const osd = @import("osdialog");
 
-const env = @import("../env.zig");
 const AppConfig = @import("../config.zig");
 
 const freetracer_lib = @import("freetracer-lib");
 const Debug = freetracer_lib.Debug;
+const fs = freetracer_lib.fs;
 
 const ResourceManager = @import("./ResourceManager.zig").ResourceManagerSingleton;
 const WindowManager = @import("./WindowManager.zig").WindowManagerSingleton;
@@ -41,10 +41,13 @@ pub fn init(allocator: std.mem.Allocator) AppManager {
 }
 
 pub fn run(self: *AppManager) !void {
+    var logsPathBuffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
+    const logsPath = try fs.unwrapUserHomePath(&logsPathBuffer, AppConfig.MAIN_APP_LOGS_PATH);
+
     //----------------------------------------------------------------------------------
     //--- @MANAGERS --------------------------------------------------------------------
     //----------------------------------------------------------------------------------
-    try Debug.init(self.allocator, .{ .standaloneLogFilePath = env.MAIN_APP_LOGS_PATH });
+    try Debug.init(self.allocator, .{ .standaloneLogFilePath = logsPath });
     defer Debug.deinit();
 
     try WindowManager.init();

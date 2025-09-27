@@ -41,6 +41,8 @@ const Checkbox = @This();
 component: ?Component = null,
 
 // Component-specific, unique props
+allocator: std.mem.Allocator,
+deviceId: u32,
 transform: Transform,
 outerRect: Rectangle,
 innerRect: Rectangle,
@@ -49,7 +51,7 @@ state: CheckboxState = .NORMAL,
 styles: CheckboxVariant,
 clickHandler: CheckboxHandler,
 
-pub fn init(text: [:0]const u8, position: rl.Vector2, size: f32, variant: CheckboxVariant, clickHandler: CheckboxHandler) Checkbox {
+pub fn init(allocator: std.mem.Allocator, deviceId: u32, text: [:0]const u8, position: rl.Vector2, size: f32, variant: CheckboxVariant, clickHandler: CheckboxHandler) Checkbox {
     const outerRect = Rectangle{
         .transform = .{
             .x = position.x,
@@ -78,6 +80,8 @@ pub fn init(text: [:0]const u8, position: rl.Vector2, size: f32, variant: Checkb
     _text.transform.y = position.y + outerRect.transform.h / 2 - textDimensions.height / 2;
 
     return .{
+        .allocator = allocator,
+        .deviceId = deviceId,
         .transform = .{
             .x = position.x,
             .y = position.y,
@@ -165,7 +169,8 @@ pub fn handleEvent(self: *Checkbox, event: ComponentFramework.Event) !ComponentF
 }
 
 pub fn deinit(self: *Checkbox) void {
-    _ = self;
+    self.allocator.free(self.text);
+    self.allocator.destroy(self.clickHandler.context);
 }
 
 pub fn dispatchComponentAction(self: *Checkbox) void {

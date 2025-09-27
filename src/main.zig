@@ -11,5 +11,9 @@ pub fn main() !void {
     }
 
     var app = AppManager.init(allocator);
-    try app.run();
+
+    app.run() catch |err| {
+        std.log.err("\nFreetracer encountered critical error: {any}.\n", .{err});
+        return err;
+    };
 }

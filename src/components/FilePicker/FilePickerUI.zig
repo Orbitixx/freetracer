@@ -107,8 +107,8 @@ pub fn start(self: *ISOFilePickerUI) !void {
 
     self.bgRect = Rectangle{
         .transform = .{
-            .x = winRelX(0.08),
-            .y = winRelY(0.2),
+            .x = winRelX(AppConfig.APP_UI_MODULE_PANEL_FILE_PICKER_X),
+            .y = winRelY(AppConfig.APP_UI_MODULE_PANEL_Y),
             .w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
             .h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
         },

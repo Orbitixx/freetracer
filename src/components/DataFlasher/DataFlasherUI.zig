@@ -57,7 +57,7 @@ const winRelY = WindowManager.relH;
 const ProgressBox = struct {
     value: i64 = 0,
     text: Text = undefined,
-    percentTextBuf: [4]u8 = undefined,
+    percentTextBuf: [5]u8 = undefined,
     percentText: Text = undefined,
     rect: Rectangle = undefined,
 
@@ -72,7 +72,7 @@ const ProgressBox = struct {
 
         const width: f32 = referenceRect.transform.getWidth();
         const progress: f32 = @floatFromInt(newValue);
-        self.percentTextBuf = std.mem.zeroes([4]u8);
+        self.percentTextBuf = std.mem.zeroes([5]u8);
         self.percentText.value = "";
         self.percentText.value = @ptrCast(std.fmt.bufPrint(&self.percentTextBuf, "{d}%", .{progress}) catch "Err");
         self.rect.transform.w = (progress / 100) * (1 - SECTION_PADDING) * width;
@@ -127,7 +127,7 @@ isoText: Text = undefined,
 deviceText: Text = undefined,
 progressBox: ProgressBox = undefined,
 buffer: [MAX_PATH_DISPLAY_LENGTH]u8 = undefined,
-// operationInProgress: bool = false,
+flashRequested: bool = false,
 
 statusSectionHeader: Text = undefined,
 isoStatus: StatusIndicator = undefined,
@@ -177,7 +177,7 @@ pub fn start(self: *DataFlasherUI) !void {
     self.bgRect = Rectangle{
         .transform = .{
             .x = winRelX(0.5),
-            .y = winRelY(0.2),
+            .y = winRelY(AppConfig.APP_UI_MODULE_PANEL_Y),
             .w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
             .h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
         },
@@ -258,7 +258,7 @@ pub fn start(self: *DataFlasherUI) !void {
             .{ .fontSize = 14 },
         ),
         .value = 0,
-        .percentTextBuf = std.mem.zeroes([4]u8),
+        .percentTextBuf = std.mem.zeroes([5]u8),
         .rect = .{
             .bordered = true,
             .rounded = true,
@@ -292,14 +292,17 @@ pub fn draw(self: *DataFlasherUI) !void {
 fn drawActive(self: *DataFlasherUI) !void {
     self.isoText.draw();
     self.deviceText.draw();
-    self.progressBox.draw();
 
-    self.statusSectionHeader.draw();
-    try self.isoStatus.draw();
-    try self.deviceStatus.draw();
-    try self.permissionsStatus.draw();
-    try self.writeStatus.draw();
-    try self.verificationStatus.draw();
+    if (self.flashRequested) {
+        self.statusSectionHeader.draw();
+        try self.isoStatus.draw();
+        try self.deviceStatus.draw();
+        try self.permissionsStatus.draw();
+        try self.writeStatus.draw();
+        try self.verificationStatus.draw();
+    }
+
+    self.progressBox.draw();
 
     try self.button.draw();
 }

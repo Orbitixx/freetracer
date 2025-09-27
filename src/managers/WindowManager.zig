@@ -1,7 +1,7 @@
 const std = @import("std");
 const rl = @import("raylib");
 const Debug = @import("freetracer-lib").Debug;
-const env = @import("../env.zig");
+const AppConfig = @import("../config.zig");
 
 pub const Window = struct {
     x: f32 = 0,
@@ -16,8 +16,8 @@ pub const Window = struct {
         const mWidth: i32 = rl.getMonitorWidth(m);
         const mHeight: i32 = rl.getMonitorHeight(m);
 
-        self.width = @as(f32, @floatFromInt(mWidth)) * env.WINDOW_WIDTH_FACTOR;
-        self.height = @as(f32, @floatFromInt(mHeight)) * env.WINDOW_HEIGHT_FACTOR;
+        self.width = @as(f32, @floatFromInt(mWidth)) * AppConfig.WINDOW_WIDTH_FACTOR;
+        self.height = @as(f32, @floatFromInt(mHeight)) * AppConfig.WINDOW_HEIGHT_FACTOR;
 
         Debug.log(.INFO, "WINDOW INITIALIZED: {d}x{d}\n", .{ self.width, self.height });
 
@@ -28,7 +28,7 @@ pub const Window = struct {
 
         rl.setWindowPosition(newX, newY);
 
-        rl.setTargetFPS(env.WINDOW_FPS);
+        rl.setTargetFPS(AppConfig.WINDOW_FPS);
     }
 
     pub fn deinit(self: Window) void {

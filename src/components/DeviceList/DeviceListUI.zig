@@ -45,6 +45,7 @@ pub const ComponentState = ComponentFramework.ComponentState(DeviceListUIState);
 const DeviceListUI = @This();
 
 const COMPONENT_UI_GAP: f32 = 20;
+const MAX_DISPLAY_STRING_LENGTH: usize = 254;
 
 // Component-agnostic props
 state: ComponentState,
@@ -135,7 +136,7 @@ pub fn start(self: *DeviceListUI) !void {
     self.bgRect = Rectangle{
         .transform = .{
             .x = winRelX(0.5),
-            .y = winRelY(0.2),
+            .y = winRelY(AppConfig.APP_UI_MODULE_PANEL_Y),
             .w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
             .h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
         },
@@ -334,7 +335,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
                 };
 
                 // Buffered display string in a predefined format
-                const deviceStringBuffer = self.allocator.allocSentinel(u8, 254, Character.NULL) catch |err| {
+                const deviceStringBuffer = self.allocator.allocSentinel(u8, MAX_DISPLAY_STRING_LENGTH, Character.NULL) catch |err| {
                     std.debug.panic("{any}", .{err});
                 };
 
@@ -353,6 +354,8 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
                 Debug.log(.DEBUG, "ComponentUI: formatted string is: {s}", .{deviceStringBuffer});
 
                 try self.deviceCheckboxes.append(Checkbox.init(
+                    self.allocator,
+                    device.serviceId,
                     @ptrCast(@alignCast(deviceStringBuffer)),
                     .{
                         .x = self.bgRect.transform.relX(0.05),
@@ -380,12 +383,24 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
         Events.onSelectedDeviceNameChanged.Hash => {
             //
             const data = Events.onSelectedDeviceNameChanged.getData(event) orelse break :eventLoop;
-            eventResult.validate(.SUCCESS);
 
-            // WARNING: Mutex lock is used within larger block. OK as of the moment of implementation.
+            // WARNING: Mutex lock is used within broader scope of this event instead of dedicated scope. OK as of the moment of implementation.
             self.state.lock();
             defer self.state.unlock();
             self.state.data.selectedDevice = data.selectedDevice;
+
+            // TODO: doesn't quite fix the visual selection bug with multiple devices
+            {
+                for (self.deviceCheckboxes.items) |*cb| {
+                    cb.state = .NORMAL;
+                }
+
+                if (data.selectedDevice) |device| {
+                    for (self.deviceCheckboxes.items) |*cb| {
+                        if (device.serviceId == cb.deviceId) cb.state = .CHECKED;
+                    }
+                }
+            }
 
             Debug.log(.DEBUG, "DeviceListUI.handleEvent.onSelectedDeviceNameChanged received selectedDevice: \n{s}\n\n", .{data.selectedDevice.?.getNameSlice()});
 
@@ -398,6 +413,8 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
 
             // Toggle the "Next" button based on whether or not a device is selected
             self.nextButton.setEnabled(data.selectedDevice != null);
+
+            eventResult.validate(.SUCCESS);
         },
         else => {},
     }
