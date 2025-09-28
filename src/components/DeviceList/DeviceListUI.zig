@@ -334,29 +334,29 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
                     .selectedDevice = device.*,
                 };
 
-                // Buffered display string in a predefined format
-                const deviceStringBuffer = self.allocator.allocSentinel(u8, MAX_DISPLAY_STRING_LENGTH, Character.NULL) catch |err| {
-                    std.debug.panic("{any}", .{err});
-                };
+                var textBuf: [AppConfig.CHECKBOX_TEXT_BUFFER_SIZE]u8 = std.mem.zeroes([AppConfig.CHECKBOX_TEXT_BUFFER_SIZE]u8);
+
+                const deviceName = std.mem.sliceTo(device.deviceName[0..], Character.NULL);
+                const bsdName = device.getBsdNameSlice();
 
                 _ = std.fmt.bufPrintZ(
-                    deviceStringBuffer,
+                    textBuf[0..],
                     "{s} - {s} ({d:.0}GB)",
                     .{
-                        std.mem.sliceTo(device.deviceName[0..device.deviceName.len], Character.NULL),
-                        device.getBsdNameSlice(),
+                        if (deviceName.len > 20) deviceName[0..20] else deviceName,
+                        if (bsdName.len > 10) bsdName[0..10] else bsdName,
                         @divTrunc(device.size, 1_000_000_000),
                     },
                 ) catch |err| {
                     std.debug.panic("{any}", .{err});
                 };
 
-                Debug.log(.DEBUG, "ComponentUI: formatted string is: {s}", .{deviceStringBuffer});
+                Debug.log(.DEBUG, "ComponentUI: formatted string is: {s}", .{std.mem.sliceTo(textBuf[0..], Character.NULL)});
 
                 try self.deviceCheckboxes.append(Checkbox.init(
                     self.allocator,
                     device.serviceId,
-                    @ptrCast(@alignCast(deviceStringBuffer)),
+                    textBuf,
                     .{
                         .x = self.bgRect.transform.relX(0.05),
                         .y = self.bgRect.transform.relY(0.12) + @as(f32, @floatFromInt(i)) * 25,
@@ -472,9 +472,6 @@ fn drawInactive(self: *DeviceListUI) !void {
 
 pub fn deinit(self: *DeviceListUI) void {
     for (self.deviceCheckboxes.items) |checkbox| {
-        // Free the buffered display name (allocated via std.mem.buffPrintZ)
-        self.allocator.free(checkbox.text.value);
-
         // Destroy the heap-based pointer to the checkbox's on-click context
         const ctx: *DeviceList.SelectDeviceCallbackContext = @ptrCast(@alignCast(checkbox.clickHandler.context));
         self.allocator.destroy(ctx);
@@ -541,7 +538,14 @@ const refreshDevices = struct {
         const component = DeviceList.asInstance(ctx);
 
         if (component.uiComponent) |*ui| {
-            if (ui.deviceCheckboxes.items.len > 0) ui.deviceCheckboxes.clearAndFree();
+            if (ui.deviceCheckboxes.items.len > 0) {
+                for (ui.deviceCheckboxes.items) |*cb| {
+                    const p: *DeviceList.SelectDeviceCallbackContext = @ptrCast(@alignCast(cb.clickHandler.context));
+                    cb.allocator.destroy(p);
+                }
+
+                ui.deviceCheckboxes.clearAndFree();
+            }
         }
 
         component.dispatchComponentAction();

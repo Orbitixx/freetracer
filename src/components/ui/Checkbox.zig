@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const rl = @import("raylib");
+const AppConfig = @import("../../config.zig");
 
 const ComponentFramework = @import("../framework/import/index.zig");
 const Component = ComponentFramework.Component;
@@ -24,8 +25,6 @@ pub const CheckboxState = enum {
     CHECKED,
 };
 
-const CHECKBOX_TEXT_MARGIN: f32 = 12;
-
 pub const CheckboxHandler = struct {
     function: *const fn (ctx: *anyopaque) void,
     context: *anyopaque,
@@ -47,11 +46,12 @@ transform: Transform,
 outerRect: Rectangle,
 innerRect: Rectangle,
 text: Text,
+textBuf: [AppConfig.CHECKBOX_TEXT_BUFFER_SIZE]u8,
 state: CheckboxState = .NORMAL,
 styles: CheckboxVariant,
 clickHandler: CheckboxHandler,
 
-pub fn init(allocator: std.mem.Allocator, deviceId: u32, text: [:0]const u8, position: rl.Vector2, size: f32, variant: CheckboxVariant, clickHandler: CheckboxHandler) Checkbox {
+pub fn init(allocator: std.mem.Allocator, deviceId: u32, text: [AppConfig.CHECKBOX_TEXT_BUFFER_SIZE]u8, position: rl.Vector2, size: f32, variant: CheckboxVariant, clickHandler: CheckboxHandler) Checkbox {
     const outerRect = Rectangle{
         .transform = .{
             .x = position.x,
@@ -72,12 +72,12 @@ pub fn init(allocator: std.mem.Allocator, deviceId: u32, text: [:0]const u8, pos
         },
     };
 
-    var _text = Text.init(text, position, variant.normal.textStyle);
+    const _text = Text.init("", position, variant.normal.textStyle);
 
-    const textDimensions = _text.getDimensions();
-
-    _text.transform.x = position.x + outerRect.transform.w + CHECKBOX_TEXT_MARGIN;
-    _text.transform.y = position.y + outerRect.transform.h / 2 - textDimensions.height / 2;
+    // const textDimensions = _text.getDimensions();
+    //
+    // _text.transform.x = position.x + outerRect.transform.w + AppConfig.CHECKBOX_TEXT_MARGIN_LEFT;
+    // _text.transform.y = position.y + outerRect.transform.h / 2 - textDimensions.height / 2;
 
     return .{
         .allocator = allocator,
@@ -85,19 +85,29 @@ pub fn init(allocator: std.mem.Allocator, deviceId: u32, text: [:0]const u8, pos
         .transform = .{
             .x = position.x,
             .y = position.y,
-            .w = outerRect.transform.w + CHECKBOX_TEXT_MARGIN + textDimensions.width,
-            .h = if (size > textDimensions.height) size else textDimensions.height,
+            .w = outerRect.transform.w + AppConfig.CHECKBOX_TEXT_MARGIN_LEFT,
+            .h = size,
         },
         .state = .NORMAL,
         .outerRect = outerRect,
         .innerRect = innerRect,
         .text = _text,
+        .textBuf = text,
         .styles = variant,
         .clickHandler = clickHandler,
     };
 }
 
 pub fn start(self: *Checkbox) !void {
+    self.text.value = @ptrCast(std.mem.sliceTo(self.textBuf[0..], 0x00));
+    const textDimensions = self.text.getDimensions();
+
+    self.text.transform.x = self.outerRect.transform.x + self.outerRect.transform.w + AppConfig.CHECKBOX_TEXT_MARGIN_LEFT;
+    self.text.transform.y = self.outerRect.transform.y + self.outerRect.transform.h / 2 - textDimensions.height / 2;
+
+    self.transform.w = self.outerRect.transform.w + AppConfig.CHECKBOX_TEXT_MARGIN_LEFT + textDimensions.width;
+    self.transform.h = if (self.outerRect.transform.h > textDimensions.height) self.outerRect.transform.h else textDimensions.height;
+
     self.outerRect.style = self.styles.normal.outerRectStyle;
     self.innerRect.style = self.styles.normal.innerRectStyle;
     self.text.style = self.styles.normal.textStyle;
@@ -169,8 +179,8 @@ pub fn handleEvent(self: *Checkbox, event: ComponentFramework.Event) !ComponentF
 }
 
 pub fn deinit(self: *Checkbox) void {
-    self.allocator.free(self.text);
-    self.allocator.destroy(self.clickHandler.context);
+    _ = self;
+    // self.allocator.destroy(self.clickHandler.context);
 }
 
 pub fn dispatchComponentAction(self: *Checkbox) void {
