@@ -59,6 +59,21 @@ pub fn main() !void {
 
     Debug.log(.INFO, "MAIN START - UID: {}, EUID: {}", .{ c.getuid(), c.geteuid() });
 
+    var args = std.process.args();
+    _ = args.next(); // skip program name
+
+    if (args.next()) |arg| {
+        const stdout = std.io.getStdOut().writer();
+        try stdout.print("Received bsdName: {s}\n", .{arg});
+
+        const device = try dev.openDeviceValidated(arg);
+        defer device.close();
+
+        try stdout.print("Completed test task!\n", .{});
+
+        return;
+    }
+
     var xpcServer = try XPCService.init(.{
         .isServer = true,
         .serviceName = "Freetracer Helper XPC Server",
@@ -208,6 +223,44 @@ fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
     defer device.close();
 
     sendXPCReply(connection, .DEVICE_VALID, "Device is determined to be valid and is successfully opened.");
+
+    // const fd: c_int = @intCast(XPCService.getFileDescriptor(data, "fd"));
+    // defer _ = c.close(fd);
+
+    // const path = "/dev/disk5";
+    // const fd: c_int = c.open(path, c.O_RDWR, @as(c_uint, 0o644));
+    //
+    // if (fd < 0) {
+    //     Debug.log(.ERROR, "fd is -1 :(", .{});
+    //     const err_num = c.__error().*;
+    //     const err_str = c.strerror(err_num);
+    //     Debug.log(.ERROR, "open() failed with errno {}: {s}", .{ err_num, err_str });
+    //     respondWithErrorAndTerminate(
+    //         .{ .err = error.fdIsNull, .message = "fd is -1." },
+    //         .{ .xpcConnection = connection, .xpcResponseCode = .DEVICE_INVALID },
+    //     );
+    //     return;
+    // }
+    //
+    // defer _ = c.close(fd);
+
+    // if (true) {
+    //     Debug.log(.INFO, "TEST SUCCESS", .{});
+    //     return;
+    // }
+
+    // var sampleData: [81920]u8 = std.mem.zeroes([81920]u8);
+    // @memset(sampleData[0..], 0xAA);
+    //
+    // const bytes_written = c.write(fd, sampleData[0..].ptr, @as(usize, @intCast(sampleData.len)));
+    //
+    // if (bytes_written < 0) {
+    //     respondWithErrorAndTerminate(
+    //         .{ .err = error.fdIsNull, .message = "fd is -1." },
+    //         .{ .xpcConnection = connection, .xpcResponseCode = .ISO_WRITE_FAIL },
+    //     );
+    //     return;
+    // }
 
     fs.writeISO(connection, isoFile, device) catch |err| {
         respondWithErrorAndTerminate(

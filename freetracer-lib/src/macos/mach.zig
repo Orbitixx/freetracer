@@ -228,6 +228,16 @@ pub const XPCService = struct {
         return xpc.xpc_dictionary_get_uint64(dict, @ptrCast(key));
     }
 
+    pub fn createFileDescriptor(dict: XPCObject, key: []const u8, value: c_int) void {
+        const fdObj: XPCObject = xpc.xpc_fd_create(value);
+        xpc.xpc_dictionary_set_value(dict, @ptrCast(key), fdObj);
+        xpc.xpc_release(fdObj);
+    }
+
+    pub fn getFileDescriptor(dict: XPCObject, key: []const u8) c_int {
+        return xpc.xpc_dictionary_dup_fd(dict, @ptrCast(key));
+    }
+
     pub fn releaseObject(obj: XPCObject) void {
         xpc.xpc_release(obj);
     }

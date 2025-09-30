@@ -36,6 +36,7 @@ pub const c = if (isMac) @cImport({
     @cInclude("errno.h");
     @cInclude("fcntl.h");
     @cInclude("string.h");
+    @cInclude("unistd.h");
 }) else if (isLinux) @cImport({
     // @cInclude("blkid/blkid.h");
 });

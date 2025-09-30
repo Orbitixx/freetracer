@@ -235,7 +235,7 @@ pub fn update(self: *PrivilegedHelper) !void {
             defer self.xpcClient.timer.reset();
 
             const shouldReinstallHelper = osd.message(
-                "Hmmm. It seems that Freetracer Helper Tool is not responding to Freetracer. Attempt reinstalling it?",
+                "hmmm. it seems that freetracer helper tool is not responding to freetracer. attempt reinstalling it?",
                 .{ .level = .warning, .buttons = .ok_cancel },
             );
 
@@ -546,11 +546,23 @@ fn requestWrite(self: *PrivilegedHelper, targetDisk: [:0]const u8, isoPath: [:0]
         return;
     }
 
+    // const path = "/dev/disk5";
+    // const fd: c_int = c.open(path, c.O_RDWR, @as(c_uint, 0o644));
+    //
+    // if (fd == -1) {
+    //     Debug.log(.ERROR, "fd is -1 :(", .{});
+    //     const err_num = c.__error().*;
+    //     const err_str = c.strerror(err_num);
+    //     Debug.log(.ERROR, "open() failed with errno {}: {s}", .{ err_num, err_str });
+    //     return;
+    // }
+    //
     const request = XPCService.createRequest(.WRITE_ISO_TO_DEVICE);
     defer XPCService.releaseObject(request);
     XPCService.createString(request, "disk", targetDisk);
     XPCService.createString(request, "isoPath", isoPath);
     XPCService.createUInt64(request, "deviceServiceId", deviceServiceId);
+    // XPCService.createFileDescriptor(request, "fd", fd);
     XPCService.connectionSendMessage(self.xpcClient.service, request);
 }
 
