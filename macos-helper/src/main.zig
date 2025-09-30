@@ -1,5 +1,9 @@
 const std = @import("std");
 const env = @import("env.zig");
+const da = @import("util/diskarbitration.zig");
+const fs = @import("util/filesystem.zig");
+const dev = @import("util/devices.zig");
+const str = @import("util/strings.zig");
 const testing = std.testing;
 const freetracer_lib = @import("freetracer-lib");
 
@@ -8,25 +12,20 @@ const Debug = freetracer_lib.Debug;
 const xpc = freetracer_lib.xpc;
 const ISOParser = freetracer_lib.ISOParser;
 
-const k = freetracer_lib.k;
+const k = freetracer_lib.constants.k;
 const c = freetracer_lib.c;
 const String = freetracer_lib.String;
-const Character = freetracer_lib.Character;
+const Character = freetracer_lib.constants.Character;
 
-const da = @import("util/diskarbitration.zig");
-const fs = @import("util/filesystem.zig");
-const dev = @import("util/devices.zig");
-const str = @import("util/strings.zig");
+const MachCommunicator = freetracer_lib.Mach.MachCommunicator;
+const XPCService = freetracer_lib.Mach.XPCService;
+const XPCConnection = freetracer_lib.Mach.XPCConnection;
+const XPCObject = freetracer_lib.Mach.XPCObject;
 
-const MachCommunicator = freetracer_lib.MachCommunicator;
-const XPCService = freetracer_lib.XPCService;
-const XPCConnection = freetracer_lib.XPCConnection;
-const XPCObject = freetracer_lib.XPCObject;
-
-const HelperRequestCode = freetracer_lib.HelperRequestCode;
-const HelperResponseCode = freetracer_lib.HelperResponseCode;
-const ReturnCode = freetracer_lib.HelperReturnCode;
-const WriteRequestData = freetracer_lib.WriteRequestData;
+const HelperRequestCode = freetracer_lib.constants.HelperRequestCode;
+const HelperResponseCode = freetracer_lib.constants.HelperResponseCode;
+const ReturnCode = freetracer_lib.constants.HelperReturnCode;
+const WriteRequestData = freetracer_lib.constants.WriteRequestData;
 
 // NOTE: Critical compile-time .plist symbol exports
 // Apple requires these to be linked into the binary in their respective sections
@@ -46,7 +45,6 @@ comptime {
 // export var info_plist_data: [env.INFO_PLIST.len:0]u8 linksection("__TEXT,__info_plist") = env.INFO_PLIST.*;
 // export var launchd_plist_data: [env.LAUNCHD_PLIST.len:0]u8 linksection("__TEXT,__launchd_plist") = env.LAUNCHD_PLIST.*;
 
-
 pub fn main() !void {
     var debugAllocator = std.heap.DebugAllocator(.{ .thread_safe = true }).init;
     const allocator = debugAllocator.allocator();
@@ -58,6 +56,8 @@ pub fn main() !void {
     // Standard daemon out log does not support .DEBUG; .INFO and above only.
     Debug.log(.INFO, "------------------------------------------------------------------------------------------", .{});
     Debug.log(.INFO, "Debug logger is initialized.", .{});
+
+    Debug.log(.INFO, "MAIN START - UID: {}, EUID: {}", .{ c.getuid(), c.geteuid() });
 
     var xpcServer = try XPCService.init(.{
         .isServer = true,
@@ -162,7 +162,9 @@ fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
     //
     const isoPath: []const u8 = XPCService.parseString(data, "isoPath");
     const deviceBsdName: []const u8 = XPCService.parseString(data, "disk");
-    // const deviceServiceId: u64 = XPCService.getUInt64(data, "deviceServiceId");
+    const deviceServiceId: c_uint = @intCast(XPCService.getUInt64(data, "deviceServiceId"));
+
+    Debug.log(.INFO, "Recieved service: {d}", .{deviceServiceId});
 
     const userHomePath: []const u8 = XPCService.getUserHomePath(connection) catch |err| {
         respondWithErrorAndTerminate(
@@ -187,8 +189,6 @@ fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
     const device = dev.openDeviceValidated(deviceBsdName) catch |err| {
         switch (err) {
             error.AccessDenied => {
-                // sendXPCReply(connection, .NEED_DISK_PERMISSIONS, "Helper requires disk access permissions.");
-                // return;
                 respondWithErrorAndTerminate(
                     .{ .err = err, .message = "Helper required disk access permissions." },
                     .{ .xpcConnection = connection, .xpcResponseCode = .NEED_DISK_PERMISSIONS },

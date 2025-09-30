@@ -33,6 +33,9 @@ pub const c = if (isMac) @cImport({
     @cInclude("pwd.h");
     // @cInclude("bootstrap.h");
     // @cInclude("mach/mach.h");
+    @cInclude("errno.h");
+    @cInclude("fcntl.h");
+    @cInclude("string.h");
 }) else if (isLinux) @cImport({
     // @cInclude("blkid/blkid.h");
 });

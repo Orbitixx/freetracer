@@ -7,16 +7,18 @@ const AppConfig = @import("../../config.zig");
 const freetracer_lib = @import("freetracer-lib");
 const c = freetracer_lib.c;
 const Debug = freetracer_lib.Debug;
-const StorageDevice = freetracer_lib.StorageDevice;
-const isLinux = freetracer_lib.isLinux;
-const isMacOS = freetracer_lib.isMacOS;
+const StorageDevice = freetracer_lib.types.StorageDevice;
+const isLinux = freetracer_lib.types.isLinux;
+const isMacOS = freetracer_lib.types.isMacOS;
 
 const xpc = freetracer_lib.xpc;
-const XPCService = freetracer_lib.XPCService;
-const XPCConnection = freetracer_lib.XPCConnection;
-const XPCObject = freetracer_lib.XPCObject;
-const HelperRequestCode = freetracer_lib.HelperRequestCode;
-const HelperResponseCode = freetracer_lib.HelperResponseCode;
+const XPCService = freetracer_lib.Mach.XPCService;
+const XPCConnection = freetracer_lib.Mach.XPCConnection;
+const XPCObject = freetracer_lib.Mach.XPCObject;
+const HelperRequestCode = freetracer_lib.constants.HelperRequestCode;
+const HelperResponseCode = freetracer_lib.constants.HelperResponseCode;
+
+const HelperInstallCode = freetracer_lib.constants.HelperInstallCode;
 
 const PrivilegedHelperTool = @import("../../modules/macos/PrivilegedHelperTool.zig");
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
@@ -55,6 +57,8 @@ allocator: std.mem.Allocator,
 xpcClient: XPCService,
 isHelperInstalled: bool = false,
 reinstallAttempts: u8 = 0,
+checkedDiskPermissions: bool = false,
+needsDiskPermissions: bool = false,
 
 pub const Events = struct {
     //
@@ -220,13 +224,18 @@ pub fn update(self: *PrivilegedHelper) !void {
 
     self.checkAndJoinWorker();
 
+    if (self.needsDiskPermissions) {
+        self.xpcClient.timer.reset();
+        return;
+    }
+
     if (self.xpcClient.timer.isTimerSet and self.reinstallAttempts < 1) {
         if (std.time.timestamp() - self.xpcClient.timer.timeOfLastRequest > 5) {
             Debug.log(.ERROR, "Failed to communicate with Freetracer Helper Tool...", .{});
             defer self.xpcClient.timer.reset();
 
             const shouldReinstallHelper = osd.message(
-                "Hmmm. It seems that Freetracer Helper Tool is not responding to Freetracer. Let's try reinstalling it?",
+                "Hmmm. It seems that Freetracer Helper Tool is not responding to Freetracer. Attempt reinstalling it?",
                 .{ .level = .warning, .buttons = .ok_cancel },
             );
 
@@ -242,7 +251,7 @@ pub fn update(self: *PrivilegedHelper) !void {
             waitForHelperToolInstall();
             self.reinstallAttempts += 1;
 
-            if (installResult == freetracer_lib.HelperInstallCode.SUCCESS) {
+            if (installResult == HelperInstallCode.SUCCESS) {
                 Debug.log(.INFO, "Fretracer Helper Tool is successfully installed!", .{});
                 self.dispatchComponentAction();
                 XPCService.pingServer(self.xpcClient.service);
@@ -268,7 +277,22 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
 
     eventLoop: switch (event.hash) {
         //
+        Events.onWriteISOToDeviceRequest.Hash => {
+            const data = Events.onWriteISOToDeviceRequest.getData(event) orelse break :eventLoop;
+
+            try self.acquireStateDataOwnership(data.isoPath, data.targetDisk, data.device);
+
+            self.installHelperIfNotInstalled() catch |err| {
+                Debug.log(.ERROR, "An error occurred while trying to install Freetracer Helper Tool. Exiting event loop... {any}", .{err});
+                break :eventLoop;
+            };
+
+            self.xpcClient.start();
+            eventResult.validate(.SUCCESS);
+        },
+
         Events.onHelperToolConfirmedSuccessfulComms.Hash => {
+            self.xpcClient.timer.reset();
             const request: XPCObject = XPCService.createRequest(.GET_HELPER_VERSION);
             defer XPCService.releaseObject(request);
             XPCService.connectionSendMessage(self.xpcClient.service, request);
@@ -277,12 +301,14 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
 
         // TODO: Count internally number of attempts to avoid being stuck in an inifinite loop here
         Events.onHelperVersionReceived.Hash => {
+            self.xpcClient.timer.reset();
+
             const eventData = Events.onHelperVersionReceived.getData(event) orelse break :eventLoop;
 
             if (eventData.shouldHelperUpdate) {
                 const installResult = PrivilegedHelperTool.installPrivilegedHelperTool();
 
-                if (installResult != freetracer_lib.HelperInstallCode.SUCCESS) {
+                if (installResult != HelperInstallCode.SUCCESS) {
                     Debug.log(.ERROR, "Unable to update Freetracer Helper Tool... Aborting.", .{});
                     return error.UnableToUpdateHelperTool;
                 }
@@ -305,6 +331,8 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
             const isoPath: [:0]const u8 = self.state.data.isoPath.?;
             const deviceServiceId: c_uint = self.state.data.device.?.serviceId;
 
+            Debug.log(.INFO, "Sending deviceServiceId: {d}", .{deviceServiceId});
+
             Debug.log(.INFO, "targetDisk local set to the state value of: {s}", .{self.state.data.targetDisk.?});
             self.state.unlock();
 
@@ -316,26 +344,14 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
         },
 
         Events.onDiskUnmountConfirmed.Hash => {
-            eventResult.validate(.SUCCESS);
-        },
-
-        Events.onWriteISOToDeviceRequest.Hash => {
-            const data = Events.onWriteISOToDeviceRequest.getData(event) orelse break :eventLoop;
-
-            try self.acquireStateDataOwnership(data.isoPath, data.targetDisk, data.device);
-
-            self.installHelperIfNotInstalled() catch |err| {
-                Debug.log(.ERROR, "An error occurred while trying to install Freetracer Helper Tool. Exiting event loop... {any}", .{err});
-                break :eventLoop;
-            };
-
-            self.xpcClient.start();
-
+            self.xpcClient.timer.reset();
             eventResult.validate(.SUCCESS);
         },
 
         Events.onHelperNeedsDiskPermissions.Hash => {
+            self.xpcClient.timer.reset();
             Debug.log(.INFO, "Helper tool requires disk access permissions, alerting user.", .{});
+            self.needsDiskPermissions = true;
             c.dispatch_async_f(c.dispatch_get_main_queue(), null, displayNeedPermissionsDialog);
         },
 
@@ -350,9 +366,9 @@ fn displayNeedPermissionsDialog(context: ?*anyopaque) callconv(.c) void {
 
     EventManager.broadcast(Events.onHelperDeviceOpenFailed.create(null, null));
 
-    const result = osd.message("Writing to the device failed. MacOS' security policy requires 'Full Disk Access' for an app to write directly to a drive.\n\nFreetracer will only use this to write your selected ISO file to the selected device. Your other data will not be accessed.\n\nTo grant access:\n\nOpen System Settings > Privacy & Security > Full Disk Access.\nClick the (+) button and add Freetracer from the /Applications folder.", .{ .level = .warning, .buttons = .ok_cancel });
+    const result = osd.message("Writing to the device failed. MacOS' security policy requires 'Full Disk Access' for an app to write directly to a drive.\n\nFreetracer will only use this to write your selected ISO file to the selected device. Your other data will not be accessed.\n\nTo grant access:\n\nOpen System Settings > Privacy & Security > Full Disk Access.\nClick the (+) button and add Freetracer from the /Applications folder and relaunch Freetracer.", .{ .level = .warning, .buttons = .ok_cancel });
 
-    if (result) freetracer_lib.openPrivacySettings();
+    if (result) freetracer_lib.MacOSPermissions.openPrivacySettings();
 }
 
 pub fn deinit(self: *PrivilegedHelper) void {
@@ -372,12 +388,12 @@ pub fn workerCallback(worker: *ComponentWorker, context: *anyopaque) void {
 
 pub fn dispatchComponentAction(self: *PrivilegedHelper) void {
     //
-    const installCheckResult: freetracer_lib.HelperInstallCode = PrivilegedHelperTool.isHelperToolInstalled();
+    const installCheckResult: HelperInstallCode = PrivilegedHelperTool.isHelperToolInstalled();
 
     self.state.lock();
     defer self.state.unlock();
 
-    if (installCheckResult == freetracer_lib.HelperInstallCode.SUCCESS) {
+    if (installCheckResult == HelperInstallCode.SUCCESS) {
         self.isHelperInstalled = true;
     } else self.isHelperInstalled = false;
 }
@@ -513,7 +529,7 @@ fn installHelperIfNotInstalled(self: *PrivilegedHelper) !void {
         const installResult = PrivilegedHelperTool.installPrivilegedHelperTool();
         waitForHelperToolInstall();
 
-        if (installResult == freetracer_lib.HelperInstallCode.SUCCESS) {
+        if (installResult == HelperInstallCode.SUCCESS) {
             Debug.log(.INFO, "Fretracer Helper Tool is successfully installed!", .{});
             self.dispatchComponentAction();
         } else return error.FailedToInstallPrivilegedHelperTool;

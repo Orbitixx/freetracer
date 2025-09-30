@@ -17,6 +17,7 @@ const Color = Styles.Color;
 
 const ResourceManager = @import("../../managers/ResourceManager.zig");
 const Font = ResourceManager.FONT;
+const getTexture = ResourceManager.ResourceManagerSingleton.getTexture;
 
 pub const StatusboxState = enum {
     NONE,
@@ -44,6 +45,11 @@ outerRect: Rectangle,
 innerRect: Rectangle,
 state: StatusboxState = .NONE,
 styles: StatusboxVariant,
+texture: ?ResourceManager.Texture = null,
+textureOffsetX: f32 = 0,
+textureOffsetY: f32 = 0,
+textureSize: f32,
+textureTileSize: f32 = 16,
 
 pub fn init(position: rl.Vector2, size: f32, variant: StatusboxVariant) Statusbox {
     const outerRect = Rectangle{
@@ -78,6 +84,8 @@ pub fn init(position: rl.Vector2, size: f32, variant: StatusboxVariant) Statusbo
         .outerRect = outerRect,
         .innerRect = innerRect,
         .styles = variant,
+        .texture = getTexture(.BUTTON_UI),
+        .textureSize = size,
     };
 }
 
@@ -105,14 +113,29 @@ pub fn switchState(self: *Statusbox, newState: StatusboxState) void {
         .NONE => {
             self.outerRect.style = self.styles.none.outerRectStyle;
             self.innerRect.style = self.styles.none.innerRectStyle;
+
+            if (self.texture) |_| {
+                self.textureOffsetX = self.textureTileSize * 6;
+                self.textureOffsetY = self.textureTileSize * 9;
+            }
         },
         .SUCCESS => {
             self.outerRect.style = self.styles.success.outerRectStyle;
             self.innerRect.style = self.styles.success.innerRectStyle;
+
+            if (self.texture) |_| {
+                self.textureOffsetX = self.textureTileSize * 5;
+                self.textureOffsetY = self.textureTileSize * 1;
+            }
         },
         .FAILURE => {
             self.outerRect.style = self.styles.failure.outerRectStyle;
             self.innerRect.style = self.styles.failure.innerRectStyle;
+
+            if (self.texture) |_| {
+                self.textureOffsetX = self.textureTileSize * 4;
+                self.textureOffsetY = self.textureTileSize * 4;
+            }
         },
     }
 }
@@ -123,7 +146,18 @@ pub fn update(self: *Statusbox) !void {
 
 pub fn draw(self: *Statusbox) !void {
     self.outerRect.draw();
-    self.innerRect.draw();
+    // self.innerRect.draw();
+
+    if (self.texture) |texture| {
+        rl.drawTexturePro(
+            texture,
+            .{ .x = 0 + self.textureOffsetX, .y = 0 + self.textureOffsetY, .width = self.textureTileSize, .height = self.textureTileSize },
+            .{ .x = self.transform.x, .y = self.transform.y, .width = self.textureSize, .height = self.textureSize },
+            .{ .x = 0, .y = 0 },
+            0,
+            .white,
+        );
+    }
 }
 
 pub fn handleEvent(self: *Statusbox, event: ComponentFramework.Event) !ComponentFramework.EventResult {

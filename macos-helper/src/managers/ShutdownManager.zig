@@ -4,7 +4,7 @@ const freetracer_lib = @import("freetracer-lib");
 const Debug = freetracer_lib.Debug;
 const xpc = freetracer_lib.xpc;
 
-const XPCService = freetracer_lib.XPCService;
+const XPCService = freetracer_lib.Mach.XPCService;
 const DebugAllocator = std.heap.DebugAllocator(.{ .thread_safe = true });
 
 pub const ShutdownManagerSingleton = struct {

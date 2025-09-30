@@ -11,3 +11,7 @@ for the Cursor Pixel Pack (UI icons)
 Reload icon (tile_0210)
 https://kenney.nl/assets/cursor-pixel-pack
 
+
+## Kicked-in-teeth
+Checkmark, x-cross, and reload icons
+https://kicked-in-teeth.itch.io/button-ui

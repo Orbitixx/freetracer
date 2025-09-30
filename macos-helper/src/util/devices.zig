@@ -9,7 +9,7 @@ const ShutdownManager = @import("../managers/ShutdownManager.zig").ShutdownManag
 const da = @import("./diskarbitration.zig");
 
 const String = freetracer_lib.String;
-const ReturnCode = freetracer_lib.HelperReturnCode;
+const ReturnCode = freetracer_lib.constants.HelperReturnCode;
 
 pub fn openDeviceValidated(bsdName: []const u8) !std.fs.File {
     if (bsdName.len < 2) return error.DeviceNameTooShort;
@@ -30,6 +30,26 @@ pub fn openDeviceValidated(bsdName: []const u8) !std.fs.File {
 
     // Open directory without following symlinks
     const directory = try std.fs.openDirAbsolute(deviceDir, .{ .no_follow = true });
+
+    // _ = c.seteuid(0);
+
+    try std.posix.seteuid(0);
+
+    const uid = std.os.linux.getuid();
+    const euid = std.os.linux.geteuid();
+    Debug.log(.INFO, "UID: {}, EUID: {} (both should be 0)", .{ uid, euid });
+
+    const path = "/dev/rdisk5";
+    const fd = c.open(path, c.O_RDONLY, @as(c_uint, 0));
+
+    if (fd < 0) {
+        const err_num = c.__error().*; // This gets errno on macOS
+        const err_str = c.strerror(err_num);
+        Debug.log(.ERROR, "open() failed with errno {}: {s}", .{ err_num, err_str });
+    } else {
+        Debug.log(.INFO, "Successfully opened device, fd={}", .{fd});
+        _ = c.close(fd);
+    }
 
     // Open device and ensure it's a block device and not a character device or another kind
     const device = try directory.openFile(sanitizedBsdName, .{ .mode = .read_write, .lock = .exclusive });

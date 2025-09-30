@@ -5,29 +5,32 @@ const isMacOS = (@import("builtin").os.tag == .macos);
 
 const c_xpc = @cImport(@cInclude("xpc_helper.h"));
 
-const constants = @import("./constants.zig");
+pub const constants = @import("./constants.zig");
 const debug = @import("./util/debug.zig");
-const types = @import("./types.zig");
-const time = @import("./util/time.zig");
-const string = @import("./util/string.zig");
-const MacOSPermissions = @import("./macos/Permissions.zig");
+pub const types = @import("./types.zig");
+pub const time = @import("./util/time.zig");
+pub const string = @import("./util/string.zig");
+pub const MacOSPermissions = @import("./macos/Permissions.zig");
 
 pub const fs = @import("./macos/FileSystem.zig");
 pub const endian = @import("./util/endian.zig");
 pub const iso9660 = @import("./util/iso9660.zig");
 
-const Mach = @import("./macos/Mach.zig");
-const IOKit = @import("./macos/IOKit.zig");
+pub const Mach = @import("./macos/Mach.zig");
+pub const IOKit = @import("./macos/IOKit.zig");
+
+pub const c = types.c;
+pub const StorageDevice = types.StorageDevice;
 
 // Expose namespaces to be consumed by users
-pub usingnamespace types;
-pub usingnamespace constants;
-pub usingnamespace time;
-pub usingnamespace IOKit;
-
-// MacOS-only export
-pub usingnamespace if (isMacOS) Mach;
-pub usingnamespace if (isMacOS) MacOSPermissions;
+// pub usingnamespace types;
+// pub usingnamespace constants;
+// pub usingnamespace time;
+// pub usingnamespace IOKit;
+//
+// // MacOS-only export
+// pub usingnamespace if (isMacOS) Mach;
+// pub usingnamespace if (isMacOS) MacOSPermissions;
 
 // Expose debug singleton to be consumed by users
 pub const Debug = debug;

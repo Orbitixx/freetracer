@@ -12,12 +12,13 @@ pub const FONT = enum(u8) {
 };
 
 const FONTS_COUNT: usize = 2;
-const TEXTURES_COUNT: usize = 3;
+const TEXTURES_COUNT: usize = 4;
 
 pub const TEXTURE = enum(u8) {
     DISK_IMAGE = 0,
     USB_IMAGE = 1,
     RELOAD_ICON = 2,
+    BUTTON_UI = 3,
 };
 
 pub const Texture = rl.Texture2D;
@@ -88,6 +89,10 @@ pub const ResourceManagerSingleton = struct {
         defer allocator.free(reloadIconTextureFile);
         const reloadIconTexture = try rl.loadTexture(reloadIconTextureFile);
 
+        const buttonUiTextureFile = try getResourcePath(allocator, "button_ui.png");
+        defer allocator.free(buttonUiTextureFile);
+        const buttonUiTexture = try rl.loadTexture(buttonUiTextureFile);
+
         Debug.log(.DEBUG, "ResourceManager: textures successfully loaded!", .{});
 
         //----------------------------------------//
@@ -103,9 +108,11 @@ pub const ResourceManagerSingleton = struct {
         if (instance) |*inst| {
             inst.fonts[0] = robotoRegular;
             inst.fonts[1] = jersey10Regular;
+
             inst.textures[0] = diskTexture;
             inst.textures[1] = usbTexture;
             inst.textures[2] = reloadIconTexture;
+            inst.textures[3] = buttonUiTexture;
         }
 
         Debug.log(.INFO, "ResourceManager: finished initialization!", .{});

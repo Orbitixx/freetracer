@@ -8,21 +8,20 @@ const Debug = freetracer_lib.Debug;
 const xpc = freetracer_lib.xpc;
 const ISOParser = freetracer_lib.ISOParser;
 
-const k = freetracer_lib.k;
+const k = freetracer_lib.constants.k;
 const c = freetracer_lib.c;
 const String = freetracer_lib.String;
-const Character = freetracer_lib.Character;
+const Character = freetracer_lib.constants.Character;
 
-const XPCService = freetracer_lib.XPCService;
-const XPCConnection = freetracer_lib.XPCConnection;
-const XPCObject = freetracer_lib.XPCObject;
+const XPCService = freetracer_lib.Mach.XPCService;
+const XPCConnection = freetracer_lib.Mach.XPCConnection;
+const XPCObject = freetracer_lib.Mach.XPCObject;
 
 const WRITE_BLOCK_SIZE = 4096;
 
 pub fn isFilePathAllowed(userHomePath: []const u8, pathString: []const u8) bool {
     var realPathBuffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
 
-    // TODO: add other allowed paths
     const allowedPathsRelative = [_][]u8{
         @ptrCast(@constCast("/Desktop/")),
         @ptrCast(@constCast("/Documents/")),
@@ -40,7 +39,7 @@ pub fn isFilePathAllowed(userHomePath: []const u8, pathString: []const u8) bool 
 
         // Buffer overflow protection
         if (pathString.len > std.fs.max_path_bytes) {
-            Debug.log(.ERROR, "isFilePathAllowed: Provided ISO path is too long (over std.fs.max_path_bytes).", .{});
+            Debug.log(.ERROR, "isFilePathAllowed: Provided path is too long (over std.fs.max_path_bytes).", .{});
             return false;
         }
 
@@ -69,7 +68,7 @@ pub fn openFileValidated(unsanitizedIsoPath: []const u8, params: struct { userHo
 
     // Buffer overflow protection
     if (unsanitizedIsoPath.len > std.fs.max_path_bytes) {
-        Debug.log(.ERROR, "Provided ISO path is too long (over std.fs.max_path_bytes).", .{});
+        Debug.log(.ERROR, "Provided path is too long (over std.fs.max_path_bytes).", .{});
         return error.ISOFilePathTooLong;
     }
 
@@ -79,7 +78,7 @@ pub fn openFileValidated(unsanitizedIsoPath: []const u8, params: struct { userHo
     var sanitizeStringBuffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
 
     const isoPath = std.fs.realpath(unsanitizedIsoPath, &realPathBuffer) catch |err| {
-        Debug.log(.ERROR, "Unable to resolve the real path of the povided ISO path: {s}. Error: {any}", .{
+        Debug.log(.ERROR, "Unable to resolve the real path of the povided path: {s}. Error: {any}", .{
             String.sanitizeString(&sanitizeStringBuffer, unsanitizedIsoPath),
             err,
         });
@@ -89,7 +88,7 @@ pub fn openFileValidated(unsanitizedIsoPath: []const u8, params: struct { userHo
     const printableIsoPath = String.sanitizeString(&sanitizeStringBuffer, isoPath);
 
     if (isoPath.len < 8) {
-        Debug.log(.ERROR, "Provided ISO path is less than 8 characters long. Likely invalid, aborting for safety...", .{});
+        Debug.log(.ERROR, "Provided path is less than 8 characters long. Likely invalid, aborting for safety...", .{});
         return error.ISOFilePathTooShort;
     }
 
@@ -97,7 +96,7 @@ pub fn openFileValidated(unsanitizedIsoPath: []const u8, params: struct { userHo
     const fileName = std.fs.path.basename(isoPath);
 
     if (!isFilePathAllowed(params.userHomePath, directory)) {
-        Debug.log(.ERROR, "Provided ISO contains a disallowed path: {s}", .{printableIsoPath});
+        Debug.log(.ERROR, "Provided path contains a disallowed part: {s}", .{printableIsoPath});
         return error.ISOFileContainsRestrictedPaths;
     }
 

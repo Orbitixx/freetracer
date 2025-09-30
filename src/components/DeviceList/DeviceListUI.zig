@@ -2,11 +2,12 @@ const std = @import("std");
 const rl = @import("raylib");
 const freetracer_lib = @import("freetracer-lib");
 const Debug = freetracer_lib.Debug;
-const Character = freetracer_lib.Character;
+const types = freetracer_lib.types;
+
+const Character = freetracer_lib.constants.Character;
+const StorageDevice = types.StorageDevice;
 
 const AppConfig = @import("../../config.zig");
-
-const StorageDevice = freetracer_lib.StorageDevice;
 
 const WindowManager = @import("../../managers/WindowManager.zig").WindowManagerSingleton;
 const winRelX = WindowManager.relW;

@@ -1,8 +1,9 @@
 const std = @import("std");
 const freetracer_lib = @import("freetracer-lib");
+const types = freetracer_lib.types;
 const Debug = freetracer_lib.Debug;
 
-const StorageDevice = freetracer_lib.StorageDevice;
+const StorageDevice = types.StorageDevice;
 
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
 const ComponentName = EventManager.ComponentName.DEVICE_LIST;
