@@ -1,11 +1,11 @@
 const std = @import("std");
 const env = @import("env.zig");
-const da = @import("util/diskarbitration.zig");
 const fs = @import("util/filesystem.zig");
-const dev = @import("util/devices.zig");
 const str = @import("util/strings.zig");
 const testing = std.testing;
 const freetracer_lib = @import("freetracer-lib");
+
+const dev = freetracer_lib.device;
 
 const ShutdownManager = @import("./managers/ShutdownManager.zig").ShutdownManagerSingleton;
 const Debug = freetracer_lib.Debug;

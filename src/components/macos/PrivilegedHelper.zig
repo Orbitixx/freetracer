@@ -10,6 +10,8 @@ const Debug = freetracer_lib.Debug;
 const StorageDevice = freetracer_lib.types.StorageDevice;
 const isLinux = freetracer_lib.types.isLinux;
 const isMacOS = freetracer_lib.types.isMacOS;
+const Device = freetracer_lib.device;
+const Character = freetracer_lib.constants.Character;
 
 const xpc = freetracer_lib.xpc;
 const XPCService = freetracer_lib.Mach.XPCService;
@@ -17,7 +19,6 @@ const XPCConnection = freetracer_lib.Mach.XPCConnection;
 const XPCObject = freetracer_lib.Mach.XPCObject;
 const HelperRequestCode = freetracer_lib.constants.HelperRequestCode;
 const HelperResponseCode = freetracer_lib.constants.HelperResponseCode;
-
 const HelperInstallCode = freetracer_lib.constants.HelperInstallCode;
 
 const PrivilegedHelperTool = @import("../../modules/macos/PrivilegedHelperTool.zig");
@@ -546,17 +547,29 @@ fn requestWrite(self: *PrivilegedHelper, targetDisk: [:0]const u8, isoPath: [:0]
         return;
     }
 
-    // const path = "/dev/disk5";
-    // const fd: c_int = c.open(path, c.O_RDWR, @as(c_uint, 0o644));
-    //
+    const path = "/dev/disk5";
+    const fd: c_int = c.open(path, c.O_RDWR, @as(c_uint, 0));
+
     // if (fd == -1) {
     //     Debug.log(.ERROR, "fd is -1 :(", .{});
     //     const err_num = c.__error().*;
     //     const err_str = c.strerror(err_num);
     //     Debug.log(.ERROR, "open() failed with errno {}: {s}", .{ err_num, err_str });
     //     return;
-    // }
+    // } else
+    _ = c.close(fd);
+
+    // const deviceDir = "/dev/";
+    // var devicePathBuf: [std.fs.max_name_bytes]u8 = std.mem.zeroes([std.fs.max_name_bytes]u8);
+    // @memcpy(devicePathBuf[0..deviceDir.len], deviceDir);
+    // @memcpy(devicePathBuf[deviceDir.len .. deviceDir.len + targetDisk.len], targetDisk);
     //
+    // const device: std.fs.File = Device.openDeviceValidated(std.mem.sliceTo(&devicePathBuf, Character.NULL)) catch |err| {
+    //     Debug.log(.ERROR, "Unable to obtain device handle, error: {any}", .{err});
+    //     return;
+    // };
+    // device.close();
+
     const request = XPCService.createRequest(.WRITE_ISO_TO_DEVICE);
     defer XPCService.releaseObject(request);
     XPCService.createString(request, "disk", targetDisk);

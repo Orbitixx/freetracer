@@ -1,16 +1,12 @@
-const freetracer_lib = @import("freetracer-lib");
+const c = @import("../types.zig").c;
+const Debug = @import("../util/debug.zig");
 
-const ShutdownManager = @import("../managers/ShutdownManager.zig").ShutdownManagerSingleton;
-const Debug = freetracer_lib.Debug;
-const c = freetracer_lib.c;
-
-pub fn isTargetDiskInternalDevice(diskDictionaryRef: c.CFDictionaryRef) bool {
+pub fn isTargetDiskInternalDevice(diskDictionaryRef: c.CFDictionaryRef) !bool {
     const isInternalDeviceRef: c.CFBooleanRef = @ptrCast(c.CFDictionaryGetValue(diskDictionaryRef, c.kDADiskDescriptionDeviceInternalKey));
 
     if (isInternalDeviceRef == null or c.CFGetTypeID(isInternalDeviceRef) != c.CFBooleanGetTypeID()) {
         Debug.log(.ERROR, "Failed to obtain internal device key boolean.", .{});
-        ShutdownManager.terminateWithError(error.REQUEST_DISK_UNMOUNT_FAILED_TO_OBTAIN_INTERNAL_DEVICE_KEY);
-        return true;
+        return error.REQUEST_DISK_UNMOUNT_FAILED_TO_OBTAIN_INTERNAL_DEVICE_KEY;
     }
 
     const isDeviceInternal: bool = (isInternalDeviceRef == c.kCFBooleanTrue);

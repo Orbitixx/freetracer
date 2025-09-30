@@ -1,15 +1,8 @@
 const std = @import("std");
-const env = @import("../env.zig");
-const freetracer_lib = @import("freetracer-lib");
-const Debug = freetracer_lib.Debug;
-
-const c = freetracer_lib.c;
-
-const ShutdownManager = @import("../managers/ShutdownManager.zig").ShutdownManagerSingleton;
-const da = @import("./diskarbitration.zig");
-
-const String = freetracer_lib.String;
-const ReturnCode = freetracer_lib.constants.HelperReturnCode;
+const c = @import("../types.zig").c;
+const da = @import("../macos/DiskArbitration.zig");
+const Debug = @import("../util/debug.zig");
+const String = @import("./string.zig");
 
 pub fn openDeviceValidated(bsdName: []const u8) !std.fs.File {
     if (bsdName.len < 2) return error.DeviceNameTooShort;
@@ -24,9 +17,12 @@ pub fn openDeviceValidated(bsdName: []const u8) !std.fs.File {
     var sanitizedBuffer: [std.fs.max_name_bytes]u8 = std.mem.zeroes([std.fs.max_name_bytes]u8);
     const sanitizedBsdName = String.sanitizeString(&sanitizedBuffer, bsdName);
 
+    var unmountStatus: bool = false;
+
     // This performs a check via Disk Arbitration on whether or not the device is internal or removable
-    const unmountResult = requestUnmountWithIORegistry(sanitizedBsdName);
-    if (unmountResult != .SUCCESS) return error.UnableToUnmountDevice;
+    try requestUnmount(sanitizedBsdName, &unmountStatus);
+
+    while (!unmountStatus) std.Thread.sleep(500_000_000);
 
     // Open directory without following symlinks
     const directory = try std.fs.openDirAbsolute(deviceDir, .{ .no_follow = true });
@@ -50,6 +46,17 @@ pub fn openDeviceValidated(bsdName: []const u8) !std.fs.File {
     //     Debug.log(.INFO, "Successfully opened device, fd={}", .{fd});
     //     _ = c.close(fd);
     // }
+    //
+    const path = "/dev/disk5";
+    const fd: c_int = c.open(path, c.O_RDWR, @as(c_uint, 0o644));
+
+    if (fd == -1) {
+        Debug.log(.ERROR, "fd is -1 :(", .{});
+        const err_num = c.__error().*;
+        const err_str = c.strerror(err_num);
+        Debug.log(.ERROR, "open() failed with errno {}: {s}", .{ err_num, err_str });
+        return error.UnableToOpenFileCSyscall;
+    } else _ = c.close(fd);
 
     // Open device and ensure it's a block device and not a character device or another kind
     const device = try directory.openFile(sanitizedBsdName, .{ .mode = .read_write, .lock = .exclusive });
@@ -68,12 +75,12 @@ pub fn openDeviceValidated(bsdName: []const u8) !std.fs.File {
     return device;
 }
 
-pub fn requestUnmountWithIORegistry(targetDisk: []const u8) ReturnCode {
+pub fn requestUnmount(targetDisk: []const u8, statusResultPtr: *bool) !void {
 
     // TODO: perform a check to ensure the device has a kIOMediaRemovableKey key
     // TODO: refactor code to smalelr functions
 
-    if (targetDisk.len < 2) return ReturnCode.MALFORMED_TARGET_DISK_STRING;
+    if (targetDisk.len < 2) return error.MALFORMED_TARGET_DISK_STRING;
 
     Debug.log(.INFO, "Received bsdName: {s}", .{targetDisk});
 
@@ -83,11 +90,7 @@ pub fn requestUnmountWithIORegistry(targetDisk: []const u8) ReturnCode {
 
     const daSession = c.DASessionCreate(c.kCFAllocatorDefault);
 
-    if (daSession == null) {
-        Debug.log(.ERROR, "Failed to create DASession\n", .{});
-        ShutdownManager.terminateWithError(error.REQUEST_DISK_UNMOUNT_FAILED_TO_CREATE_DA_DISK_SESSION);
-        return ReturnCode.FAILED_TO_CREATE_DA_SESSION;
-    }
+    if (daSession == null) return error.FAILED_TO_CREATE_DA_SESSION;
     defer c.CFRelease(daSession);
 
     Debug.log(.INFO, "Successfully started a blank DASession.", .{});
@@ -103,45 +106,31 @@ pub fn requestUnmountWithIORegistry(targetDisk: []const u8) ReturnCode {
 
     const daDiskRef: c.DADiskRef = c.DADiskCreateFromBSDName(c.kCFAllocatorDefault, daSession, bsdName.ptr);
 
-    if (daDiskRef == null) {
-        Debug.log(.ERROR, "Could not create DADiskRef for '{s}', skipping.\n", .{bsdName});
-        ShutdownManager.terminateWithError(error.REQUEST_DISK_UNMOUNT_FAILED_TO_CREATE_DA_DISK_REF);
-        return ReturnCode.FAILED_TO_CREATE_DA_DISK_REF;
-    }
+    if (daDiskRef == null) return error.FAILED_TO_CREATE_DA_DISK_REF;
     defer c.CFRelease(daDiskRef);
 
     Debug.log(.INFO, "DA Disk refererence is successfuly created for the provided device BSD name.", .{});
 
     const diskInfo: c.CFDictionaryRef = @ptrCast(c.DADiskCopyDescription(daDiskRef));
 
-    if (diskInfo == null) {
-        ShutdownManager.terminateWithError(error.REQUEST_DISK_UNMOUNT_FAILED_TO_OBTAIN_DISK_INFO_DICT_REF);
-        return ReturnCode.FAILED_TO_OBTAIN_DISK_INFO_DICT_REF;
-    }
+    if (diskInfo == null) return error.FAILED_TO_OBTAIN_DISK_INFO_DICT_REF;
     defer c.CFRelease(diskInfo);
 
     Debug.log(.INFO, "DA Disk Description is successfully obtained/copied.", .{});
 
     // _ = c.CFShow(diskInfo);
 
-    if (da.isTargetDiskInternalDevice(diskInfo)) {
-        Debug.log(.ERROR, "ERROR: internal device detected on disk: {s}. Aborting unmount operations for device.", .{bsdName});
-        ShutdownManager.terminateWithError(error.REQUEST_DISK_UNMOUNT_UNMOUNT_REQUEST_ON_INTERNAL_DEVICE);
-        return ReturnCode.UNMOUNT_REQUEST_ON_INTERNAL_DEVICE;
-    }
+    if (try da.isTargetDiskInternalDevice(diskInfo)) return error.UNMOUNT_REQUEST_ON_INTERNAL_DEVICE;
 
     Debug.log(.INFO, "Unmount request passed checks. Initiating unmount call for disk: {s}.", .{bsdName});
 
-    c.DADiskUnmount(daDiskRef, c.kDADiskUnmountOptionWhole, unmountDiskCallback, null);
+    c.DADiskUnmount(daDiskRef, c.kDADiskUnmountOptionWhole, unmountDiskCallback, @ptrCast(statusResultPtr));
 
     c.CFRunLoopRun();
-
-    return ReturnCode.SUCCESS;
 }
 
 pub fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: ?*anyopaque) callconv(.C) void {
-    _ = context;
-
+    const unmountStatus: *bool = @ptrCast(context);
     Debug.log(.INFO, "Processing unmountDiskCallback()...", .{});
 
     const bsdNameCPtr: [*c]const u8 = c.DADiskGetBSDName(disk);
@@ -154,6 +143,7 @@ pub fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, conte
     if (dissenter != null) {
         Debug.log(.WARNING, "Disk Arbitration Dissenter returned a non-empty status.", .{});
 
+        unmountStatus.* = false;
         const status = c.DADissenterGetStatus(dissenter);
         const statusStringRef = c.DADissenterGetStatusString(dissenter);
         var statusString: [256]u8 = undefined;
@@ -161,12 +151,12 @@ pub fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, conte
         if (statusStringRef != null) {
             _ = c.CFStringGetCString(statusStringRef, &statusString, statusString.len, c.kCFStringEncodingUTF8);
         }
+
         Debug.log(.ERROR, "Failed to unmount {s}. Dissenter status code: {any}, status message: {s}", .{ bsdName, status, statusString });
     } else {
+        unmountStatus.* = true;
         Debug.log(.INFO, "Successfully unmounted disk: {s}", .{bsdName});
-
         Debug.log(.INFO, "Finished unmounting all volumes for device.", .{});
-
         const currentLoop = c.CFRunLoopGetCurrent();
         c.CFRunLoopStop(currentLoop);
     }

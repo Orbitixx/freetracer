@@ -11,6 +11,8 @@ pub const types = @import("./types.zig");
 pub const time = @import("./util/time.zig");
 pub const string = @import("./util/string.zig");
 pub const MacOSPermissions = @import("./macos/Permissions.zig");
+pub const DiskArbitration = @import("./macos/DiskArbitration.zig");
+pub const device = @import("./util/device.zig");
 
 pub const fs = @import("./macos/FileSystem.zig");
 pub const endian = @import("./util/endian.zig");
