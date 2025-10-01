@@ -142,9 +142,9 @@ pub fn start(self: *DeviceListUI) !void {
             .h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
         },
         .style = .{
-            .color = Styles.Color.transparentDark,
+            .color = Styles.Color.darkBlueGray,
             .borderStyle = .{
-                .color = Styles.Color.transparentDark,
+                .color = Styles.Color.darkBlueGray,
             },
         },
         .rounded = true,

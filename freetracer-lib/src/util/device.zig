@@ -3,6 +3,7 @@ const c = @import("../types.zig").c;
 const da = @import("../macos/DiskArbitration.zig");
 const Debug = @import("../util/debug.zig");
 const String = @import("./string.zig");
+const Character = @import("../constants.zig").Character;
 
 pub fn openDeviceValidated(bsdName: []const u8) !std.fs.File {
     if (bsdName.len < 2) return error.DeviceNameTooShort;
@@ -17,46 +18,34 @@ pub fn openDeviceValidated(bsdName: []const u8) !std.fs.File {
     var sanitizedBuffer: [std.fs.max_name_bytes]u8 = std.mem.zeroes([std.fs.max_name_bytes]u8);
     const sanitizedBsdName = String.sanitizeString(&sanitizedBuffer, bsdName);
 
-    var unmountStatus: bool = false;
+    // Performs a check via Disk Arbitration on whether or not the device is internal or removable
+    {
+        var unmountStatus: bool = false;
+        try requestUnmount(sanitizedBsdName, &unmountStatus);
+        while (!unmountStatus) std.Thread.sleep(500_000_000);
+    }
 
-    // This performs a check via Disk Arbitration on whether or not the device is internal or removable
-    try requestUnmount(sanitizedBsdName, &unmountStatus);
+    // This block ensures the Privileged Helper is able to trigger/inherit "Removable Volumes" permission
+    // via C's `open` syscall wrapper. This is important nuance.
+    {
+        if (sanitizedBsdName.len >= std.fs.max_name_bytes + deviceDir.len) return error.DevicePathTooLong;
 
-    while (!unmountStatus) std.Thread.sleep(500_000_000);
+        // std.fs.max_name_bytes is used intentionally as /dev/diskN pattern names should be short by design
+        var sanitizedDevicePathBuf: [std.fs.max_name_bytes]u8 = std.mem.zeroes([std.fs.max_name_bytes]u8);
+        const sanitizedDevicePath = try String.concatStrings(std.fs.max_name_bytes, &sanitizedDevicePathBuf, deviceDir, sanitizedBsdName);
+
+        const fd: c_int = c.open(@ptrCast(sanitizedDevicePath), c.O_RDWR, @as(c_uint, 0o644));
+
+        if (fd < 0) {
+            const err_num = c.__error().*;
+            const err_str = c.strerror(err_num);
+            Debug.log(.ERROR, "open() failed with errno {}: {s}", .{ err_num, err_str });
+            return error.UnableToOpenFileCSyscall;
+        } else _ = c.close(fd);
+    }
 
     // Open directory without following symlinks
     const directory = try std.fs.openDirAbsolute(deviceDir, .{ .no_follow = true });
-
-    // _ = c.seteuid(0);
-
-    // try std.posix.seteuid(0);
-
-    // const uid = c.getuid();
-    // const euid = c.geteuid();
-    // Debug.log(.INFO, "UID: {}, EUID: {} (both should be 0)", .{ uid, euid });
-    //
-    // const path = "/dev/disk5";
-    // const fd = c.open(path, c.O_RDONLY, @as(c_uint, 0));
-    //
-    // if (fd < 0) {
-    //     const err_num = c.__error().*; // This gets errno on macOS
-    //     const err_str = c.strerror(err_num);
-    //     Debug.log(.ERROR, "open() failed with errno {}: {s}", .{ err_num, err_str });
-    // } else {
-    //     Debug.log(.INFO, "Successfully opened device, fd={}", .{fd});
-    //     _ = c.close(fd);
-    // }
-    //
-    const path = "/dev/disk5";
-    const fd: c_int = c.open(path, c.O_RDWR, @as(c_uint, 0o644));
-
-    if (fd == -1) {
-        Debug.log(.ERROR, "fd is -1 :(", .{});
-        const err_num = c.__error().*;
-        const err_str = c.strerror(err_num);
-        Debug.log(.ERROR, "open() failed with errno {}: {s}", .{ err_num, err_str });
-        return error.UnableToOpenFileCSyscall;
-    } else _ = c.close(fd);
 
     // Open device and ensure it's a block device and not a character device or another kind
     const device = try directory.openFile(sanitizedBsdName, .{ .mode = .read_write, .lock = .exclusive });

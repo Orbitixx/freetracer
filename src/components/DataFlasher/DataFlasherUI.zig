@@ -182,9 +182,9 @@ pub fn start(self: *DataFlasherUI) !void {
             .h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
         },
         .style = .{
-            .color = Styles.Color.transparentDark,
+            .color = Styles.Color.darkGreen,
             .borderStyle = .{
-                .color = Styles.Color.transparentDark,
+                .color = Styles.Color.darkGreen,
             },
         },
         .rounded = true,
@@ -377,7 +377,7 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
 
                     self.recalculateUI(.{
                         .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
-                        .color = Color.blueGray,
+                        .color = Color.activeGreen,
                         .borderColor = Color.white,
                     });
                 },

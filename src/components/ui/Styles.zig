@@ -17,6 +17,8 @@ pub const Color = struct {
     pub const transparent = rl.Color{ .r = 0, .g = 0, .b = 0, .a = 0 };
     pub const transparentDark = rl.Color{ .r = 0, .g = 0, .b = 0, .a = 60 };
     pub const lightGray = rl.Color.light_gray;
+    pub const darkGreen = rl.Color{ .r = 40, .g = 60, .b = 67, .a = 255 };
+    pub const activeGreen = rl.Color{ .r = 70, .g = 108, .b = 91, .a = 255 };
 };
 
 pub const TextStyle = struct {

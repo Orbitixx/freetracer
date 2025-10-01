@@ -1,4 +1,5 @@
 const std = @import("std");
+const Character = @import("../constants.zig").Character;
 
 pub fn parseUpToDelimeter(comptime length: comptime_int, data: [length]u8, delimeter: u8) [length]u8 {
     var stringArray: [length]u8 = std.mem.zeroes([length]u8);
@@ -40,4 +41,11 @@ pub fn sanitizeString(buf: []u8, input: []const u8) []const u8 {
     }
 
     return buf[0..len];
+}
+
+pub fn concatStrings(comptime len: usize, buf: *[len]u8, str1: []const u8, str2: []const u8) ![]u8 {
+    if (str1.len + str2.len > len) return error.ConcatStringLengthExceedsBufferSize;
+    @memcpy(buf.*[0..str1.len], str1);
+    @memcpy(buf.*[str1.len .. str1.len + str2.len], str2);
+    return std.mem.sliceTo(buf, Character.NULL);
 }
