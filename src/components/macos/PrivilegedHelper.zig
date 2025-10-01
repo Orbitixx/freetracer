@@ -231,12 +231,12 @@ pub fn update(self: *PrivilegedHelper) !void {
     }
 
     if (self.xpcClient.timer.isTimerSet and self.reinstallAttempts < 1) {
-        if (std.time.timestamp() - self.xpcClient.timer.timeOfLastRequest > 5) {
+        if (std.time.timestamp() - self.xpcClient.timer.timeOfLastRequest > 3) {
             Debug.log(.ERROR, "Failed to communicate with Freetracer Helper Tool...", .{});
             defer self.xpcClient.timer.reset();
 
             const shouldReinstallHelper = osd.message(
-                "hmmm. it seems that freetracer helper tool is not responding to freetracer. attempt reinstalling it?",
+                "Hmmm. It seems that Freetracer Helper Tool is not responding to Freetracer. Attempt reinstalling it?",
                 .{ .level = .warning, .buttons = .ok_cancel },
             );
 

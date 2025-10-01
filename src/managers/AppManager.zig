@@ -114,16 +114,16 @@ pub fn run(self: *AppManager) !void {
 
     var logText = UI.Text.init(
         "",
-        .{ .x = relX(0.02), .y = relY(0.93) },
+        .{ .x = relX(0.02), .y = relY(0.935) },
         .{ .font = .ROBOTO_REGULAR, .fontSize = 14, .textColor = Color.lightGray },
     );
 
     const logLineBgRect = UI.Rectangle{
         .transform = .{
             .x = 0,
-            .y = relY(0.94),
+            .y = relY(0.95),
             .w = WindowManager.getWindowWidth(),
-            .h = relY(0.06),
+            .h = relY(0.05),
         },
         .style = .{
             .color = Color.transparentDark,

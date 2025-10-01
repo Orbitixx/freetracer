@@ -21,6 +21,18 @@ const SECTION_PADDING: f32 = 0.1;
 const PADDING_LEFT: f32 = SECTION_PADDING / 2;
 const PADDING_RIGHT: f32 = PADDING_LEFT;
 
+const TEXTURE_TILE_SIZE = 16;
+
+const ICON_SIZE = 22;
+const ICON_TEXT_GAP_X = ICON_SIZE * 1.5;
+const ISO_ICON_POS_REL_X = PADDING_LEFT;
+const ISO_ICON_POS_REL_Y = SECTION_PADDING;
+const DEV_ICON_POS_REL_X = ISO_ICON_POS_REL_X;
+const DEV_ICON_POS_REL_Y = ISO_ICON_POS_REL_Y + ISO_ICON_POS_REL_Y / 2;
+
+const ITEM_GAP_Y = 8;
+const STATUS_INDICATOR_SIZE: f32 = 20;
+
 const DataFlasherUIState = struct {
     isActive: bool = false,
     isoPath: ?[:0]const u8 = null,
@@ -53,6 +65,12 @@ const Color = UIFramework.Styles.Color;
 const WindowManager = @import("../../managers/WindowManager.zig").WindowManagerSingleton;
 const winRelX = WindowManager.relW;
 const winRelY = WindowManager.relH;
+
+const BgRectParams = struct {
+    width: f32,
+    color: rl.Color,
+    borderColor: rl.Color,
+};
 
 const ProgressBox = struct {
     value: i64 = 0,
@@ -127,7 +145,9 @@ button: Button = undefined,
 isoText: Text = undefined,
 deviceText: Text = undefined,
 progressBox: ProgressBox = undefined,
-displayTextBuffer: [std.fs.max_path_bytes]u8 = undefined,
+displayISOTextBuffer: [std.fs.max_path_bytes]u8 = undefined,
+displayDeviceTextBuffer: [std.fs.max_path_bytes]u8 = undefined,
+
 flashRequested: bool = false,
 
 statusSectionHeader: Text = undefined,
@@ -136,16 +156,6 @@ deviceStatus: StatusIndicator = undefined,
 permissionsStatus: StatusIndicator = undefined,
 writeStatus: StatusIndicator = undefined,
 verificationStatus: StatusIndicator = undefined,
-
-const BgRectParams = struct {
-    width: f32,
-    color: rl.Color,
-    borderColor: rl.Color,
-};
-
-const statusIndicatorSize: f32 = 20;
-const perc_relPaddingLeft: f32 = 0.05;
-const statusIndicatorGapY: f32 = 8;
 
 pub const Events = struct {
     pub const onActiveStateChanged = ComponentFramework.defineEvent(
@@ -211,8 +221,8 @@ pub fn start(self: *DataFlasherUI) !void {
     });
     self.button.rect.rounded = true;
 
-    self.isoText = Text.init("NULL", .{ .x = self.bgRect.transform.relX(0.075), .y = self.bgRect.transform.relY(0.1) - 20 }, .{ .fontSize = 14 });
-    self.deviceText = Text.init("NULL", .{ .x = self.bgRect.transform.relX(0.075), .y = self.bgRect.transform.relY(0.15) - 20 }, .{ .fontSize = 14 });
+    self.isoText = Text.init("NULL", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
+    self.deviceText = Text.init("NULL", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
 
     self.headerLabel = Text.init("flash", .{ .x = self.bgRect.transform.x + 12, .y = self.bgRect.transform.relY(0.01) }, .{
         .font = .JERSEY10_REGULAR,
@@ -230,19 +240,19 @@ pub fn start(self: *DataFlasherUI) !void {
 
     self.statusSectionHeader = Text.init(
         "status",
-        .{ .x = self.bgRect.transform.relX(perc_relPaddingLeft), .y = self.bgRect.transform.relY(0.26) },
+        .{ .x = self.bgRect.transform.relX(PADDING_LEFT), .y = self.bgRect.transform.relY(0.26) },
         .{ .fontSize = 24, .font = .JERSEY10_REGULAR },
     );
 
-    self.isoStatus = StatusIndicator.init("ISO validated & stream open", statusIndicatorSize);
-    self.deviceStatus = StatusIndicator.init("Device validated & stream open", statusIndicatorSize);
-    self.permissionsStatus = StatusIndicator.init("Freetracer has necessary permissions", statusIndicatorSize);
-    self.writeStatus = StatusIndicator.init("Write successfully completed", statusIndicatorSize);
-    self.verificationStatus = StatusIndicator.init("Written bytes successfuly verified", statusIndicatorSize);
+    self.isoStatus = StatusIndicator.init("ISO validated & stream open", STATUS_INDICATOR_SIZE);
+    self.deviceStatus = StatusIndicator.init("Device validated & stream open", STATUS_INDICATOR_SIZE);
+    self.permissionsStatus = StatusIndicator.init("Freetracer has necessary permissions", STATUS_INDICATOR_SIZE);
+    self.writeStatus = StatusIndicator.init("Write successfully completed", STATUS_INDICATOR_SIZE);
+    self.verificationStatus = StatusIndicator.init("Written bytes successfuly verified", STATUS_INDICATOR_SIZE);
 
     self.progressBox = ProgressBox{
         .text = Text.init("", .{
-            .x = self.bgRect.transform.relX(0.05),
+            .x = self.bgRect.transform.relX(PADDING_LEFT),
             .y = self.bgRect.transform.relY(0.75),
         }, .{
             .font = .ROBOTO_REGULAR,
@@ -268,6 +278,9 @@ pub fn start(self: *DataFlasherUI) !void {
             },
         },
     };
+
+    self.displayISOTextBuffer = std.mem.zeroes([std.fs.max_path_bytes]u8);
+    self.displayDeviceTextBuffer = std.mem.zeroes([std.fs.max_path_bytes]u8);
 }
 
 pub fn update(self: *DataFlasherUI) !void {
@@ -292,8 +305,8 @@ fn drawActive(self: *DataFlasherUI) !void {
 
     rl.drawTexturePro(
         self.uiSheetTexture.texture,
-        .{ .x = 16 * 9, .y = 16 * 10, .width = 16, .height = 16 },
-        .{ .x = self.bgRect.transform.relX(0.025), .y = self.bgRect.transform.relY(0.1), .width = 20, .height = 20 },
+        .{ .x = TEXTURE_TILE_SIZE * 9, .y = TEXTURE_TILE_SIZE * 10, .width = TEXTURE_TILE_SIZE, .height = TEXTURE_TILE_SIZE },
+        .{ .x = self.bgRect.transform.relX(ISO_ICON_POS_REL_X), .y = self.bgRect.transform.relY(ISO_ICON_POS_REL_Y), .width = ICON_SIZE, .height = ICON_SIZE },
         .{ .x = 0, .y = 0 },
         0,
         .white,
@@ -301,8 +314,8 @@ fn drawActive(self: *DataFlasherUI) !void {
 
     rl.drawTexturePro(
         self.uiSheetTexture.texture,
-        .{ .x = 16 * 10, .y = 16 * 11, .width = 16, .height = 16 },
-        .{ .x = self.bgRect.transform.relX(0.025), .y = self.bgRect.transform.relY(0.15), .width = 20, .height = 20 },
+        .{ .x = TEXTURE_TILE_SIZE * 10, .y = TEXTURE_TILE_SIZE * 11, .width = TEXTURE_TILE_SIZE, .height = TEXTURE_TILE_SIZE },
+        .{ .x = self.bgRect.transform.relX(DEV_ICON_POS_REL_X), .y = self.bgRect.transform.relY(DEV_ICON_POS_REL_Y), .width = ICON_SIZE, .height = ICON_SIZE },
         .{ .x = 0, .y = 0 },
         0,
         .white,
@@ -383,13 +396,14 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
 
                     const tempText = Text.init(isoPath, .{ .x = winRelX(1.5), .y = winRelY(1.5) }, self.isoText.style);
                     const isoDims = tempText.getDimensions();
-                    const widthDiff = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth() - isoDims.width;
+                    const availableWidth = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth() - (ICON_SIZE + ICON_TEXT_GAP_X);
+                    const widthDiff = availableWidth - isoDims.width;
 
                     Debug.log(.INFO, "isoPath width: {d}, widthDiff: {d}, activeWidth: {d}", .{ isoDims.width, widthDiff, (1 - SECTION_PADDING) * self.bgRect.transform.getWidth() });
 
                     if (widthDiff < 0) {
                         const d_widthDiff_d_isoWidth = @abs(widthDiff / isoDims.width);
-                        const numCharsToObscure = @round(@as(f32, @floatFromInt(isoPath.len)) * d_widthDiff_d_isoWidth) + 3;
+                        const numCharsToObscure = @round(@as(f32, @floatFromInt(isoPath.len)) * d_widthDiff_d_isoWidth);
                         Debug.log(.DEBUG, "d_widthDiff_d_isoWidth = {d}, numCharsToObscure = {d}", .{ d_widthDiff_d_isoWidth, numCharsToObscure });
 
                         if (numCharsToObscure > @as(f32, @floatFromInt(isoPath.len - 16))) {
@@ -400,13 +414,12 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
                             const startCharIdx = textMidPoint - @as(usize, @intFromFloat((numCharsToObscure) / 2));
                             const endCharIdx = startCharIdx + @as(usize, @intFromFloat(numCharsToObscure));
                             const remainingLen = isoPath.len - endCharIdx;
-                            self.displayTextBuffer = std.mem.zeroes([std.fs.max_path_bytes]u8);
 
-                            @memcpy(self.displayTextBuffer[0..startCharIdx], isoPath[0..startCharIdx]);
-                            @memcpy(self.displayTextBuffer[startCharIdx .. startCharIdx + filler.len], filler);
-                            @memcpy(self.displayTextBuffer[startCharIdx + filler.len .. startCharIdx + filler.len + remainingLen], isoPath[endCharIdx..]);
+                            @memcpy(self.displayISOTextBuffer[0..startCharIdx], isoPath[0..startCharIdx]);
+                            @memcpy(self.displayISOTextBuffer[startCharIdx .. startCharIdx + filler.len], filler);
+                            @memcpy(self.displayISOTextBuffer[startCharIdx + filler.len .. startCharIdx + filler.len + remainingLen], isoPath[endCharIdx..]);
 
-                            self.isoText.value = @ptrCast(std.mem.sliceTo(&self.displayTextBuffer, 0x00));
+                            self.isoText.value = @ptrCast(std.mem.sliceTo(&self.displayISOTextBuffer, 0x00));
                         }
 
                         Debug.log(.DEBUG, "New display path is: {s}", .{self.isoText.value});
@@ -414,7 +427,19 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
                         self.isoText.value = isoPath;
                     }
 
-                    self.deviceText.value = device.?.getNameSlice();
+                    if (device) |dev| {
+                        const devName = dev.getNameSlice();
+                        const p1 = " (";
+                        const bsdName = dev.getBsdNameSlice();
+                        const p2 = ")";
+
+                        @memcpy(self.displayDeviceTextBuffer[0..devName.len], devName);
+                        @memcpy(self.displayDeviceTextBuffer[devName.len .. devName.len + p1.len], p1);
+                        @memcpy(self.displayDeviceTextBuffer[devName.len + p1.len .. devName.len + p1.len + bsdName.len], bsdName);
+                        @memcpy(self.displayDeviceTextBuffer[devName.len + p1.len + bsdName.len .. devName.len + p1.len + bsdName.len + p2.len], p2);
+
+                        self.deviceText.value = @ptrCast(std.mem.sliceTo(&self.displayDeviceTextBuffer, 0x00));
+                    }
                 },
 
                 false => {
@@ -533,55 +558,55 @@ fn recalculateUI(self: *DataFlasherUI, bgRectParams: BgRectParams) void {
     self.moduleImg.transform.x = centerX - self.moduleImg.transform.getWidth() / 2;
     self.moduleImg.transform.y = self.bgRect.transform.relY(0.5) - self.moduleImg.transform.getHeight() / 2;
 
-    self.isoText.transform.x = self.bgRect.transform.relX(PADDING_LEFT) + 20;
-    self.isoText.transform.y = self.bgRect.transform.relY(0.1);
+    self.isoText.transform.x = self.bgRect.transform.relX(ISO_ICON_POS_REL_X) + ICON_TEXT_GAP_X;
+    self.isoText.transform.y = self.bgRect.transform.relY(ISO_ICON_POS_REL_Y) + self.isoText.getDimensions().height / 8;
 
-    self.deviceText.transform.x = self.bgRect.transform.relX(PADDING_LEFT) + 20;
-    self.deviceText.transform.y = self.bgRect.transform.relY(0.15);
+    self.deviceText.transform.x = self.bgRect.transform.relX(DEV_ICON_POS_REL_X) + ICON_TEXT_GAP_X;
+    self.deviceText.transform.y = self.bgRect.transform.relY(DEV_ICON_POS_REL_Y) + self.deviceText.getDimensions().height / 8;
 
-    self.statusSectionHeader.transform.x = self.bgRect.transform.relX(perc_relPaddingLeft);
+    self.statusSectionHeader.transform.x = self.bgRect.transform.relX(PADDING_LEFT);
 
     self.isoStatus.calculateUI(.{
-        .x = self.bgRect.transform.relX(perc_relPaddingLeft),
-        .y = self.statusSectionHeader.transform.y + self.statusSectionHeader.getDimensions().height + statusIndicatorGapY,
+        .x = self.bgRect.transform.relX(PADDING_LEFT),
+        .y = self.statusSectionHeader.transform.y + self.statusSectionHeader.getDimensions().height + ITEM_GAP_Y,
         .w = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth(),
-        .h = statusIndicatorSize,
+        .h = STATUS_INDICATOR_SIZE,
     });
 
     self.deviceStatus.calculateUI(.{
-        .x = self.bgRect.transform.relX(perc_relPaddingLeft),
-        .y = self.isoStatus.box.transform.y + statusIndicatorSize + statusIndicatorGapY,
+        .x = self.bgRect.transform.relX(PADDING_LEFT),
+        .y = self.isoStatus.box.transform.y + STATUS_INDICATOR_SIZE + ITEM_GAP_Y,
         .w = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth(),
-        .h = statusIndicatorSize,
+        .h = STATUS_INDICATOR_SIZE,
     });
 
     self.permissionsStatus.calculateUI(.{
-        .x = self.bgRect.transform.relX(perc_relPaddingLeft),
-        .y = self.deviceStatus.box.transform.y + statusIndicatorSize + statusIndicatorGapY,
+        .x = self.bgRect.transform.relX(PADDING_LEFT),
+        .y = self.deviceStatus.box.transform.y + STATUS_INDICATOR_SIZE + ITEM_GAP_Y,
         .w = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth(),
-        .h = statusIndicatorSize,
+        .h = STATUS_INDICATOR_SIZE,
     });
 
     self.writeStatus.calculateUI(.{
-        .x = self.bgRect.transform.relX(perc_relPaddingLeft),
-        .y = self.permissionsStatus.box.transform.y + statusIndicatorSize + statusIndicatorGapY,
+        .x = self.bgRect.transform.relX(PADDING_LEFT),
+        .y = self.permissionsStatus.box.transform.y + STATUS_INDICATOR_SIZE + ITEM_GAP_Y,
         .w = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth(),
-        .h = statusIndicatorSize,
+        .h = STATUS_INDICATOR_SIZE,
     });
 
     self.verificationStatus.calculateUI(.{
-        .x = self.bgRect.transform.relX(perc_relPaddingLeft),
-        .y = self.writeStatus.box.transform.y + statusIndicatorSize + statusIndicatorGapY,
+        .x = self.bgRect.transform.relX(PADDING_LEFT),
+        .y = self.writeStatus.box.transform.y + STATUS_INDICATOR_SIZE + ITEM_GAP_Y,
         .w = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth(),
-        .h = statusIndicatorSize,
+        .h = STATUS_INDICATOR_SIZE,
     });
 
     self.progressBox.text.transform.x = leftPadding;
-    self.progressBox.text.transform.y = self.verificationStatus.box.transform.y + self.verificationStatus.box.transform.h + 2 * statusIndicatorGapY;
+    self.progressBox.text.transform.y = self.verificationStatus.box.transform.y + self.verificationStatus.box.transform.h + 2 * ITEM_GAP_Y;
     self.progressBox.percentText.transform.x = leftPadding + (1 - SECTION_PADDING) * self.bgRect.transform.getWidth() - self.progressBox.percentText.getDimensions().width;
     self.progressBox.percentText.transform.y = self.progressBox.text.transform.y;
     self.progressBox.rect.transform.x = leftPadding;
-    self.progressBox.rect.transform.y = self.progressBox.text.transform.y + self.progressBox.text.getDimensions().height + 2.5 * statusIndicatorGapY;
+    self.progressBox.rect.transform.y = self.progressBox.text.transform.y + self.progressBox.text.getDimensions().height + 2.5 * ITEM_GAP_Y;
 
     self.button.setPosition(.{
         .x = centerX - self.button.rect.transform.getWidth() / 2,
