@@ -122,11 +122,12 @@ parent: *DataFlasher,
 bgRect: Rectangle = undefined,
 headerLabel: Text = undefined,
 moduleImg: Texture = undefined,
+uiSheetTexture: Texture = undefined,
 button: Button = undefined,
 isoText: Text = undefined,
 deviceText: Text = undefined,
 progressBox: ProgressBox = undefined,
-buffer: [MAX_PATH_DISPLAY_LENGTH]u8 = undefined,
+displayTextBuffer: [std.fs.max_path_bytes]u8 = undefined,
 flashRequested: bool = false,
 
 statusSectionHeader: Text = undefined,
@@ -210,20 +211,16 @@ pub fn start(self: *DataFlasherUI) !void {
     });
     self.button.rect.rounded = true;
 
-    self.isoText = Text.init("NULL", .{
-        .x = self.bgRect.transform.relX(0.05),
-        .y = self.bgRect.transform.relY(0.1),
-    }, .{
-        .fontSize = 14,
-    });
-
-    self.deviceText = Text.init("NULL", .{ .x = self.bgRect.transform.relX(0.05), .y = self.bgRect.transform.relY(0.15) }, .{ .fontSize = 14 });
+    self.isoText = Text.init("NULL", .{ .x = self.bgRect.transform.relX(0.075), .y = self.bgRect.transform.relY(0.1) - 20 }, .{ .fontSize = 14 });
+    self.deviceText = Text.init("NULL", .{ .x = self.bgRect.transform.relX(0.075), .y = self.bgRect.transform.relY(0.15) - 20 }, .{ .fontSize = 14 });
 
     self.headerLabel = Text.init("flash", .{ .x = self.bgRect.transform.x + 12, .y = self.bgRect.transform.relY(0.01) }, .{
         .font = .JERSEY10_REGULAR,
         .fontSize = 34,
         .textColor = Styles.Color.white,
     });
+
+    self.uiSheetTexture = Texture.init(.BUTTON_UI, .{ .x = winRelX(1.5), .y = winRelY(1.5) });
 
     self.moduleImg = Texture.init(.DISK_IMAGE, .{ .x = 0, .y = 0 });
     self.moduleImg.transform.scale = 0.5;
@@ -293,6 +290,24 @@ fn drawActive(self: *DataFlasherUI) !void {
     self.isoText.draw();
     self.deviceText.draw();
 
+    rl.drawTexturePro(
+        self.uiSheetTexture.texture,
+        .{ .x = 16 * 9, .y = 16 * 10, .width = 16, .height = 16 },
+        .{ .x = self.bgRect.transform.relX(0.025), .y = self.bgRect.transform.relY(0.1), .width = 20, .height = 20 },
+        .{ .x = 0, .y = 0 },
+        0,
+        .white,
+    );
+
+    rl.drawTexturePro(
+        self.uiSheetTexture.texture,
+        .{ .x = 16 * 10, .y = 16 * 11, .width = 16, .height = 16 },
+        .{ .x = self.bgRect.transform.relX(0.025), .y = self.bgRect.transform.relY(0.15), .width = 20, .height = 20 },
+        .{ .x = 0, .y = 0 },
+        0,
+        .white,
+    );
+
     if (self.flashRequested) {
         self.statusSectionHeader.draw();
         try self.isoStatus.draw();
@@ -356,21 +371,6 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
                         }
                     }
 
-                    // const maxTextWidth = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth();
-                    self.isoText.value = isoPath;
-                    // // const textWidth = self.isoText.getDimensions().width;
-                    // // const characterCount = @divExact(@as(f32, @floatFromInt(self.isoText.font.baseSize)), textWidth);
-                    // // _ = characterCount;
-                    // // (maxTextWidth - textWidth) / self.isoText.font.recs.*.width;
-                    //
-                    // if (self.isoText.getDimensions().width > maxTextWidth) {
-                    //     @memcpy(self.buffer[0..20], self.parent.state.data.isoPath.?[0..20]);
-                    //     @memcpy(self.buffer[20..40], self.parent.state.data.isoPath.?[isoPath.len - 20 .. isoPath.len]);
-                    //     self.isoText.value = @ptrCast(self.buffer[0..40]);
-                    // }
-
-                    self.deviceText.value = device.?.getBsdNameSlice();
-
                     if (areStateParamsAvailable) self.button.setEnabled(true);
 
                     self.headerLabel.style.textColor = Color.white;
@@ -380,6 +380,41 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
                         .color = Color.activeGreen,
                         .borderColor = Color.white,
                     });
+
+                    const tempText = Text.init(isoPath, .{ .x = winRelX(1.5), .y = winRelY(1.5) }, self.isoText.style);
+                    const isoDims = tempText.getDimensions();
+                    const widthDiff = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth() - isoDims.width;
+
+                    Debug.log(.INFO, "isoPath width: {d}, widthDiff: {d}, activeWidth: {d}", .{ isoDims.width, widthDiff, (1 - SECTION_PADDING) * self.bgRect.transform.getWidth() });
+
+                    if (widthDiff < 0) {
+                        const d_widthDiff_d_isoWidth = @abs(widthDiff / isoDims.width);
+                        const numCharsToObscure = @round(@as(f32, @floatFromInt(isoPath.len)) * d_widthDiff_d_isoWidth) + 3;
+                        Debug.log(.DEBUG, "d_widthDiff_d_isoWidth = {d}, numCharsToObscure = {d}", .{ d_widthDiff_d_isoWidth, numCharsToObscure });
+
+                        if (numCharsToObscure > @as(f32, @floatFromInt(isoPath.len - 16))) {
+                            self.isoText.value = isoPath[isoPath.len - 16 ..];
+                        } else {
+                            const filler = "...";
+                            const textMidPoint = isoPath.len / 2;
+                            const startCharIdx = textMidPoint - @as(usize, @intFromFloat((numCharsToObscure) / 2));
+                            const endCharIdx = startCharIdx + @as(usize, @intFromFloat(numCharsToObscure));
+                            const remainingLen = isoPath.len - endCharIdx;
+                            self.displayTextBuffer = std.mem.zeroes([std.fs.max_path_bytes]u8);
+
+                            @memcpy(self.displayTextBuffer[0..startCharIdx], isoPath[0..startCharIdx]);
+                            @memcpy(self.displayTextBuffer[startCharIdx .. startCharIdx + filler.len], filler);
+                            @memcpy(self.displayTextBuffer[startCharIdx + filler.len .. startCharIdx + filler.len + remainingLen], isoPath[endCharIdx..]);
+
+                            self.isoText.value = @ptrCast(std.mem.sliceTo(&self.displayTextBuffer, 0x00));
+                        }
+
+                        Debug.log(.DEBUG, "New display path is: {s}", .{self.isoText.value});
+                    } else {
+                        self.isoText.value = isoPath;
+                    }
+
+                    self.deviceText.value = device.?.getNameSlice();
                 },
 
                 false => {
@@ -498,11 +533,11 @@ fn recalculateUI(self: *DataFlasherUI, bgRectParams: BgRectParams) void {
     self.moduleImg.transform.x = centerX - self.moduleImg.transform.getWidth() / 2;
     self.moduleImg.transform.y = self.bgRect.transform.relY(0.5) - self.moduleImg.transform.getHeight() / 2;
 
-    self.isoText.transform.x = leftPadding;
-    self.isoText.transform.y = self.bgRect.transform.relY(0.13);
+    self.isoText.transform.x = self.bgRect.transform.relX(PADDING_LEFT) + 20;
+    self.isoText.transform.y = self.bgRect.transform.relY(0.1);
 
-    self.deviceText.transform.x = leftPadding;
-    self.deviceText.transform.y = self.isoText.transform.y + self.isoText.transform.getHeight() + 10;
+    self.deviceText.transform.x = self.bgRect.transform.relX(PADDING_LEFT) + 20;
+    self.deviceText.transform.y = self.bgRect.transform.relY(0.15);
 
     self.statusSectionHeader.transform.x = self.bgRect.transform.relX(perc_relPaddingLeft);
 

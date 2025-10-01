@@ -143,9 +143,7 @@ pub fn start(self: *DeviceListUI) !void {
         },
         .style = .{
             .color = Styles.Color.darkBlueGray,
-            .borderStyle = .{
-                .color = Styles.Color.darkBlueGray,
-            },
+            .borderStyle = .{ .color = Styles.Color.darkBlueGray },
         },
         .rounded = true,
         .bordered = true,
