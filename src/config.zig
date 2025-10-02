@@ -7,6 +7,7 @@ pub const DISK_PREFIX: []const u8 = "/dev/";
 
 // Logs path in the Users/{USER} directory
 pub const MAIN_APP_LOGS_PATH = "/freetracer.log";
+pub const ALLOWED_ISO_EXTENSIONS: [2][]const u8 = .{ ".iso", ".img" };
 
 pub const WINDOW_WIDTH_FACTOR: f32 = 0.5;
 pub const WINDOW_HEIGHT_FACTOR: f32 = 0.52;

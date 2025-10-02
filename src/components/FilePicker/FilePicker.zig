@@ -1,10 +1,12 @@
 const std = @import("std");
 const osd = @import("osdialog");
+
+const AppConfig = @import("../../config.zig");
+
 const Debug = @import("freetracer-lib").Debug;
 
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
 const ComponentName = EventManager.ComponentName.ISO_FILE_PICKER;
-
 const ComponentFramework = @import("../framework/import/index.zig");
 
 const UIFramework = @import("../ui/import/index.zig");
@@ -179,27 +181,12 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
                 const pathUpToDot: []const u8 = std.mem.sliceTo(newPath, 0x2e); // slice to the dot
                 const fileExtension: []const u8 = newPath[pathUpToDot.len..];
 
-                const extVariants: [3][]const u8 = .{ ".iso", ".ISO", ".Iso" };
-
                 var isOKToProceedPopupResponse = false;
+                const isExtensionOK = isExtensionAllowed(fileExtension);
 
-                const isExtensionUnknown: bool = !std.mem.eql(
-                    u8,
-                    fileExtension,
-                    extVariants[0],
-                ) and !std.mem.eql(
-                    u8,
-                    fileExtension,
-                    extVariants[1],
-                ) and !std.mem.eql(
-                    u8,
-                    fileExtension,
-                    extVariants[2],
-                );
-
-                if (isExtensionUnknown) {
+                if (!isExtensionOK) {
                     //
-                    isOKToProceedPopupResponse = osd.message("The extension of the selected file does not appear to be '.iso', are you sure you want to proceed?", .{
+                    isOKToProceedPopupResponse = osd.message("The extension of the selected file does not appear to be '.iso' or '.img', are you sure you want to proceed?", .{
                         .level = .warning,
                         .buttons = .yes_no,
                     });
@@ -207,11 +194,8 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
                     if (!isOKToProceedPopupResponse) break :eventLoop;
                 }
 
-                // TODO: Review this block again, this seems a bit crazy on the second look to dispatch another event with similar payload.
-                const pathBuffer: [:0]u8 = try self.allocator.dupeZ(u8, newPath);
-
                 const newEvent = ISOFilePickerUI.Events.onISOFilePathChanged.create(self.asComponentPtr(), &.{
-                    .newPath = pathBuffer,
+                    .newPath = newPath,
                 });
 
                 if (self.uiComponent) |*ui| {
@@ -285,13 +269,7 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
 }
 
 pub fn deinit(self: *ISOFilePickerComponent) void {
-    // Clean up resources
-    const state = self.state.getDataLocked();
-    defer self.state.unlock();
-
-    if (state.selected_path) |path| {
-        self.allocator.free(path);
-    }
+    _ = self;
 }
 
 pub fn selectFile(self: *ISOFilePickerComponent) !void {
@@ -372,3 +350,44 @@ pub const ComponentImplementation = ComponentFramework.ImplementComponent(ISOFil
 pub const asComponent = ComponentImplementation.asComponent;
 pub const asComponentPtr = ComponentImplementation.asComponentPtr;
 pub const asInstance = ComponentImplementation.asInstance;
+
+pub fn isExtensionAllowed(ext: []const u8) bool {
+    const MAX_EXT_LEN = 6;
+
+    if (ext.len > MAX_EXT_LEN or ext.len < 1) {
+        Debug.log(.ERROR, "Selected file's extension length is more than allowed MAX length or it is 0: `{s}`", .{ext});
+        return false;
+    }
+
+    var fileExtBuffer: [MAX_EXT_LEN]u8 = std.mem.zeroes([MAX_EXT_LEN]u8);
+    var allowedExtBuffer: [MAX_EXT_LEN]u8 = std.mem.zeroes([MAX_EXT_LEN]u8);
+    _ = std.ascii.upperString(fileExtBuffer[0..ext.len], ext);
+
+    const ucExt: []const u8 = std.mem.sliceTo(&fileExtBuffer, 0);
+
+    for (AppConfig.ALLOWED_ISO_EXTENSIONS) |allowedExt| {
+        allowedExtBuffer = std.mem.zeroes([MAX_EXT_LEN]u8);
+        _ = std.ascii.upperString(allowedExtBuffer[0..allowedExt.len], allowedExt);
+        const ucAllowedExt: []const u8 = std.mem.sliceTo(&allowedExtBuffer, 0x00);
+        Debug.log(.DEBUG, "Comparing extensions: {s} and {s}", .{ ucExt, ucAllowedExt });
+        if (std.mem.eql(u8, ucExt, ucAllowedExt)) return true;
+    }
+
+    return false;
+}
+
+test ".iso and .img extensions are allowed" {
+    const ext1: []const u8 = ".iso";
+    const ext2: []const u8 = ".img";
+
+    try std.testing.expect(isExtensionAllowed(ext1));
+    try std.testing.expect(isExtensionAllowed(ext2));
+}
+
+test "random extensions are not allowed" {
+    const ext1: []const u8 = ".md";
+    const ext2: []const u8 = ".exe";
+
+    try std.testing.expect(!isExtensionAllowed(ext1));
+    try std.testing.expect(!isExtensionAllowed(ext2));
+}

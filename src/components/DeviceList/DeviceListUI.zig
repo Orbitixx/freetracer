@@ -407,6 +407,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
                 .{if (data.selectedDevice) |device| device.getNameSlice() else "NULL"},
             );
 
+            // BUG: the "NULL" text pointer is invalidated after scope exit
             self.deviceNameLabel = Text.init(if (data.selectedDevice) |*device| device.getNameSlice() else "NULL", .{
                 .x = self.bgRect.transform.relX(0.5),
                 .y = self.bgRect.transform.relY(0.5),
