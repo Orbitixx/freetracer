@@ -120,7 +120,7 @@ pub fn initComponent(self: *Checkbox, parent: ?*Component) !void {
 
 pub fn update(self: *Checkbox) !void {
     const mousePos: rl.Vector2 = rl.getMousePosition();
-    const isCheckboxClicked: bool = rl.isMouseButtonPressed(.left);
+    const isCheckboxClicked: bool = rl.isMouseButtonReleased(.left);
     const isCheckboxHovered: bool = self.transform.isPointWithinBounds(mousePos);
 
     // Don't bother updating if state change triggers are not present
@@ -129,11 +129,9 @@ pub fn update(self: *Checkbox) !void {
 
     if (isCheckboxHovered and isCheckboxClicked) {
         if (self.state == .CHECKED) {
-            // Handle state transition from CHECKED to NORMAL
-            self.state = CheckboxState.NORMAL;
+            self.state = CheckboxState.HOVER;
             self.clickHandler.handle();
         } else {
-            // Handle State transition from NORMAL to CHECKED
             self.state = CheckboxState.CHECKED;
             self.clickHandler.handle();
         }
@@ -180,7 +178,6 @@ pub fn handleEvent(self: *Checkbox, event: ComponentFramework.Event) !ComponentF
 
 pub fn deinit(self: *Checkbox) void {
     _ = self;
-    // self.allocator.destroy(self.clickHandler.context);
 }
 
 pub fn dispatchComponentAction(self: *Checkbox) void {

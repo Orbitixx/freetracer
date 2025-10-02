@@ -155,7 +155,6 @@ pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResu
     eventLoop: switch (event.hash) {
         //
         // Event: Preceding component's state changed
-        // TODO: change this over to ISOFilePicker instead of its UI child
         ISOFilePicker.Events.onActiveStateChanged.Hash => {
             //
             const data = ISOFilePicker.Events.onActiveStateChanged.getData(event) orelse break :eventLoop;
@@ -205,7 +204,6 @@ pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResu
             }
 
             self.state.data.isActive = false;
-
             self.state.unlock();
 
             // Prepare and broacast component state changed event
@@ -299,12 +297,17 @@ pub const selectDeviceActionWrapper = struct {
     pub fn call(ctx: *anyopaque) void {
         const context: *SelectDeviceCallbackContext = @ptrCast(@alignCast(ctx));
 
+        var isSameUnselected: bool = false;
+
         context.component.state.lock();
 
         // TODO: ugly block, refactor
         if (context.component.state.data.selectedDevice) |currentlySelectedDevice| {
             // If the same device is already selected -- then unselect it
-            context.component.state.data.selectedDevice = if (currentlySelectedDevice.serviceId == context.selectedDevice.serviceId) null else context.selectedDevice;
+            if (currentlySelectedDevice.serviceId == context.selectedDevice.serviceId) {
+                context.component.state.data.selectedDevice = null;
+                isSameUnselected = true;
+            } else context.component.state.data.selectedDevice = context.selectedDevice;
         } else {
             // Otherwise, assign a device
             context.component.state.data.selectedDevice = context.selectedDevice;
@@ -321,7 +324,10 @@ pub const selectDeviceActionWrapper = struct {
         context.component.state.unlock();
 
         // TODO: CHECK: changed context.state.data.selectedDevice to context.selectedDevice -- probably not right but fixing another issue
-        const event = DeviceListUI.Events.onSelectedDeviceNameChanged.create(&context.component.component.?, &.{ .selectedDevice = context.selectedDevice });
+        const event = DeviceListUI.Events.onSelectedDeviceNameChanged.create(
+            &context.component.component.?,
+            &.{ .selectedDevice = if (isSameUnselected) null else context.selectedDevice },
+        );
         _ = EventManager.broadcast(event);
     }
 };

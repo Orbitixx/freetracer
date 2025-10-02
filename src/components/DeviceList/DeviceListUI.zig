@@ -389,21 +389,25 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
             self.state.data.selectedDevice = data.selectedDevice;
 
             // TODO: doesn't quite fix the visual selection bug with multiple devices
-            {
-                for (self.deviceCheckboxes.items) |*cb| {
-                    cb.state = .NORMAL;
-                }
+            // {
+            //     for (self.deviceCheckboxes.items) |*cb| {
+            //         cb.state = .NORMAL;
+            //     }
+            //
+            //     if (data.selectedDevice) |device| {
+            //         for (self.deviceCheckboxes.items) |*cb| {
+            //             if (device.serviceId == cb.deviceId) cb.state = .CHECKED;
+            //         }
+            //     }
+            // }
 
-                if (data.selectedDevice) |device| {
-                    for (self.deviceCheckboxes.items) |*cb| {
-                        if (device.serviceId == cb.deviceId) cb.state = .CHECKED;
-                    }
-                }
-            }
+            Debug.log(
+                .DEBUG,
+                "DeviceListUI.handleEvent.onSelectedDeviceNameChanged received selectedDevice: \n{s}\n",
+                .{if (data.selectedDevice) |device| device.getNameSlice() else "NULL"},
+            );
 
-            Debug.log(.DEBUG, "DeviceListUI.handleEvent.onSelectedDeviceNameChanged received selectedDevice: \n{s}\n\n", .{data.selectedDevice.?.getNameSlice()});
-
-            self.deviceNameLabel = Text.init(if (self.state.data.selectedDevice) |*device| device.getNameSlice() else "NULL", .{
+            self.deviceNameLabel = Text.init(if (data.selectedDevice) |*device| device.getNameSlice() else "NULL", .{
                 .x = self.bgRect.transform.relX(0.5),
                 .y = self.bgRect.transform.relY(0.5),
             }, .{
