@@ -340,11 +340,12 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
 
                 _ = std.fmt.bufPrintZ(
                     textBuf[0..],
-                    "{s} - {s} ({d:.0}GB)",
+                    "{s} - {s} ({d:.0}GB) [{s}]",
                     .{
                         if (deviceName.len > 20) deviceName[0..20] else deviceName,
                         if (bsdName.len > 10) bsdName[0..10] else bsdName,
                         @divTrunc(device.size, 1_000_000_000),
+                        if (device.type == .USB) "USB" else if (device.type == .SD) "SD" else "Other",
                     },
                 ) catch |err| {
                     std.debug.panic("{any}", .{err});
