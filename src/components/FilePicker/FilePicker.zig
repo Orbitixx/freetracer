@@ -1,9 +1,14 @@
 const std = @import("std");
 const osd = @import("osdialog");
 
-const AppConfig = @import("../../config.zig");
+const freetracer_lib = @import("freetracer-lib");
+const Debug = freetracer_lib.Debug;
+const Character = freetracer_lib.constants.Character;
+const ImageType = freetracer_lib.types.ImageType;
+const Image = freetracer_lib.types.Image;
 
-const Debug = @import("freetracer-lib").Debug;
+const AppConfig = @import("../../config.zig");
+const MAX_EXT_LEN = AppConfig.MAX_EXT_LEN;
 
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
 const ComponentName = EventManager.ComponentName.ISO_FILE_PICKER;
@@ -14,6 +19,7 @@ const UIFramework = @import("../ui/import/index.zig");
 pub const FilePickerState = struct {
     selected_path: ?[:0]u8 = null,
     is_selecting: bool = false,
+    image: Image = .{},
 };
 
 const ComponentState = ComponentFramework.ComponentState(FilePickerState);
@@ -61,7 +67,10 @@ pub const Events = struct {
     pub const onISOFilePathQueried = ComponentFramework.defineEvent(
         EventManager.createEventName(ComponentName, "on_iso_file_path_queried"),
         struct {},
-        struct { isoPath: [:0]u8 },
+        struct {
+            isoPath: [:0]u8,
+            image: Image,
+        },
     );
 };
 
@@ -178,7 +187,7 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
             );
 
             if (selectedPath) |newPath| {
-                const pathUpToDot: []const u8 = std.mem.sliceTo(newPath, 0x2e); // slice to the dot
+                const pathUpToDot: []const u8 = std.mem.sliceTo(newPath, Character.DOT); // slice to the dot
                 const fileExtension: []const u8 = newPath[pathUpToDot.len..];
 
                 var isOKToProceedPopupResponse = false;
@@ -192,6 +201,13 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
                     });
 
                     if (!isOKToProceedPopupResponse) break :eventLoop;
+                }
+
+                {
+                    self.state.lock();
+                    defer self.state.unlock();
+                    self.state.data.image.path = newPath;
+                    self.state.data.image.type = getImageType(fileExtension);
                 }
 
                 const newEvent = ISOFilePickerUI.Events.onISOFilePathChanged.create(self.asComponentPtr(), &.{
@@ -225,10 +241,10 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
             errdefer self.state.unlock();
             const path = self.state.data.selected_path;
             const isSelecting = self.state.data.is_selecting;
+            const image = self.state.data.image;
             self.state.unlock();
 
             Debug.log(.INFO, "ISOFilePicker.handleEvent.onISOFilePathQueried: processing event...", .{});
-
             Debug.log(.DEBUG, "\tpath: {s}\n\tisSelecting: {any}", .{ path.?, isSelecting });
 
             // WARNING: Debug assertion
@@ -256,6 +272,7 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
 
             responseDataPtr.* = Events.onISOFilePathQueried.Response{
                 .isoPath = path.?,
+                .image = image,
             };
 
             eventResult.validate(.SUCCESS);
@@ -352,8 +369,6 @@ pub const asComponentPtr = ComponentImplementation.asComponentPtr;
 pub const asInstance = ComponentImplementation.asInstance;
 
 pub fn isExtensionAllowed(ext: []const u8) bool {
-    const MAX_EXT_LEN = 6;
-
     if (ext.len > MAX_EXT_LEN or ext.len < 1) {
         Debug.log(.ERROR, "Selected file's extension length is more than allowed MAX length or it is 0: `{s}`", .{ext});
         return false;
@@ -374,6 +389,17 @@ pub fn isExtensionAllowed(ext: []const u8) bool {
     }
 
     return false;
+}
+
+fn getImageType(ext: []const u8) ImageType {
+    var fileExtBuffer: [MAX_EXT_LEN]u8 = std.mem.zeroes([MAX_EXT_LEN]u8);
+    _ = std.ascii.upperString(fileExtBuffer[0..ext.len], ext);
+    const ucExt: []const u8 = std.mem.sliceTo(&fileExtBuffer, 0);
+
+    if (std.mem.eql(u8, ucExt, "ISO")) return .ISO;
+    if (std.mem.eql(u8, ucExt, "IMG")) return .IMG;
+
+    return .Other;
 }
 
 test ".iso and .img extensions are allowed" {

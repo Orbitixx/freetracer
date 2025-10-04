@@ -4,13 +4,14 @@ const fs = @import("util/filesystem.zig");
 const str = @import("util/strings.zig");
 const testing = std.testing;
 const freetracer_lib = @import("freetracer-lib");
-
 const dev = freetracer_lib.device;
 
 const ShutdownManager = @import("./managers/ShutdownManager.zig").ShutdownManagerSingleton;
 const Debug = freetracer_lib.Debug;
 const xpc = freetracer_lib.xpc;
 const ISOParser = freetracer_lib.ISOParser;
+const DeviceType = freetracer_lib.types.DeviceType;
+const ImageType = freetracer_lib.types.ImageType;
 
 const k = freetracer_lib.constants.k;
 const c = freetracer_lib.c;
@@ -59,20 +60,20 @@ pub fn main() !void {
 
     Debug.log(.INFO, "MAIN START - UID: {}, EUID: {}", .{ c.getuid(), c.geteuid() });
 
-    var args = std.process.args();
-    _ = args.next(); // skip program name
-
-    if (args.next()) |arg| {
-        const stdout = std.io.getStdOut().writer();
-        try stdout.print("Received bsdName: {s}\n", .{arg});
-
-        const device = try dev.openDeviceValidated(arg);
-        defer device.close();
-
-        try stdout.print("Completed test task!\n", .{});
-
-        return;
-    }
+    // var args = std.process.args();
+    // _ = args.next(); // skip program name
+    //
+    // if (args.next()) |arg| {
+    //     const stdout = std.io.getStdOut().writer();
+    //     try stdout.print("Received bsdName: {s}\n", .{arg});
+    //
+    //     const device = try dev.openDeviceValidated(arg);
+    //     defer device.close();
+    //
+    //     try stdout.print("Completed test task!\n", .{});
+    //
+    //     return;
+    // }
 
     var xpcServer = try XPCService.init(.{
         .isServer = true,
@@ -178,6 +179,8 @@ fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
     const isoPath: []const u8 = XPCService.parseString(data, "isoPath");
     const deviceBsdName: []const u8 = XPCService.parseString(data, "disk");
     const deviceServiceId: c_uint = @intCast(XPCService.getUInt64(data, "deviceServiceId"));
+    const deviceType: DeviceType = @enumFromInt(XPCService.getUInt64(data, "deviceType"));
+    const imageType: ImageType = @enumFromInt(XPCService.getUInt64(data, "imageType"));
 
     Debug.log(.INFO, "Recieved service: {d}", .{deviceServiceId});
 
@@ -189,7 +192,7 @@ fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
         return;
     };
 
-    const isoFile = fs.openFileValidated(isoPath, .{ .userHomePath = userHomePath }) catch |err| {
+    const isoFile = fs.openFileValidated(isoPath, .{ .userHomePath = userHomePath, .imageType = imageType }) catch |err| {
         respondWithErrorAndTerminate(
             .{ .err = err, .message = "Unable to open ISO file or its directory." },
             .{ .xpcConnection = connection, .xpcResponseCode = .ISO_FILE_INVALID },
@@ -201,7 +204,7 @@ fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
 
     sendXPCReply(connection, .ISO_FILE_VALID, "ISO File is determined to be valid and is successfully opened.");
 
-    const device = dev.openDeviceValidated(deviceBsdName) catch |err| {
+    const device = dev.openDeviceValidated(deviceBsdName, deviceType) catch |err| {
         switch (err) {
             error.AccessDenied => {
                 respondWithErrorAndTerminate(

@@ -23,6 +23,10 @@ pub const k = struct {
     pub const DefaultDeviceName = "Untitled Device";
 };
 
+/// Recurse a maximum of up to 10 levels within IOKit
+/// operations
+pub const MAX_IOKIT_DEVICE_RECURSE_NUM = 10;
+
 pub const Character = struct {
     pub const NULL = 0x00;
     pub const SEMICOLON = 0x3B;

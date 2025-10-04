@@ -49,10 +49,28 @@ pub const WriteRequestData = struct {
 pub const MAX_BSD_NAME: usize = 64;
 pub const MAX_DEVICE_NAME: usize = std.fs.max_name_bytes;
 
+pub const DeviceType = enum(u64) {
+    USB,
+    SD,
+    Other,
+};
+
+pub const ImageType = enum(u64) {
+    ISO,
+    IMG,
+    Other,
+};
+
+pub const Image = struct {
+    path: ?[:0]u8 = null,
+    type: ImageType = undefined,
+};
+
 pub const StorageDevice = struct {
     serviceId: c.io_service_t,
     deviceName: [std.fs.max_name_bytes:0]u8,
     bsdName: [MAX_BSD_NAME:0]u8,
+    type: DeviceType,
     size: i64,
 
     pub fn getNameSlice(self: *const StorageDevice) [:0]const u8 {

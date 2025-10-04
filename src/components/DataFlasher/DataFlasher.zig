@@ -2,14 +2,21 @@ const std = @import("std");
 const osd = @import("osdialog");
 const freetracer_lib = @import("freetracer-lib");
 const Debug = freetracer_lib.Debug;
+const types = freetracer_lib.types;
 
-const StorageDevice = freetracer_lib.StorageDevice;
+const StorageDevice = types.StorageDevice;
+const DeviceType = types.DeviceType;
+const ImageType = types.ImageType;
+const Image = types.Image;
 
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
 const ComponentName = EventManager.ComponentName.DATA_FLASHER;
 
 const ComponentFramework = @import("../framework/import/index.zig");
 // const WorkerContext = @import("./WorkerContext.zig", .{});
+const DeviceList = @import("../DeviceList/DeviceList.zig");
+const ISOFilePicker = @import("../FilePicker/FilePicker.zig");
+const PrivilegedHelper = @import("../macos/PrivilegedHelper.zig");
 
 const DataFlasherUI = @import("./DataFlasherUI.zig");
 
@@ -17,12 +24,10 @@ const DataFlasherState = struct {
     isActive: bool = false,
     isoPath: ?[:0]const u8 = null,
     device: ?StorageDevice = null,
+    image: Image = .{},
 };
 
 const DataFlasher = @This();
-const DeviceList = @import("../DeviceList/DeviceList.zig");
-const ISOFilePicker = @import("../FilePicker/FilePicker.zig");
-const PrivilegedHelper = @import("../macos/PrivilegedHelper.zig");
 
 const Component = ComponentFramework.Component;
 const ComponentState = ComponentFramework.ComponentState(DataFlasherState);
@@ -122,9 +127,10 @@ pub fn handleEvent(self: *DataFlasher, event: ComponentEvent) !EventResult {
                 std.debug.assert(self.state.data.isoPath != null and self.state.data.isoPath.?.len > 2);
                 std.debug.assert(self.state.data.device != null and @TypeOf(self.state.data.device.?) == StorageDevice);
 
-                Debug.log(.DEBUG, "DataFlasher received:\n\tisoPath: {s}\n\tdevice: {s}\n", .{
+                Debug.log(.DEBUG, "DataFlasher received:\n\tisoPath: {s}\n\tdevice: {s} ({any})\n", .{
                     self.state.data.isoPath.?,
                     self.state.data.device.?.getBsdNameSlice(),
+                    self.state.data.device.?.type,
                 });
             }
 
@@ -146,12 +152,14 @@ pub fn dispatchComponentAction(self: *DataFlasher) void {
     // live/s only within the scope of this function.
     var device: StorageDevice = undefined;
     var isoPath: [:0]const u8 = undefined;
+    var imageType: ImageType = undefined;
 
     {
         self.state.lock();
         defer self.state.unlock();
         device = self.state.data.device.?;
         isoPath = self.state.data.isoPath.?;
+        imageType = self.state.data.image.type;
     }
 
     self.state.lock();
@@ -208,6 +216,7 @@ pub fn dispatchComponentAction(self: *DataFlasher) void {
             .targetDisk = device.getBsdNameSlice(),
             .device = device,
             .isoPath = isoPath,
+            .imageType = imageType,
         }),
     ) catch |err| errBlk: {
         Debug.log(.ERROR, "DataFlasher: Received an error dispatching a disk write request. Aborting... Error: {any}", .{err});
@@ -251,6 +260,7 @@ fn queryAndSaveISOPath(self: *DataFlasher) !void {
         }
 
         self.state.data.isoPath = isoResponse.isoPath;
+        self.state.data.image = isoResponse.image;
     } else return error.DataFlasherReceivedNullISOPath;
 }
 

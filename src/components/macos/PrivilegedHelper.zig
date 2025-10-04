@@ -12,6 +12,10 @@ const isLinux = freetracer_lib.types.isLinux;
 const isMacOS = freetracer_lib.types.isMacOS;
 const Device = freetracer_lib.device;
 const Character = freetracer_lib.constants.Character;
+const String = freetracer_lib.String;
+
+const DeviceType = freetracer_lib.types.DeviceType;
+const ImageType = freetracer_lib.types.ImageType;
 
 const xpc = freetracer_lib.xpc;
 const XPCService = freetracer_lib.Mach.XPCService;
@@ -21,6 +25,7 @@ const HelperRequestCode = freetracer_lib.constants.HelperRequestCode;
 const HelperResponseCode = freetracer_lib.constants.HelperResponseCode;
 const HelperInstallCode = freetracer_lib.constants.HelperInstallCode;
 
+const ISOFilePicker = @import("../FilePicker/FilePicker.zig");
 const PrivilegedHelperTool = @import("../../modules/macos/PrivilegedHelperTool.zig");
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
 const WindowManager = @import("../../managers/WindowManager.zig").WindowManagerSingleton;
@@ -34,6 +39,7 @@ const PrivilegedHelperState = struct {
     isoPath: ?[:0]const u8 = null,
     targetDisk: ?[:0]const u8 = null,
     device: ?StorageDevice = null,
+    imageType: ImageType = undefined,
 };
 
 const ComponentFramework = @import("../framework/import/index.zig");
@@ -67,6 +73,7 @@ pub const Events = struct {
         EventManager.createEventName(ComponentName, "on_write_iso_to_device"),
         struct {
             isoPath: [:0]const u8,
+            imageType: ImageType,
             targetDisk: [:0]const u8,
             device: StorageDevice,
         },
@@ -281,7 +288,7 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
         Events.onWriteISOToDeviceRequest.Hash => {
             const data = Events.onWriteISOToDeviceRequest.getData(event) orelse break :eventLoop;
 
-            try self.acquireStateDataOwnership(data.isoPath, data.targetDisk, data.device);
+            try self.acquireStateDataOwnership(data.isoPath, data.targetDisk, data.device, data.imageType);
 
             self.installHelperIfNotInstalled() catch |err| {
                 Debug.log(.ERROR, "An error occurred while trying to install Freetracer Helper Tool. Exiting event loop... {any}", .{err});
@@ -331,6 +338,9 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
             const targetDisk: [:0]const u8 = self.state.data.targetDisk.?;
             const isoPath: [:0]const u8 = self.state.data.isoPath.?;
             const deviceServiceId: c_uint = self.state.data.device.?.serviceId;
+            const deviceType: DeviceType = self.state.data.device.?.type;
+            const imageType: ImageType = self.state.data.imageType;
+            // const imageType: ImageType = EventManager.signal("iso_file_picker", )
 
             Debug.log(.INFO, "Sending deviceServiceId: {d}", .{deviceServiceId});
 
@@ -339,7 +349,7 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
 
             Debug.log(.INFO, "Sending target disk: {s}", .{targetDisk});
 
-            self.requestWrite(targetDisk, isoPath, deviceServiceId);
+            self.requestWrite(targetDisk, isoPath, deviceServiceId, deviceType, imageType);
 
             eventResult.validate(.SUCCESS);
         },
@@ -537,7 +547,7 @@ fn installHelperIfNotInstalled(self: *PrivilegedHelper) !void {
     } else Debug.log(.INFO, "Determined that Freetracer Helper Tool is already installed.", .{});
 }
 
-fn requestWrite(self: *PrivilegedHelper, targetDisk: [:0]const u8, isoPath: [:0]const u8, deviceServiceId: c_uint) void {
+fn requestWrite(self: *PrivilegedHelper, targetDisk: [:0]const u8, isoPath: [:0]const u8, deviceServiceId: c_uint, deviceType: DeviceType, imageType: ImageType) void {
     // Install or update the Privileged Helper Tool before sending unmount request
 
     Debug.log(.DEBUG, "requestWrite() received targetDisk: {s}", .{targetDisk});
@@ -547,45 +557,35 @@ fn requestWrite(self: *PrivilegedHelper, targetDisk: [:0]const u8, isoPath: [:0]
         return;
     }
 
-    const path = "/dev/disk5";
-    const fd: c_int = c.open(path, c.O_RDWR, @as(c_uint, 0));
+    // TODO: outsource this to a common lib function which does sanitization and other sanity checks
+    const deviceDir = "/dev/";
+    var devicePathBuf: [std.fs.max_name_bytes]u8 = std.mem.zeroes([std.fs.max_name_bytes]u8);
+    const devicePath = String.concatStrings(std.fs.max_name_bytes, &devicePathBuf, deviceDir, @ptrCast(targetDisk)) catch |err| {
+        Debug.log(.ERROR, "Error while concatenating devicePath from directory and target disk. Err: {any}", .{err});
+        return;
+    };
 
-    // if (fd == -1) {
-    //     Debug.log(.ERROR, "fd is -1 :(", .{});
-    //     const err_num = c.__error().*;
-    //     const err_str = c.strerror(err_num);
-    //     Debug.log(.ERROR, "open() failed with errno {}: {s}", .{ err_num, err_str });
-    //     return;
-    // } else
+    const fd: c_int = c.open(@ptrCast(devicePath), c.O_RDWR, @as(c_uint, 0o644));
     _ = c.close(fd);
-
-    // const deviceDir = "/dev/";
-    // var devicePathBuf: [std.fs.max_name_bytes]u8 = std.mem.zeroes([std.fs.max_name_bytes]u8);
-    // @memcpy(devicePathBuf[0..deviceDir.len], deviceDir);
-    // @memcpy(devicePathBuf[deviceDir.len .. deviceDir.len + targetDisk.len], targetDisk);
-    //
-    // const device: std.fs.File = Device.openDeviceValidated(std.mem.sliceTo(&devicePathBuf, Character.NULL)) catch |err| {
-    //     Debug.log(.ERROR, "Unable to obtain device handle, error: {any}", .{err});
-    //     return;
-    // };
-    // device.close();
 
     const request = XPCService.createRequest(.WRITE_ISO_TO_DEVICE);
     defer XPCService.releaseObject(request);
     XPCService.createString(request, "disk", targetDisk);
     XPCService.createString(request, "isoPath", isoPath);
     XPCService.createUInt64(request, "deviceServiceId", deviceServiceId);
-    // XPCService.createFileDescriptor(request, "fd", fd);
+    XPCService.createUInt64(request, "deviceType", @intFromEnum(deviceType));
+    XPCService.createUInt64(request, "imageType", @intFromEnum(imageType));
     XPCService.connectionSendMessage(self.xpcClient.service, request);
 }
 
-fn acquireStateDataOwnership(self: *PrivilegedHelper, isoPath: [:0]const u8, targetDisk: [:0]const u8, device: StorageDevice) !void {
+fn acquireStateDataOwnership(self: *PrivilegedHelper, isoPath: [:0]const u8, targetDisk: [:0]const u8, device: StorageDevice, imageType: ImageType) !void {
     self.cleanupComponentState();
     self.state.lock();
     defer self.state.unlock();
     self.state.data.isoPath = try self.allocator.dupeZ(u8, isoPath);
     self.state.data.targetDisk = try self.allocator.dupeZ(u8, targetDisk);
     self.state.data.device = device;
+    self.state.data.imageType = imageType;
     Debug.log(.INFO, "Set to state: \n\tISO Path: {s}\n\ttargetDisk: {s}", .{ self.state.data.isoPath.?, self.state.data.targetDisk.? });
 }
 

@@ -1,11 +1,13 @@
 const std = @import("std");
-const c = @import("../types.zig").c;
+const types = @import("../types.zig");
+const c = types.c;
 const da = @import("../macos/DiskArbitration.zig");
 const Debug = @import("../util/debug.zig");
 const String = @import("./string.zig");
 const Character = @import("../constants.zig").Character;
+const DeviceType = types.DeviceType;
 
-pub fn openDeviceValidated(bsdName: []const u8) !std.fs.File {
+pub fn openDeviceValidated(bsdName: []const u8, deviceType: DeviceType) !std.fs.File {
     if (bsdName.len < 2) return error.DeviceNameTooShort;
     if (bsdName.len > std.fs.max_name_bytes) return error.DeviceNameTooLong;
 
@@ -21,7 +23,7 @@ pub fn openDeviceValidated(bsdName: []const u8) !std.fs.File {
     // Performs a check via Disk Arbitration on whether or not the device is internal or removable
     {
         var unmountStatus: bool = false;
-        try requestUnmount(sanitizedBsdName, &unmountStatus);
+        try requestUnmount(sanitizedBsdName, deviceType, &unmountStatus);
         while (!unmountStatus) std.Thread.sleep(500_000_000);
     }
 
@@ -64,7 +66,7 @@ pub fn openDeviceValidated(bsdName: []const u8) !std.fs.File {
     return device;
 }
 
-pub fn requestUnmount(targetDisk: []const u8, statusResultPtr: *bool) !void {
+pub fn requestUnmount(targetDisk: []const u8, deviceType: DeviceType, statusResultPtr: *bool) !void {
 
     // TODO: perform a check to ensure the device has a kIOMediaRemovableKey key
     // TODO: refactor code to smalelr functions
@@ -107,9 +109,11 @@ pub fn requestUnmount(targetDisk: []const u8, statusResultPtr: *bool) !void {
 
     Debug.log(.INFO, "DA Disk Description is successfully obtained/copied.", .{});
 
-    // _ = c.CFShow(diskInfo);
+    _ = c.CFShow(diskInfo);
 
-    if (try da.isTargetDiskInternalDevice(diskInfo)) return error.UNMOUNT_REQUEST_ON_INTERNAL_DEVICE;
+    if (try da.isTargetDiskInternalDevice(diskInfo)) {
+        if (deviceType != .SD) return error.UNMOUNT_REQUEST_ON_INTERNAL_DEVICE;
+    }
 
     Debug.log(.INFO, "Unmount request passed checks. Initiating unmount call for disk: {s}.", .{bsdName});
 

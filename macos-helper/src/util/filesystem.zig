@@ -12,6 +12,7 @@ const k = freetracer_lib.constants.k;
 const c = freetracer_lib.c;
 const String = freetracer_lib.String;
 const Character = freetracer_lib.constants.Character;
+const ImageType = freetracer_lib.types.ImageType;
 
 const XPCService = freetracer_lib.Mach.XPCService;
 const XPCConnection = freetracer_lib.Mach.XPCConnection;
@@ -64,7 +65,7 @@ pub fn unwrapUserHomePath(buffer: *[std.fs.max_path_bytes]u8, restOfPath: []cons
     return buffer[0 .. userDir.len + restOfPath.len];
 }
 
-pub fn openFileValidated(unsanitizedIsoPath: []const u8, params: struct { userHomePath: []const u8 }) !std.fs.File {
+pub fn openFileValidated(unsanitizedIsoPath: []const u8, params: struct { userHomePath: []const u8, imageType: ImageType }) !std.fs.File {
 
     // Buffer overflow protection
     if (unsanitizedIsoPath.len > std.fs.max_path_bytes) {
@@ -77,7 +78,7 @@ pub fn openFileValidated(unsanitizedIsoPath: []const u8, params: struct { userHo
     var realPathBuffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
     var sanitizeStringBuffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
 
-    const isoPath = std.fs.realpath(unsanitizedIsoPath, &realPathBuffer) catch |err| {
+    const imagePath = std.fs.realpath(unsanitizedIsoPath, &realPathBuffer) catch |err| {
         Debug.log(.ERROR, "Unable to resolve the real path of the povided path: {s}. Error: {any}", .{
             String.sanitizeString(&sanitizeStringBuffer, unsanitizedIsoPath),
             err,
@@ -85,15 +86,15 @@ pub fn openFileValidated(unsanitizedIsoPath: []const u8, params: struct { userHo
         return error.UnableToResolveRealISOPath;
     };
 
-    const printableIsoPath = String.sanitizeString(&sanitizeStringBuffer, isoPath);
+    const printableIsoPath = String.sanitizeString(&sanitizeStringBuffer, imagePath);
 
-    if (isoPath.len < 8) {
+    if (imagePath.len < 8) {
         Debug.log(.ERROR, "Provided path is less than 8 characters long. Likely invalid, aborting for safety...", .{});
         return error.ISOFilePathTooShort;
     }
 
-    const directory = std.fs.path.dirname(isoPath) orelse ".";
-    const fileName = std.fs.path.basename(isoPath);
+    const directory = std.fs.path.dirname(imagePath) orelse ".";
+    const fileName = std.fs.path.basename(imagePath);
 
     if (!isFilePathAllowed(params.userHomePath, directory)) {
         Debug.log(.ERROR, "Provided path contains a disallowed part: {s}", .{printableIsoPath});
@@ -105,12 +106,12 @@ pub fn openFileValidated(unsanitizedIsoPath: []const u8, params: struct { userHo
         return error.UnableToOpenDirectoryOfSpecificedISOFile;
     };
 
-    const isoFile = dir.openFile(fileName, .{ .mode = .read_only, .lock = .exclusive }) catch |err| {
+    const imageFile = dir.openFile(fileName, .{ .mode = .read_only, .lock = .exclusive }) catch |err| {
         Debug.log(.ERROR, "Failed to open ISO file or obtain an exclusive lock. Error: {any}", .{err});
         return error.UnableToOpenISOFileOrObtainExclusiveLock;
     };
 
-    const fileStat = isoFile.stat() catch |err| {
+    const fileStat = imageFile.stat() catch |err| {
         Debug.log(.ERROR, "Failed to obtain ISO file stat. Error: {any}", .{err});
         return error.UnableToObtainISOFileStat;
     };
@@ -127,14 +128,17 @@ pub fn openFileValidated(unsanitizedIsoPath: []const u8, params: struct { userHo
     // Minimum ISO system block: 16 sectors by 2048 bytes each + 1 sector for PVD contents.
     if (fileStat.size < 16 * 2048 + 1) return error.InvalidISOSystemStructure;
 
-    const isoValidationResult = ISOParser.validateISOFileStructure(isoFile);
+    if (params.imageType == .ISO) {
+        const isoValidationResult = ISOParser.validateISOFileStructure(imageFile);
 
-    if (isoValidationResult != .ISO_VALID) {
-        Debug.log(.ERROR, "Invalid ISO file structure detected. Aborting... Error code: {any}", .{isoValidationResult});
-        return error.InvalidISOStructureDoesNotConformToISO9660;
+        // TODO: If ISO structure does not conform to ISO9660, prompt user to proceed or not.
+        if (isoValidationResult != .ISO_VALID) {
+            Debug.log(.ERROR, "Invalid ISO file structure detected. Aborting... Error code: {any}", .{isoValidationResult});
+            return error.InvalidISOStructureDoesNotConformToISO9660;
+        }
     }
 
-    return isoFile;
+    return imageFile;
 }
 
 pub fn writeISO(connection: XPCConnection, isoFile: std.fs.File, device: std.fs.File) !void {
