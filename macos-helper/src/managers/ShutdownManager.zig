@@ -41,6 +41,7 @@ pub const ShutdownManagerSingleton = struct {
 
     pub fn exitSuccessfully() void {
         Debug.log(.INFO, "Freetracer Helper successfully finished executing.", .{});
+        std.Thread.sleep(500_000_000);
         xpc.dispatch_async_f(xpc.dispatch_get_main_queue(), null, &exitFunction);
     }
 

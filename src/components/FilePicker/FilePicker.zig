@@ -88,7 +88,7 @@ pub fn init(allocator: std.mem.Allocator) !ISOFilePickerComponent {
 
 pub fn initComponent(self: *ISOFilePickerComponent, parent: ?*Component) !void {
     if (self.component != null) return error.BaseComponentAlreadyInitialized;
-    self.component = try Component.init(self, &ComponentImplementation.vtable, parent);
+    self.component = try Component.init(self, &ComponentImplementation.vtable, parent, self.allocator);
 }
 
 pub fn initWorker(self: *ISOFilePickerComponent) !void {
@@ -121,14 +121,13 @@ pub fn start(self: *ISOFilePickerComponent) !void {
 
         Debug.log(.DEBUG, "ISOFilePickerComponent: attempting to initialize children...", .{});
 
-        component.children = std.ArrayList(Component).init(self.allocator);
-
+        component.children = std.ArrayList(Component).empty;
         self.uiComponent = try ISOFilePickerUI.init(self.allocator, self);
 
         if (component.children) |*children| {
             if (self.uiComponent) |*uiComponent| {
                 try uiComponent.start();
-                try children.append(uiComponent.asComponent());
+                try children.append(self.allocator, uiComponent.asComponent());
             }
         }
 

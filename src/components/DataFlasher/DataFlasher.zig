@@ -69,7 +69,7 @@ pub fn init(allocator: std.mem.Allocator) !DataFlasher {
 
 pub fn initComponent(self: *DataFlasher, parent: ?*Component) !void {
     if (self.component != null) return error.BaseComponentAlreadyInitialized;
-    self.component = try Component.init(self, &ComponentImplementation.vtable, parent);
+    self.component = try Component.init(self, &ComponentImplementation.vtable, parent, self.allocator);
 }
 
 pub fn start(self: *DataFlasher) !void {
@@ -80,14 +80,14 @@ pub fn start(self: *DataFlasher) !void {
 
         Debug.log(.DEBUG, "DataFlasher: attempting to initialize children...", .{});
 
-        component.children = std.ArrayList(Component).init(self.allocator);
+        component.children = std.ArrayList(Component).empty;
 
         self.ui = try DataFlasherUI.init(self.allocator, self);
 
         if (component.children) |*children| {
             if (self.ui) |*ui| {
                 try ui.start();
-                try children.append(ui.asComponent());
+                try children.append(self.allocator, ui.asComponent());
             }
         }
 

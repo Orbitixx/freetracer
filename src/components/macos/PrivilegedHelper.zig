@@ -185,7 +185,7 @@ pub fn init(allocator: std.mem.Allocator) !PrivilegedHelper {
 
 pub fn initComponent(self: *PrivilegedHelper, parent: ?*Component) !void {
     if (self.component != null) return error.BaseComponentAlreadyInitialized;
-    self.component = try Component.init(self, &ComponentImplementation.vtable, parent);
+    self.component = try Component.init(self, &ComponentImplementation.vtable, parent, self.allocator);
 }
 
 pub fn initWorker(self: *PrivilegedHelper) !void {
@@ -221,7 +221,7 @@ pub fn start(self: *PrivilegedHelper) !void {
 
         Debug.log(.DEBUG, "PrivilegedHelper: attempting to initialize children...", .{});
 
-        component.children = std.ArrayList(Component).init(self.allocator);
+        component.children = std.ArrayList(Component).empty;
 
         Debug.log(.DEBUG, "PrivilegedHelper: finished initializing children.", .{});
     }
@@ -425,7 +425,7 @@ pub fn messageHandler(connection: xpc.xpc_connection_t, message: xpc.xpc_object_
     const reply_type = xpc.xpc_get_type(message);
 
     if (reply_type == xpc.XPC_TYPE_DICTIONARY) {
-        processResponseMessage(connection, message);
+        processResponseMessage(@ptrCast(connection), message);
     }
 }
 
@@ -532,7 +532,7 @@ fn shouldHelperUpdate(dict: XPCObject) bool {
 
 fn waitForHelperToolInstall() void {
     Debug.log(.INFO, "Waiting to allow Helper Tool be registered with system launch daemon", .{});
-    std.time.sleep(1_000_000_000);
+    std.Thread.sleep(1_000_000_000);
 }
 
 fn installHelperIfNotInstalled(self: *PrivilegedHelper) !void {

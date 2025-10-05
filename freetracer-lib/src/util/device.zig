@@ -122,7 +122,7 @@ pub fn requestUnmount(targetDisk: []const u8, deviceType: DeviceType, statusResu
     c.CFRunLoopRun();
 }
 
-pub fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: ?*anyopaque) callconv(.C) void {
+pub fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: ?*anyopaque) callconv(.c) void {
     const unmountStatus: *bool = @ptrCast(context);
     Debug.log(.INFO, "Processing unmountDiskCallback()...", .{});
 

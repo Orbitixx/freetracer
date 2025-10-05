@@ -28,7 +28,7 @@
 
     // Tracks the earliest Zig version that the package considers to be a
     // supported use case.
-    .minimum_zig_version = "0.14.1",
+    .minimum_zig_version = "0.15.1",
 
     // This field is optional.
     // Each dependency must either provide a `url` and `hash`, or a `path`.
@@ -37,12 +37,12 @@
     // internet connectivity.
     .dependencies = .{
         .raylib_zig = .{
-            .url = "git+https://github.com/Not-Nik/raylib-zig?ref=devel#d6c77762cbdebbf56d3ff101142048dfae2496c4",
-            .hash = "raylib_zig-5.6.0-dev-KE8REBMyBQCnQ9RBhHsoSKr97XmDHF84wx3g0UiMRDxj",
+            .url = "git+https://github.com/raylib-zig/raylib-zig#1e257d1738b4ee25fe76ea1b1bd8b5ea2bf639c4",
+            .hash = "raylib_zig-5.6.0-dev-KE8RECxEBQDwM9vp3RY9uvOduewuez61dojPyNO_L9Ph",
         },
         .osdialog = .{
-            .url = "git+https://github.com/ttytm/osdialog-zig.git#8ea6ae8eb69b14610f15311de79dd68063321b7e",
-            .hash = "osdialog-0.1.0-AAAAAIUUAADnAYgpZBGt7g7mCiEZ3ypLe8afIpFDV52A",
+            .url = "git+https://github.com/obx0/osdialog-zig#8202f267cbceafc560717ee02d6f895a0b4ab9a1",
+            .hash = "osdialog-0.1.0-jgiL4PIZAAAajpt9RwgmyYn1aATFNivrqYSSVpF3rNQo",
         },
         .freetracer_lib = .{
             .path = "./freetracer-lib",

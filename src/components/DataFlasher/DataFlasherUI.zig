@@ -175,7 +175,7 @@ pub fn init(allocator: std.mem.Allocator, parent: *DataFlasher) !DataFlasherUI {
 
 pub fn initComponent(self: *DataFlasherUI, parent: ?*Component) !void {
     if (self.component != null) return error.BaseComponentAlreadyInitialized;
-    self.component = try Component.init(self, &ComponentImplementation.vtable, parent);
+    self.component = try Component.init(self, &ComponentImplementation.vtable, parent, self.allocator);
 }
 
 pub fn start(self: *DataFlasherUI) !void {
@@ -211,6 +211,7 @@ pub fn start(self: *DataFlasherUI) !void {
         self.bgRect.transform.getPosition(),
         .Primary,
         .{ .context = self.parent, .function = DataFlasher.flashISOtoDeviceWrapper.call },
+        self.allocator,
     );
     self.button.params.disableOnClick = true;
     self.button.setEnabled(false);

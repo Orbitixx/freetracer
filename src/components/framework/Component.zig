@@ -16,6 +16,9 @@ pub const Component = struct {
     /// Pointer to the virtual table of the concrete component implementing this interface.
     vtable: *const VTable,
 
+    /// Allocator used to manage the children ArrayList.
+    allocator: std.mem.Allocator,
+
     /// Pointer to the Component property, which is an effective parent of some other
     /// concrete component implementing this interface.
     /// E.g.: DataFlasher.component: Component -> (parent of) DataFlasherUI.component: Component
@@ -38,11 +41,12 @@ pub const Component = struct {
 
     /// Instantiates an instance of the Component interface as a Component object.
     /// @Returns anyerror!Component.
-    pub fn init(ptr: *anyopaque, vtable: *const VTable, parent: ?*Component) !Component {
+    pub fn init(ptr: *anyopaque, vtable: *const VTable, parent: ?*Component, allocator: std.mem.Allocator) !Component {
         return Component{
             .ptr = ptr,
             .vtable = vtable,
             .parent = parent,
+            .allocator = allocator,
         };
     }
 
@@ -103,11 +107,11 @@ pub const Component = struct {
     /// Cleanup function that is called upon the end of the component's lifecycle.
     /// @Returns void.
     pub fn deinit(self: *Component) void {
-        if (self.children) |children| {
+        if (self.children) |*children| {
             for (children.items) |*child| {
                 child.deinit();
             }
-            children.deinit();
+            children.deinit(self.allocator);
         }
 
         self.children = null;
@@ -119,7 +123,7 @@ pub const Component = struct {
 
 /// Helper function which allows to easily implement the Component interface within
 /// each concrete component's body, reducing the code boilerplate required to be
-/// re-implemented the same way within each such component. Providers helper methods
+/// re-implemented the same way within each such component. Provides helper methods
 /// like asInstance() and asComponentPtr().
 /// @Returns ConcreteComponentType, e.g.: DataFlasher.
 pub fn ImplementComponent(comptime T: type) type {

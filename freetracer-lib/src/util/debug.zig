@@ -1,6 +1,8 @@
 const std = @import("std");
 const time = @import("./time.zig");
 
+const Character = @import("../constants.zig").Character;
+
 const Debug = @This();
 
 var instance: ?Logger = null;
@@ -112,16 +114,21 @@ pub const Logger = struct {
         }
 
         // Create the full message with timestamp and format arguments
-        const full_message = std.fmt.allocPrintZ(self.allocator, "[{d:0>2}/{d:0>2}/{d} {d:0>2}:{d:0>2}:{d:0>2}] {s}: " ++ fmt, .{
-            t.month,
-            t.day,
-            t.year,
-            t.hours,
-            t.minutes,
-            t.seconds,
-            severityPrefix,
-        } ++ args) catch |err| blk: {
-            const msg = "\nlog(): ERROR occurred attempting to allocPrintZ msg: \n\t{s}\nError: {any}";
+        const full_message = std.fmt.allocPrintSentinel(
+            self.allocator,
+            "[{d:0>2}/{d:0>2}/{d} {d:0>2}:{d:0>2}:{d:0>2}] {s}: " ++ fmt,
+            .{
+                t.month,
+                t.day,
+                t.year,
+                t.hours,
+                t.minutes,
+                t.seconds,
+                severityPrefix,
+            } ++ args,
+            Character.NULL,
+        ) catch |err| blk: {
+            const msg = "\nlog(): ERROR occurred attempting to allocPrintSentinel msg: \n\t{s}\nError: {any}";
             std.debug.print(msg, .{ fmt, err });
 
             // TODO: Huh? Is this OK here? Examine later.
@@ -148,7 +155,7 @@ pub const Logger = struct {
             self.latestLog = null;
         }
 
-        const fmtStr = std.fmt.allocPrintZ(self.allocator, msg, args) catch |err| blk: {
+        const fmtStr = std.fmt.allocPrintSentinel(self.allocator, msg, args, Character.NULL) catch |err| blk: {
             std.log.err("\nLogger.log(): ERROR - failed to print via allocPrint. Aborting print early. Error msg: {any}", .{err});
             isError = true;
             break :blk "";

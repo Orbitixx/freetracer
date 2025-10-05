@@ -20,7 +20,7 @@ const PhysicalDeviceCheckResult = struct {
 pub fn getStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(StorageDevice) {
     Debug.log(.DEBUG, "Querying storage devices from IORegistry...", .{});
 
-    var storageDevices = std.ArrayList(StorageDevice).init(allocator);
+    var storageDevices = std.ArrayList(StorageDevice).empty;
 
     const matchingDict = c.IOServiceMatching(c.kIOMediaClass);
     if (matchingDict == null) return error.FailedToCreateIOServiceMatchingDictionary;
@@ -59,7 +59,7 @@ pub fn getStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(StorageDev
             return err;
         };
 
-        try storageDevices.append(device);
+        try storageDevices.append(allocator, device);
         currentService = c.IOIteratorNext(serviceIterator);
     }
 

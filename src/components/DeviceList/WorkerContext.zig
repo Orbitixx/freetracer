@@ -18,7 +18,7 @@ pub fn workerRun(worker: *DeviceListComponentWorker, context: *anyopaque) void {
 
     const devices = freetracer_lib.IOKit.getStorageDevices(deviceList.allocator) catch blk: {
         Debug.log(.WARNING, "Unable to capture USB devices. Please make sure a USB flash drive is plugged in.", .{});
-        break :blk std.ArrayList(StorageDevice).init(deviceList.allocator);
+        break :blk std.ArrayList(StorageDevice).empty;
     };
 
     Debug.log(.INFO, "DeviceList Worker: finished finding USB Storage devices, found: {d}", .{devices.items.len});

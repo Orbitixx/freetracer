@@ -96,7 +96,7 @@ pub fn init(allocator: std.mem.Allocator, parent: *ISOFilePicker) !ISOFilePicker
 
 pub fn initComponent(self: *ISOFilePickerUI, parent: ?*Component) !void {
     if (self.component != null) return error.BaseComponentAlreadyInitialized;
-    self.component = try Component.init(self, &ComponentImplementation.vtable, parent);
+    self.component = try Component.init(self, &ComponentImplementation.vtable, parent, self.allocator);
 }
 
 pub fn start(self: *ISOFilePickerUI) !void {
@@ -148,6 +148,7 @@ pub fn start(self: *ISOFilePickerUI) !void {
             .context = self.parent,
             .function = ISOFilePicker.dispatchComponentActionWrapper.call,
         },
+        self.allocator,
     );
 
     try self.button.start();

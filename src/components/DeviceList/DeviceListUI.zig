@@ -115,7 +115,7 @@ pub fn init(allocator: std.mem.Allocator, parent: *DeviceList) !DeviceListUI {
             .devices = &parent.state.data.devices,
         }),
         .parent = parent,
-        .deviceCheckboxes = std.ArrayList(Checkbox).init(allocator),
+        .deviceCheckboxes = std.ArrayList(Checkbox).empty,
     };
 }
 
@@ -123,7 +123,7 @@ pub fn init(allocator: std.mem.Allocator, parent: *DeviceList) !DeviceListUI {
 // however, the param is preserved for convention's sake.
 pub fn initComponent(self: *DeviceListUI, parent: ?*Component) !void {
     if (self.component != null) return error.BaseComponentAlreadyInitialized;
-    self.component = try Component.init(self, &ComponentImplementation.vtable, parent);
+    self.component = try Component.init(self, &ComponentImplementation.vtable, parent, self.allocator);
 }
 
 // Called once upon component initialization.
@@ -167,6 +167,7 @@ pub fn start(self: *DeviceListUI) !void {
             .context = self.parent,
             .function = DeviceList.dispatchComponentFinishedAction.call,
         },
+        self.allocator,
     );
 
     self.nextButton.setEnabled(false);
@@ -180,6 +181,7 @@ pub fn start(self: *DeviceListUI) !void {
             .context = self.parent,
             .function = refreshDevices.call,
         },
+        self.allocator,
     );
 
     self.refreshDevicesButton.rect.rounded = true;
@@ -355,7 +357,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
 
                 Debug.log(.DEBUG, "ComponentUI: formatted string is: {s}", .{std.mem.sliceTo(textBuf[0..], Character.NULL)});
 
-                try self.deviceCheckboxes.append(Checkbox.init(
+                try self.deviceCheckboxes.append(self.allocator, Checkbox.init(
                     self.allocator,
                     device.serviceId,
                     textBuf,
@@ -489,7 +491,7 @@ pub fn deinit(self: *DeviceListUI) void {
         self.allocator.destroy(ctx);
     }
 
-    self.deviceCheckboxes.deinit();
+    self.deviceCheckboxes.deinit(self.allocator);
 }
 
 pub fn dispatchComponentAction(self: *DeviceListUI) void {
@@ -556,7 +558,7 @@ const refreshDevices = struct {
                     cb.allocator.destroy(p);
                 }
 
-                ui.deviceCheckboxes.clearAndFree();
+                ui.deviceCheckboxes.clearAndFree(component.allocator);
             }
         }
 

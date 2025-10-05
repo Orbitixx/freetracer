@@ -92,7 +92,7 @@ pub const XPCService = struct {
 
         if (self.config.isServer) xpc.dispatch_main() else {
             // Allow a small gap of time for XPC service to spin up (100ms)
-            std.time.sleep(100_000);
+            std.Thread.sleep(100_000);
             self.timer.start();
             pingServer(self.service);
         }

@@ -32,8 +32,8 @@ pub fn build(b: *std.Build) void {
     const exe = b.addExecutable(.{
         .name = "macos_helper",
         .root_module = exe_mod,
-        .link_libc = true,
-        .strip = false,
+        // .link_libc = true,
+        // .strip = false,
     });
 
     // Important flags to keep exported symbol sections

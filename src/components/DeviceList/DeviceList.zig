@@ -85,7 +85,7 @@ pub const Events = struct {
 pub fn init(allocator: std.mem.Allocator) !DeviceListComponent {
     return .{
         .state = ComponentState.init(DeviceListState{
-            .devices = std.ArrayList(StorageDevice).init(allocator),
+            .devices = std.ArrayList(StorageDevice).empty,
         }),
         .allocator = allocator,
     };
@@ -93,7 +93,7 @@ pub fn init(allocator: std.mem.Allocator) !DeviceListComponent {
 
 pub fn initComponent(self: *DeviceListComponent, parent: ?*Component) !void {
     if (self.component != null) return error.BaseComponentAlreadyInitialized;
-    self.component = try Component.init(self, &ComponentImplementation.vtable, parent);
+    self.component = try Component.init(self, &ComponentImplementation.vtable, parent, self.allocator);
 }
 
 pub fn initWorker(self: *DeviceListComponent) !void {
@@ -124,14 +124,14 @@ pub fn start(self: *DeviceListComponent) !void {
 
         Debug.log(.DEBUG, "DeviceList: attempting to initialize children...", .{});
 
-        component.children = std.ArrayList(Component).init(self.allocator);
+        component.children = std.ArrayList(Component).empty;
 
         self.uiComponent = try DeviceListUI.init(self.allocator, self);
 
         if (component.children) |*children| {
             if (self.uiComponent) |*uiComponent| {
                 try uiComponent.start();
-                try children.append(uiComponent.asComponent());
+                try children.append(self.allocator, uiComponent.asComponent());
             }
         }
 
@@ -247,7 +247,7 @@ pub fn deinit(self: *DeviceListComponent) void {
     self.state.lock();
     defer self.state.unlock();
 
-    self.state.data.devices.deinit();
+    self.state.data.devices.deinit(self.allocator);
 }
 
 fn discoverDevices(self: *DeviceListComponent) !void {
@@ -265,7 +265,7 @@ fn discoverDevices(self: *DeviceListComponent) !void {
 
         if (!eventResult.success) return error.DeviceListCouldNotCleanUpDevicesBeforeDiscoveringNewOnes;
 
-        devices.clearAndFree();
+        devices.clearAndFree(self.allocator);
     }
 
     // Start the worker once the cleanup is complete

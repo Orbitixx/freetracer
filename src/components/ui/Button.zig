@@ -50,6 +50,7 @@ const ButtonComponent = @This();
 
 // Component-agnostic props
 component: ?Component = null,
+allocator: std.mem.Allocator,
 
 // Component-specific, unique props
 rect: Rectangle,
@@ -70,7 +71,7 @@ pub const Events = struct {
     );
 };
 
-pub fn init(text: [:0]const u8, texture: ?TextureResource, position: rl.Vector2, variant: ButtonVariant, clickHandler: ButtonHandler) ButtonComponent {
+pub fn init(text: [:0]const u8, texture: ?TextureResource, position: rl.Vector2, variant: ButtonVariant, clickHandler: ButtonHandler, allocator: std.mem.Allocator) ButtonComponent {
     const btnText = Text.init(text, position, variant.normal.textStyle);
 
     const textDimensions = btnText.getDimensions();
@@ -86,6 +87,7 @@ pub fn init(text: [:0]const u8, texture: ?TextureResource, position: rl.Vector2,
     };
 
     return .{
+        .allocator = allocator,
         .rect = rect,
         .text = Text.init(
             text,
@@ -103,7 +105,7 @@ pub fn init(text: [:0]const u8, texture: ?TextureResource, position: rl.Vector2,
 
 pub fn initComponent(self: *ButtonComponent, parent: ?*Component) !void {
     if (self.component != null) return error.ButtonBaseComponentAlreadyInitialized;
-    self.component = try Component.init(self, &ComponentImplementation.vtable, parent);
+    self.component = try Component.init(self, &ComponentImplementation.vtable, parent, self.allocator);
 }
 
 /// Called once when Component is fully initialized
