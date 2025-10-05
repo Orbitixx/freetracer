@@ -142,13 +142,13 @@ pub const Events = struct {
 
     pub const onISOWriteProgressChanged = ComponentFramework.defineEvent(
         EventManager.createEventName(ComponentName, "on_iso_write_progress_changed"),
-        struct { newProgress: i64 },
+        struct { newProgress: u64 },
         struct {},
     );
 
     pub const onWriteVerificationProgressChanged = ComponentFramework.defineEvent(
         EventManager.createEventName(ComponentName, "on_write_verification_progress_changed"),
-        struct { newProgress: i64 },
+        struct { newProgress: u64 },
         struct {},
     );
 
@@ -483,7 +483,7 @@ fn processResponseMessage(connection: XPCConnection, data: XPCObject) void {
         },
 
         .ISO_WRITE_PROGRESS => {
-            const progress = XPCService.getInt64(data, "write_progress");
+            const progress = XPCService.getUInt64(data, "write_progress");
             EventManager.broadcast(Events.onISOWriteProgressChanged.create(
                 null,
                 &Events.onISOWriteProgressChanged.Data{ .newProgress = progress },
@@ -502,7 +502,7 @@ fn processResponseMessage(connection: XPCConnection, data: XPCObject) void {
         },
 
         .WRITE_VERIFICATION_PROGRESS => {
-            const progress = XPCService.getInt64(data, "verification_progress");
+            const progress = XPCService.getUInt64(data, "verification_progress");
             EventManager.broadcast(Events.onWriteVerificationProgressChanged.create(
                 null,
                 &Events.onWriteVerificationProgressChanged.Data{ .newProgress = progress },

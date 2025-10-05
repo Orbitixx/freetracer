@@ -73,7 +73,7 @@ const BgRectParams = struct {
 };
 
 const ProgressBox = struct {
-    value: i64 = 0,
+    value: u64 = 0,
     text: Text = undefined,
     percentTextBuf: [5]u8 = undefined,
     percentText: Text = undefined,
@@ -85,7 +85,7 @@ const ProgressBox = struct {
         self.rect.draw();
     }
 
-    pub fn setProgressTo(self: *ProgressBox, referenceRect: Rectangle, newValue: i64) void {
+    pub fn setProgressTo(self: *ProgressBox, referenceRect: Rectangle, newValue: u64) void {
         self.value = newValue;
 
         const width: f32 = referenceRect.transform.getWidth();

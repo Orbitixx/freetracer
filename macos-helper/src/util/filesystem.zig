@@ -149,8 +149,8 @@ pub fn writeISO(connection: XPCConnection, isoFile: std.fs.File, device: std.fs.
     const ISO_SIZE = fileStat.size;
 
     var currentByte: u64 = 0;
-    var previousProgress: i64 = 0;
-    var currentProgress: i64 = 0;
+    var previousProgress: u64 = 0;
+    var currentProgress: u64 = 0;
 
     Debug.log(.INFO, "File and device are opened successfully! File size: {d}", .{ISO_SIZE});
     Debug.log(.INFO, "Writing ISO to device, please wait...", .{});
@@ -177,14 +177,14 @@ pub fn writeISO(connection: XPCConnection, isoFile: std.fs.File, device: std.fs.
         }
 
         currentByte += WRITE_BLOCK_SIZE;
-        currentProgress = @as(i64, @intCast((currentByte * 100) / ISO_SIZE));
+        currentProgress = @as(u64, @intCast((currentByte * 100) / ISO_SIZE));
 
         // Only send an XPC message if the progress moved at least 1%
         if (currentProgress - previousProgress < 1) continue;
 
         const progressUpdate = XPCService.createResponse(.ISO_WRITE_PROGRESS);
         defer XPCService.releaseObject(progressUpdate);
-        XPCService.createInt64(progressUpdate, "write_progress", currentProgress);
+        XPCService.createUInt64(progressUpdate, "write_progress", currentProgress);
         XPCService.connectionSendMessage(connection, progressUpdate);
     }
 
@@ -201,8 +201,8 @@ pub fn verifyWrittenBytes(connection: XPCConnection, isoFile: std.fs.File, devic
     const ISO_SIZE = fileStat.size;
 
     var currentByte: u64 = 0;
-    var previousProgress: i64 = 0;
-    var currentProgress: i64 = 0;
+    var previousProgress: u64 = 0;
+    var currentProgress: u64 = 0;
 
     Debug.log(.INFO, "File and device are opened successfully! File size: {d}", .{ISO_SIZE});
     Debug.log(.INFO, "Verifying ISO bytes written to device, please wait...", .{});
@@ -226,14 +226,16 @@ pub fn verifyWrittenBytes(connection: XPCConnection, isoFile: std.fs.File, devic
         if (!std.mem.eql(u8, &isoByteBuffer, &deviceByteBuffer)) return error.MismatchingISOAndDeviceBytesDetected;
 
         currentByte += WRITE_BLOCK_SIZE;
-        currentProgress = @as(i64, @intCast((currentByte * 100) / ISO_SIZE));
+        currentProgress = @as(u64, @intCast((currentByte * 100) / ISO_SIZE));
 
         // Only send an XPC message if the progress moved at least 1%
         if (currentProgress - previousProgress < 1) continue;
 
+        Debug.log(.INFO, "Verification progress: {d}", .{currentProgress});
+
         const progressUpdate = XPCService.createResponse(.WRITE_VERIFICATION_PROGRESS);
         defer XPCService.releaseObject(progressUpdate);
-        XPCService.createInt64(progressUpdate, "verification_progress", currentProgress);
+        XPCService.createUInt64(progressUpdate, "verification_progress", currentProgress);
         XPCService.connectionSendMessage(connection, progressUpdate);
     }
 
