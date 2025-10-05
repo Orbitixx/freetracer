@@ -48,6 +48,8 @@ const DeviceListUI = @This();
 const COMPONENT_UI_GAP: f32 = 20;
 const MAX_DISPLAY_STRING_LENGTH: usize = 254;
 
+const kStringDeviceListNoDeviceSelected = "NULL";
+
 // Component-agnostic props
 state: ComponentState,
 component: ?Component = null,
@@ -408,8 +410,13 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
                 .{if (data.selectedDevice) |device| device.getNameSlice() else "NULL"},
             );
 
+            const displayName = if (self.state.data.selectedDevice) |*device| blk: {
+                const deviceName = device.getNameSlice();
+                if (deviceName.len > 12) break :blk deviceName[0..12] else break :blk deviceName;
+            } else kStringDeviceListNoDeviceSelected;
+
             // BUG: the "NULL" text pointer is invalidated after scope exit
-            self.deviceNameLabel = Text.init(if (data.selectedDevice) |*device| device.getNameSlice() else "NULL", .{
+            self.deviceNameLabel = Text.init(@ptrCast(displayName), .{
                 .x = self.bgRect.transform.relX(0.5),
                 .y = self.bgRect.transform.relY(0.5),
             }, .{

@@ -3,6 +3,8 @@ const rl = @import("raylib");
 const Debug = @import("freetracer-lib").Debug;
 
 const AppConfig = @import("../../config.zig");
+const freetracer_lib = @import("freetracer-lib");
+const Character = freetracer_lib.constants.Character;
 
 const WindowManager = @import("../../managers/WindowManager.zig").WindowManagerSingleton;
 const winRelX = WindowManager.relW;
@@ -48,6 +50,7 @@ headerLabel: Text = undefined,
 diskImg: Texture = undefined,
 button: Button = undefined,
 isoTitle: Text = undefined,
+displayNameBuffer: [36]u8 = undefined,
 
 const BgRectParams = struct {
     width: f32,
@@ -156,6 +159,7 @@ pub fn start(self: *ISOFilePickerUI) !void {
 
     self.button.rect.rounded = true;
 
+    self.displayNameBuffer = std.mem.zeroes([36]u8);
     self.isoTitle = Text.init("No ISO selected...", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
 
     Debug.log(.DEBUG, "ISOFilePickerUI: component start() finished.", .{});
@@ -171,7 +175,7 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
         Events.onISOFilePathChanged.Hash => {
             //
             const data = Events.onISOFilePathChanged.getData(event) orelse break :eventLoop;
-            eventResult.validate(.SUCCESS);
+            defer eventResult.validate(.SUCCESS);
 
             var newName: [:0]const u8 = @ptrCast("No ISO selected...");
 
@@ -193,7 +197,13 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
                 newName = data.newPath[lastSlash + 1 .. data.newPath.len :0];
             }
 
-            self.isoTitle = Text.init(newName, .{
+            if (newName.len > 14) {
+                const prefix = "...";
+                @memcpy(self.displayNameBuffer[0..prefix.len], prefix);
+                @memcpy(self.displayNameBuffer[prefix.len .. prefix.len + 14], newName[newName.len - 14 ..]);
+            } else @memcpy(self.displayNameBuffer[0..newName.len], newName);
+
+            self.isoTitle = Text.init(@ptrCast(std.mem.sliceTo(&self.displayNameBuffer, Character.NULL)), .{
                 .x = self.bgRect.transform.relX(0.5),
                 .y = self.bgRect.transform.relY(0.5),
             }, .{
