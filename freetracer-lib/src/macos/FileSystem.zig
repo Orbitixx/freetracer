@@ -3,46 +3,105 @@ const Character = @import("../constants.zig").Character;
 const Debug = @import("../util/debug.zig");
 const ImageType = @import("../types.zig").ImageType;
 
-pub fn unwrapUserHomePath(buffer: *[std.fs.max_path_bytes]u8, restOfPath: []const u8) ![]u8 {
-    const userDir = std.posix.getenv("HOME") orelse return error.HomeEnvironmentVariableIsNULL;
+/// Error set for path operations.
+pub const PathError = error{
+    HomeEnvironmentVariableIsNULL,
+    PathTooLong,
+    PathConstructionFailed,
+};
+
+/// Concatenates the user's home directory path (retrieved from $HOME) with
+/// a provided relative path segment, storing the result in the given buffer.
+///
+/// The function assumes that the `restOfPath` *begins* with the necessary
+/// path separator (`/`).
+///
+/// Parameters:
+///   - buffer: A pointer to a fixed-size buffer (`[std.fs.max_path_bytes]u8`)
+///             where the resulting path string will be written.
+///   - restOfPath: The segment of the path to append (e.g., "/Documents/file.txt").
+///
+/// Returns `![:0]u8`
+pub fn unwrapUserHomePath(buffer: *[std.fs.max_path_bytes]u8, restOfPath: []const u8) ![:0]u8 {
+    const userDir = std.posix.getenv("HOME") orelse return PathError.HomeEnvironmentVariableIsNULL;
+
+    const totalLen = userDir.len + restOfPath.len;
+
+    // Safety check for buffer overflow and null terminator space.
+    if (totalLen >= std.fs.max_path_bytes) return PathError.PathTooLong;
 
     @memcpy(buffer[0..userDir.len], userDir);
-    @memcpy(buffer[userDir.len .. userDir.len + restOfPath.len], restOfPath);
+    @memcpy(buffer[userDir.len..totalLen], restOfPath);
+    buffer[totalLen] = Character.NULL;
 
-    return buffer[0 .. userDir.len + restOfPath.len];
+    return @ptrCast(buffer[0..totalLen]);
 }
 
+/// Checks if a given `pathString` is a descendant of one of the allowed directories
+/// within the user's home path. This function performs canonicalization (using
+/// `std.fs.realpath`) on the allowed paths to mitigate symlink attacks.
+///
+/// The allowed directories are:
+///   - "{userHomePath}/Desktop/"
+///   - "{userHomePath}/Documents/"
+///   - "{userHomePath}/Downloads/"
+///
+/// Parameters:
+///   - userHomePath: The absolute path to the user's home directory (e.g., "/home/user").
+///                   This is typically retrieved from `unwrapUserHomePath`.
+///   - pathString: The absolute path string provided by the user to be checked.
+///
+/// Returns: `bool`
 pub fn isFilePathAllowed(userHomePath: []const u8, pathString: []const u8) bool {
-    var realPathBuffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
-
-    const allowedPathsRelative = [_][]u8{
-        @ptrCast(@constCast("/Desktop/")),
-        @ptrCast(@constCast("/Documents/")),
-        @ptrCast(@constCast("/Downloads/")),
-    };
-
-    var allowedPaths = std.mem.zeroes([allowedPathsRelative.len][std.fs.max_path_bytes]u8);
-
-    for (allowedPathsRelative, 0..allowedPathsRelative.len) |pathRel, i| {
-        @memcpy(allowedPaths[i][0..userHomePath.len], userHomePath);
-        @memcpy(allowedPaths[i][userHomePath.len .. userHomePath.len + pathRel.len], pathRel);
+    if (pathString.len >= std.fs.max_path_bytes) {
+        Debug.log(.ERROR, "isFilePathAllowed: Provided path is too long (over std.fs.max_path_bytes).", .{});
+        return false;
     }
 
-    for (allowedPaths) |allowedPath| {
+    // Temporary buffer for canonicalizing the input path (pathString)
+    // to compare against canonicalized allowed paths.
+    var realInputPathBuffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
+    const realInputPath = std.fs.realpath(pathString, &realInputPathBuffer) catch |err| {
+        Debug.log(.ERROR, "isFilePathAllowed: Unable to resolve real path of input. Error: {any}", .{err});
+        return false;
+    };
 
-        // Buffer overflow protection
-        if (pathString.len > std.fs.max_path_bytes) {
-            Debug.log(.ERROR, "isFilePathAllowed: Provided path is too long (over std.fs.max_path_bytes).", .{});
-            return false;
+    const allowedPathsRelative = [_][]const u8{
+        "/Desktop/",
+        "/Documents/",
+        "/Downloads/",
+    };
+
+    var allowedPathBuffer: [std.fs.max_path_bytes]u8 = undefined;
+
+    for (allowedPathsRelative) |pathRel| {
+        const fullPathLen = userHomePath.len + pathRel.len;
+
+        if (fullPathLen >= std.fs.max_path_bytes) {
+            Debug.log(.ERROR, "isFilePathAllowed: Allowed path construction exceeds max_path_bytes.", .{});
+            continue;
         }
 
-        // Canonicalize the path string
-        const realAllowedPath = std.fs.realpath(std.mem.sliceTo(&allowedPath, Character.NULL), &realPathBuffer) catch |err| {
+        // Construct the path (e.g., "/home/user/Desktop/")
+        @memcpy(allowedPathBuffer[0..userHomePath.len], userHomePath);
+        @memcpy(allowedPathBuffer[userHomePath.len..fullPathLen], pathRel);
+        allowedPathBuffer[fullPathLen] = Character.NULL;
+
+        // Canonicalize the constructed allowed directory path.
+        var realAllowedPathBuffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
+
+        const allowedPathSlice = allowedPathBuffer[0..fullPathLen :0];
+
+        const realAllowedPath = std.fs.realpath(allowedPathSlice, &realAllowedPathBuffer) catch |err| {
             Debug.log(.ERROR, "isFilePathAllowed: Unable to resolve the real path of the allowed path. Error: {any}", .{err});
-            return false;
+            continue;
         };
 
-        if (std.mem.startsWith(u8, pathString, realAllowedPath)) return true;
+        // Check if the canonicalized input path starts with the canonicalized allowed path.
+        // This effectively checks if the input path is inside the allowed directory.
+        if (std.mem.startsWith(u8, realInputPath, realAllowedPath)) {
+            return true;
+        }
     }
 
     return false;
@@ -72,12 +131,10 @@ pub fn getExtensionFromPath(path: []const u8) []const u8 {
 /// Returns `true` if the path's extension is in the allowed list, `false` otherwise.
 pub fn isExtensionAllowed(comptime n: usize, allowedExtensionsArray: [n][]const u8, path: []const u8) bool {
     const ext: []const u8 = getExtensionFromPath(path);
-    if (ext.len == 0) return false; // No extension cannot be an allowed one.
 
-    for (allowedExtensionsArray) |allowedExt| {
-        Debug.log(.DEBUG, "Comparing `{s}` and `{s}`", .{ ext, allowedExt });
-        if (std.ascii.eqlIgnoreCase(ext, allowedExt)) return true;
-    }
+    if (ext.len == 0) return false;
+
+    for (allowedExtensionsArray) |allowedExt| if (std.ascii.eqlIgnoreCase(ext, allowedExt)) return true;
 
     return false;
 }
@@ -85,7 +142,7 @@ pub fn isExtensionAllowed(comptime n: usize, allowedExtensionsArray: [n][]const 
 /// Determines the ImageType enum based on the file path's extension.
 /// This function performs a case-insensitive check for ".ISO" and ".IMG".
 /// If the extension does not match either of those, it defaults to ImageType.Other.
-fn getImageType(path: []const u8) ImageType {
+pub fn getImageType(path: []const u8) ImageType {
     const ext = getExtensionFromPath(path);
 
     if (std.ascii.eqlIgnoreCase(ext, ".ISO")) return .ISO;
@@ -95,6 +152,92 @@ fn getImageType(path: []const u8) ImageType {
 }
 
 // --- Unit Tests ---
+//
+
+test "unwrapUserHomePath tests" {
+
+    // Test standard concatenation
+    {
+        var buffer: [std.fs.max_path_bytes]u8 = undefined;
+        const rest_of_path = "/project/file.txt";
+        const result = try unwrapUserHomePath(&buffer, rest_of_path);
+
+        const expected = "/tmp/mock_user/project/file.txt";
+        try std.testing.expectEqualStrings(expected, result);
+        try std.testing.expectEqual(buffer[result.len], @as(u8, Character.NULL)); // Check for null terminator
+    }
+
+    // Test concatenation with a bare subdirectory
+    {
+        var buffer: [std.fs.max_path_bytes]u8 = undefined;
+        const rest_of_path = "/Downloads";
+        const result = try unwrapUserHomePath(&buffer, rest_of_path);
+
+        const expected = "/tmp/mock_user/Downloads";
+        try std.testing.expectEqualStrings(expected, result);
+    }
+
+    // Home path is exactly max_path_bytes long (should fail due to null terminator)
+    {
+        var big_home_path_bytes: [std.fs.max_path_bytes]u8 = [_]u8{'a'} ** std.fs.max_path_bytes;
+        const big_home_path = big_home_path_bytes[0..std.fs.max_path_bytes];
+        var buffer: [std.fs.max_path_bytes]u8 = undefined;
+
+        // This MUST return .PathTooLong because the total length (len + null byte) exceeds max_path_bytes
+        try std.testing.expectError(PathError.PathTooLong, unwrapUserHomePath(&buffer, big_home_path));
+    }
+}
+
+test "isFilePathAllowed tests" {
+    // Note: To test realpath accurately, we must ensure the mock paths exist.
+    // For this test, we will create temporary directories.
+
+    const buffer = std.mem.zeroes([std.fs.max_path_bytes]u8);
+    const home = unwrapUserHomePath(&buffer, "");
+
+    const home_path_slice = std.mem.sliceTo(home, Character.NULL);
+
+    // 1. Test allowed file path (simple)
+    try std.testing.expect(isFilePathAllowed(home_path_slice, home ++ "/Desktop/report.pdf"));
+
+    // 2. Test allowed directory path (exact match of allowed prefix)
+    try std.testing.expect(isFilePathAllowed(home_path_slice, home ++ "/Downloads/"));
+
+    // 3. Test disallowed file path
+    try std.testing.expectEqual(false, isFilePathAllowed(home_path_slice, home ++ "/Forbidden/secret.key"));
+
+    // 4. Test path outside home directory
+    try std.testing.expectEqual(false, isFilePathAllowed(home_path_slice, "/etc/passwd"));
+
+    // 5. Test against relative path (should fail as realpath expects an absolute path on most systems)
+    try std.testing.expectEqual(false, isFilePathAllowed(home_path_slice, "Desktop/report.pdf"));
+
+    // 6. Test with path traversal (symlink attack mitigation) - this verifies realpath logic
+    // We create a symlink in an allowed directory pointing outside.
+    const link_name = "secret_link";
+    const link_path = home ++ "/Desktop/" ++ link_name;
+    const target_path = "/etc/passwd";
+
+    std.fs.symLinkAbsolute(target_path, link_path, .{}) catch |err| {
+        std.log.warn("Skipping symlink test due to error: {any}", .{err});
+        return;
+    };
+
+    // The input path is the path *with* the symlink
+    const symlinked_input = link_path;
+
+    // Because isFilePathAllowed canonicalizes the *input* path first,
+    // it will resolve to `/etc/passwd`.
+    // It then checks if `/etc/passwd` starts with `/tmp/mock_user/Desktop/`.
+    // This should fail, which is the correct security behaviour.
+    try std.testing.expectEqual(false, isFilePathAllowed(home_path_slice, symlinked_input));
+
+    // 7. Test long path string (should fail early)
+    var long_path_str: [std.fs.max_path_bytes + 10]u8 = std.mem.zeroes([std.fs.max_path_bytes + 10]u8);
+    @memset(long_path_str[0..], 'x');
+    long_path_str[std.fs.max_path_bytes + 10] = Character.NULL;
+    try std.testing.expectEqual(false, isFilePathAllowed(home_path_slice, long_path_str[0..]));
+}
 
 test "getExtensionFromPath: full path with extension" {
     const path = "/home/user/files/photo.JPG";

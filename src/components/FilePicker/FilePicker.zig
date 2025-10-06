@@ -7,8 +7,7 @@ const Character = freetracer_lib.constants.Character;
 const ImageType = freetracer_lib.types.ImageType;
 const Image = freetracer_lib.types.Image;
 
-const getExtensionFromPath = freetracer_lib.fs.getExtensionFromPath;
-const isExtensionAllowed = freetracer_lib.fs.isExtensionAllowed;
+const fs = freetracer_lib.fs;
 
 const AppConfig = @import("../../config.zig");
 const MAX_EXT_LEN = AppConfig.MAX_EXT_LEN;
@@ -20,8 +19,8 @@ const ComponentFramework = @import("../framework/import/index.zig");
 const UIFramework = @import("../ui/import/index.zig");
 
 pub const FilePickerState = struct {
-    selected_path: ?[:0]u8 = null,
-    is_selecting: bool = false,
+    selectedPath: ?[:0]u8 = null,
+    isSelecting: bool = false,
     image: Image = .{},
 };
 
@@ -183,20 +182,18 @@ fn handleISOFilePathQueried(self: *ISOFilePickerComponent, event: ComponentEvent
     self.state.lock();
     defer self.state.unlock();
 
-    const path = self.state.data.selected_path;
-    const isSelecting = self.state.data.is_selecting;
-
+    const path = self.state.data.selectedPath;
     var eventResult = EventResult.init();
 
     const data = Events.onISOFilePathQueried.getData(event) orelse return eventResult.fail();
 
-    if (path == null or isSelecting) {
+    if (path == null or self.state.data.isSelecting) {
         Debug.log(.WARNING, "ISOFilePicker: Query failed. Path is null or selection is in progress.", .{});
         return eventResult.fail();
     }
 
     // Write the response directly into the caller-provided memory.
-    data.result.* = .{
+    data.result.* = ImageQueryObject{
         .imagePath = path.?,
         .image = self.state.data.image,
     };
@@ -210,8 +207,8 @@ fn handleISOFileSelected(self: *ISOFilePickerComponent) !EventResult {
     self.state.lock();
     defer self.state.unlock();
 
-    const selectedPath = self.state.data.selected_path;
-    const isSelecting = self.state.data.is_selecting;
+    const selectedPath = self.state.data.selectedPath;
+    const isSelecting = self.state.data.isSelecting;
 
     var eventResult = EventResult.init();
 
@@ -223,8 +220,7 @@ fn handleISOFileSelected(self: *ISOFilePickerComponent) !EventResult {
     const newPath = selectedPath.?;
 
     // --- Validate extension
-    if (!isExtensionAllowed(AppConfig.ALLOWED_ISO_EXTENSIONS.len, AppConfig.ALLOWED_ISO_EXTENSIONS, newPath)) {
-        // SRP: UI interaction (the popup) is isolated here.
+    if (!fs.isExtensionAllowed(AppConfig.ALLOWED_ISO_EXTENSIONS.len, AppConfig.ALLOWED_ISO_EXTENSIONS, newPath)) {
         const proceed = osd.message("The selected file extension is not a recognized image type (.iso, .img). Proceed anyway?", .{
             .level = .warning,
             .buttons = .yes_no,
@@ -233,14 +229,14 @@ fn handleISOFileSelected(self: *ISOFilePickerComponent) !EventResult {
         if (!proceed) {
             // If user cancelled, clean up the path.
             self.allocator.free(newPath);
-            self.state.data.selected_path = null;
+            self.state.data.selectedPath = null;
             return eventResult.succeed();
         }
     }
 
     // --- Update state & notify UI
     self.state.data.image.path = newPath;
-    self.state.data.image.type = getImageType(getExtensionFromPath(newPath));
+    self.state.data.image.type = fs.getImageType(fs.getExtensionFromPath(newPath));
 
     if (self.uiComponent) |*ui| {
         const pathChangedEvent = ISOFilePickerUI.Events.onISOFilePathChanged.create(self.asComponentPtr(), &.{
@@ -291,7 +287,7 @@ pub fn workerRun(worker: *ComponentWorker, context: *anyopaque) void {
     {
         worker.state.lock();
         defer worker.state.unlock();
-        worker.state.data.is_selecting = true;
+        worker.state.data.isSelecting = true;
     }
 
     // NOTE: It is important that this memory address / contents are released in component's deinit().
@@ -303,8 +299,8 @@ pub fn workerRun(worker: *ComponentWorker, context: *anyopaque) void {
     {
         worker.state.lock();
         defer worker.state.unlock();
-        worker.state.data.is_selecting = false;
-        worker.state.data.selected_path = selectedPath;
+        worker.state.data.isSelecting = false;
+        worker.state.data.selectedPath = selectedPath;
     }
 
     const event = ISOFilePickerComponent.Events.onISOFileSelected.create(
@@ -332,14 +328,3 @@ pub const ComponentImplementation = ComponentFramework.ImplementComponent(ISOFil
 pub const asComponent = ComponentImplementation.asComponent;
 pub const asComponentPtr = ComponentImplementation.asComponentPtr;
 pub const asInstance = ComponentImplementation.asInstance;
-
-fn getImageType(ext: []const u8) ImageType {
-    var fileExtBuffer: [MAX_EXT_LEN]u8 = std.mem.zeroes([MAX_EXT_LEN]u8);
-    _ = std.ascii.upperString(fileExtBuffer[0..ext.len], ext);
-    const ucExt: []const u8 = std.mem.sliceTo(&fileExtBuffer, 0);
-
-    if (std.mem.eql(u8, ucExt, "ISO")) return .ISO;
-    if (std.mem.eql(u8, ucExt, "IMG")) return .IMG;
-
-    return .Other;
-}
