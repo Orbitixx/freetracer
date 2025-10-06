@@ -239,29 +239,20 @@ fn queryAndSaveISOPath(self: *DataFlasher) !void {
     self.state.lock();
     defer self.state.unlock();
 
-    const isoResult = try EventManager.signal("iso_file_picker", ISOFilePicker.Events.onISOFilePathQueried.create(self.asComponentPtr(), null));
+    var imageInfo: ISOFilePicker.ImageQueryObject = .{};
+    const data = ISOFilePicker.Events.onISOFilePathQueried.Data{ .result = &imageInfo };
 
-    if (isoResult.data) |isoData| {
-        //
-        const isoDataPtr: *ISOFilePicker.Events.onISOFilePathQueried.Response = @ptrCast(@alignCast(isoData));
+    const eventResult = try EventManager.signal("iso_file_picker", ISOFilePicker.Events.onISOFilePathQueried.create(self.asComponentPtr(), &data));
 
-        // Destroy a heap-allocated isoResult.data pointer.
-        // Defer is required in order to clean up irrespective of function's outcome (i.e. success or error)
-        // WARNING: cleaning up a pointer created on the heap by ISOFilePicker.handleEvent.onISOFilePathQueried.
-        defer self.allocator.destroy(isoDataPtr);
+    if (!eventResult.success) return error.DataFlasherFailedToQueryImagePath;
 
-        const isoResponse: ISOFilePicker.Events.onISOFilePathQueried.Response = isoDataPtr.*;
+    if (imageInfo.imagePath.len < 2) {
+        Debug.log(.ERROR, "DataFlasher received invalid ISO path: {s}", .{imageInfo.imagePath});
+        return error.DataFlasherReceivedInvalidImagePath;
+    }
 
-        if (!isoResult.success) return error.DataFlasherFailedToQueryISOPath;
-
-        if (isoResponse.isoPath.len < 2) {
-            Debug.log(.ERROR, "DataFlasher received invalid ISO path: {s}", .{isoResponse.isoPath});
-            return error.DataFlasherReceivedInvalidISOPath;
-        }
-
-        self.state.data.isoPath = isoResponse.isoPath;
-        self.state.data.image = isoResponse.image;
-    } else return error.DataFlasherReceivedNullISOPath;
+    self.state.data.isoPath = imageInfo.imagePath;
+    self.state.data.image = imageInfo.image;
 }
 
 fn queryAndSaveSelectedDevice(self: *DataFlasher) !void {

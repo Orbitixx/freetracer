@@ -14,47 +14,13 @@ const String = freetracer_lib.String;
 const Character = freetracer_lib.constants.Character;
 const ImageType = freetracer_lib.types.ImageType;
 
+const isFilePathAllowed = freetracer_lib.fs.isFilePathAllowed;
+
 const XPCService = freetracer_lib.Mach.XPCService;
 const XPCConnection = freetracer_lib.Mach.XPCConnection;
 const XPCObject = freetracer_lib.Mach.XPCObject;
 
 const WRITE_BLOCK_SIZE = 4096;
-
-pub fn isFilePathAllowed(userHomePath: []const u8, pathString: []const u8) bool {
-    var realPathBuffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
-
-    const allowedPathsRelative = [_][]u8{
-        @ptrCast(@constCast("/Desktop/")),
-        @ptrCast(@constCast("/Documents/")),
-        @ptrCast(@constCast("/Downloads/")),
-    };
-
-    var allowedPaths = std.mem.zeroes([allowedPathsRelative.len][std.fs.max_path_bytes]u8);
-
-    for (allowedPathsRelative, 0..allowedPathsRelative.len) |pathRel, i| {
-        @memcpy(allowedPaths[i][0..userHomePath.len], userHomePath);
-        @memcpy(allowedPaths[i][userHomePath.len .. userHomePath.len + pathRel.len], pathRel);
-    }
-
-    for (allowedPaths) |allowedPath| {
-
-        // Buffer overflow protection
-        if (pathString.len > std.fs.max_path_bytes) {
-            Debug.log(.ERROR, "isFilePathAllowed: Provided path is too long (over std.fs.max_path_bytes).", .{});
-            return false;
-        }
-
-        // Canonicalize the path string
-        const realAllowedPath = std.fs.realpath(std.mem.sliceTo(&allowedPath, Character.NULL), &realPathBuffer) catch |err| {
-            Debug.log(.ERROR, "isFilePathAllowed: Unable to resolve the real path of the allowed path. Error: {any}", .{err});
-            return false;
-        };
-
-        if (std.mem.startsWith(u8, pathString, realAllowedPath)) return true;
-    }
-
-    return false;
-}
 
 pub fn unwrapUserHomePath(buffer: *[std.fs.max_path_bytes]u8, restOfPath: []const u8) ![]u8 {
     const userDir = std.posix.getenv("HOME") orelse return error.HomeEnvironmentVariableIsNULL;

@@ -24,16 +24,6 @@ pub const IOKit = @import("./macos/IOKit.zig");
 pub const c = types.c;
 pub const StorageDevice = types.StorageDevice;
 
-// Expose namespaces to be consumed by users
-// pub usingnamespace types;
-// pub usingnamespace constants;
-// pub usingnamespace time;
-// pub usingnamespace IOKit;
-//
-// // MacOS-only export
-// pub usingnamespace if (isMacOS) Mach;
-// pub usingnamespace if (isMacOS) MacOSPermissions;
-
 // Expose debug singleton to be consumed by users
 pub const Debug = debug;
 pub const String = string;

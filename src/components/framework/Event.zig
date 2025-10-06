@@ -50,6 +50,18 @@ pub const EventResult = struct {
         return EventResult{};
     }
 
+    pub fn succeed(self: *EventResult) EventResult {
+        self.success = true;
+        self.validation = .SUCCESS;
+        return self.*;
+    }
+
+    pub fn fail(self: *EventResult) EventResult {
+        self.success = false;
+        self.validation = .FAILURE;
+        return self.*;
+    }
+
     pub fn validate(self: *EventResult, validation: EventValidation) void {
         self.success = true;
         self.validation = validation;
