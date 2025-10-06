@@ -1,11 +1,22 @@
 const std = @import("std");
 const Debug = @import("freetracer-lib").Debug;
 
+const ascii = std.ascii;
+
 const ComponentState = @import("./import/index.zig").ComponentState;
 
 const EventFramework = @import("Event.zig");
 const ComponentEvent = EventFramework.ComponentEvent;
 const EventResult = EventFramework.EventResult;
+
+// TODO: Implement something like this:
+// pub fn autoVTable(comptime VTableType: type, comptime ImplType: type) VTableType {
+//     const v_table: VTableType = undefined;
+//     inline for (@typeInfo(VTableType).Struct.fields) |field| {
+//         @field(v_table, field.name) = @field(ImplType, field.name);
+//     }
+//     return v_table;
+// }
 
 pub const Component = struct {
     /// Represents the unique concrete instance implementing this

@@ -328,3 +328,6 @@ pub const ComponentImplementation = ComponentFramework.ImplementComponent(ISOFil
 pub const asComponent = ComponentImplementation.asComponent;
 pub const asComponentPtr = ComponentImplementation.asComponentPtr;
 pub const asInstance = ComponentImplementation.asInstance;
+
+pub const FilePickerComponent = @import("../framework/Component.zig").implementInterface(Component, ISOFilePickerComponent);
+// FilePickerComponent.

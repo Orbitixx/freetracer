@@ -28,7 +28,7 @@ pub fn unwrapUserHomePath(buffer: *[std.fs.max_path_bytes]u8, restOfPath: []cons
     const totalLen = userDir.len + restOfPath.len;
 
     // Safety check for buffer overflow and null terminator space.
-    if (totalLen >= std.fs.max_path_bytes) return PathError.PathTooLong;
+    if (totalLen >= buffer.len) return PathError.PathTooLong;
 
     @memcpy(buffer[0..userDir.len], userDir);
     @memcpy(buffer[userDir.len..totalLen], restOfPath);
@@ -139,9 +139,11 @@ pub fn isExtensionAllowed(comptime n: usize, allowedExtensionsArray: [n][]const 
     return false;
 }
 
-/// Determines the ImageType enum based on the file path's extension.
-/// This function performs a case-insensitive check for ".ISO" and ".IMG".
-/// If the extension does not match either of those, it defaults to ImageType.Other.
+/// Determines the `ImageType` enum based on the file path's extension.
+/// This function performs a case-insensitive check for `.ISO` and `.IMG`.
+/// If the extension does not match either of those, it defaults to `ImageType.Other`.
+///
+/// Returns `ImageType`
 pub fn getImageType(path: []const u8) ImageType {
     const ext = getExtensionFromPath(path);
 

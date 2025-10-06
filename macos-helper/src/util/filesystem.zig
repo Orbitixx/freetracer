@@ -112,16 +112,16 @@ pub fn writeISO(connection: XPCConnection, isoFile: std.fs.File, device: std.fs.
     var writeBuffer: [WRITE_BLOCK_SIZE]u8 = undefined;
 
     const fileStat = try isoFile.stat();
-    const ISO_SIZE = fileStat.size;
+    const imageSize = fileStat.size;
 
     var currentByte: u64 = 0;
     var previousProgress: u64 = 0;
     var currentProgress: u64 = 0;
 
-    Debug.log(.INFO, "File and device are opened successfully! File size: {d}", .{ISO_SIZE});
+    Debug.log(.INFO, "File and device are opened successfully! File size: {d}", .{imageSize});
     Debug.log(.INFO, "Writing ISO to device, please wait...", .{});
 
-    while (currentByte < ISO_SIZE) {
+    while (currentByte < imageSize) {
         previousProgress = currentProgress;
 
         try isoFile.seekTo(currentByte);
@@ -142,8 +142,8 @@ pub fn writeISO(connection: XPCConnection, isoFile: std.fs.File, device: std.fs.
             break;
         }
 
-        currentByte += WRITE_BLOCK_SIZE;
-        currentProgress = @as(u64, @intCast((currentByte * 100) / ISO_SIZE));
+        currentByte += @as(u64, @intCast(bytesWritten));
+        currentProgress = try std.math.divFloor(u64, currentByte * @as(u64, 100), imageSize);
 
         // Only send an XPC message if the progress moved at least 1%
         if (currentProgress - previousProgress < 1) continue;
@@ -164,22 +164,22 @@ pub fn verifyWrittenBytes(connection: XPCConnection, isoFile: std.fs.File, devic
     var deviceByteBuffer: [WRITE_BLOCK_SIZE]u8 = undefined;
 
     const fileStat = try isoFile.stat();
-    const ISO_SIZE = fileStat.size;
+    const imageSize = fileStat.size;
 
     var currentByte: u64 = 0;
     var previousProgress: u64 = 0;
     var currentProgress: u64 = 0;
 
-    Debug.log(.INFO, "File and device are opened successfully! File size: {d}", .{ISO_SIZE});
+    Debug.log(.INFO, "File and device are opened successfully! File size: {d}", .{imageSize});
     Debug.log(.INFO, "Verifying ISO bytes written to device, please wait...", .{});
 
-    while (currentByte < ISO_SIZE) {
+    while (currentByte < imageSize) {
         previousProgress = currentProgress;
 
         try isoFile.seekTo(currentByte);
-        const isoBytesRead = try isoFile.read(&isoByteBuffer);
+        const imageBytesRead = try isoFile.read(&isoByteBuffer);
 
-        if (isoBytesRead == 0) {
+        if (imageBytesRead == 0) {
             Debug.log(.INFO, "End of ISO File reached, final block: {d} at {d}!", .{ currentByte / WRITE_BLOCK_SIZE, currentByte });
             break;
         }
@@ -189,10 +189,15 @@ pub fn verifyWrittenBytes(connection: XPCConnection, isoFile: std.fs.File, devic
 
         if (deviceBytesRead == 0) break;
 
-        if (!std.mem.eql(u8, &isoByteBuffer, &deviceByteBuffer)) return error.MismatchingISOAndDeviceBytesDetected;
+        if (deviceBytesRead != imageBytesRead) return error.MismatchingISOAndDeviceBytesDetected;
 
-        currentByte += WRITE_BLOCK_SIZE;
-        currentProgress = @as(u64, @intCast((currentByte * 100) / ISO_SIZE));
+        const imageSlice = isoByteBuffer[0..imageBytesRead];
+        const deviceSlice = deviceByteBuffer[0..deviceBytesRead];
+
+        if (!std.mem.eql(u8, imageSlice, deviceSlice)) return error.MismatchingISOAndDeviceBytesDetected;
+
+        currentByte += @as(u64, @intCast(imageBytesRead));
+        currentProgress = try std.math.divFloor(u64, currentByte * @as(u64, 100), imageSize);
 
         // Only send an XPC message if the progress moved at least 1%
         if (currentProgress - previousProgress < 1) continue;

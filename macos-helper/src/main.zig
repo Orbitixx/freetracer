@@ -1,10 +1,11 @@
 const std = @import("std");
 const env = @import("env.zig");
-const fs = @import("util/filesystem.zig");
+const fsops = @import("util/filesystem.zig");
 const str = @import("util/strings.zig");
 const testing = std.testing;
 const freetracer_lib = @import("freetracer-lib");
 const dev = freetracer_lib.device;
+const fs = freetracer_lib.fs;
 
 const ShutdownManager = @import("./managers/ShutdownManager.zig").ShutdownManagerSingleton;
 const Debug = freetracer_lib.Debug;
@@ -96,6 +97,13 @@ pub fn main() !void {
 fn xpcRequestHandler(connection: XPCConnection, message: XPCObject) callconv(.c) void {
     Debug.log(.INFO, "Helper received a new message over XPC bridge. Attempting to authenticate requester...", .{});
 
+    // Terminate XPC connection and shutdown helper in case of null payload.
+    if (message == null) {
+        Debug.log(.ERROR, "XPC Server received a NULL request. Aborting processing response...", .{});
+        ShutdownManager.terminateWithError(error.XPC_MESSAGE_PAYLOAD_NULL);
+        return;
+    }
+
     const isConnectionAuthorized: bool = XPCService.authenticateMessage(
         message,
         @ptrCast(env.MAIN_APP_BUNDLE_ID),
@@ -107,12 +115,6 @@ fn xpcRequestHandler(connection: XPCConnection, message: XPCObject) callconv(.c)
         ShutdownManager.terminateWithError(error.XPC_CONNECTION_UNAUTHORIZED);
         return;
     } else Debug.log(.INFO, "Successfully authenticated incoming message...", .{});
-
-    if (message == null) {
-        Debug.log(.ERROR, "XPC Server received a NULL request. Aborting processing response...", .{});
-        ShutdownManager.terminateWithError(error.XPC_MESSAGE_PAYLOAD_NULL);
-        return;
-    }
 
     const msg_type = xpc.xpc_get_type(message);
 
@@ -139,7 +141,7 @@ fn processRequestMessage(connection: XPCConnection, data: XPCObject) void {
         .INITIAL_PING => processInitialPing(connection),
         .GET_HELPER_VERSION => processGetHelperVersion(connection),
         .UNMOUNT_DISK => Debug.log(.INFO, "Discrete unmount request received -- dropping request. Deprecated.", .{}),
-        .WRITE_ISO_TO_DEVICE => processRequestWriteISO(connection, data),
+        .WRITE_ISO_TO_DEVICE => processRequestWriteImage(connection, data),
     }
 }
 
@@ -174,13 +176,15 @@ fn sendXPCReply(connection: XPCConnection, reply: HelperResponseCode, comptime l
     XPCService.releaseObject(replyObject);
 }
 
-fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
+fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) void {
     //
     const isoPath: []const u8 = XPCService.parseString(data, "isoPath");
     const deviceBsdName: []const u8 = XPCService.parseString(data, "disk");
     const deviceServiceId: c_uint = @intCast(XPCService.getUInt64(data, "deviceServiceId"));
     const deviceType: DeviceType = @enumFromInt(XPCService.getUInt64(data, "deviceType"));
     const imageType: ImageType = @enumFromInt(XPCService.getUInt64(data, "imageType"));
+
+    defer XPCService.releaseObject(data);
 
     Debug.log(.INFO, "Recieved service: {d}", .{deviceServiceId});
 
@@ -192,7 +196,7 @@ fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
         return;
     };
 
-    const isoFile = fs.openFileValidated(isoPath, .{ .userHomePath = userHomePath, .imageType = imageType }) catch |err| {
+    const isoFile = fsops.openFileValidated(isoPath, .{ .userHomePath = userHomePath, .imageType = imageType }) catch |err| {
         respondWithErrorAndTerminate(
             .{ .err = err, .message = "Unable to open ISO file or its directory." },
             .{ .xpcConnection = connection, .xpcResponseCode = .ISO_FILE_INVALID },
@@ -265,7 +269,7 @@ fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
     //     return;
     // }
 
-    fs.writeISO(connection, isoFile, device) catch |err| {
+    fsops.writeISO(connection, isoFile, device) catch |err| {
         respondWithErrorAndTerminate(
             .{ .err = err, .message = "Unable to write ISO to device." },
             .{ .xpcConnection = connection, .xpcResponseCode = .ISO_WRITE_FAIL },
@@ -275,7 +279,7 @@ fn processRequestWriteISO(connection: XPCConnection, data: XPCObject) void {
 
     sendXPCReply(connection, .ISO_WRITE_SUCCESS, "ISO image successfully written to device!");
 
-    fs.verifyWrittenBytes(connection, isoFile, device) catch |err| {
+    fsops.verifyWrittenBytes(connection, isoFile, device) catch |err| {
         respondWithErrorAndTerminate(
             .{ .err = err, .message = "Unable to verify written ISO image." },
             .{ .xpcConnection = connection, .xpcResponseCode = .WRITE_VERIFICATION_FAIL },

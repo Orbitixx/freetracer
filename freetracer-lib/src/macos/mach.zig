@@ -126,11 +126,9 @@ pub const XPCService = struct {
 
     pub fn getUserHomePath(connection: XPCConnection) ![]const u8 {
         const euid: c_uint = c.xpc_connection_get_euid(@ptrCast(connection));
-
         if (euid == 0) return error.ClientApplicationIsRunningAsRootIsDisallowedBySecurityPolicy;
 
         const userEntry = c.getpwuid(euid);
-
         if (userEntry == null) return error.UnableToMapUserToEUID;
 
         return std.mem.span(userEntry.*.pw_dir);

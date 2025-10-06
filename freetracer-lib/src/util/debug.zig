@@ -130,9 +130,7 @@ pub const Logger = struct {
         ) catch |err| blk: {
             const msg = "\nlog(): ERROR occurred attempting to allocPrintSentinel msg: \n\t{s}\nError: {any}";
             std.debug.print(msg, .{ fmt, err });
-
-            // TODO: Huh? Is this OK here? Examine later.
-            Debug.log(.ERROR, msg, .{ fmt, err });
+            std.log.err(msg, .{ fmt, err });
             break :blk "";
         };
 
