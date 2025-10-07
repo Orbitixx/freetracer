@@ -260,24 +260,15 @@ fn queryAndSaveSelectedDevice(self: *DataFlasher) !void {
     self.state.lock();
     defer self.state.unlock();
 
-    const deviceResult = try EventManager.signal("device_list", DeviceList.Events.onSelectedDeviceQueried.create(self.asComponentPtr(), null));
+    var query: DeviceList.DeviceQueryObject = .{};
 
-    if (deviceResult.data) |deviceData| {
-        //
-        const deviceDataPtr: *DeviceList.Events.onSelectedDeviceQueried.Response = @ptrCast(@alignCast(deviceData));
+    const deviceResult = try EventManager.signal("device_list", DeviceList.Events.onSelectedDeviceQueried.create(self.asComponentPtr(), &.{ .result = &query }));
 
-        // Destroy a heap-allocated deviceResult.data pointer.
-        // Defer is required in order to clean up irrespective of function's outcome (i.e. success or error)
-        // WARNING: cleaning up a pointer created on the heap by DeviceList.handleEvent.onSelectedDeviceQueried.
-        defer self.allocator.destroy(deviceDataPtr);
+    if (!deviceResult.success or query.selectedDevice == null) {
+        return error.DataFlasherFailedToQuerySelectedDevice;
+    }
 
-        if (!deviceResult.success) return error.DataFlasherFailedToQuerySelectedDevice;
-
-        const deviceResponse: DeviceList.Events.onSelectedDeviceQueried.Response = deviceDataPtr.*;
-
-        // deviceResponse.device is not an optional, it cannot be a null device
-        self.state.data.device = deviceResponse.device;
-    } else return error.DataFlasherReceivedNullDevice;
+    if (query.selectedDevice) |dev| self.state.data.device = dev;
 }
 
 pub const flashISOtoDeviceWrapper = struct {

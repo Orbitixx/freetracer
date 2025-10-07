@@ -531,16 +531,13 @@ pub fn deinit(self: *DataFlasherUI) void {
 }
 
 fn queryDeviceListUIDimensions(self: *DataFlasherUI) !void {
-    const queryDimensionsEvent = DeviceListUI.Events.onUITransformQueried.create(self.asComponentPtr(), null);
+    var transform = Transform{ .x = 0, .y = 0, .w = 0, .h = 0 };
+    const queryDimensionsEvent = DeviceListUI.Events.onUITransformQueried.create(self.asComponentPtr(), &.{ .result = &transform });
+
     const eventResult = try EventManager.signal("device_list_ui", queryDimensionsEvent);
+    if (!eventResult.success) return error.DataFlasherUICouldNotObtainInitialUIDimensions;
 
-    if (!eventResult.success or eventResult.data == null) return error.DataFlasherUICouldNotObtainInitialUIDimensions;
-
-    if (eventResult.data) |dimensionsData| {
-        const deviceListUIData: *DeviceListUI.Events.onUITransformQueried.Response = @ptrCast(@alignCast(dimensionsData));
-        self.bgRect.transform.x = deviceListUIData.transform.x + deviceListUIData.transform.getWidth() + 20;
-        self.allocator.destroy(deviceListUIData);
-    }
+    self.bgRect.transform.x = transform.x + transform.getWidth() + 20;
 }
 
 fn recalculateUI(self: *DataFlasherUI, bgRectParams: BgRectParams) void {

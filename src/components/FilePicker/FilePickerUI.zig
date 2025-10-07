@@ -11,7 +11,7 @@ const winRelX = WindowManager.relW;
 const winRelY = WindowManager.relH;
 
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
-const ComponentName = EventManager.ComponentName.ISO_FILE_PICKER_UI;
+pub const ComponentName = EventManager.ComponentName.ISO_FILE_PICKER_UI;
 
 const ISOFilePicker = @import("./FilePicker.zig");
 
@@ -29,6 +29,8 @@ const Texture = UIFramework.Primitives.Texture;
 
 const Styles = UIFramework.Styles;
 const Color = Styles.Color;
+
+const DEFAULT_ISO_TITLE = "No ISO selected...";
 
 pub const ISOFilePickerUIState = struct {
     isActive: bool = true,
@@ -102,66 +104,9 @@ pub fn initComponent(self: *ISOFilePickerUI, parent: ?*Component) !void {
 pub fn start(self: *ISOFilePickerUI) !void {
     Debug.log(.DEBUG, "ISOFilePickerUI: component start() called.", .{});
 
-    if (self.component == null) try self.initComponent(self.parent.asComponentPtr());
-
-    if (self.component) |*component| {
-        if (!EventManager.subscribe(ComponentName, component)) return error.UnableToSubscribeToEventManager;
-    } else return error.UnableToSubscribeToEventManager;
-
-    self.bgRect = Rectangle{
-        .transform = .{
-            .x = winRelX(AppConfig.APP_UI_MODULE_PANEL_FILE_PICKER_X),
-            .y = winRelY(AppConfig.APP_UI_MODULE_PANEL_Y),
-            .w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
-            .h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
-        },
-        .style = .{
-            .color = Color.violet,
-            .borderStyle = .{
-                .color = Color.white,
-            },
-        },
-        .rounded = true,
-        .bordered = true,
-    };
-
-    self.headerLabel = Text.init("image", .{
-        .x = self.bgRect.transform.x + 12,
-        .y = self.bgRect.transform.relY(0.01),
-    }, .{
-        .font = .JERSEY10_REGULAR,
-        .fontSize = 34,
-        .textColor = Color.white,
-    });
-
-    self.diskImg = Texture.init(.DISK_IMAGE, .{ .x = 0, .y = 0 });
-    self.diskImg.transform.x = self.bgRect.transform.relX(0.5) - self.diskImg.transform.w / 2;
-    self.diskImg.transform.y = self.bgRect.transform.relY(0.5) - self.diskImg.transform.h / 2;
-    self.diskImg.tint = .{ .r = 255, .g = 255, .b = 255, .a = 150 };
-
-    self.button = Button.init(
-        "SELECT ISO",
-        null,
-        self.bgRect.transform.getPosition(),
-        .Primary,
-        .{
-            .context = self.parent,
-            .function = ISOFilePicker.dispatchComponentActionWrapper.call,
-        },
-        self.allocator,
-    );
-
-    try self.button.start();
-
-    self.button.setPosition(.{
-        .x = self.bgRect.transform.relX(0.5) - @divTrunc(self.button.rect.transform.w, 2),
-        .y = self.bgRect.transform.relY(0.9) - @divTrunc(self.button.rect.transform.h, 2),
-    });
-
-    self.button.rect.rounded = true;
-
-    self.displayNameBuffer = std.mem.zeroes([36]u8);
-    self.isoTitle = Text.init("No ISO selected...", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
+    const component = try self.ensureComponentInitialized();
+    try subscribeToEvents(component);
+    try self.initializeUIElements();
 
     Debug.log(.DEBUG, "ISOFilePickerUI: component start() finished.", .{});
 }
@@ -171,123 +116,49 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
 
     var eventResult = EventResult.init();
 
-    eventLoop: switch (event.hash) {
-        //
-        Events.onISOFilePathChanged.Hash => {
-            //
-            const data = Events.onISOFilePathChanged.getData(event) orelse break :eventLoop;
-            defer eventResult = eventResult.succeed();
+    return switch (event.hash) {
+        Events.onISOFilePathChanged.Hash => try self.handleIsoFilePathChanged(event),
+        Events.onUIDimensionsQueried.Hash => try self.handleUIDimensionsQueried(event),
+        ISOFilePicker.Events.onActiveStateChanged.Hash => try self.handleActiveStateChanged(event),
+        else => eventResult.fail(),
+    };
+}
 
-            var newName: [:0]const u8 = @ptrCast("No ISO selected...");
+pub fn update(self: *ISOFilePickerUI) !void {
+    try self.button.update();
+}
 
-            if (data.newPath.len > 0) {
-                //
-                {
-                    self.state.lock();
-                    defer self.state.unlock();
-                    self.state.data.isoPath = data.newPath;
-                }
+pub fn draw(self: *ISOFilePickerUI) !void {
+    self.state.lock();
+    const isActive = self.state.data.isActive;
+    self.state.unlock();
 
-                var lastSlash: usize = 0;
+    self.bgRect.draw();
+    self.headerLabel.draw();
+    self.diskImg.draw();
 
-                for (0..data.newPath.len) |i| {
-                    // Find the last forward slash in the path (0x2f)
-                    if (data.newPath[i] == 0x2f) lastSlash = i;
-                }
+    if (isActive) try self.drawActive() else try self.drawInactive();
+}
 
-                newName = data.newPath[lastSlash + 1 .. data.newPath.len :0];
-            }
+pub fn deinit(self: *ISOFilePickerUI) void {
+    _ = self;
+}
 
-            @memset(&self.displayNameBuffer, Character.NULL);
+pub fn dispatchComponentAction(self: *ISOFilePickerUI) void {
+    _ = self;
+}
 
-            const written = if (newName.len > 14) blk: {
-                const prefix = "...";
-                @memcpy(self.displayNameBuffer[0..prefix.len], prefix);
-                @memcpy(self.displayNameBuffer[prefix.len .. prefix.len + 14], newName[newName.len - 14 ..]);
-                break :blk prefix.len + 14;
-            } else blk: {
-                @memcpy(self.displayNameBuffer[0..newName.len], newName);
-                break :blk newName.len;
-            };
+pub const ComponentImplementation = ComponentFramework.ImplementComponent(ISOFilePickerUI);
+pub const asComponent = ComponentImplementation.asComponent;
+pub const asComponentPtr = ComponentImplementation.asComponentPtr;
+pub const asInstance = ComponentImplementation.asInstance;
 
-            self.displayNameBuffer[written] = Character.NULL;
+fn drawActive(self: *ISOFilePickerUI) !void {
+    try self.button.draw();
+}
 
-            self.isoTitle = Text.init(@ptrCast(std.mem.sliceTo(&self.displayNameBuffer, Character.NULL)), .{
-                .x = self.bgRect.transform.relX(0.5),
-                .y = self.bgRect.transform.relY(0.5),
-            }, .{
-                .fontSize = 14,
-            });
-        },
-
-        // NOTE: Deprecated implementation. Use Events.onUIDimensionsQueried.
-        // ISOFilePickerUI emits this event in response to receiving the same event
-        Events.onGetUIDimensions.Hash => {
-            //
-            const data = Events.onGetUIDimensions.Data{ .transform = self.bgRect.transform };
-            const responseEvent = Events.onGetUIDimensions.create(self.asComponentPtr(), &data);
-            eventResult = eventResult.succeed();
-            EventManager.broadcast(responseEvent);
-        },
-
-        Events.onUIDimensionsQueried.Hash => {
-            // const responseDataPtr: *Events.onUIDimensionsQueried.Response = try self.allocator.create(Events.onUIDimensionsQueried.Response);
-            // responseDataPtr.* = .{ .bgRectWidth = self.bgRect.transform.w };
-
-            // eventResult.data = @ptrCast(@alignCast(responseDataPtr));
-
-            const data = Events.onUIDimensionsQueried.getData(event) orelse return eventResult.fail();
-            data.result.* = self.bgRect.transform;
-            return eventResult.succeed();
-        },
-
-        ISOFilePicker.Events.onActiveStateChanged.Hash => {
-            //
-            const data = ISOFilePicker.Events.onActiveStateChanged.getData(event) orelse break :eventLoop;
-
-            {
-                self.state.lock();
-                defer self.state.unlock();
-                self.state.data.isActive = data.isActive;
-            }
-
-            switch (data.isActive) {
-                true => {
-                    self.headerLabel.style.textColor = Color.white;
-                    self.diskImg.transform.scale = 1.0;
-
-                    self.recalculateUI(.{
-                        .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
-                        .color = Color.violet,
-                        .borderColor = Color.white,
-                    });
-                },
-
-                false => {
-                    self.headerLabel.style.textColor = Color.offWhite;
-                    self.diskImg.transform.scale = 0.7;
-
-                    self.recalculateUI(.{
-                        .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
-                        .color = Color.darkViolet,
-                        .borderColor = Color.transparentDark,
-                    });
-                },
-            }
-
-            const responseEvent = Events.onGetUIDimensions.create(
-                self.asComponentPtr(),
-                &.{ .transform = self.bgRect.transform },
-            );
-
-            eventResult = eventResult.succeed();
-            EventManager.broadcast(responseEvent);
-        },
-
-        else => {},
-    }
-
-    return eventResult;
+fn drawInactive(self: *ISOFilePickerUI) !void {
+    self.isoTitle.draw();
 }
 
 fn recalculateUI(self: *ISOFilePickerUI, bgRectParams: BgRectParams) void {
@@ -309,39 +180,194 @@ fn recalculateUI(self: *ISOFilePickerUI, bgRectParams: BgRectParams) void {
     self.button.setPosition(.{ .x = self.bgRect.transform.relX(0.5) - self.button.rect.transform.getWidth() / 2, .y = self.button.rect.transform.y });
 }
 
-pub fn update(self: *ISOFilePickerUI) !void {
-    try self.button.update();
+fn ensureComponentInitialized(self: *ISOFilePickerUI) !*Component {
+    if (self.component == null) try self.initComponent(self.parent.asComponentPtr());
+    if (self.component) |*component| return component;
+    return error.UnableToSubscribeToEventManager;
 }
 
-pub fn draw(self: *ISOFilePickerUI) !void {
+fn subscribeToEvents(component: *Component) !void {
+    if (!EventManager.subscribe(ComponentName, component)) return error.UnableToSubscribeToEventManager;
+}
+
+fn initializeUIElements(self: *ISOFilePickerUI) !void {
+    self.initializeBackground();
+    self.initializeHeader();
+    self.initializeDiskImage();
+    self.initializeIsoTitle();
+    try self.initializeButton();
+}
+
+fn initializeBackground(self: *ISOFilePickerUI) void {
+    self.bgRect = Rectangle{
+        .transform = .{
+            .x = winRelX(AppConfig.APP_UI_MODULE_PANEL_FILE_PICKER_X),
+            .y = winRelY(AppConfig.APP_UI_MODULE_PANEL_Y),
+            .w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
+            .h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
+        },
+        .style = .{
+            .color = Color.violet,
+            .borderStyle = .{ .color = Color.white },
+        },
+        .rounded = true,
+        .bordered = true,
+    };
+}
+
+fn initializeHeader(self: *ISOFilePickerUI) void {
+    self.headerLabel = Text.init("image", .{
+        .x = self.bgRect.transform.x + 12,
+        .y = self.bgRect.transform.relY(0.01),
+    }, .{
+        .font = .JERSEY10_REGULAR,
+        .fontSize = 34,
+        .textColor = Color.white,
+    });
+}
+
+fn initializeDiskImage(self: *ISOFilePickerUI) void {
+    self.diskImg = Texture.init(.DISK_IMAGE, .{ .x = 0, .y = 0 });
+    self.diskImg.transform.x = self.bgRect.transform.relX(0.5) - self.diskImg.transform.w / 2;
+    self.diskImg.transform.y = self.bgRect.transform.relY(0.5) - self.diskImg.transform.h / 2;
+    self.diskImg.tint = .{ .r = 255, .g = 255, .b = 255, .a = 150 };
+}
+
+fn initializeButton(self: *ISOFilePickerUI) !void {
+    self.button = Button.init(
+        "SELECT ISO",
+        null,
+        self.bgRect.transform.getPosition(),
+        .Primary,
+        .{ .context = self.parent, .function = ISOFilePicker.dispatchComponentActionWrapper.call },
+        self.allocator,
+    );
+
+    try self.button.start();
+
+    self.button.setPosition(.{
+        .x = self.bgRect.transform.relX(0.5) - @divTrunc(self.button.rect.transform.w, 2),
+        .y = self.bgRect.transform.relY(0.9) - @divTrunc(self.button.rect.transform.h, 2),
+    });
+
+    self.button.rect.rounded = true;
+}
+
+fn initializeIsoTitle(self: *ISOFilePickerUI) void {
+    self.displayNameBuffer = std.mem.zeroes([36]u8);
+    self.resetIsoTitle();
+}
+
+fn applyAppearance(self: *ISOFilePickerUI, params: BgRectParams, headerColor: rl.Color, diskScale: f32) void {
+    self.headerLabel.style.textColor = headerColor;
+    self.diskImg.transform.scale = diskScale;
+    self.recalculateUI(params);
+}
+
+fn broadcastUIDimensions(self: *ISOFilePickerUI) void {
+    const responseEvent = Events.onGetUIDimensions.create(self.asComponentPtr(), &.{ .transform = self.bgRect.transform });
+    EventManager.broadcast(responseEvent);
+}
+
+fn setIsActive(self: *ISOFilePickerUI, isActive: bool) void {
+    {
+        self.state.lock();
+        defer self.state.unlock();
+        self.state.data.isActive = isActive;
+    }
+
+    if (isActive) {
+        self.applyAppearance(.{
+            .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
+            .color = Color.violet,
+            .borderColor = Color.white,
+        }, Color.white, 1.0);
+    } else {
+        self.applyAppearance(.{
+            .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
+            .color = Color.darkViolet,
+            .borderColor = Color.transparentDark,
+        }, Color.offWhite, 0.7);
+    }
+
+    self.broadcastUIDimensions();
+}
+
+fn updateIsoPathState(self: *ISOFilePickerUI, newPath: [:0]u8) void {
     self.state.lock();
-    const isActive = self.state.data.isActive;
-    self.state.unlock();
-
-    self.bgRect.draw();
-    self.headerLabel.draw();
-    self.diskImg.draw();
-
-    if (isActive) try self.drawActive() else try self.drawInactive();
+    defer self.state.unlock();
+    self.state.data.isoPath = newPath;
 }
 
-fn drawActive(self: *ISOFilePickerUI) !void {
-    try self.button.draw();
+fn extractDisplayName(path: [:0]u8) [:0]const u8 {
+    var lastSlash: usize = 0;
+    for (0..path.len) |i| {
+        if (path[i] == '/') lastSlash = i;
+    }
+    return path[lastSlash + 1 .. path.len :0];
 }
 
-fn drawInactive(self: *ISOFilePickerUI) !void {
-    self.isoTitle.draw();
+fn updateIsoTitle(self: *ISOFilePickerUI, newName: [:0]const u8) void {
+    @memset(&self.displayNameBuffer, Character.NULL);
+
+    const written = if (newName.len > 14) blk: {
+        const prefix = "...";
+        @memcpy(self.displayNameBuffer[0..prefix.len], prefix);
+        @memcpy(self.displayNameBuffer[prefix.len .. prefix.len + 14], newName[newName.len - 14 ..]);
+        break :blk prefix.len + 14;
+    } else blk: {
+        @memcpy(self.displayNameBuffer[0..newName.len], newName);
+        break :blk newName.len;
+    };
+
+    self.displayNameBuffer[written] = Character.NULL;
+
+    const label = std.mem.sliceTo(&self.displayNameBuffer, Character.NULL);
+    self.isoTitle = Text.init(@ptrCast(label), .{
+        .x = self.bgRect.transform.relX(0.5),
+        .y = self.bgRect.transform.relY(0.5),
+    }, .{ .fontSize = 14 });
 }
 
-pub fn deinit(self: *ISOFilePickerUI) void {
-    _ = self;
+fn resetIsoTitle(self: *ISOFilePickerUI) void {
+    self.isoTitle = Text.init(DEFAULT_ISO_TITLE, .{
+        .x = self.bgRect.transform.relX(0.5),
+        .y = self.bgRect.transform.relY(0.5),
+    }, .{ .fontSize = 14 });
 }
 
-pub fn dispatchComponentAction(self: *ISOFilePickerUI) void {
-    _ = self;
+// fn handleGetUIDimensions(self: *ISOFilePickerUI) EventResult {
+//     var eventResult = EventResult.init();
+//     const responseEvent = Events.onGetUIDimensions.create(self.asComponentPtr(), &.{ .transform = self.bgRect.transform });
+//     EventManager.broadcast(responseEvent);
+//     return eventResult.succeed();
+// }
+
+fn handleUIDimensionsQueried(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
+    var eventResult = EventResult.init();
+    const data = Events.onUIDimensionsQueried.getData(event) orelse return eventResult.fail();
+    data.result.* = self.bgRect.transform;
+    return eventResult.succeed();
 }
 
-pub const ComponentImplementation = ComponentFramework.ImplementComponent(ISOFilePickerUI);
-pub const asComponent = ComponentImplementation.asComponent;
-pub const asComponentPtr = ComponentImplementation.asComponentPtr;
-pub const asInstance = ComponentImplementation.asInstance;
+fn handleActiveStateChanged(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
+    var eventResult = EventResult.init();
+    const data = ISOFilePicker.Events.onActiveStateChanged.getData(event) orelse return eventResult.fail();
+    self.setIsActive(data.isActive);
+    return eventResult.succeed();
+}
+
+fn handleIsoFilePathChanged(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
+    var eventResult = EventResult.init();
+    const data = Events.onISOFilePathChanged.getData(event) orelse return eventResult.fail();
+
+    if (data.newPath.len > 0) {
+        self.updateIsoPathState(data.newPath);
+        const displayName = extractDisplayName(data.newPath);
+        self.updateIsoTitle(displayName);
+    } else {
+        self.resetIsoTitle();
+    }
+
+    return eventResult.succeed();
+}

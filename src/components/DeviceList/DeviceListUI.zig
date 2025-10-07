@@ -14,7 +14,7 @@ const winRelX = WindowManager.relW;
 const winRelY = WindowManager.relH;
 
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
-const ComponentName = EventManager.ComponentName.DEVICE_LIST_UI;
+pub const ComponentName = EventManager.ComponentName.DEVICE_LIST_UI;
 
 const DeviceList = @import("./DeviceList.zig");
 const ISOFilePicker = @import("../FilePicker/FilePicker.zig");
@@ -32,6 +32,7 @@ const Rectangle = UIFramework.Primitives.Rectangle;
 const Text = UIFramework.Primitives.Text;
 const Transform = UIFramework.Primitives.Transform;
 const Texture = UIFramework.Primitives.Texture;
+const UI = UIFramework.utils;
 
 const Styles = UIFramework.Styles;
 const Color = UIFramework.Styles.Color;
@@ -98,8 +99,8 @@ pub const Events = struct {
 
     pub const onUITransformQueried = ComponentFramework.defineEvent(
         EventManager.createEventName(ComponentName, "on_ui_transform_queried"),
+        struct { result: *UIFramework.Primitives.Transform },
         struct {},
-        struct { transform: UIFramework.Primitives.Transform },
     );
 };
 
@@ -131,93 +132,17 @@ pub fn initComponent(self: *DeviceListUI, parent: ?*Component) !void {
 pub fn start(self: *DeviceListUI) !void {
     Debug.log(.DEBUG, "DeviceListUI: component start() called.", .{});
 
-    if (self.component == null) try self.initComponent(self.parent.asComponentPtr());
+    try self.initComponent(&self.parent.component.?);
+    try self.subscribeToEvents();
 
-    if (self.component) |*component| {
-        if (!EventManager.subscribe(ComponentName, component)) return error.UnableToSubscribeToEventManager;
-    } else return error.UnableToSubscribeToEventManager;
-
-    // Obtain previous UI section's Transform
-    var bgRectTransform: Transform = Transform{ .x = 0, .y = 0, .w = 0, .h = 0 };
-    const uiDimsEvent = ISOFilePickerUI.Events.onUIDimensionsQueried.create(self.asComponentPtr(), &.{ .result = &bgRectTransform });
-    const eventResult = try EventManager.signal("iso_file_picker_ui", uiDimsEvent);
-    if (!eventResult.success) Debug.log(.WARNING, "DeviceListUI was unable to query FilePicker bgRect dimensions.", .{});
-
-    self.bgRect = Rectangle{
-        .transform = .{
-            .x = bgRectTransform.x + bgRectTransform.w + 20,
-            .y = winRelY(AppConfig.APP_UI_MODULE_PANEL_Y),
-            .w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
-            .h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
-        },
-        .style = .{
-            .color = Styles.Color.darkBlueGray,
-            .borderStyle = .{ .color = Styles.Color.darkBlueGray },
-        },
-        .rounded = true,
-        .bordered = true,
-    };
-
-    self.nextButton = Button.init(
-        "Next",
-        null,
-        self.bgRect.transform.getPosition(),
-        .Primary,
-        .{
-            .context = self.parent,
-            .function = DeviceList.dispatchComponentFinishedAction.call,
-        },
-        self.allocator,
-    );
-
-    self.nextButton.setEnabled(false);
-
-    self.refreshDevicesButton = Button.init(
-        "",
-        .RELOAD_ICON,
-        self.bgRect.transform.getPosition(),
-        .Primary,
-        .{
-            .context = self.parent,
-            .function = refreshDevices.call,
-        },
-        self.allocator,
-    );
-
-    self.refreshDevicesButton.rect.rounded = true;
-
-    self.headerLabel = Text.init(
-        "device",
-        .{
-            .x = self.bgRect.transform.x + 12,
-            .y = self.bgRect.transform.relY(0.01),
-        },
-        .{
-            .font = .JERSEY10_REGULAR,
-            .fontSize = 34,
-            .textColor = Styles.Color.white,
-        },
-    );
-
-    self.moduleImg = Texture.init(.USB_IMAGE, .{ .x = 0, .y = 0 });
-    self.moduleImg.transform.scale = 0.5;
-    self.moduleImg.transform.x = self.bgRect.transform.relX(0.5) - self.moduleImg.transform.getWidth() / 2;
-    self.moduleImg.transform.y = self.bgRect.transform.relY(0.5) - self.moduleImg.transform.getHeight() / 2;
-    self.moduleImg.tint = .{ .r = 255, .g = 255, .b = 255, .a = 150 };
-
-    try self.nextButton.start();
-
-    self.nextButton.setPosition(.{
-        .x = self.bgRect.transform.relX(0.5) - @divTrunc(self.nextButton.rect.transform.getWidth(), 2),
-        .y = self.bgRect.transform.relY(0.9) - @divTrunc(self.nextButton.rect.transform.getHeight(), 2),
-    });
-
-    self.nextButton.rect.rounded = true;
+    self.initBgRect();
+    try self.initNextBtn();
+    self.initRefreshDevicesBtn();
+    self.initHeaderLabel();
+    self.initDeviceNameLabel();
+    self.initModuleCoverTexture();
 
     self.noDevicesLabel = Text.init("No external devices found...", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
-    self.deviceNameLabel = Text.init("No device selected...", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
-    self.deviceNameLabel.transform.x = self.bgRect.transform.relX(0.5) - self.deviceNameLabel.getDimensions().width / 2;
-    self.deviceNameLabel.transform.y = self.moduleImg.transform.y + self.moduleImg.transform.getHeight() + winRelY(0.02);
 
     Debug.log(.DEBUG, "DeviceListUI: component start() finished.", .{});
 }
@@ -227,214 +152,14 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
 
     var eventResult = EventResult.init();
 
-    eventLoop: switch (event.hash) {
-
-        // ISOFilePickerUI emits this event in response to receiving the same event
-        ISOFilePickerUI.Events.onGetUIDimensions.Hash => {
-            //
-            const data = ISOFilePickerUI.Events.onGetUIDimensions.getData(event) orelse break :eventLoop;
-            self.bgRect.transform.x = data.transform.x + data.transform.w + 20;
-            eventResult = eventResult.succeed();
-        },
-
-        ISOFilePicker.Events.onActiveStateChanged.Hash => {
-            //
-            const data = ISOFilePicker.Events.onActiveStateChanged.getData(event) orelse break :eventLoop;
-
-            // Dispatch a parent event that the current component already listens to (for simplicity)
-            return try self.handleEvent(DeviceList.Events.onDeviceListActiveStateChanged.create(
-                self.asComponentPtr(),
-                // Set the __opposite__ of the ISOFilePicker active state.
-                &.{ .isActive = !data.isActive },
-            ));
-        },
-
-        DeviceList.Events.onDeviceListActiveStateChanged.Hash => {
-            //
-            const data = DeviceList.Events.onDeviceListActiveStateChanged.getData(event) orelse break :eventLoop;
-
-            // Update state in a block with a shorter lifecycle
-            {
-                self.state.lock();
-                defer self.state.unlock();
-                self.state.data.isActive = data.isActive;
-            }
-
-            switch (data.isActive) {
-                true => {
-                    Debug.log(.DEBUG, "DeviceListUI: setting UI to ACTIVE.", .{});
-
-                    self.headerLabel.style.textColor = Color.white;
-
-                    self.recalculateUI(.{
-                        .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
-                        .color = Color.blueGray,
-                        .borderColor = Color.white,
-                    });
-                },
-
-                false => {
-                    Debug.log(.DEBUG, "DeviceListUI: setting UI to INACTIVE.", .{});
-
-                    self.headerLabel.style.textColor = Color.lightGray;
-
-                    self.recalculateUI(.{
-                        .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
-                        .color = Color.darkBlueGray,
-                        .borderColor = Color.transparentDark,
-                    });
-                },
-            }
-
-            eventResult = eventResult.succeed();
-        },
-
-        DeviceList.Events.onDevicesCleanup.Hash => {
-            self.deviceNameLabel.value = "NULL";
-
-            self.state.lock();
-            defer self.state.unlock();
-
-            self.state.data.selectedDevice = null;
-
-            eventResult = eventResult.succeed();
-        },
-
-        Events.onUITransformQueried.Hash => {
-            const responseDataPtr: *Events.onUITransformQueried.Response = try self.allocator.create(Events.onUITransformQueried.Response);
-
-            responseDataPtr.* = .{
-                .transform = self.bgRect.transform,
-            };
-
-            eventResult.data = @ptrCast(@alignCast(responseDataPtr));
-            eventResult = eventResult.succeed();
-        },
-
-        Events.onDevicesReadyToRender.Hash => {
-            //
-            Debug.log(.DEBUG, "DeviceListUI: onDevicesReadyToRender() start.", .{});
-
-            // WARNING: General defer is OK here because no other call is coupled here where mutex lock would propagate.
-            self.state.lock();
-            defer self.state.unlock();
-
-            if (self.state.data.devices.items.len < 1) {
-                Debug.log(.WARNING, "DeviceListUI: onDevicesReadyToRender(): no devices discovered, breaking the event loop.", .{});
-                break :eventLoop;
-            }
-
-            Debug.log(.DEBUG, "DeviceListUI: onDevicesReadyToRender(): processing checkboxes for {d} devices.", .{self.state.data.devices.items.len});
-
-            for (self.state.data.devices.items, 0..) |*device, i| {
-                //
-                const selectDeviceContext = try self.allocator.create(DeviceList.SelectDeviceCallbackContext);
-
-                // Define context for the checkbox's on-click behavior/callback
-                selectDeviceContext.* = DeviceList.SelectDeviceCallbackContext{
-                    .component = self.parent,
-                    .selectedDevice = device.*,
-                };
-
-                var textBuf: [AppConfig.CHECKBOX_TEXT_BUFFER_SIZE]u8 = std.mem.zeroes([AppConfig.CHECKBOX_TEXT_BUFFER_SIZE]u8);
-
-                const deviceName = std.mem.sliceTo(device.deviceName[0..], Character.NULL);
-                const bsdName = device.getBsdNameSlice();
-
-                _ = std.fmt.bufPrintZ(
-                    textBuf[0..],
-                    "{s} - {s} ({d:.0}GB) [{s}]",
-                    .{
-                        if (deviceName.len > 20) deviceName[0..20] else deviceName,
-                        if (bsdName.len > 10) bsdName[0..10] else bsdName,
-                        @divTrunc(device.size, 1_000_000_000),
-                        if (device.type == .USB) "USB" else if (device.type == .SD) "SD" else "Other",
-                    },
-                ) catch |err| {
-                    std.debug.panic("{any}", .{err});
-                };
-
-                Debug.log(.DEBUG, "ComponentUI: formatted string is: {s}", .{std.mem.sliceTo(textBuf[0..], Character.NULL)});
-
-                try self.deviceCheckboxes.append(self.allocator, Checkbox.init(
-                    self.allocator,
-                    device.serviceId,
-                    textBuf,
-                    .{
-                        .x = self.bgRect.transform.relX(0.05),
-                        .y = self.bgRect.transform.relY(0.12) + @as(f32, @floatFromInt(i)) * 25,
-                    },
-                    20,
-                    .Primary,
-                    .{
-                        .context = selectDeviceContext,
-                        .function = DeviceList.selectDeviceActionWrapper.call,
-                    },
-                ));
-
-                for (self.deviceCheckboxes.items) |*checkbox| {
-                    checkbox.outerRect.bordered = true;
-                    checkbox.outerRect.rounded = true;
-                    checkbox.innerRect.rounded = true;
-                    try checkbox.start();
-                }
-            }
-            Debug.log(.DEBUG, "DeviceListUI: onDevicesReadyToRender() end.", .{});
-
-            eventResult = eventResult.succeed();
-        },
-
-        // Fired when a device is selected, e.g. selectedDevice != null
-        Events.onSelectedDeviceNameChanged.Hash => {
-            //
-            const data = Events.onSelectedDeviceNameChanged.getData(event) orelse break :eventLoop;
-
-            // WARNING: Mutex lock is used within broader scope of this event instead of dedicated scope. OK as of the moment of implementation.
-            self.state.lock();
-            defer self.state.unlock();
-            self.state.data.selectedDevice = data.selectedDevice;
-
-            // TODO: doesn't quite fix the visual selection bug with multiple devices
-            // {
-            //     for (self.deviceCheckboxes.items) |*cb| {
-            //         cb.state = .NORMAL;
-            //     }
-            //
-            //     if (data.selectedDevice) |device| {
-            //         for (self.deviceCheckboxes.items) |*cb| {
-            //             if (device.serviceId == cb.deviceId) cb.state = .CHECKED;
-            //         }
-            //     }
-            // }
-
-            Debug.log(
-                .DEBUG,
-                "DeviceListUI.handleEvent.onSelectedDeviceNameChanged received selectedDevice: \n{s}\n",
-                .{if (data.selectedDevice) |device| device.getNameSlice() else "NULL"},
-            );
-
-            const displayName = if (self.state.data.selectedDevice) |*device| blk: {
-                const deviceName = device.getNameSlice();
-                if (deviceName.len > 12) break :blk deviceName[0..12] else break :blk deviceName;
-            } else kStringDeviceListNoDeviceSelected;
-
-            // BUG: the "NULL" text pointer is invalidated after scope exit
-            self.deviceNameLabel = Text.init(@ptrCast(displayName), .{
-                .x = self.bgRect.transform.relX(0.5),
-                .y = self.bgRect.transform.relY(0.5),
-            }, .{
-                .fontSize = 14,
-            });
-
-            // Toggle the "Next" button based on whether or not a device is selected
-            self.nextButton.setEnabled(data.selectedDevice != null);
-
-            eventResult = eventResult.succeed();
-        },
-        else => {},
-    }
-
-    return eventResult;
+    return switch (event.hash) {
+        DeviceList.Events.onDeviceListActiveStateChanged.Hash => try self.handleOnDeviceListActiveStateChanged(event),
+        DeviceList.Events.onDevicesCleanup.Hash => try self.handleOnDevicesCleanup(),
+        Events.onUITransformQueried.Hash => try self.handleOnUITransformQueried(event),
+        Events.onDevicesReadyToRender.Hash => try self.handleOnDevicesReadyToRender(),
+        Events.onSelectedDeviceNameChanged.Hash => try self.handleOnSelectedDeviceNameChanged(event),
+        else => return eventResult.fail(),
+    };
 }
 
 pub fn update(self: *DeviceListUI) !void {
@@ -463,6 +188,103 @@ pub fn draw(self: *DeviceListUI) !void {
     if (isActive) try self.drawActive() else try self.drawInactive();
 }
 
+pub fn deinit(self: *DeviceListUI) void {
+    for (self.deviceCheckboxes.items) |checkbox| {
+        // Destroy the heap-based pointer to the checkbox's on-click context
+        const ctx: *DeviceList.SelectDeviceCallbackContext = @ptrCast(@alignCast(checkbox.clickHandler.context));
+        self.allocator.destroy(ctx);
+    }
+
+    self.deviceCheckboxes.deinit(self.allocator);
+}
+
+pub fn dispatchComponentAction(self: *DeviceListUI) void {
+    _ = self;
+}
+
+pub const ComponentImplementation = ComponentFramework.ImplementComponent(DeviceListUI);
+pub const asComponent = ComponentImplementation.asComponent;
+pub const asComponentPtr = ComponentImplementation.asComponentPtr;
+pub const asInstance = ComponentImplementation.asInstance;
+
+fn subscribeToEvents(self: *DeviceListUI) !void {
+    if (self.component) |*component| {
+        if (!EventManager.subscribe(ComponentName, component)) return error.UnableToSubscribeToEventManager;
+    } else return error.UnableToSubscribeToEventManager;
+}
+
+fn initBgRect(self: *DeviceListUI) void {
+    // Obtain previous UI section's Transform
+    const filePickerBgRectTransform = UI.queryComponentTransform(ISOFilePickerUI);
+
+    self.bgRect = Rectangle{
+        .transform = .{
+            .x = filePickerBgRectTransform.x + filePickerBgRectTransform.w + AppConfig.APP_UI_MODULE_GAP_X,
+            .y = winRelY(AppConfig.APP_UI_MODULE_PANEL_Y),
+            .w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
+            .h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
+        },
+        .style = .{
+            .color = Styles.Color.darkBlueGray,
+            .borderStyle = .{ .color = Styles.Color.darkBlueGray },
+        },
+        .rounded = true,
+        .bordered = true,
+    };
+}
+
+fn initNextBtn(self: *DeviceListUI) !void {
+    self.nextButton = Button.init("Next", null, self.bgRect.transform.getPosition(), .Primary, .{
+        .context = self.parent,
+        .function = DeviceList.dispatchComponentFinishedAction.call,
+    }, self.allocator);
+
+    self.nextButton.setEnabled(false);
+
+    try self.nextButton.start();
+
+    self.nextButton.setPosition(.{
+        .x = self.bgRect.transform.relX(0.5) - @divTrunc(self.nextButton.rect.transform.getWidth(), 2),
+        .y = self.bgRect.transform.relY(0.9) - @divTrunc(self.nextButton.rect.transform.getHeight(), 2),
+    });
+
+    self.nextButton.rect.rounded = true;
+}
+
+fn initRefreshDevicesBtn(self: *DeviceListUI) void {
+    self.refreshDevicesButton = Button.init("", .RELOAD_ICON, self.bgRect.transform.getPosition(), .Primary, .{
+        .context = self.parent,
+        .function = refreshDevices.call,
+    }, self.allocator);
+
+    self.refreshDevicesButton.rect.rounded = true;
+}
+
+fn initHeaderLabel(self: *DeviceListUI) void {
+    self.headerLabel = Text.init("device", .{
+        .x = self.bgRect.transform.x + 12,
+        .y = self.bgRect.transform.relY(0.01),
+    }, .{
+        .font = .JERSEY10_REGULAR,
+        .fontSize = 34,
+        .textColor = Styles.Color.white,
+    });
+}
+
+fn initModuleCoverTexture(self: *DeviceListUI) void {
+    self.moduleImg = Texture.init(.USB_IMAGE, .{ .x = 0, .y = 0 });
+    self.moduleImg.transform.scale = 0.5;
+    self.moduleImg.transform.x = self.bgRect.transform.relX(0.5) - self.moduleImg.transform.getWidth() / 2;
+    self.moduleImg.transform.y = self.bgRect.transform.relY(0.5) - self.moduleImg.transform.getHeight() / 2;
+    self.moduleImg.tint = .{ .r = 255, .g = 255, .b = 255, .a = 150 };
+}
+
+fn initDeviceNameLabel(self: *DeviceListUI) void {
+    self.deviceNameLabel = Text.init("No device selected...", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
+    self.deviceNameLabel.transform.x = self.bgRect.transform.relX(0.5) - self.deviceNameLabel.getDimensions().width / 2;
+    self.deviceNameLabel.transform.y = self.moduleImg.transform.y + self.moduleImg.transform.getHeight() + winRelY(0.02);
+}
+
 fn drawActive(self: *DeviceListUI) !void {
     self.state.lock();
     const foundDevices = self.state.data.devices.items.len > 0;
@@ -483,20 +305,6 @@ fn drawActive(self: *DeviceListUI) !void {
 fn drawInactive(self: *DeviceListUI) !void {
     self.deviceNameLabel.draw();
     self.moduleImg.draw();
-}
-
-pub fn deinit(self: *DeviceListUI) void {
-    for (self.deviceCheckboxes.items) |checkbox| {
-        // Destroy the heap-based pointer to the checkbox's on-click context
-        const ctx: *DeviceList.SelectDeviceCallbackContext = @ptrCast(@alignCast(checkbox.clickHandler.context));
-        self.allocator.destroy(ctx);
-    }
-
-    self.deviceCheckboxes.deinit(self.allocator);
-}
-
-pub fn dispatchComponentAction(self: *DeviceListUI) void {
-    _ = self;
 }
 
 fn recalculateUI(self: *DeviceListUI, bgRectParams: BgRectParams) void {
@@ -567,7 +375,183 @@ const refreshDevices = struct {
     }
 };
 
-pub const ComponentImplementation = ComponentFramework.ImplementComponent(DeviceListUI);
-pub const asComponent = ComponentImplementation.asComponent;
-pub const asComponentPtr = ComponentImplementation.asComponentPtr;
-pub const asInstance = ComponentImplementation.asInstance;
+fn handleOnDeviceListActiveStateChanged(self: *DeviceListUI, event: ComponentEvent) !EventResult {
+    var eventResult = EventResult.init();
+
+    const data = DeviceList.Events.onDeviceListActiveStateChanged.getData(event) orelse return eventResult.fail();
+
+    // Update state in a block with a shorter lifecycle
+    {
+        self.state.lock();
+        defer self.state.unlock();
+        self.state.data.isActive = data.isActive;
+    }
+
+    const filePickerBgRectTransform = UI.queryComponentTransform(ISOFilePickerUI);
+    self.bgRect.transform.x = filePickerBgRectTransform.x + filePickerBgRectTransform.w + AppConfig.APP_UI_MODULE_GAP_X;
+
+    switch (data.isActive) {
+        true => {
+            Debug.log(.DEBUG, "DeviceListUI: setting UI to ACTIVE.", .{});
+
+            self.headerLabel.style.textColor = Color.white;
+
+            self.recalculateUI(.{
+                .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
+                .color = Color.blueGray,
+                .borderColor = Color.white,
+            });
+        },
+
+        false => {
+            Debug.log(.DEBUG, "DeviceListUI: setting UI to INACTIVE.", .{});
+
+            self.headerLabel.style.textColor = Color.lightGray;
+
+            self.recalculateUI(.{
+                .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
+                .color = Color.darkBlueGray,
+                .borderColor = Color.transparentDark,
+            });
+        },
+    }
+
+    return eventResult.succeed();
+}
+
+fn handleOnUITransformQueried(self: *DeviceListUI, event: ComponentEvent) !EventResult {
+    var eventResult = EventResult.init();
+    const data = Events.onUITransformQueried.getData(event) orelse return eventResult.fail();
+    data.result.* = self.bgRect.transform;
+    return eventResult.succeed();
+}
+
+fn handleOnDevicesCleanup(self: *DeviceListUI) !EventResult {
+    var eventResult = EventResult.init();
+    self.state.lock();
+    defer self.state.unlock();
+    self.deviceNameLabel.value = kStringDeviceListNoDeviceSelected;
+    self.state.data.selectedDevice = null;
+    return eventResult.succeed();
+}
+
+fn handleOnDevicesReadyToRender(self: *DeviceListUI) !EventResult {
+    var eventResult = EventResult.init();
+    //
+    Debug.log(.DEBUG, "DeviceListUI: onDevicesReadyToRender() start.", .{});
+
+    // WARNING: General defer is OK here because no other call is coupled here where mutex lock would propagate.
+    self.state.lock();
+    defer self.state.unlock();
+
+    if (self.state.data.devices.items.len < 1) {
+        Debug.log(.WARNING, "DeviceListUI: onDevicesReadyToRender(): no devices discovered, breaking the event loop.", .{});
+        return eventResult.fail();
+    }
+
+    Debug.log(.DEBUG, "DeviceListUI: onDevicesReadyToRender(): processing checkboxes for {d} devices.", .{self.state.data.devices.items.len});
+
+    for (self.state.data.devices.items, 0..) |*device, i| {
+        //
+        const selectDeviceContext = try self.allocator.create(DeviceList.SelectDeviceCallbackContext);
+
+        // Define context for the checkbox's on-click behavior/callback
+        selectDeviceContext.* = DeviceList.SelectDeviceCallbackContext{
+            .component = self.parent,
+            .selectedDevice = device.*,
+        };
+
+        var textBuf: [AppConfig.CHECKBOX_TEXT_BUFFER_SIZE]u8 = std.mem.zeroes([AppConfig.CHECKBOX_TEXT_BUFFER_SIZE]u8);
+
+        const deviceName = std.mem.sliceTo(device.deviceName[0..], Character.NULL);
+        const bsdName = device.getBsdNameSlice();
+
+        _ = std.fmt.bufPrintZ(
+            textBuf[0..],
+            "{s} - {s} ({d:.0}GB) [{s}]",
+            .{
+                if (deviceName.len > 20) deviceName[0..20] else deviceName,
+                if (bsdName.len > 10) bsdName[0..10] else bsdName,
+                @divTrunc(device.size, 1_000_000_000),
+                if (device.type == .USB) "USB" else if (device.type == .SD) "SD" else "Other",
+            },
+        ) catch |err| {
+            std.debug.panic("{any}", .{err});
+        };
+
+        Debug.log(.DEBUG, "ComponentUI: formatted string is: {s}", .{std.mem.sliceTo(textBuf[0..], Character.NULL)});
+
+        try self.deviceCheckboxes.append(self.allocator, Checkbox.init(
+            self.allocator,
+            device.serviceId,
+            textBuf,
+            .{
+                .x = self.bgRect.transform.relX(0.05),
+                .y = self.bgRect.transform.relY(0.12) + @as(f32, @floatFromInt(i)) * 25,
+            },
+            20,
+            .Primary,
+            .{
+                .context = selectDeviceContext,
+                .function = DeviceList.selectDeviceActionWrapper.call,
+            },
+        ));
+
+        for (self.deviceCheckboxes.items) |*checkbox| {
+            checkbox.outerRect.bordered = true;
+            checkbox.outerRect.rounded = true;
+            checkbox.innerRect.rounded = true;
+            try checkbox.start();
+        }
+    }
+    Debug.log(.DEBUG, "DeviceListUI: onDevicesReadyToRender() end.", .{});
+
+    return eventResult.succeed();
+}
+
+fn handleOnSelectedDeviceNameChanged(self: *DeviceListUI, event: ComponentEvent) !EventResult {
+    var eventResult = EventResult.init();
+
+    const data = Events.onSelectedDeviceNameChanged.getData(event) orelse return eventResult.fail();
+
+    self.state.lock();
+    defer self.state.unlock();
+    self.state.data.selectedDevice = data.selectedDevice;
+
+    // TODO: doesn't quite fix the visual selection bug with multiple devices
+    // {
+    //     for (self.deviceCheckboxes.items) |*cb| {
+    //         cb.state = .NORMAL;
+    //     }
+    //
+    //     if (data.selectedDevice) |device| {
+    //         for (self.deviceCheckboxes.items) |*cb| {
+    //             if (device.serviceId == cb.deviceId) cb.state = .CHECKED;
+    //         }
+    //     }
+    // }
+
+    Debug.log(
+        .DEBUG,
+        "DeviceListUI.handleEvent.onSelectedDeviceNameChanged received selectedDevice: \n{s}\n",
+        .{if (data.selectedDevice) |device| device.getNameSlice() else kStringDeviceListNoDeviceSelected},
+    );
+
+    const displayName = if (self.state.data.selectedDevice) |*device| blk: {
+        const deviceName = device.getNameSlice();
+        if (deviceName.len > 12) break :blk deviceName[0..12] else break :blk deviceName;
+    } else kStringDeviceListNoDeviceSelected;
+
+    // BUG: the "NULL" text pointer is invalidated after scope exit
+    self.deviceNameLabel = Text.init(@ptrCast(displayName), .{
+        .x = self.bgRect.transform.relX(0.5),
+        .y = self.bgRect.transform.relY(0.5),
+    }, .{
+        .fontSize = 14,
+    });
+
+    // Toggle the "Next" button based on whether or not a device is selected
+    self.nextButton.setEnabled(data.selectedDevice != null);
+
+    return eventResult.succeed();
+}

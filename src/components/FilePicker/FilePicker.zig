@@ -167,7 +167,6 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
     return switch (event.hash) {
         Events.onISOFileSelected.Hash => try self.handleISOFileSelected(),
         Events.onISOFilePathQueried.Hash => try self.handleISOFilePathQueried(event),
-        // ISOFilePickerUI.Events.onGetUIDimensions.Hash => eventResult.succeed(), //self.handleGetUIDimensions(event),
         else => eventResult.fail(),
     };
 }

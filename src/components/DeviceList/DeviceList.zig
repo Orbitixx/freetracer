@@ -13,6 +13,10 @@ const WorkerContext = @import("./WorkerContext.zig");
 
 const DeviceListUI = @import("./DeviceListUI.zig");
 
+pub const DeviceQueryObject = struct {
+    selectedDevice: ?StorageDevice = null,
+};
+
 const DeviceListState = struct {
     isActive: bool = false,
     devices: std.ArrayList(StorageDevice),
@@ -77,7 +81,7 @@ pub const Events = struct {
     // Event: Another component requested info about selected device
     pub const onSelectedDeviceQueried = ComponentFramework.defineEvent(
         EventManager.createEventName(ComponentName, "on_selected_device_queried"),
-        struct {},
+        struct { result: *DeviceQueryObject },
         struct { device: StorageDevice },
     );
 };
@@ -152,95 +156,13 @@ pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResu
 
     var eventResult = EventResult.init();
 
-    eventLoop: switch (event.hash) {
-        //
-        // Event: Preceding component's state changed
-        ISOFilePicker.Events.onActiveStateChanged.Hash => {
-            //
-            const data = ISOFilePicker.Events.onActiveStateChanged.getData(event) orelse break :eventLoop;
-            eventResult.validate(.SUCCESS);
-
-            // If the preceding component is still active - ignore event;
-            if (data.isActive) break :eventLoop;
-
-            // Update state data in a block with shorter lifespan
-            {
-                self.state.lock();
-                defer self.state.unlock();
-                self.state.data.isActive = true;
-            }
-
-            EventManager.broadcast(Events.onDeviceListActiveStateChanged.create(self.asComponentPtr(), &.{ .isActive = true }));
-
-            self.dispatchComponentAction();
-        },
-
-        // Event: Worker finished discovering storage devices
-        Events.onDiscoverDevicesEnd.Hash => {
-            const data = Events.onDiscoverDevicesEnd.getData(event) orelse break :eventLoop;
-            eventResult.validate(.SUCCESS);
-
-            {
-                self.state.lock();
-                defer self.state.unlock();
-                self.state.data.devices = data.devices;
-            }
-
-            const responseEvent = DeviceListUI.Events.onDevicesReadyToRender.create(self.asComponentPtr(), null);
-
-            EventManager.broadcast(responseEvent);
-
-            Debug.log(.DEBUG, "DeviceList: Component processed StorageDevices from Worker", .{});
-        },
-
-        // Event: User is finished interacting with DeviceList component
-        Events.onFinishedComponentInteraction.Hash => {
-            self.state.lock();
-
-            // Quality control check: OK to move on from component?
-            if (self.state.data.selectedDevice == null) {
-                Debug.log(.WARNING, "DeviceList.handleEvent.onFinishedComponentInteraction: WARNING - selectedDevice is NULL.", .{});
-                break :eventLoop;
-            }
-
-            self.state.data.isActive = false;
-            self.state.unlock();
-
-            // Prepare and broacast component state changed event
-            var responseEvent = Events.onDeviceListActiveStateChanged.create(
-                self.asComponentPtr(),
-                &.{ .isActive = false },
-            );
-
-            responseEvent.flags.overrideNotifySelfOnSelfOrigin = true;
-
-            Debug.log(.DEBUG, "DeviceList: broadcasting state changed to INACTIVE.", .{});
-
-            EventManager.broadcast(responseEvent);
-        },
-
-        Events.onSelectedDeviceQueried.Hash => {
-            self.state.lock();
-            defer self.state.unlock();
-
-            // WARNING: Debug assertion
-            std.debug.assert(self.state.data.selectedDevice != null);
-
-            if (self.state.data.selectedDevice == null) return error.DeviceListSelectedDeviceIsNull;
-
-            // TODO: rethink this approach
-            // WARNING: Heap allocation
-            const responseDataPtr = try self.allocator.create(Events.onSelectedDeviceQueried.Response);
-            responseDataPtr.* = Events.onSelectedDeviceQueried.Response{ .device = self.state.data.selectedDevice.? };
-
-            eventResult.validate(.SUCCESS);
-            eventResult.data = @ptrCast(@alignCast(responseDataPtr));
-        },
-
-        else => {},
-    }
-
-    return eventResult;
+    return switch (event.hash) {
+        ISOFilePicker.Events.onActiveStateChanged.Hash => try self.handlePrecedingComponentStateChange(event),
+        Events.onDiscoverDevicesEnd.Hash => try self.handleDevicesDiscovered(event),
+        Events.onFinishedComponentInteraction.Hash => try self.handleFinishedInteraction(),
+        Events.onSelectedDeviceQueried.Hash => try self.handleSelectedDeviceQuery(event),
+        else => eventResult.fail(),
+    };
 }
 
 pub fn deinit(self: *DeviceListComponent) void {
@@ -250,22 +172,38 @@ pub fn deinit(self: *DeviceListComponent) void {
     self.state.data.devices.deinit(self.allocator);
 }
 
+pub fn dispatchComponentAction(self: *DeviceListComponent) void {
+    Debug.log(.DEBUG, "DeviceList: dispatched component action...", .{});
+
+    self.discoverDevices() catch |err| {
+        Debug.log(.ERROR, "DeviceList Component caught error: {any}", .{err});
+    };
+}
+
+pub fn checkAndJoinWorker(self: *DeviceListComponent) void {
+    if (self.worker) |*worker| {
+        if (worker.status == ComponentFramework.WorkerStatus.NEEDS_JOINING) {
+            Debug.log(.DEBUG, "DeviceList: Worker finished, needs joining...", .{});
+            worker.join();
+            Debug.log(.DEBUG, "DeviceList: Worker joined.", .{});
+        }
+    }
+}
+
 fn discoverDevices(self: *DeviceListComponent) !void {
     Debug.log(.DEBUG, "DeviceList: discovering connected devices...", .{});
 
     self.state.lock();
-    errdefer self.state.unlock();
-    var devices = self.state.data.devices;
+    const hadDevices = self.state.data.devices.items.len > 0;
+    self.state.data.devices.clearAndFree(self.allocator);
     self.state.data.selectedDevice = null;
     self.state.unlock();
 
     // Important memory cleanup for the refresh devices functionality
-    if (devices.items.len > 0) {
+    if (hadDevices) {
         const eventResult = try EventManager.signal("device_list_ui", Events.onDevicesCleanup.create(self.asComponentPtr(), null));
 
         if (!eventResult.success) return error.DeviceListCouldNotCleanUpDevicesBeforeDiscoveringNewOnes;
-
-        devices.clearAndFree(self.allocator);
     }
 
     // Start the worker once the cleanup is complete
@@ -274,6 +212,13 @@ fn discoverDevices(self: *DeviceListComponent) !void {
         try worker.start();
     }
 }
+
+pub const dispatchRefreshDevicesAction = struct {
+    pub fn call(ctx: *anyopaque) void {
+        const self = DeviceListComponent.asInstance(ctx);
+        self.refreshDevices();
+    }
+};
 
 pub const dispatchComponentFinishedAction = struct {
     pub fn call(ctx: *anyopaque) void {
@@ -297,57 +242,159 @@ pub const selectDeviceActionWrapper = struct {
     pub fn call(ctx: *anyopaque) void {
         const context: *SelectDeviceCallbackContext = @ptrCast(@alignCast(ctx));
 
-        var isSameUnselected: bool = false;
+        const new_selection = context.component.toggleSelectedDevice(context.selectedDevice);
+        context.component.publishSelectionChanged(new_selection);
 
-        context.component.state.lock();
-
-        // TODO: ugly block, refactor
-        if (context.component.state.data.selectedDevice) |currentlySelectedDevice| {
-            // If the same device is already selected -- then unselect it
-            if (currentlySelectedDevice.serviceId == context.selectedDevice.serviceId) {
-                context.component.state.data.selectedDevice = null;
-                isSameUnselected = true;
-            } else context.component.state.data.selectedDevice = context.selectedDevice;
-        } else {
-            // Otherwise, assign a device
-            context.component.state.data.selectedDevice = context.selectedDevice;
-        }
-
-        Debug.log(
-            .INFO,
-            "DeviceList: selected device set to: {s}",
-            .{
-                if (context.component.state.data.selectedDevice != null) context.selectedDevice.getBsdNameSlice() else "NULL",
-            },
-        );
-
-        context.component.state.unlock();
-
-        // TODO: CHECK: changed context.state.data.selectedDevice to context.selectedDevice -- probably not right but fixing another issue
-        const event = DeviceListUI.Events.onSelectedDeviceNameChanged.create(
-            &context.component.component.?,
-            &.{ .selectedDevice = if (isSameUnselected) null else context.selectedDevice },
-        );
-        _ = EventManager.broadcast(event);
+        //     var isSameUnselected: bool = false;
+        //
+        //     context.component.state.lock();
+        //
+        //     // TODO: ugly block, refactor
+        //     if (context.component.state.data.selectedDevice) |currentlySelectedDevice| {
+        //         // If the same device is already selected -- then unselect it
+        //         if (currentlySelectedDevice.serviceId == context.selectedDevice.serviceId) {
+        //             context.component.state.data.selectedDevice = null;
+        //             isSameUnselected = true;
+        //         } else context.component.state.data.selectedDevice = context.selectedDevice;
+        //     } else {
+        //         // Otherwise, assign a device
+        //         context.component.state.data.selectedDevice = context.selectedDevice;
+        //     }
+        //
+        //     Debug.log(
+        //         .INFO,
+        //         "DeviceList: selected device set to: {s}",
+        //         .{
+        //             if (context.component.state.data.selectedDevice != null) context.selectedDevice.getBsdNameSlice() else "NULL",
+        //         },
+        //     );
+        //
+        //     context.component.state.unlock();
+        //
+        //     // TODO: CHECK: changed context.state.data.selectedDevice to context.selectedDevice -- probably not right but fixing another issue
+        //     const event = DeviceListUI.Events.onSelectedDeviceNameChanged.create(
+        //         &context.component.component.?,
+        //         &.{ .selectedDevice = if (isSameUnselected) null else context.selectedDevice },
+        //     );
+        //     _ = EventManager.broadcast(event);
     }
 };
 
-pub fn dispatchComponentAction(self: *DeviceListComponent) void {
-    Debug.log(.DEBUG, "DeviceList: dispatched component action...", .{});
+fn handlePrecedingComponentStateChange(self: *DeviceListComponent, event: ComponentEvent) !EventResult {
+    var eventResult = EventResult.init();
+    const data = ISOFilePicker.Events.onActiveStateChanged.getData(event) orelse return eventResult.fail();
 
-    self.discoverDevices() catch |err| {
-        Debug.log(.ERROR, "DeviceList Component caught error: {any}", .{err});
-    };
+    if (data.isActive) return eventResult.succeed();
+
+    self.state.lock();
+    self.state.data.isActive = true;
+    self.state.unlock();
+
+    EventManager.broadcast(Events.onDeviceListActiveStateChanged.create(self.asComponentPtr(), &.{ .isActive = true }));
+    self.dispatchComponentAction();
+
+    return eventResult.succeed();
 }
 
-pub fn checkAndJoinWorker(self: *DeviceListComponent) void {
-    if (self.worker) |*worker| {
-        if (worker.status == ComponentFramework.WorkerStatus.NEEDS_JOINING) {
-            Debug.log(.DEBUG, "DeviceList: Worker finished, needs joining...", .{});
-            worker.join();
-            Debug.log(.DEBUG, "DeviceList: Worker joined.", .{});
-        }
+fn handleDevicesDiscovered(self: *DeviceListComponent, event: ComponentEvent) !EventResult {
+    var eventResult = EventResult.init();
+    const data = Events.onDiscoverDevicesEnd.getData(event) orelse return eventResult.fail();
+
+    self.state.lock();
+    self.state.data.devices = data.devices;
+    self.state.data.selectedDevice = null;
+    self.state.unlock();
+
+    EventManager.broadcast(DeviceListUI.Events.onDevicesReadyToRender.create(self.asComponentPtr(), null));
+    Debug.log(.DEBUG, "DeviceList: Component processed StorageDevices from Worker", .{});
+
+    return eventResult.succeed();
+}
+
+fn handleFinishedInteraction(self: *DeviceListComponent) !EventResult {
+    var eventResult = EventResult.init();
+
+    self.state.lock();
+
+    if (self.state.data.selectedDevice == null) {
+        self.state.unlock();
+        Debug.log(
+            .WARNING,
+            "DeviceList.handleEvent.onFinishedComponentInteraction: WARNING - selectedDevice is NULL.",
+            .{},
+        );
+        return eventResult.fail();
     }
+
+    self.state.data.isActive = false;
+    self.state.unlock();
+
+    var responseEvent = Events.onDeviceListActiveStateChanged.create(
+        self.asComponentPtr(),
+        &.{ .isActive = false },
+    );
+
+    responseEvent.flags.overrideNotifySelfOnSelfOrigin = true;
+
+    Debug.log(.DEBUG, "DeviceList: broadcasting state changed to INACTIVE.", .{});
+    EventManager.broadcast(responseEvent);
+
+    return eventResult.succeed();
+}
+
+fn handleSelectedDeviceQuery(self: *DeviceListComponent, event: ComponentEvent) !EventResult {
+    var eventResult = EventResult.init();
+    const data = Events.onSelectedDeviceQueried.getData(event) orelse return eventResult.fail();
+
+    self.state.lock();
+    const selected = self.state.data.selectedDevice;
+    self.state.unlock();
+
+    data.result.* = .{ .selectedDevice = selected };
+
+    if (selected == null) {
+        Debug.log(.WARNING, "DeviceList: Selected device query failed; no device chosen.", .{});
+        return eventResult.fail();
+    }
+
+    return eventResult.succeed();
+}
+
+fn toggleSelectedDevice(self: *DeviceListComponent, device: StorageDevice) ?StorageDevice {
+    self.state.lock();
+
+    if (self.state.data.selectedDevice) |current| {
+        if (current.serviceId == device.serviceId) {
+            self.state.data.selectedDevice = null;
+        } else {
+            self.state.data.selectedDevice = device;
+        }
+    } else {
+        self.state.data.selectedDevice = device;
+    }
+
+    const selection = self.state.data.selectedDevice;
+    self.state.unlock();
+
+    Debug.log(
+        .INFO,
+        "DeviceList: selected device set to: {s}",
+        .{if (selection) |selected_device| selected_device.getBsdNameSlice() else "NULL"},
+    );
+
+    return selection;
+}
+
+fn publishSelectionChanged(self: *DeviceListComponent, selection: ?StorageDevice) void {
+    _ = EventManager.broadcast(DeviceListUI.Events.onSelectedDeviceNameChanged.create(self.asComponentPtr(), &.{ .selectedDevice = selection }));
+}
+
+fn refreshDevices(self: *DeviceListComponent) void {
+    if (self.uiComponent) |*ui| {
+        ui.clearDeviceCheckboxes();
+    }
+
+    self.dispatchComponentAction();
 }
 
 const ComponentImplementation = ComponentFramework.ImplementComponent(DeviceListComponent);

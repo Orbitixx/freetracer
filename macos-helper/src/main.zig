@@ -250,7 +250,7 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) void {
     };
 
     sendXPCReply(connection, .WRITE_VERIFICATION_SUCCESS, "Written ISO image successfully verified!");
-    XPCService.connectionFlush(connection);
+    // XPCService.connectionFlush(connection);
     ShutdownManager.exitSuccessfully();
 
     // TODO:
