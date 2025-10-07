@@ -74,11 +74,6 @@ pub fn init(allocator: std.mem.Allocator, deviceId: u32, text: [AppConfig.CHECKB
 
     const _text = Text.init("", position, variant.normal.textStyle);
 
-    // const textDimensions = _text.getDimensions();
-    //
-    // _text.transform.x = position.x + outerRect.transform.w + AppConfig.CHECKBOX_TEXT_MARGIN_LEFT;
-    // _text.transform.y = position.y + outerRect.transform.h / 2 - textDimensions.height / 2;
-
     return .{
         .allocator = allocator,
         .deviceId = deviceId,
@@ -99,7 +94,7 @@ pub fn init(allocator: std.mem.Allocator, deviceId: u32, text: [AppConfig.CHECKB
 }
 
 pub fn start(self: *Checkbox) !void {
-    self.text.value = @ptrCast(std.mem.sliceTo(self.textBuf[0..], 0x00));
+    self.text.value = @ptrCast(std.mem.sliceTo(&self.textBuf, 0x00));
     const textDimensions = self.text.getDimensions();
 
     self.text.transform.x = self.outerRect.transform.x + self.outerRect.transform.w + AppConfig.CHECKBOX_TEXT_MARGIN_LEFT;

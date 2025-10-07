@@ -1,7 +1,7 @@
 // Main config file for app settings
 
-pub const APP_VERSION = "v0.2";
-pub const PRIVILEGED_TOOL_LATEST_VERSION: [:0]const u8 = "0.1.7";
+pub const APP_VERSION = "v0.9";
+pub const PRIVILEGED_TOOL_LATEST_VERSION: [:0]const u8 = "0.9";
 
 pub const DISK_PREFIX: []const u8 = "/dev/";
 

@@ -1,3 +1,8 @@
+// DeviceList orchestrates discovery and selection of removable storage devices, mediating between the
+// background worker that talks to the helper via IOKit and the UI subcomponent that renders choices.
+// It subscribes to component events (activation, refresh, selection queries) and broadcasts updates to
+// downstream consumers while owning the allocator-backed device list shared with the UI layer.
+// ----------------------------------------------------------------------------------------------------
 const std = @import("std");
 const freetracer_lib = @import("freetracer-lib");
 const types = freetracer_lib.types;
@@ -86,6 +91,7 @@ pub const Events = struct {
     );
 };
 
+/// Initializes the DeviceList component with an empty device collection backed by `allocator`.
 pub fn init(allocator: std.mem.Allocator) !DeviceListComponent {
     return .{
         .state = ComponentState.init(DeviceListState{
@@ -95,11 +101,13 @@ pub fn init(allocator: std.mem.Allocator) !DeviceListComponent {
     };
 }
 
+/// Binds this component instance into the `Component` interface.
 pub fn initComponent(self: *DeviceListComponent, parent: ?*Component) !void {
     if (self.component != null) return error.BaseComponentAlreadyInitialized;
     self.component = try Component.init(self, &ComponentImplementation.vtable, parent, self.allocator);
 }
 
+/// Prepares the background worker responsible for enumerating storage devices.
 pub fn initWorker(self: *DeviceListComponent) !void {
     if (self.worker != null) return error.ComponentWorkerAlreadyInitialized;
 
@@ -118,13 +126,14 @@ pub fn initWorker(self: *DeviceListComponent) !void {
     );
 }
 
+/// Starts the component, creating UI children and registering for DeviceList events.
 pub fn start(self: *DeviceListComponent) !void {
     try self.initWorker();
 
     if (self.component) |*component| {
         if (component.children != null) return error.ComponentAlreadyCalledStartBefore;
 
-        if (!EventManager.subscribe("device_list", component)) return error.UnableToSubscribeToEventManager;
+        if (!EventManager.subscribe(ComponentName, component)) return error.UnableToSubscribeToEventManager;
 
         Debug.log(.DEBUG, "DeviceList: attempting to initialize children...", .{});
 
@@ -180,6 +189,11 @@ pub fn dispatchComponentAction(self: *DeviceListComponent) void {
     };
 }
 
+const ComponentImplementation = ComponentFramework.ImplementComponent(DeviceListComponent);
+pub const asComponent = ComponentImplementation.asComponent;
+pub const asComponentPtr = ComponentImplementation.asComponentPtr;
+pub const asInstance = ComponentImplementation.asInstance;
+
 pub fn checkAndJoinWorker(self: *DeviceListComponent) void {
     if (self.worker) |*worker| {
         if (worker.status == ComponentFramework.WorkerStatus.NEEDS_JOINING) {
@@ -190,6 +204,7 @@ pub fn checkAndJoinWorker(self: *DeviceListComponent) void {
     }
 }
 
+/// Resets cached device state, requests UI cleanup, and schedules the background worker to rescan.
 fn discoverDevices(self: *DeviceListComponent) !void {
     Debug.log(.DEBUG, "DeviceList: discovering connected devices...", .{});
 
@@ -206,10 +221,12 @@ fn discoverDevices(self: *DeviceListComponent) !void {
         if (!eventResult.success) return error.DeviceListCouldNotCleanUpDevicesBeforeDiscoveringNewOnes;
     }
 
+    Debug.log(.DEBUG, "DeviceList: starting Worker...", .{});
+
     // Start the worker once the cleanup is complete
-    if (self.worker) |*worker| {
-        Debug.log(.DEBUG, "DeviceList: starting Worker...", .{});
-        try worker.start();
+    if (self.worker) |*worker| try worker.start() else {
+        Debug.log(.ERROR, "DeviceList: attempted to discover devices without initializing worker.", .{});
+        return error.ComponentWorkerNotInitialized;
     }
 }
 
@@ -360,6 +377,7 @@ fn handleSelectedDeviceQuery(self: *DeviceListComponent, event: ComponentEvent) 
     return eventResult.succeed();
 }
 
+/// Toggles the selection state for `device`, returning the new selection (or null when deselected).
 fn toggleSelectedDevice(self: *DeviceListComponent, device: StorageDevice) ?StorageDevice {
     self.state.lock();
 
@@ -385,10 +403,12 @@ fn toggleSelectedDevice(self: *DeviceListComponent, device: StorageDevice) ?Stor
     return selection;
 }
 
+/// Notifies UI listeners that the selected device has changed.
 fn publishSelectionChanged(self: *DeviceListComponent, selection: ?StorageDevice) void {
     _ = EventManager.broadcast(DeviceListUI.Events.onSelectedDeviceNameChanged.create(self.asComponentPtr(), &.{ .selectedDevice = selection }));
 }
 
+/// Requests a fresh device scan, clearing any existing devices.
 fn refreshDevices(self: *DeviceListComponent) void {
     if (self.uiComponent) |*ui| {
         ui.clearDeviceCheckboxes();
@@ -396,8 +416,3 @@ fn refreshDevices(self: *DeviceListComponent) void {
 
     self.dispatchComponentAction();
 }
-
-const ComponentImplementation = ComponentFramework.ImplementComponent(DeviceListComponent);
-pub const asComponent = ComponentImplementation.asComponent;
-pub const asComponentPtr = ComponentImplementation.asComponentPtr;
-pub const asInstance = ComponentImplementation.asInstance;

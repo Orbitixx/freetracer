@@ -1,3 +1,11 @@
+// DeviceListUI renders the interactive list of removable storage devices and coordinates
+// selection state between the GUI component tree and the backing DeviceList model.
+// It subscribes to DeviceList and UI framework events, updates raylib primitives for
+// display, and emits callbacks that ultimately trigger helper-side disk operations.
+// Memory ownership stays within this component except for checkbox callback contexts,
+// which are allocated/freed via the component allocator.
+// --------------------------------------------------------------------------------------
+
 const std = @import("std");
 const rl = @import("raylib");
 const freetracer_lib = @import("freetracer-lib");
@@ -49,8 +57,9 @@ const DeviceListUI = @This();
 
 const COMPONENT_UI_GAP: f32 = 20;
 const MAX_DISPLAY_STRING_LENGTH: usize = 254;
+const MAX_SELECTED_DEVICE_NAME_LEN: usize = 12;
 
-const kStringDeviceListNoDeviceSelected = "NULL";
+const kStringDeviceListNoDeviceSelected = "No device selected...";
 
 // Component-agnostic props
 state: ComponentState,
@@ -67,6 +76,7 @@ nextButton: Button = undefined,
 deviceNameLabel: Text = undefined,
 noDevicesLabel: Text = undefined,
 refreshDevicesButton: Button = undefined,
+selectedDeviceNameBuf: [MAX_DISPLAY_STRING_LENGTH:0]u8 = undefined,
 
 const BgRectParams = struct {
     width: f32,
@@ -118,6 +128,7 @@ pub fn init(allocator: std.mem.Allocator, parent: *DeviceList) !DeviceListUI {
         }),
         .parent = parent,
         .deviceCheckboxes = std.ArrayList(Checkbox).empty,
+        .selectedDeviceNameBuf = std.mem.zeroes([MAX_DISPLAY_STRING_LENGTH:0]u8),
     };
 }
 
@@ -128,7 +139,7 @@ pub fn initComponent(self: *DeviceListUI, parent: ?*Component) !void {
     self.component = try Component.init(self, &ComponentImplementation.vtable, parent, self.allocator);
 }
 
-// Called once upon component initialization.
+/// Called once per component lifetime to wire event subscriptions and initial draw state.
 pub fn start(self: *DeviceListUI) !void {
     Debug.log(.DEBUG, "DeviceListUI: component start() called.", .{});
 
@@ -139,8 +150,9 @@ pub fn start(self: *DeviceListUI) !void {
     try self.initNextBtn();
     self.initRefreshDevicesBtn();
     self.initHeaderLabel();
-    self.initDeviceNameLabel();
     self.initModuleCoverTexture();
+    // Must come after initModuleCoverTexture() as deviceNameLabel references its position
+    self.initDeviceNameLabel();
 
     self.noDevicesLabel = Text.init("No external devices found...", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
 
@@ -189,12 +201,7 @@ pub fn draw(self: *DeviceListUI) !void {
 }
 
 pub fn deinit(self: *DeviceListUI) void {
-    for (self.deviceCheckboxes.items) |checkbox| {
-        // Destroy the heap-based pointer to the checkbox's on-click context
-        const ctx: *DeviceList.SelectDeviceCallbackContext = @ptrCast(@alignCast(checkbox.clickHandler.context));
-        self.allocator.destroy(ctx);
-    }
-
+    self.destroyDeviceCheckboxContexts();
     self.deviceCheckboxes.deinit(self.allocator);
 }
 
@@ -280,9 +287,10 @@ fn initModuleCoverTexture(self: *DeviceListUI) void {
 }
 
 fn initDeviceNameLabel(self: *DeviceListUI) void {
-    self.deviceNameLabel = Text.init("No device selected...", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
+    self.deviceNameLabel = Text.init("", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
     self.deviceNameLabel.transform.x = self.bgRect.transform.relX(0.5) - self.deviceNameLabel.getDimensions().width / 2;
     self.deviceNameLabel.transform.y = self.moduleImg.transform.y + self.moduleImg.transform.getHeight() + winRelY(0.02);
+    self.updateDeviceNameLabel(kStringDeviceListNoDeviceSelected, null);
 }
 
 fn drawActive(self: *DeviceListUI) !void {
@@ -303,7 +311,11 @@ fn drawActive(self: *DeviceListUI) !void {
 }
 
 fn drawInactive(self: *DeviceListUI) !void {
-    self.deviceNameLabel.draw();
+    self.state.lock();
+    const foundDevices = self.state.data.devices.items.len > 0;
+    self.state.unlock();
+
+    if (foundDevices) self.deviceNameLabel.draw();
     self.moduleImg.draw();
 }
 
@@ -322,8 +334,6 @@ fn recalculateUI(self: *DeviceListUI, bgRectParams: BgRectParams) void {
     self.noDevicesLabel.transform.y = self.bgRect.transform.relY(0.5) - dims.height / 2;
 
     self.state.lock();
-    errdefer self.state.unlock();
-    // BUG: appears to be truthy when no devices are found
     const devicesFound = self.state.data.devices.items.len > 0;
     self.state.unlock();
 
@@ -332,6 +342,9 @@ fn recalculateUI(self: *DeviceListUI, bgRectParams: BgRectParams) void {
             .x = self.bgRect.transform.relX(0.9) - self.refreshDevicesButton.rect.transform.getWidth() / 2,
             .y = self.bgRect.transform.relY(0.1) - self.refreshDevicesButton.rect.transform.getHeight() / 2,
         });
+
+        self.deviceNameLabel.transform.x = self.bgRect.transform.relX(0.5) - self.deviceNameLabel.getDimensions().width / 2;
+        self.deviceNameLabel.transform.y = self.moduleImg.transform.y + self.moduleImg.transform.getHeight() + winRelY(0.02);
     } else {
         self.refreshDevicesButton.setPosition(.{
             .x = self.bgRect.transform.relX(0.5) - self.refreshDevicesButton.rect.transform.getWidth() / 2,
@@ -341,9 +354,6 @@ fn recalculateUI(self: *DeviceListUI, bgRectParams: BgRectParams) void {
 
     self.moduleImg.transform.x = self.bgRect.transform.relX(0.5) - self.moduleImg.transform.getWidth() / 2;
     self.moduleImg.transform.y = self.bgRect.transform.relY(0.5) - self.moduleImg.transform.getHeight() / 2;
-
-    self.deviceNameLabel.transform.x = self.bgRect.transform.relX(0.5) - self.deviceNameLabel.getDimensions().width / 2;
-    self.deviceNameLabel.transform.y = self.moduleImg.transform.y + self.moduleImg.transform.getHeight() + winRelY(0.02);
 
     self.refreshDevicesButton.setPosition(.{
         .x = self.bgRect.transform.relX(0.95) - self.refreshDevicesButton.rect.transform.getWidth(),
@@ -362,12 +372,8 @@ const refreshDevices = struct {
 
         if (component.uiComponent) |*ui| {
             if (ui.deviceCheckboxes.items.len > 0) {
-                for (ui.deviceCheckboxes.items) |*cb| {
-                    const p: *DeviceList.SelectDeviceCallbackContext = @ptrCast(@alignCast(cb.clickHandler.context));
-                    cb.allocator.destroy(p);
-                }
-
-                ui.deviceCheckboxes.clearAndFree(component.allocator);
+                ui.destroyDeviceCheckboxContexts();
+                ui.deviceCheckboxes.clearAndFree(ui.allocator);
             }
         }
 
@@ -419,6 +425,35 @@ fn handleOnDeviceListActiveStateChanged(self: *DeviceListUI, event: ComponentEve
     return eventResult.succeed();
 }
 
+/// Releases checkbox callback contexts without mutating the backing ArrayList buffer.
+fn destroyDeviceCheckboxContexts(self: *DeviceListUI) void {
+    for (self.deviceCheckboxes.items) |checkbox| {
+        const ctx: *DeviceList.SelectDeviceCallbackContext = @ptrCast(@alignCast(checkbox.clickHandler.context));
+        self.allocator.destroy(ctx);
+    }
+}
+
+/// Copies `value` into an owned buffer, optionally truncating for UI display, and updates label layout.
+fn updateDeviceNameLabel(self: *DeviceListUI, value: [:0]const u8, truncate_len: ?usize) void {
+    self.selectedDeviceNameBuf = std.mem.zeroes([MAX_DISPLAY_STRING_LENGTH:0]u8);
+
+    const max_allowed = if (truncate_len) |limit| @min(limit, MAX_DISPLAY_STRING_LENGTH - 1) else MAX_DISPLAY_STRING_LENGTH - 1;
+    const truncated_len = @min(value.len, max_allowed);
+
+    if (truncated_len > 0) {
+        @memcpy(self.selectedDeviceNameBuf[0..truncated_len], value[0..truncated_len]);
+    }
+
+    self.selectedDeviceNameBuf[truncated_len] = 0;
+    self.deviceNameLabel.value = std.mem.sliceTo(self.selectedDeviceNameBuf[0..], 0);
+
+    const dims = self.deviceNameLabel.getDimensions();
+    self.deviceNameLabel.transform.x = self.bgRect.transform.relX(0.5) - dims.width / 2;
+    self.deviceNameLabel.transform.y = self.moduleImg.transform.y + self.moduleImg.transform.getHeight() + winRelY(0.02);
+    self.deviceNameLabel.transform.w = dims.width;
+    self.deviceNameLabel.transform.h = dims.height;
+}
+
 fn handleOnUITransformQueried(self: *DeviceListUI, event: ComponentEvent) !EventResult {
     var eventResult = EventResult.init();
     const data = Events.onUITransformQueried.getData(event) orelse return eventResult.fail();
@@ -429,18 +464,21 @@ fn handleOnUITransformQueried(self: *DeviceListUI, event: ComponentEvent) !Event
 fn handleOnDevicesCleanup(self: *DeviceListUI) !EventResult {
     var eventResult = EventResult.init();
     self.state.lock();
-    defer self.state.unlock();
-    self.deviceNameLabel.value = kStringDeviceListNoDeviceSelected;
     self.state.data.selectedDevice = null;
+    self.state.unlock();
+    self.updateDeviceNameLabel(kStringDeviceListNoDeviceSelected, null);
     return eventResult.succeed();
 }
 
+/// Rebuilds checkbox controls from the latest removable device snapshot while holding state lock.
 fn handleOnDevicesReadyToRender(self: *DeviceListUI) !EventResult {
     var eventResult = EventResult.init();
     //
     Debug.log(.DEBUG, "DeviceListUI: onDevicesReadyToRender() start.", .{});
 
-    // WARNING: General defer is OK here because no other call is coupled here where mutex lock would propagate.
+    self.destroyDeviceCheckboxContexts();
+    self.deviceCheckboxes.clearAndFree(self.allocator);
+
     self.state.lock();
     defer self.state.unlock();
 
@@ -454,6 +492,7 @@ fn handleOnDevicesReadyToRender(self: *DeviceListUI) !EventResult {
     for (self.state.data.devices.items, 0..) |*device, i| {
         //
         const selectDeviceContext = try self.allocator.create(DeviceList.SelectDeviceCallbackContext);
+        errdefer self.allocator.destroy(selectDeviceContext);
 
         // Define context for the checkbox's on-click behavior/callback
         selectDeviceContext.* = DeviceList.SelectDeviceCallbackContext{
@@ -476,7 +515,8 @@ fn handleOnDevicesReadyToRender(self: *DeviceListUI) !EventResult {
                 if (device.type == .USB) "USB" else if (device.type == .SD) "SD" else "Other",
             },
         ) catch |err| {
-            std.debug.panic("{any}", .{err});
+            Debug.log(.ERROR, "DeviceListUI: failed to format checkbox label: {any}", .{err});
+            return eventResult.fail();
         };
 
         Debug.log(.DEBUG, "ComponentUI: formatted string is: {s}", .{std.mem.sliceTo(textBuf[0..], Character.NULL)});
@@ -497,22 +537,28 @@ fn handleOnDevicesReadyToRender(self: *DeviceListUI) !EventResult {
             },
         ));
 
-        for (self.deviceCheckboxes.items) |*checkbox| {
-            checkbox.outerRect.bordered = true;
-            checkbox.outerRect.rounded = true;
-            checkbox.innerRect.rounded = true;
-            try checkbox.start();
-        }
+        const checkboxPtr = &self.deviceCheckboxes.items[self.deviceCheckboxes.items.len - 1];
+
+        checkboxPtr.outerRect.bordered = true;
+        checkboxPtr.outerRect.rounded = true;
+        checkboxPtr.innerRect.rounded = true;
+
+        try checkboxPtr.*.start();
     }
+
     Debug.log(.DEBUG, "DeviceListUI: onDevicesReadyToRender() end.", .{});
 
     return eventResult.succeed();
 }
 
+/// Synchronizes checkbox toggles and summary label when the selected device changes.
 fn handleOnSelectedDeviceNameChanged(self: *DeviceListUI, event: ComponentEvent) !EventResult {
     var eventResult = EventResult.init();
 
     const data = Events.onSelectedDeviceNameChanged.getData(event) orelse return eventResult.fail();
+
+    var displayName: [:0]const u8 = kStringDeviceListNoDeviceSelected;
+    var truncateDisplay: bool = false;
 
     self.state.lock();
     defer self.state.unlock();
@@ -536,21 +582,14 @@ fn handleOnSelectedDeviceNameChanged(self: *DeviceListUI, event: ComponentEvent)
         .{if (data.selectedDevice) |device| device.getNameSlice() else kStringDeviceListNoDeviceSelected},
     );
 
-    const displayName = if (self.state.data.selectedDevice) |*device| blk: {
-        const deviceName = device.getNameSlice();
-        if (deviceName.len > 12) break :blk deviceName[0..12] else break :blk deviceName;
-    } else kStringDeviceListNoDeviceSelected;
-
-    // BUG: the "NULL" text pointer is invalidated after scope exit
-    self.deviceNameLabel = Text.init(@ptrCast(displayName), .{
-        .x = self.bgRect.transform.relX(0.5),
-        .y = self.bgRect.transform.relY(0.5),
-    }, .{
-        .fontSize = 14,
-    });
+    if (self.state.data.selectedDevice) |*device| {
+        displayName = device.getNameSlice();
+        truncateDisplay = true;
+    }
 
     // Toggle the "Next" button based on whether or not a device is selected
     self.nextButton.setEnabled(data.selectedDevice != null);
+    self.updateDeviceNameLabel(displayName, if (truncateDisplay) MAX_SELECTED_DEVICE_NAME_LEN else null);
 
     return eventResult.succeed();
 }
