@@ -3,6 +3,7 @@ const env = @import("../env.zig");
 const freetracer_lib = @import("freetracer-lib");
 const Debug = freetracer_lib.Debug;
 const xpc = freetracer_lib.xpc;
+const time = freetracer_lib.time;
 
 const XPCService = freetracer_lib.Mach.XPCService;
 const DebugAllocator = std.heap.DebugAllocator(.{ .thread_safe = true });
@@ -41,8 +42,12 @@ pub const ShutdownManagerSingleton = struct {
 
     pub fn exitSuccessfully() void {
         Debug.log(.INFO, "Freetracer Helper successfully finished executing.", .{});
-        std.Thread.sleep(500_000_000);
-        xpc.dispatch_async_f(xpc.dispatch_get_main_queue(), null, &exitFunction);
+
+        const delay = xpc.dispatch_time(xpc.DISPATCH_TIME_NOW, 500_000_000);
+        xpc.dispatch_after_f(delay, xpc.dispatch_get_main_queue(), null, &exitFunction);
+
+        // time.sleep(1000);
+        // xpc.dispatch_async_f(xpc.dispatch_get_main_queue(), null, &exitFunction);
     }
 
     pub fn terminateWithError(err: anyerror) void {

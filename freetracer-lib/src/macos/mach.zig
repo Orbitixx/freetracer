@@ -239,6 +239,10 @@ pub const XPCService = struct {
     pub fn releaseObject(obj: XPCObject) void {
         xpc.xpc_release(obj);
     }
+
+    pub fn connectionFlush(connection: XPCConnection) void {
+        xpc.XPCConnectionFlush(connection);
+    }
 };
 
 fn validateDictionaryString(dictionary: c.CFDictionaryRef, key: c.CFStringRef, validString: [:0]const u8) bool {
@@ -258,14 +262,20 @@ fn getStringFromDictionary(dictionary: c.CFDictionaryRef, key: c.CFStringRef) ![
     // Pre-allocate a large enough buffer to avoid stack overflow vector of attack
     var resultBuffer: [512]u8 = std.mem.zeroes([512]u8);
 
-    const resultValueRef: c.CFStringRef = @ptrCast(c.CFDictionaryGetValue(dictionary, key));
+    const resultValueRef_opt = c.CFDictionaryGetValue(dictionary, key);
+
+    if (resultValueRef_opt == null) return error.UnableToRetrieveStringFromRef;
+
+    const resultValueRef: c.CFStringRef = @ptrCast(resultValueRef_opt);
     const stringParsingResult: c.Boolean = c.CFStringGetCString(resultValueRef, &resultBuffer, resultBuffer.len, c.kCFStringEncodingUTF8);
 
     if (stringParsingResult != c.TRUE) {
         return error.UnableToRetrieveStringFromRef;
     }
 
-    if (resultBuffer.len < 2) {
+    const effectiveLen = std.mem.indexOfScalar(u8, &resultBuffer, Character.NULL) orelse resultBuffer.len;
+
+    if (effectiveLen < 2) {
         Debug.log(.ERROR, "Retrieved string is too short to be meaningful: '{s}'.", .{std.mem.sliceTo(&resultBuffer, Character.NULL)});
         return error.StringIsTooShortToBeMeaningful;
     }

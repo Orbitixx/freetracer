@@ -43,9 +43,13 @@ pub fn sanitizeString(buf: []u8, input: []const u8) []const u8 {
     return buf[0..len];
 }
 
-pub fn concatStrings(comptime len: usize, buf: *[len]u8, str1: []const u8, str2: []const u8) ![]u8 {
-    if (str1.len + str2.len > len) return error.ConcatStringLengthExceedsBufferSize;
+pub fn concatStrings(comptime len: usize, buf: *[len]u8, str1: []const u8, str2: []const u8) ![:0]u8 {
+    const required = str1.len + str2.len;
+    if (required >= len) return error.ConcatStringLengthExceedsBufferSize;
+
     @memcpy(buf.*[0..str1.len], str1);
-    @memcpy(buf.*[str1.len .. str1.len + str2.len], str2);
-    return std.mem.sliceTo(buf, Character.NULL);
+    @memcpy(buf.*[str1.len..required], str2);
+    buf.*[required] = Character.NULL;
+
+    return buf.*[0..required :0];
 }

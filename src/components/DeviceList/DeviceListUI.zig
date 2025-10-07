@@ -30,6 +30,7 @@ const Button = UIFramework.Button;
 const Checkbox = UIFramework.Checkbox;
 const Rectangle = UIFramework.Primitives.Rectangle;
 const Text = UIFramework.Primitives.Text;
+const Transform = UIFramework.Primitives.Transform;
 const Texture = UIFramework.Primitives.Texture;
 
 const Styles = UIFramework.Styles;
@@ -136,9 +137,15 @@ pub fn start(self: *DeviceListUI) !void {
         if (!EventManager.subscribe(ComponentName, component)) return error.UnableToSubscribeToEventManager;
     } else return error.UnableToSubscribeToEventManager;
 
+    // Obtain previous UI section's Transform
+    var bgRectTransform: Transform = Transform{ .x = 0, .y = 0, .w = 0, .h = 0 };
+    const uiDimsEvent = ISOFilePickerUI.Events.onUIDimensionsQueried.create(self.asComponentPtr(), &.{ .result = &bgRectTransform });
+    const eventResult = try EventManager.signal("iso_file_picker_ui", uiDimsEvent);
+    if (!eventResult.success) Debug.log(.WARNING, "DeviceListUI was unable to query FilePicker bgRect dimensions.", .{});
+
     self.bgRect = Rectangle{
         .transform = .{
-            .x = winRelX(0.5),
+            .x = bgRectTransform.x + bgRectTransform.w + 20,
             .y = winRelY(AppConfig.APP_UI_MODULE_PANEL_Y),
             .w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
             .h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
@@ -150,13 +157,6 @@ pub fn start(self: *DeviceListUI) !void {
         .rounded = true,
         .bordered = true,
     };
-
-    // Get initial width of the preceding UI element
-    const initialPositionEvent = ISOFilePickerUI.Events.onGetUIDimensions.create(self.asComponentPtr(), null);
-    EventManager.broadcast(initialPositionEvent);
-
-    // const response = try EventManager.signal("iso_file_picker", event);
-    // const data: *ISOFilePickerUI.Events.onGetUIDimensions.Response = response.data
 
     self.nextButton = Button.init(
         "Next",
@@ -233,9 +233,8 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
         ISOFilePickerUI.Events.onGetUIDimensions.Hash => {
             //
             const data = ISOFilePickerUI.Events.onGetUIDimensions.getData(event) orelse break :eventLoop;
-            eventResult.validate(.SUCCESS);
-
             self.bgRect.transform.x = data.transform.x + data.transform.w + 20;
+            eventResult = eventResult.succeed();
         },
 
         ISOFilePicker.Events.onActiveStateChanged.Hash => {
@@ -253,7 +252,6 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
         DeviceList.Events.onDeviceListActiveStateChanged.Hash => {
             //
             const data = DeviceList.Events.onDeviceListActiveStateChanged.getData(event) orelse break :eventLoop;
-            eventResult.validate(.SUCCESS);
 
             // Update state in a block with a shorter lifecycle
             {
@@ -287,6 +285,8 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
                     });
                 },
             }
+
+            eventResult = eventResult.succeed();
         },
 
         DeviceList.Events.onDevicesCleanup.Hash => {
@@ -297,12 +297,10 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
 
             self.state.data.selectedDevice = null;
 
-            eventResult.validate(.SUCCESS);
+            eventResult = eventResult.succeed();
         },
 
         Events.onUITransformQueried.Hash => {
-            eventResult.validate(.SUCCESS);
-
             const responseDataPtr: *Events.onUITransformQueried.Response = try self.allocator.create(Events.onUITransformQueried.Response);
 
             responseDataPtr.* = .{
@@ -310,6 +308,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
             };
 
             eventResult.data = @ptrCast(@alignCast(responseDataPtr));
+            eventResult = eventResult.succeed();
         },
 
         Events.onDevicesReadyToRender.Hash => {
@@ -381,6 +380,8 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
                 }
             }
             Debug.log(.DEBUG, "DeviceListUI: onDevicesReadyToRender() end.", .{});
+
+            eventResult = eventResult.succeed();
         },
 
         // Fired when a device is selected, e.g. selectedDevice != null
@@ -428,7 +429,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
             // Toggle the "Next" button based on whether or not a device is selected
             self.nextButton.setEnabled(data.selectedDevice != null);
 
-            eventResult.validate(.SUCCESS);
+            eventResult = eventResult.succeed();
         },
         else => {},
     }

@@ -36,7 +36,7 @@ pub fn openDeviceValidated(bsdName: []const u8, deviceType: DeviceType) !std.fs.
         var sanitizedDevicePathBuf: [std.fs.max_name_bytes]u8 = std.mem.zeroes([std.fs.max_name_bytes]u8);
         const sanitizedDevicePath = try String.concatStrings(std.fs.max_name_bytes, &sanitizedDevicePathBuf, deviceDir, sanitizedBsdName);
 
-        const fd: c_int = c.open(@ptrCast(sanitizedDevicePath), c.O_RDWR, @as(c_uint, 0o644));
+        const fd: c_int = c.open(sanitizedDevicePath.ptr, c.O_RDWR, @as(c_uint, 0o644));
 
         if (fd < 0) {
             const err_num = c.__error().*;
@@ -109,7 +109,7 @@ pub fn requestUnmount(targetDisk: []const u8, deviceType: DeviceType, statusResu
 
     Debug.log(.INFO, "DA Disk Description is successfully obtained/copied.", .{});
 
-    _ = c.CFShow(diskInfo);
+    // _ = c.CFShow(diskInfo);
 
     if (try da.isTargetDiskInternalDevice(diskInfo)) {
         if (deviceType != .SD) return error.UNMOUNT_REQUEST_ON_INTERNAL_DEVICE;

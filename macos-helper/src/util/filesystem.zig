@@ -107,11 +107,11 @@ pub fn openFileValidated(unsanitizedIsoPath: []const u8, params: struct { userHo
     return imageFile;
 }
 
-pub fn writeISO(connection: XPCConnection, isoFile: std.fs.File, device: std.fs.File) !void {
+pub fn writeISO(connection: XPCConnection, imageFile: std.fs.File, device: std.fs.File) !void {
     Debug.log(.DEBUG, "Begin writing prep...", .{});
     var writeBuffer: [WRITE_BLOCK_SIZE]u8 = undefined;
 
-    const fileStat = try isoFile.stat();
+    const fileStat = try imageFile.stat();
     const imageSize = fileStat.size;
 
     var currentByte: u64 = 0;
@@ -124,8 +124,8 @@ pub fn writeISO(connection: XPCConnection, isoFile: std.fs.File, device: std.fs.
     while (currentByte < imageSize) {
         previousProgress = currentProgress;
 
-        try isoFile.seekTo(currentByte);
-        const bytesRead = try isoFile.read(&writeBuffer);
+        try imageFile.seekTo(currentByte);
+        const bytesRead = try imageFile.read(&writeBuffer);
 
         if (bytesRead == 0) {
             Debug.log(.INFO, "End of ISO File reached, final block: {d} at {d}!", .{ currentByte / WRITE_BLOCK_SIZE, currentByte });
@@ -159,11 +159,11 @@ pub fn writeISO(connection: XPCConnection, isoFile: std.fs.File, device: std.fs.
     Debug.log(.INFO, "Finished writing ISO image to device!", .{});
 }
 
-pub fn verifyWrittenBytes(connection: XPCConnection, isoFile: std.fs.File, device: std.fs.File) !void {
-    var isoByteBuffer: [WRITE_BLOCK_SIZE]u8 = undefined;
+pub fn verifyWrittenBytes(connection: XPCConnection, imageFile: std.fs.File, device: std.fs.File) !void {
+    var imageByteBuffer: [WRITE_BLOCK_SIZE]u8 = undefined;
     var deviceByteBuffer: [WRITE_BLOCK_SIZE]u8 = undefined;
 
-    const fileStat = try isoFile.stat();
+    const fileStat = try imageFile.stat();
     const imageSize = fileStat.size;
 
     var currentByte: u64 = 0;
@@ -176,8 +176,8 @@ pub fn verifyWrittenBytes(connection: XPCConnection, isoFile: std.fs.File, devic
     while (currentByte < imageSize) {
         previousProgress = currentProgress;
 
-        try isoFile.seekTo(currentByte);
-        const imageBytesRead = try isoFile.read(&isoByteBuffer);
+        try imageFile.seekTo(currentByte);
+        const imageBytesRead = try imageFile.read(&imageByteBuffer);
 
         if (imageBytesRead == 0) {
             Debug.log(.INFO, "End of ISO File reached, final block: {d} at {d}!", .{ currentByte / WRITE_BLOCK_SIZE, currentByte });
@@ -191,7 +191,7 @@ pub fn verifyWrittenBytes(connection: XPCConnection, isoFile: std.fs.File, devic
 
         if (deviceBytesRead != imageBytesRead) return error.MismatchingISOAndDeviceBytesDetected;
 
-        const imageSlice = isoByteBuffer[0..imageBytesRead];
+        const imageSlice = imageByteBuffer[0..imageBytesRead];
         const deviceSlice = deviceByteBuffer[0..deviceBytesRead];
 
         if (!std.mem.eql(u8, imageSlice, deviceSlice)) return error.MismatchingISOAndDeviceBytesDetected;
@@ -251,14 +251,14 @@ test "selecting an file in other directories is disallowed" {
 }
 
 test "calling openFileValidated returns a valid file handle" {
-    const isoFile = try openFileValidated(
+    const imageFile = try openFileValidated(
         // Simulated; during runtime, provided by the XPC client.
         env.USER_HOME_PATH ++ env.TEST_ISO_FILE_PATH,
         // Simulated; during runtime, provided securily by XPCService.getUserHomePath()
         .{ .userHomePath = std.posix.getenv("HOME") orelse return error.UserHomePathIsNULL },
     );
 
-    defer isoFile.close();
+    defer imageFile.close();
 
-    try std.testing.expect(@TypeOf(isoFile) == std.fs.File);
+    try std.testing.expect(@TypeOf(imageFile) == std.fs.File);
 }

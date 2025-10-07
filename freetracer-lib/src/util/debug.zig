@@ -91,28 +91,32 @@ pub const Logger = struct {
     pub fn log(self: *Logger, comptime level: SeverityLevel, comptime fmt: []const u8, args: anytype) void {
         const t = time.now(self.utcCorrectionHours);
 
-        comptime var logFn: ?*const fn (comptime format: []const u8, args: anytype) void = null;
-        comptime var severityPrefix: [:0]const u8 = "NONE";
+        const severityPrefix: [:0]const u8 = switch (level) {
+            .DEBUG => "DEBUG",
+            .INFO => "INFO",
+            .WARNING => "WARNING",
+            .ERROR => "ERROR",
+        };
 
-        switch (level) {
-            .DEBUG => {
-                logFn = std.log.debug;
-                severityPrefix = "DEBUG";
-            },
-            .INFO => {
-                logFn = std.log.info;
-                severityPrefix = "INFO";
-            },
-            .WARNING => {
-                logFn = std.log.warn;
-                severityPrefix = "WARNING";
-            },
-            .ERROR => {
-                logFn = std.log.err;
-                severityPrefix = "ERROR";
-            },
-        }
-
+        // switch (level) {
+        //     .DEBUG => {
+        //         logFn = std.log.debug;
+        //         severityPrefix = "DEBUG";
+        //     },
+        //     .INFO => {
+        //         logFn = std.log.info;
+        //         severityPrefix = "INFO";
+        //     },
+        //     .WARNING => {
+        //         logFn = std.log.warn;
+        //         severityPrefix = "WARNING";
+        //     },
+        //     .ERROR => {
+        //         logFn = std.log.err;
+        //         severityPrefix = "ERROR";
+        //     },
+        // }
+        //
         // Create the full message with timestamp and format arguments
         const full_message = std.fmt.allocPrintSentinel(
             self.allocator,
@@ -127,19 +131,21 @@ pub const Logger = struct {
                 severityPrefix,
             } ++ args,
             Character.NULL,
-        ) catch |err| blk: {
+        ) catch |err| {
             const msg = "\nlog(): ERROR occurred attempting to allocPrintSentinel msg: \n\t{s}\nError: {any}";
-            std.debug.print(msg, .{ fmt, err });
             std.log.err(msg, .{ fmt, err });
-            break :blk "";
+            return;
         };
 
         defer self.allocator.free(full_message);
 
         if (full_message.len < 1) return;
 
-        if (logFn) |log_fn| {
-            log_fn("{s}", .{full_message});
+        switch (level) {
+            .DEBUG => std.log.debug("{s}", .{full_message}),
+            .INFO => std.log.info("{s}", .{full_message}),
+            .WARNING => std.log.warn("{s}", .{full_message}),
+            .ERROR => std.log.err("{s}", .{full_message}),
         }
 
         if (self.logFile != null) self.writeLogToFile("\n{s}", .{full_message});

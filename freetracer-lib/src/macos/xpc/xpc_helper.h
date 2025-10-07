@@ -1,6 +1,7 @@
 #ifndef XPC_HELPER_H
 #define XPC_HELPER_H
 
+#include <dispatch/dispatch.h>
 #include <xpc/xpc.h>
 
 
@@ -22,5 +23,7 @@ void XPCProcessDispatchedEvents();
 void XPCConnectionSendMessageWithReply(xpc_connection_t connection, xpc_object_t msg, dispatch_queue_t queue, XPCMessageHandler msgHandler);
 
 bool XPCSecurityValidateConnection(xpc_object_t message);
+
+void XPCConnectionFlush(xpc_connection_t connection);
 
 #endif

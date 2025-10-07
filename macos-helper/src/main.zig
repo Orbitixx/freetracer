@@ -184,7 +184,7 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) void {
     const deviceType: DeviceType = @enumFromInt(XPCService.getUInt64(data, "deviceType"));
     const imageType: ImageType = @enumFromInt(XPCService.getUInt64(data, "imageType"));
 
-    defer XPCService.releaseObject(data);
+    // defer XPCService.releaseObject(data);
 
     Debug.log(.INFO, "Recieved service: {d}", .{deviceServiceId});
 
@@ -231,44 +231,6 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) void {
 
     sendXPCReply(connection, .DEVICE_VALID, "Device is determined to be valid and is successfully opened.");
 
-    // const fd: c_int = @intCast(XPCService.getFileDescriptor(data, "fd"));
-    // defer _ = c.close(fd);
-
-    // const path = "/dev/disk5";
-    // const fd: c_int = c.open(path, c.O_RDWR, @as(c_uint, 0o644));
-    //
-    // if (fd < 0) {
-    //     Debug.log(.ERROR, "fd is -1 :(", .{});
-    //     const err_num = c.__error().*;
-    //     const err_str = c.strerror(err_num);
-    //     Debug.log(.ERROR, "open() failed with errno {}: {s}", .{ err_num, err_str });
-    //     respondWithErrorAndTerminate(
-    //         .{ .err = error.fdIsNull, .message = "fd is -1." },
-    //         .{ .xpcConnection = connection, .xpcResponseCode = .DEVICE_INVALID },
-    //     );
-    //     return;
-    // }
-    //
-    // defer _ = c.close(fd);
-
-    // if (true) {
-    //     Debug.log(.INFO, "TEST SUCCESS", .{});
-    //     return;
-    // }
-
-    // var sampleData: [81920]u8 = std.mem.zeroes([81920]u8);
-    // @memset(sampleData[0..], 0xAA);
-    //
-    // const bytes_written = c.write(fd, sampleData[0..].ptr, @as(usize, @intCast(sampleData.len)));
-    //
-    // if (bytes_written < 0) {
-    //     respondWithErrorAndTerminate(
-    //         .{ .err = error.fdIsNull, .message = "fd is -1." },
-    //         .{ .xpcConnection = connection, .xpcResponseCode = .ISO_WRITE_FAIL },
-    //     );
-    //     return;
-    // }
-
     fsops.writeISO(connection, isoFile, device) catch |err| {
         respondWithErrorAndTerminate(
             .{ .err = err, .message = "Unable to write ISO to device." },
@@ -288,7 +250,7 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) void {
     };
 
     sendXPCReply(connection, .WRITE_VERIFICATION_SUCCESS, "Written ISO image successfully verified!");
-
+    XPCService.connectionFlush(connection);
     ShutdownManager.exitSuccessfully();
 
     // TODO:

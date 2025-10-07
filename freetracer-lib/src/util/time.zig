@@ -30,10 +30,14 @@ pub fn fromTimestamp(timestamp: i64, utcCorrectionHours: i8) DateTime {
     const offset_seconds = @as(i64, utcCorrectionHours) * 3600;
     const adjusted_timestamp = timestamp + offset_seconds;
 
+    // Clamp to Unix epoch minimum to avoid wrap-around when the adjusted timestamp
+    // would become negative (which triggers a safety panic when casting to u64).
+    const clamped_timestamp: i64 = if (adjusted_timestamp < 0) 0 else adjusted_timestamp;
+
     // Create an EpochSeconds instance from the adjusted timestamp.
     // We use u64 as required by std.time.epoch, handling potential negative results
     // from the adjustment by casting. The underlying logic in std.time handles this.
-    const datetime = std.time.epoch.EpochSeconds{ .secs = @as(u64, @intCast(adjusted_timestamp)) };
+    const datetime = std.time.epoch.EpochSeconds{ .secs = @as(u64, @intCast(clamped_timestamp)) };
 
     // Calculate the year, month, day, and time components.
     const year_day = datetime.getEpochDay().calculateYearDay();
@@ -55,6 +59,16 @@ pub fn fromTimestamp(timestamp: i64, utcCorrectionHours: i8) DateTime {
 pub fn now(utcCorrectionHours: i8) DateTime {
     // This function now simply wraps the testable 'fromTimestamp' function.
     return fromTimestamp(std.time.timestamp(), utcCorrectionHours);
+}
+
+pub fn sleep(ms: u64) void {
+    const tStart = std.time.timestamp();
+
+    const ns = ms * 1_000_000;
+
+    while (std.time.timestamp() - tStart < ns) {
+        asm volatile ("wfi");
+    }
 }
 
 // Test block for the fromTimestamp function.

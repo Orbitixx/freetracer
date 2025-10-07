@@ -79,8 +79,8 @@ pub const Events = struct {
 
     pub const onUIDimensionsQueried = ComponentFramework.defineEvent(
         EventManager.createEventName(ComponentName, "get_ui"),
+        struct { result: *Transform },
         struct {},
-        struct { bgRectWidth: f32 },
     );
 };
 
@@ -176,7 +176,7 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
         Events.onISOFilePathChanged.Hash => {
             //
             const data = Events.onISOFilePathChanged.getData(event) orelse break :eventLoop;
-            defer eventResult.validate(.SUCCESS);
+            defer eventResult = eventResult.succeed();
 
             var newName: [:0]const u8 = @ptrCast("No ISO selected...");
 
@@ -198,11 +198,19 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
                 newName = data.newPath[lastSlash + 1 .. data.newPath.len :0];
             }
 
-            if (newName.len > 14) {
+            @memset(&self.displayNameBuffer, Character.NULL);
+
+            const written = if (newName.len > 14) blk: {
                 const prefix = "...";
                 @memcpy(self.displayNameBuffer[0..prefix.len], prefix);
                 @memcpy(self.displayNameBuffer[prefix.len .. prefix.len + 14], newName[newName.len - 14 ..]);
-            } else @memcpy(self.displayNameBuffer[0..newName.len], newName);
+                break :blk prefix.len + 14;
+            } else blk: {
+                @memcpy(self.displayNameBuffer[0..newName.len], newName);
+                break :blk newName.len;
+            };
+
+            self.displayNameBuffer[written] = Character.NULL;
 
             self.isoTitle = Text.init(@ptrCast(std.mem.sliceTo(&self.displayNameBuffer, Character.NULL)), .{
                 .x = self.bgRect.transform.relX(0.5),
@@ -218,22 +226,24 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
             //
             const data = Events.onGetUIDimensions.Data{ .transform = self.bgRect.transform };
             const responseEvent = Events.onGetUIDimensions.create(self.asComponentPtr(), &data);
+            eventResult = eventResult.succeed();
             EventManager.broadcast(responseEvent);
-            eventResult.validate(.SUCCESS);
         },
 
         Events.onUIDimensionsQueried.Hash => {
-            eventResult.validate(.SUCCESS);
+            // const responseDataPtr: *Events.onUIDimensionsQueried.Response = try self.allocator.create(Events.onUIDimensionsQueried.Response);
+            // responseDataPtr.* = .{ .bgRectWidth = self.bgRect.transform.w };
 
-            const responseDataPtr: *Events.onUIDimensionsQueried.Response = try self.allocator.create(Events.onUIDimensionsQueried.Response);
-            responseDataPtr.* = .{ .bgRectWidth = self.bgRect.transform.w };
-            eventResult.data = @ptrCast(@alignCast(responseDataPtr));
+            // eventResult.data = @ptrCast(@alignCast(responseDataPtr));
+
+            const data = Events.onUIDimensionsQueried.getData(event) orelse return eventResult.fail();
+            data.result.* = self.bgRect.transform;
+            return eventResult.succeed();
         },
 
         ISOFilePicker.Events.onActiveStateChanged.Hash => {
             //
             const data = ISOFilePicker.Events.onActiveStateChanged.getData(event) orelse break :eventLoop;
-            eventResult.validate(.SUCCESS);
 
             {
                 self.state.lock();
@@ -270,6 +280,7 @@ pub fn handleEvent(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
                 &.{ .transform = self.bgRect.transform },
             );
 
+            eventResult = eventResult.succeed();
             EventManager.broadcast(responseEvent);
         },
 
@@ -323,9 +334,7 @@ fn drawInactive(self: *ISOFilePickerUI) !void {
 }
 
 pub fn deinit(self: *ISOFilePickerUI) void {
-    if (self.state.data.isoPath) |isoPath| {
-        self.parent.allocator.free(isoPath);
-    }
+    _ = self;
 }
 
 pub fn dispatchComponentAction(self: *ISOFilePickerUI) void {

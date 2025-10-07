@@ -21,6 +21,7 @@ pub fn getStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(StorageDev
     Debug.log(.DEBUG, "Querying storage devices from IORegistry...", .{});
 
     var storageDevices = std.ArrayList(StorageDevice).empty;
+    errdefer storageDevices.deinit(allocator);
 
     const matchingDict = c.IOServiceMatching(c.kIOMediaClass);
     if (matchingDict == null) return error.FailedToCreateIOServiceMatchingDictionary;
@@ -42,6 +43,8 @@ pub fn getStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(StorageDev
     const kernReturn: c_int = c.IOServiceGetMatchingServices(c.kIOMasterPortDefault, matchingDict, &serviceIterator);
 
     if (kernReturn != c.KERN_SUCCESS) return error.FailedToGetMatchingServices;
+
+    defer _ = c.IOObjectRelease(serviceIterator);
 
     var currentService: c.io_service_t = c.IOIteratorNext(serviceIterator);
 
@@ -111,16 +114,16 @@ fn checkPhysicalDevice(service: c.io_service_t) PhysicalDeviceCheckResult {
     defer _ = c.CFRelease(physicalInterconnectLocationKey);
 
     const physicalInterconnectUSBKey = c.CFStringCreateWithCString(c.kCFAllocatorDefault, c.kIOPropertyPhysicalInterconnectTypeUSB, c.kCFStringEncodingUTF8);
-    defer _ = c.CFRelease(physicalInterconnectLocationKey);
+    defer _ = c.CFRelease(physicalInterconnectUSBKey);
 
     const physicalInterconnectSDKey = c.CFStringCreateWithCString(c.kCFAllocatorDefault, c.kIOPropertyPhysicalInterconnectTypeSecureDigital, c.kCFStringEncodingUTF8);
-    defer _ = c.CFRelease(physicalInterconnectLocationKey);
+    defer _ = c.CFRelease(physicalInterconnectSDKey);
 
     const physicalInterconnectExternalKey = c.CFStringCreateWithCString(c.kCFAllocatorDefault, c.kIOPropertyExternalKey, c.kCFStringEncodingUTF8);
-    defer _ = c.CFRelease(physicalInterconnectLocationKey);
+    defer _ = c.CFRelease(physicalInterconnectExternalKey);
 
     const physicalInterconnectInternalKey = c.CFStringCreateWithCString(c.kCFAllocatorDefault, c.kIOPropertyInternalKey, c.kCFStringEncodingUTF8);
-    defer _ = c.CFRelease(physicalInterconnectLocationKey);
+    defer _ = c.CFRelease(physicalInterconnectInternalKey);
 
     var parentService: c.io_object_t = service;
     var currentService = service;

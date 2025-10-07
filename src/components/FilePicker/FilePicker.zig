@@ -173,7 +173,9 @@ pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventR
 }
 
 pub fn deinit(self: *ISOFilePickerComponent) void {
-    _ = self;
+    self.state.lock();
+    defer self.state.unlock();
+    if (self.state.data.selectedPath) |path| self.allocator.free(path);
 }
 
 /// Handles the `onISOFilePathQueried` event, providing the currently selected path to the requester.
@@ -283,25 +285,24 @@ pub fn workerRun(worker: *ComponentWorker, context: *anyopaque) void {
 
     _ = context;
 
-    // Update state in a block with shorter lifecycle (handles unlock on error too)
-    {
-        worker.state.lock();
-        defer worker.state.unlock();
-        worker.state.data.isSelecting = true;
-    }
+    worker.state.lock();
+    errdefer worker.state.unlock();
+    worker.state.data.isSelecting = true;
 
     // NOTE: It is important that this memory address / contents are released in component's deinit().
     // Currently, the ownership change occurs inside of handleEvent(), which assigns state as owner.
     // NOTE: osd.path cannot be run on a child process and must be run on the main process (enforced by MacOS).
     const selectedPath = osd.path(worker.allocator, .open, .{});
 
-    // Update state in a block with shorter lifecycle (handles unlock on error too)
-    {
-        worker.state.lock();
-        defer worker.state.unlock();
-        worker.state.data.isSelecting = false;
-        worker.state.data.selectedPath = selectedPath;
+    if (worker.state.data.selectedPath) |previous| {
+        if (selectedPath == null or previous.ptr != selectedPath.?.ptr) {
+            worker.allocator.free(previous);
+        }
     }
+
+    worker.state.data.isSelecting = false;
+    worker.state.data.selectedPath = selectedPath;
+    worker.state.unlock();
 
     const event = ISOFilePickerComponent.Events.onISOFileSelected.create(
         &ISOFilePickerComponent.asInstance(worker.context.run_context).component.?,
