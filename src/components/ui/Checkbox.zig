@@ -141,23 +141,7 @@ pub fn update(self: *Checkbox) !void {
         if (self.state != .CHECKED) self.state = CheckboxState.NORMAL;
     }
 
-    switch (self.state) {
-        .HOVER => {
-            self.outerRect.style = self.styles.hover.outerRectStyle;
-            self.innerRect.style = self.styles.hover.innerRectStyle;
-            self.text.style = self.styles.hover.textStyle;
-        },
-        .CHECKED => {
-            self.outerRect.style = self.styles.checked.outerRectStyle;
-            self.innerRect.style = self.styles.checked.innerRectStyle;
-            self.text.style = self.styles.checked.textStyle;
-        },
-        .NORMAL => {
-            self.outerRect.style = self.styles.normal.outerRectStyle;
-            self.innerRect.style = self.styles.normal.innerRectStyle;
-            self.text.style = self.styles.normal.textStyle;
-        },
-    }
+    self.applyStateStyles();
 }
 
 pub fn draw(self: *Checkbox) !void {
@@ -188,6 +172,31 @@ pub const ComponentImplementation = ComponentFramework.ImplementComponent(Checkb
 pub const asComponent = ComponentImplementation.asComponent;
 pub const asComponentPtr = ComponentImplementation.asComponentPtr;
 pub const asInstance = ComponentImplementation.asInstance;
+
+pub fn setState(self: *Checkbox, state: CheckboxState) void {
+    self.state = state;
+    self.applyStateStyles();
+}
+
+fn applyStateStyles(self: *Checkbox) void {
+    switch (self.state) {
+        .HOVER => {
+            self.outerRect.style = self.styles.hover.outerRectStyle;
+            self.innerRect.style = self.styles.hover.innerRectStyle;
+            self.text.style = self.styles.hover.textStyle;
+        },
+        .CHECKED => {
+            self.outerRect.style = self.styles.checked.outerRectStyle;
+            self.innerRect.style = self.styles.checked.innerRectStyle;
+            self.text.style = self.styles.checked.textStyle;
+        },
+        .NORMAL => {
+            self.outerRect.style = self.styles.normal.outerRectStyle;
+            self.innerRect.style = self.styles.normal.innerRectStyle;
+            self.text.style = self.styles.normal.textStyle;
+        },
+    }
+}
 
 pub const CheckboxVariant = struct {
     normal: CheckboxStyle = .{},

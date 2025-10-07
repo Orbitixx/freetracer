@@ -23,3 +23,5 @@ pub const APP_UI_MODULE_GAP_X: f32 = 20;
 
 pub const CHECKBOX_TEXT_MARGIN_LEFT: f32 = 12;
 pub const CHECKBOX_TEXT_BUFFER_SIZE: usize = 60;
+
+pub const DEVICE_CHECKBOXES_GAP_FACTOR_Y: f32 = 30;

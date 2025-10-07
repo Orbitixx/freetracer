@@ -487,7 +487,7 @@ fn handleOnDevicesReadyToRender(self: *DeviceListUI) !EventResult {
             textBuf,
             .{
                 .x = self.bgRect.transform.relX(0.05),
-                .y = self.bgRect.transform.relY(0.12) + @as(f32, @floatFromInt(i)) * 25,
+                .y = self.bgRect.transform.relY(0.12) + @as(f32, @floatFromInt(i)) * AppConfig.DEVICE_CHECKBOXES_GAP_FACTOR_Y,
             },
             20,
             .Primary,
@@ -518,18 +518,17 @@ fn handleOnSelectedDeviceNameChanged(self: *DeviceListUI, event: ComponentEvent)
     defer self.state.unlock();
     self.state.data.selectedDevice = data.selectedDevice;
 
-    // TODO: doesn't quite fix the visual selection bug with multiple devices
-    // {
-    //     for (self.deviceCheckboxes.items) |*cb| {
-    //         cb.state = .NORMAL;
-    //     }
-    //
-    //     if (data.selectedDevice) |device| {
-    //         for (self.deviceCheckboxes.items) |*cb| {
-    //             if (device.serviceId == cb.deviceId) cb.state = .CHECKED;
-    //         }
-    //     }
-    // }
+    for (self.deviceCheckboxes.items) |*checkbox| {
+        if (data.selectedDevice) |device| {
+            if (device.serviceId == checkbox.deviceId) {
+                checkbox.setState(.CHECKED);
+            } else {
+                checkbox.setState(.NORMAL);
+            }
+        } else {
+            checkbox.setState(.NORMAL);
+        }
+    }
 
     Debug.log(
         .DEBUG,
