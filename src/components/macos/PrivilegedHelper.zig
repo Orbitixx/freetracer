@@ -38,6 +38,8 @@ const WindowManager = @import("../../managers/WindowManager.zig").WindowManagerS
 const winRelX = WindowManager.relW;
 const winRelY = WindowManager.relH;
 
+// This state is mutable and can be accessed from the main UI thread (draw/update)
+// and a worker/event thread (handleEvent). Access must be guarded by state.lock().
 const PrivilegedHelperState = struct {
     isActive: bool = false,
     isHelperInstalled: bool = false,
@@ -378,6 +380,8 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
     return eventResult;
 }
 
+/// TODO: Remove.
+/// Deprecated and unnecessary. Full Disk Access is no longer neccessary since v0.9
 fn displayNeedPermissionsDialog(context: ?*anyopaque) callconv(.c) void {
     _ = context;
 
@@ -431,12 +435,15 @@ pub fn messageHandler(connection: xpc.xpc_connection_t, message: xpc.xpc_object_
     const reply_type = xpc.xpc_get_type(message);
 
     if (reply_type == xpc.XPC_TYPE_DICTIONARY) {
-        processResponseMessage(@ptrCast(connection), message);
+        processResponseMessage(@ptrCast(connection), message) catch |err| {
+            Debug.log(.ERROR, "Freetracer caught error processing a response from helper, error: {any}", .{err});
+            return;
+        };
     }
 }
 
-fn processResponseMessage(connection: XPCConnection, data: XPCObject) void {
-    const response: HelperResponseCode = XPCService.parseResponse(data);
+fn processResponseMessage(connection: XPCConnection, data: XPCObject) !void {
+    const response: HelperResponseCode = try XPCService.parseResponse(data);
 
     Debug.log(.INFO, "Successfully received Helper response: {any}", .{response});
 
@@ -489,7 +496,7 @@ fn processResponseMessage(connection: XPCConnection, data: XPCObject) void {
         },
 
         .ISO_WRITE_PROGRESS => {
-            const progress = XPCService.getUInt64(data, "write_progress");
+            const progress = try XPCService.getUInt64(data, "write_progress");
             EventManager.broadcast(Events.onISOWriteProgressChanged.create(
                 null,
                 &Events.onISOWriteProgressChanged.Data{ .newProgress = progress },
@@ -508,7 +515,7 @@ fn processResponseMessage(connection: XPCConnection, data: XPCObject) void {
         },
 
         .WRITE_VERIFICATION_PROGRESS => {
-            const progress = XPCService.getUInt64(data, "verification_progress");
+            const progress = try XPCService.getUInt64(data, "verification_progress");
             EventManager.broadcast(Events.onWriteVerificationProgressChanged.create(
                 null,
                 &Events.onWriteVerificationProgressChanged.Data{ .newProgress = progress },
@@ -531,7 +538,11 @@ fn processResponseMessage(connection: XPCConnection, data: XPCObject) void {
 }
 
 fn shouldHelperUpdate(dict: XPCObject) bool {
-    const version = XPCService.parseString(dict, "version");
+    const version = XPCService.parseString(dict, "version") catch |err| {
+        Debug.log(.ERROR, "Freetracer couldn't parse Helper version received from the Helper. Error: {any}", .{err});
+        return true;
+    };
+
     Debug.log(.INFO, "Helper reported version is: {s}", .{version});
     return !std.mem.eql(u8, version, AppConfig.PRIVILEGED_TOOL_LATEST_VERSION);
 }

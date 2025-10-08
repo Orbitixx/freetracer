@@ -1,3 +1,10 @@
+// This file implements the UI component for the DataFlasher module. It is responsible
+// for rendering the flasher's state, including the selected ISO file and target device,
+// progress bar, and status indicators. It operates entirely in the unprivileged GUI
+// process, receiving state changes and progress updates via an internal event system
+// from its parent `DataFlasher` component, which in turn communicates with the
+// privileged helper. This component allocates UI widgets using an allocator provided
+// by its parent and is responsible for their deinitialization.
 const std = @import("std");
 const rl = @import("raylib");
 const freetracer_lib = @import("freetracer-lib");
@@ -21,6 +28,10 @@ const SECTION_PADDING: f32 = 0.1;
 const PADDING_LEFT: f32 = SECTION_PADDING / 2;
 const PADDING_RIGHT: f32 = PADDING_LEFT;
 
+const HEADER_LABEL_OFFSET_X: f32 = 12.0;
+const HEADER_LABEL_REL_Y: f32 = 0.01;
+const FLASH_BUTTON_REL_Y: f32 = 0.9;
+
 const TEXTURE_TILE_SIZE = 16;
 
 const ICON_SIZE = 22;
@@ -30,9 +41,15 @@ const ISO_ICON_POS_REL_Y = SECTION_PADDING;
 const DEV_ICON_POS_REL_X = ISO_ICON_POS_REL_X;
 const DEV_ICON_POS_REL_Y = ISO_ICON_POS_REL_Y + ISO_ICON_POS_REL_Y / 2;
 
+// --- SpriteSheet Coordinates ---
+const ICON_SRC_ISO = rl.Rectangle{ .x = TEXTURE_TILE_SIZE * 9, .y = TEXTURE_TILE_SIZE * 10, .width = TEXTURE_TILE_SIZE, .height = TEXTURE_TILE_SIZE };
+const ICON_SRC_DEVICE = rl.Rectangle{ .x = TEXTURE_TILE_SIZE * 10, .y = TEXTURE_TILE_SIZE * 11, .width = TEXTURE_TILE_SIZE, .height = TEXTURE_TILE_SIZE };
+
 const ITEM_GAP_Y = 8;
 const STATUS_INDICATOR_SIZE: f32 = 20;
 
+// This state is mutable and can be accessed from the main UI thread (draw/update)
+// and a worker/event thread (handleEvent). Access must be guarded by state.lock().
 const DataFlasherUIState = struct {
     isActive: bool = false,
     isoPath: ?[:0]const u8 = null,
@@ -66,6 +83,9 @@ const WindowManager = @import("../../managers/WindowManager.zig").WindowManagerS
 const winRelX = WindowManager.relW;
 const winRelY = WindowManager.relH;
 
+const NULL_TEXT: [:0]const u8 = "NULL";
+const EMPTY_TEXT: [:0]const u8 = &[_:0]u8{0};
+
 const BgRectParams = struct {
     width: f32,
     color: rl.Color,
@@ -86,14 +106,15 @@ const ProgressBox = struct {
     }
 
     pub fn setProgressTo(self: *ProgressBox, referenceRect: Rectangle, newValue: u64) void {
-        self.value = newValue;
+        const clamped = std.math.clamp(newValue, @as(u64, 0), @as(u64, 100));
+        self.value = clamped;
 
         const width: f32 = referenceRect.transform.getWidth();
-        const progress: f32 = @floatFromInt(newValue);
+        const percent_f32: f32 = @floatFromInt(clamped);
+        const percent_u8: u8 = @intCast(clamped);
         self.percentTextBuf = std.mem.zeroes([5]u8);
-        self.percentText.value = "";
-        self.percentText.value = @ptrCast(std.fmt.bufPrint(&self.percentTextBuf, "{d}%", .{progress}) catch "Err");
-        self.rect.transform.w = (progress / 100) * (1 - SECTION_PADDING) * width;
+        self.percentText.value = std.fmt.bufPrintZ(self.percentTextBuf[0..], "{d}%", .{percent_u8}) catch EMPTY_TEXT;
+        self.rect.transform.w = (percent_f32 / 100.0) * (1 - SECTION_PADDING) * width;
     }
 };
 
@@ -165,6 +186,8 @@ pub const Events = struct {
     );
 };
 
+// Shares the caller's allocator and captures a parent pointer.
+// The caller retains ownership of the allocator and is responsible for calling deinit.
 pub fn init(allocator: std.mem.Allocator, parent: *DataFlasher) !DataFlasherUI {
     return DataFlasherUI{
         .state = ComponentState.init(DataFlasherUIState{}),
@@ -178,6 +201,7 @@ pub fn initComponent(self: *DataFlasherUI, parent: ?*Component) !void {
     self.component = try Component.init(self, &ComponentImplementation.vtable, parent, self.allocator);
 }
 
+/// Subscribes to events and prepares visual primitives; call exactly once during setup.
 pub fn start(self: *DataFlasherUI) !void {
     if (self.component == null) try self.initComponent(self.parent.asComponentPtr());
 
@@ -288,11 +312,11 @@ pub fn update(self: *DataFlasherUI) !void {
     try self.button.update();
 }
 
+/// Draws the module frame and then the appropriate active/inactive presentation.
 pub fn draw(self: *DataFlasherUI) !void {
     self.state.lock();
-    errdefer self.state.unlock();
+    defer self.state.unlock();
     const isActive = self.state.data.isActive;
-    self.state.unlock();
 
     self.bgRect.draw();
     self.headerLabel.draw();
@@ -300,13 +324,14 @@ pub fn draw(self: *DataFlasherUI) !void {
     if (isActive) try self.drawActive() else try self.drawInactive();
 }
 
+/// Render routine when the module is active; expects state lock not held by caller.
 fn drawActive(self: *DataFlasherUI) !void {
     self.isoText.draw();
     self.deviceText.draw();
 
     rl.drawTexturePro(
         self.uiSheetTexture.texture,
-        .{ .x = TEXTURE_TILE_SIZE * 9, .y = TEXTURE_TILE_SIZE * 10, .width = TEXTURE_TILE_SIZE, .height = TEXTURE_TILE_SIZE },
+        ICON_SRC_ISO,
         .{ .x = self.bgRect.transform.relX(ISO_ICON_POS_REL_X), .y = self.bgRect.transform.relY(ISO_ICON_POS_REL_Y), .width = ICON_SIZE, .height = ICON_SIZE },
         .{ .x = 0, .y = 0 },
         0,
@@ -315,7 +340,7 @@ fn drawActive(self: *DataFlasherUI) !void {
 
     rl.drawTexturePro(
         self.uiSheetTexture.texture,
-        .{ .x = TEXTURE_TILE_SIZE * 10, .y = TEXTURE_TILE_SIZE * 11, .width = TEXTURE_TILE_SIZE, .height = TEXTURE_TILE_SIZE },
+        ICON_SRC_DEVICE,
         .{ .x = self.bgRect.transform.relX(DEV_ICON_POS_REL_X), .y = self.bgRect.transform.relY(DEV_ICON_POS_REL_Y), .width = ICON_SIZE, .height = ICON_SIZE },
         .{ .x = 0, .y = 0 },
         0,
@@ -340,196 +365,76 @@ fn drawInactive(self: *DataFlasherUI) !void {
     self.moduleImg.draw();
 }
 
+/// Consumes DataFlasher/PrivilegedHelper events; returns failure for unknown events.
 pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
-    var eventResult = EventResult{
-        .success = false,
-        .validation = .FAILURE,
-    };
+    var eventResult = EventResult.init();
 
-    eventLoop: switch (event.hash) {
+    return switch (event.hash) {
         //
         // Event: parent's authoritative state signal
-        DataFlasher.Events.onActiveStateChanged.Hash => {
-            //
-            const data = DataFlasher.Events.onActiveStateChanged.getData(event) orelse break :eventLoop;
-
-            eventResult.validate(.SUCCESS);
-
-            {
-                self.state.lock();
-                defer self.state.unlock();
-                self.state.data.isActive = data.isActive;
-            }
-
-            try self.queryDeviceListUIDimensions();
-
-            switch (data.isActive) {
-                true => {
-                    Debug.log(.DEBUG, "DataFlasherUI: setting UI to ACTIVE.", .{});
-
-                    var isoPath: [:0]const u8 = "NULL";
-                    var device: ?*StorageDevice = null;
-                    var areStateParamsAvailable: bool = false;
-
-                    {
-                        self.parent.state.lock();
-                        defer self.parent.state.unlock();
-                        isoPath = self.parent.state.data.isoPath orelse "NULL";
-                        device = &self.parent.state.data.device.?;
-                        areStateParamsAvailable = (self.parent.state.data.isoPath != null and self.parent.state.data.device != null);
-
-                        if (areStateParamsAvailable) {
-                            std.debug.assert(device != null);
-                            std.debug.assert(isoPath.len > 2);
-                            std.debug.assert(device.?.getBsdNameSlice().len > 2);
-                        }
-                    }
-
-                    if (areStateParamsAvailable) self.button.setEnabled(true);
-
-                    self.headerLabel.style.textColor = Color.white;
-
-                    self.recalculateUI(.{
-                        .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
-                        .color = Color.activeGreen,
-                        .borderColor = Color.white,
-                    });
-
-                    const tempText = Text.init(isoPath, .{ .x = winRelX(1.5), .y = winRelY(1.5) }, self.isoText.style);
-                    const isoDims = tempText.getDimensions();
-                    const availableWidth = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth() - (ICON_SIZE + ICON_TEXT_GAP_X);
-                    const widthDiff = availableWidth - isoDims.width;
-
-                    Debug.log(.INFO, "isoPath width: {d}, widthDiff: {d}, activeWidth: {d}", .{ isoDims.width, widthDiff, (1 - SECTION_PADDING) * self.bgRect.transform.getWidth() });
-
-                    if (widthDiff < 0) {
-                        const d_widthDiff_d_isoWidth = @abs(widthDiff / isoDims.width);
-                        const numCharsToObscure = @round(@as(f32, @floatFromInt(isoPath.len)) * d_widthDiff_d_isoWidth);
-                        Debug.log(.DEBUG, "d_widthDiff_d_isoWidth = {d}, numCharsToObscure = {d}", .{ d_widthDiff_d_isoWidth, numCharsToObscure });
-
-                        if (numCharsToObscure > @as(f32, @floatFromInt(isoPath.len - 16))) {
-                            self.isoText.value = isoPath[isoPath.len - 16 ..];
-                        } else {
-                            const filler = "...";
-                            const textMidPoint = isoPath.len / 2;
-                            const startCharIdx = textMidPoint - @as(usize, @intFromFloat((numCharsToObscure) / 2));
-                            const endCharIdx = startCharIdx + @as(usize, @intFromFloat(numCharsToObscure));
-                            const remainingLen = isoPath.len - endCharIdx;
-
-                            @memcpy(self.displayISOTextBuffer[0..startCharIdx], isoPath[0..startCharIdx]);
-                            @memcpy(self.displayISOTextBuffer[startCharIdx .. startCharIdx + filler.len], filler);
-                            @memcpy(self.displayISOTextBuffer[startCharIdx + filler.len .. startCharIdx + filler.len + remainingLen], isoPath[endCharIdx..]);
-
-                            self.isoText.value = @ptrCast(std.mem.sliceTo(&self.displayISOTextBuffer, 0x00));
-                        }
-
-                        Debug.log(.DEBUG, "New display path is: {s}", .{self.isoText.value});
-                    } else {
-                        self.isoText.value = isoPath;
-                    }
-
-                    if (device) |dev| {
-                        const devName = dev.getNameSlice();
-                        const p1 = " (";
-                        const bsdName = dev.getBsdNameSlice();
-                        const p2 = ")";
-
-                        @memcpy(self.displayDeviceTextBuffer[0..devName.len], devName);
-                        @memcpy(self.displayDeviceTextBuffer[devName.len .. devName.len + p1.len], p1);
-                        @memcpy(self.displayDeviceTextBuffer[devName.len + p1.len .. devName.len + p1.len + bsdName.len], bsdName);
-                        @memcpy(self.displayDeviceTextBuffer[devName.len + p1.len + bsdName.len .. devName.len + p1.len + bsdName.len + p2.len], p2);
-
-                        self.deviceText.value = @ptrCast(std.mem.sliceTo(&self.displayDeviceTextBuffer, 0x00));
-                    }
-                },
-
-                false => {
-                    Debug.log(.DEBUG, "DataFlasherUI: setting UI to INACTIVE.", .{});
-
-                    self.headerLabel.style.textColor = Color.lightGray;
-                    self.button.setEnabled(false);
-
-                    self.recalculateUI(.{
-                        .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
-                        .color = Color.darkBlueGray,
-                        .borderColor = Color.transparentDark,
-                    });
-                },
-            }
-        },
+        DataFlasher.Events.onActiveStateChanged.Hash => try self.handleOnActiveStateChanged(event),
 
         PrivilegedHelper.Events.onHelperISOFileOpenSuccess.Hash => {
             self.isoStatus.switchState(.SUCCESS);
+            return eventResult.succeed();
         },
 
         PrivilegedHelper.Events.onHelperISOFileOpenFailed.Hash => {
             self.isoStatus.switchState(.FAILURE);
+            return eventResult.succeed();
         },
 
         PrivilegedHelper.Events.onHelperDeviceOpenSuccess.Hash => {
             self.deviceStatus.switchState(.SUCCESS);
             self.permissionsStatus.switchState(.SUCCESS);
+            return eventResult.succeed();
         },
 
         PrivilegedHelper.Events.onHelperDeviceOpenFailed.Hash => {
             self.deviceStatus.switchState(.FAILURE);
             self.permissionsStatus.switchState(.FAILURE);
+            return eventResult.succeed();
         },
 
         PrivilegedHelper.Events.onHelperWriteSuccess.Hash => {
             self.writeStatus.switchState(.SUCCESS);
+            return eventResult.succeed();
         },
 
         PrivilegedHelper.Events.onHelperWriteFailed.Hash => {
             self.writeStatus.switchState(.FAILURE);
+            return eventResult.succeed();
         },
 
         PrivilegedHelper.Events.onHelperVerificationSuccess.Hash => {
             self.verificationStatus.switchState(.SUCCESS);
             self.progressBox.text.value = "Finished writing ISO. You may now eject the device.";
+            return eventResult.succeed();
         },
 
         PrivilegedHelper.Events.onHelperVerificationFailed.Hash => {
             self.verificationStatus.switchState(.FAILURE);
+            return eventResult.succeed();
         },
 
-        PrivilegedHelper.Events.onISOWriteProgressChanged.Hash => {
-            const data = PrivilegedHelper.Events.onISOWriteProgressChanged.getData(event) orelse break :eventLoop;
+        PrivilegedHelper.Events.onISOWriteProgressChanged.Hash => try self.handleOnISOWriteProgressChanged(event),
 
-            Debug.log(.INFO, "Write progress is: {d}", .{data.newProgress});
+        PrivilegedHelper.Events.onWriteVerificationProgressChanged.Hash => try self.handleOnWriteVerificationProgressChanged(event),
 
-            self.progressBox.text.value = "Writing ISO... Do not eject the device.";
-            self.progressBox.setProgressTo(self.bgRect, data.newProgress);
-            self.progressBox.percentText.transform.x = self.bgRect.transform.relX(PADDING_LEFT) +
-                (1 - SECTION_PADDING) * self.bgRect.transform.getWidth() - self.progressBox.percentText.getDimensions().width;
-
-            eventResult.validate(.SUCCESS);
-        },
-
-        PrivilegedHelper.Events.onWriteVerificationProgressChanged.Hash => {
-            const data = PrivilegedHelper.Events.onWriteVerificationProgressChanged.getData(event) orelse break :eventLoop;
-
-            Debug.log(.INFO, "Verification progress is: {d}", .{data.newProgress});
-
-            self.progressBox.text.value = "Verifying device blocks...";
-            self.progressBox.setProgressTo(self.bgRect, data.newProgress);
-
-            eventResult.validate(.SUCCESS);
-        },
-
-        else => {},
-    }
-
-    return eventResult;
+        else => return eventResult.fail(),
+    };
 }
+
 pub fn dispatchComponentAction(self: *DataFlasherUI) void {
     _ = self;
 }
 
+/// Deinitializes all UI widgets owned by this component, releasing their memory back to the allocator provided in init.
 pub fn deinit(self: *DataFlasherUI) void {
-    _ = self;
+    self.button.deinit();
 }
 
+/// Pulls width/position hints from the DeviceList UI so the panels align horizontally.
 fn queryDeviceListUIDimensions(self: *DataFlasherUI) !void {
     var transform = Transform{ .x = 0, .y = 0, .w = 0, .h = 0 };
     const queryDimensionsEvent = DeviceListUI.Events.onUITransformQueried.create(self.asComponentPtr(), &.{ .result = &transform });
@@ -540,6 +445,7 @@ fn queryDeviceListUIDimensions(self: *DataFlasherUI) !void {
     self.bgRect.transform.x = transform.x + transform.getWidth() + 20;
 }
 
+/// Repositions child elements after background sizing/color changes.
 fn recalculateUI(self: *DataFlasherUI, bgRectParams: BgRectParams) void {
     Debug.log(.DEBUG, "DataFlasherUI: updating bgRect properties!", .{});
 
@@ -550,8 +456,8 @@ fn recalculateUI(self: *DataFlasherUI, bgRectParams: BgRectParams) void {
     const leftPadding = self.bgRect.transform.relX(PADDING_LEFT);
     const centerX = self.bgRect.transform.relX(0.5);
 
-    self.headerLabel.transform.x = self.bgRect.transform.x + 12;
-    self.headerLabel.transform.y = self.bgRect.transform.relY(0.01);
+    self.headerLabel.transform.x = self.bgRect.transform.x + HEADER_LABEL_OFFSET_X;
+    self.headerLabel.transform.y = self.bgRect.transform.relY(HEADER_LABEL_REL_Y);
 
     self.moduleImg.transform.x = centerX - self.moduleImg.transform.getWidth() / 2;
     self.moduleImg.transform.y = self.bgRect.transform.relY(0.5) - self.moduleImg.transform.getHeight() / 2;
@@ -616,3 +522,147 @@ pub const ComponentImplementation = ComponentFramework.ImplementComponent(DataFl
 pub const asComponent = ComponentImplementation.asComponent;
 pub const asComponentPtr = ComponentImplementation.asComponentPtr;
 pub const asInstance = ComponentImplementation.asInstance;
+
+/// Truncates a file path with a "..." in the middle to fit within max_chars.
+/// Always writes the result to the provided buffer.
+fn ellipsizePath(buffer: []u8, path: [:0]const u8, maxChars: usize) [:0]const u8 {
+    // If the path already fits, just copy it and return.
+    if (path.len <= maxChars) {
+        return std.fmt.bufPrintZ(buffer, "{s}", .{path}) catch path;
+    }
+
+    // If max_chars is too small for ellipsis, just truncate from the left.
+    if (maxChars < 5) { // e.g., "a...b" requires 5 chars
+        const startChar = path.len - @min(path.len, maxChars);
+        return std.fmt.bufPrintZ(buffer, "{s}", .{path[startChar..]}) catch path;
+    }
+
+    const ellipsis = "...";
+    const tailLen = (maxChars - ellipsis.len) / 2;
+    const headLen = maxChars - ellipsis.len - tailLen;
+
+    const head = path[0..headLen];
+    const tail = path[path.len - tailLen ..];
+
+    return std.fmt.bufPrintZ(buffer, "{s}{s}{s}", .{ head, ellipsis, tail }) catch {
+        // Fallback in case of an unexpected formatting error, though unlikely.
+        // Just copy the original path if it fits, otherwise it's an error.
+        return if (buffer.len > path.len) blk: {
+            @memcpy(buffer, path);
+            buffer[path.len] = 0;
+            break :blk buffer[0..path.len :0];
+        } else path;
+    };
+}
+
+fn formatDeviceLabel(buffer: []u8, dev_name: [:0]const u8, bsd_name: [:0]const u8) [:0]const u8 {
+    return std.fmt.bufPrintZ(buffer, "{s} ({s})", .{ dev_name, bsd_name }) catch dev_name;
+}
+
+pub fn handleOnActiveStateChanged(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
+    var eventResult = EventResult.init();
+    const data = DataFlasher.Events.onActiveStateChanged.getData(event) orelse return eventResult.fail();
+
+    {
+        self.state.lock();
+        defer self.state.unlock();
+        self.state.data.isActive = data.isActive;
+    }
+
+    try self.queryDeviceListUIDimensions();
+
+    switch (data.isActive) {
+        true => {
+            Debug.log(.DEBUG, "DataFlasherUI: setting UI to ACTIVE.", .{});
+
+            var isoPath: [:0]const u8 = NULL_TEXT;
+            var device: ?StorageDevice = null;
+            var hasImagePath = false;
+            var hasDevice = false;
+
+            {
+                self.parent.state.lock();
+                defer self.parent.state.unlock();
+                if (self.parent.state.data.isoPath) |path| {
+                    isoPath = path;
+                    hasImagePath = true;
+                }
+                if (self.parent.state.data.device) |dev| {
+                    device = dev;
+                    hasDevice = true;
+                }
+            }
+
+            const areStateParamsAvailable = hasImagePath and hasDevice;
+            self.button.setEnabled(areStateParamsAvailable);
+
+            self.headerLabel.style.textColor = Color.white;
+
+            self.recalculateUI(.{
+                .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
+                .color = Color.activeGreen,
+                .borderColor = Color.white,
+            });
+
+            const tempText = Text.init(isoPath, .{ .x = winRelX(1.5), .y = winRelY(1.5) }, self.isoText.style);
+            const isoDims = tempText.getDimensions();
+            const availableWidth = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth() - (ICON_SIZE + ICON_TEXT_GAP_X);
+
+            if (isoDims.width > availableWidth) {
+                self.isoText.value = ellipsizePath(self.displayISOTextBuffer[0..], isoPath, MAX_PATH_DISPLAY_LENGTH);
+                Debug.log(.DEBUG, "DataFlasherUI: truncated ISO path for display", .{});
+            } else {
+                self.isoText.value = isoPath;
+            }
+
+            if (device) |dev| {
+                self.deviceText.value = formatDeviceLabel(self.displayDeviceTextBuffer[0..], dev.getNameSlice(), dev.getBsdNameSlice());
+            } else {
+                self.deviceText.value = NULL_TEXT;
+            }
+
+            return eventResult.succeed();
+        },
+
+        false => {
+            Debug.log(.DEBUG, "DataFlasherUI: setting UI to INACTIVE.", .{});
+
+            self.headerLabel.style.textColor = Color.lightGray;
+            self.button.setEnabled(false);
+
+            self.recalculateUI(.{
+                .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
+                .color = Color.darkBlueGray,
+                .borderColor = Color.transparentDark,
+            });
+
+            return eventResult.succeed();
+        },
+    }
+}
+
+pub fn handleOnISOWriteProgressChanged(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
+    var eventResult = EventResult.init();
+    const data = PrivilegedHelper.Events.onISOWriteProgressChanged.getData(event) orelse return eventResult.fail();
+
+    Debug.log(.INFO, "Write progress is: {d}", .{data.newProgress});
+
+    self.progressBox.text.value = "Writing ISO... Do not eject the device.";
+    self.progressBox.setProgressTo(self.bgRect, data.newProgress);
+    self.progressBox.percentText.transform.x = self.bgRect.transform.relX(PADDING_LEFT) +
+        (1 - SECTION_PADDING) * self.bgRect.transform.getWidth() - self.progressBox.percentText.getDimensions().width;
+
+    return eventResult.succeed();
+}
+
+pub fn handleOnWriteVerificationProgressChanged(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
+    var eventResult = EventResult.init();
+    const data = PrivilegedHelper.Events.onWriteVerificationProgressChanged.getData(event) orelse return eventResult.fail();
+
+    Debug.log(.INFO, "Verification progress is: {d}", .{data.newProgress});
+
+    self.progressBox.text.value = "Verifying device blocks...";
+    self.progressBox.setProgressTo(self.bgRect, data.newProgress);
+
+    return eventResult.succeed();
+}

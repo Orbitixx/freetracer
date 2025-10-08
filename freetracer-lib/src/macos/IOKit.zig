@@ -1,3 +1,7 @@
+// macOS IOKit helpers for enumerating removable storage devices. Wraps the
+// registry queries that filter USB/SD media, extracts BSD names, and returns
+// `StorageDevice` records for the GUI and helper to consume.
+// ---------------------------------------------------------------------------
 const std = @import("std");
 const types = @import("../types.zig");
 const Debug = @import("../util/debug.zig");

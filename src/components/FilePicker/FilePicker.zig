@@ -23,6 +23,8 @@ const ComponentFramework = @import("../framework/import/index.zig");
 
 const UIFramework = @import("../ui/import/index.zig");
 
+// This state is mutable and can be accessed from the main UI thread (draw/update)
+// and a worker/event thread (handleEvent). Access must be guarded by state.lock().
 pub const FilePickerState = struct {
     selectedPath: ?[:0]u8 = null,
     isSelecting: bool = false,

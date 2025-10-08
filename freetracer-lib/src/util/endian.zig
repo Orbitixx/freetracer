@@ -1,3 +1,5 @@
+// Helpers for reading integers from ISO9660 and El Torito byte buffers in
+// different endian representations while enforcing compile-time size checks.
 const std = @import("std");
 const assert = std.debug.assert;
 const testing = std.testing;

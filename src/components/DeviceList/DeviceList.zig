@@ -22,6 +22,8 @@ pub const DeviceQueryObject = struct {
     selectedDevice: ?StorageDevice = null,
 };
 
+// This state is mutable and can be accessed from the main UI thread (draw/update)
+// and a worker/event thread (handleEvent). Access must be guarded by state.lock().
 const DeviceListState = struct {
     isActive: bool = false,
     devices: std.ArrayList(StorageDevice),

@@ -1,9 +1,11 @@
+// Convenience C wrappers that expose minimal, test-friendly shims around the
+// C XPC dispatch APIs. The Zig side links against this header to
+// support Apple C block notation unsupported by Zig.
+
 #ifndef XPC_HELPER_H
 #define XPC_HELPER_H
 
-#include <dispatch/dispatch.h>
 #include <xpc/xpc.h>
-
 
 typedef void (*Logger)(int, const char*);
 typedef void (*XPCMessageHandler)(xpc_connection_t, xpc_object_t);
@@ -23,7 +25,5 @@ void XPCProcessDispatchedEvents();
 void XPCConnectionSendMessageWithReply(xpc_connection_t connection, xpc_object_t msg, dispatch_queue_t queue, XPCMessageHandler msgHandler);
 
 bool XPCSecurityValidateConnection(xpc_object_t message);
-
-void XPCConnectionFlush(xpc_connection_t connection);
 
 #endif

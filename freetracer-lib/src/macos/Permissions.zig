@@ -1,7 +1,24 @@
 const c = @import("../types.zig").c;
 const Debug = @import("../util/debug.zig");
 
+pub const OpenSettingsError = error{
+    CreateCFStringFailed,
+    CreateURLFailed,
+    LaunchFailed,
+};
+
+/// Opens the macOS Privacy settings pane and logs failures. The infallible API
+/// is preserved for existing callers; use `openPrivacySettingsChecked` when
+/// error handling is required.
 pub fn openPrivacySettings() void {
+    _ = openPrivacySettingsChecked() catch |err| {
+        Debug.log(.ERROR, "Unable to open Privacy settings: {any}", .{err});
+    };
+}
+
+/// Opens the macOS Privacy settings pane. Returns an error when any Core
+/// Foundation object fails to materialize or the launch services call fails.
+pub fn openPrivacySettingsChecked() OpenSettingsError!void {
     const urlString = "x-apple.systempreferences:com.apple.preference.security?Privacy";
 
     const urlCFString: c.CFStringRef = @ptrCast(c.CFStringCreateWithCString(
@@ -10,25 +27,21 @@ pub fn openPrivacySettings() void {
         c.kCFStringEncodingUTF8,
     ));
 
-    if (urlCFString == null) {
-        // TODO: Handle error
-        Debug.log(.ERROR, "Unable to create a Core Foundation CFString.", .{});
-        return;
-    }
+    if (urlCFString == null) return OpenSettingsError.CreateCFStringFailed;
 
     defer c.CFRelease(urlCFString);
 
     const url: c.CFURLRef = c.CFURLCreateWithString(c.kCFAllocatorDefault, urlCFString, null);
 
-    if (url == null) {
-        // TODO: Handle error
-        Debug.log(.ERROR, "Unable to create a Core Foundation URL from CFString.", .{});
-        return;
-    }
+    if (url == null) return OpenSettingsError.CreateURLFailed;
 
     defer c.CFRelease(url);
 
     const result = c.LSOpenCFURLRef(url, null);
 
-    Debug.log(.INFO, "Open settings result is: {any}", .{result});
+    if (result != c.errSecSuccess and result != 0) {
+        return OpenSettingsError.LaunchFailed;
+    }
+
+    Debug.log(.INFO, "Successfully requested the Privacy settings pane (status: {d})", .{result});
 }

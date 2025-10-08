@@ -1,3 +1,5 @@
+// Struct definitions for El Torito boot catalog records with debug printing
+// helpers used while validating ISO images.
 const std = @import("std");
 const endian = @import("../util/endian.zig");
 const Debug = @import("freetracer-lib").Debug;

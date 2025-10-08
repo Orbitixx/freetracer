@@ -1,3 +1,5 @@
+// Small string utilities for parsing delimited data and constructing
+// null-terminated buffers for C interop.
 const std = @import("std");
 const Character = @import("../constants.zig").Character;
 
@@ -25,7 +27,7 @@ pub fn parseAfterDelimeter(comptime length: comptime_int, data: [length]u8, deli
     return stringArray;
 }
 
-pub fn sanitizeString(buf: []u8, input: []const u8) []const u8 {
+pub fn sanitizeString(buf: []u8, input: []const u8) [:0]const u8 {
     var len: usize = 0;
 
     for (input) |char| {
@@ -40,7 +42,9 @@ pub fn sanitizeString(buf: []u8, input: []const u8) []const u8 {
         len += 1;
     }
 
-    return buf[0..len];
+    buf[len] = Character.NULL;
+
+    return buf[0..len :0];
 }
 
 pub fn concatStrings(comptime len: usize, buf: *[len]u8, str1: []const u8, str2: []const u8) ![:0]u8 {

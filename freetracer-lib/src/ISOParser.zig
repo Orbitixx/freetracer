@@ -1,3 +1,8 @@
+// Provides ISO9660/El Torito structural validation used by the helper before
+// writing images to disk. Performs partial sector scanning to ensure boot
+// catalog integrity, volume descriptors, and capacity checks against the
+// target device.
+// --------------------------------------------------------------------------
 const std = @import("std");
 const Debug = @import("util/debug.zig");
 const endian = @import("util/endian.zig");
@@ -218,7 +223,7 @@ pub fn parseIso(allocator: std.mem.Allocator, isoPath: []const u8, deviceSize: i
         return ISO_PARSER_RESULT.UNABLE_TO_OBTAIN_ISO_FILE_STAT;
     };
 
-    if (fileStat.size > @as(u64, @intCast(deviceSize))) return ISO_PARSER_RESULT.INSUFFICIENT_DEVICE_CAPACITY;
+    if (deviceSize < 0 or fileStat.size > @as(u64, @intCast(deviceSize))) return ISO_PARSER_RESULT.INSUFFICIENT_DEVICE_CAPACITY;
 
     const isoSectorCount: u64 = fileStat.size / ISO_SECTOR_SIZE;
 

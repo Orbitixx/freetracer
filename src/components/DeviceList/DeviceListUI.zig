@@ -45,6 +45,8 @@ const UI = UIFramework.utils;
 const Styles = UIFramework.Styles;
 const Color = UIFramework.Styles.Color;
 
+// This state is mutable and can be accessed from the main UI thread (draw/update)
+// and a worker/event thread (handleEvent). Access must be guarded by state.lock().
 pub const DeviceListUIState = struct {
     isActive: bool = false,
     devices: *std.ArrayList(StorageDevice),

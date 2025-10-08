@@ -1,6 +1,8 @@
+// Implementation for the lightweight XPC helpers declared in xpc_helper.h.
+// Wraps the block-based C APIs which are not supported by Zig.
+
 #include "xpc_helper.h"
 #include <xpc/xpc.h>
-
 
 void XPCConnectionSetEventHandler(xpc_connection_t connection,
                                   XPCConnectionHandler connectionHandler,
@@ -54,22 +56,4 @@ void XPCProcessDispatchedEvents() {
       main_queue, ^{
           // This just ensures any pending main queue work gets processed
       });
-}
-
-
-void XPCConnectionFlush(xpc_connection_t connection) {
-  dispatch_semaphore_t barrier = dispatch_semaphore_create(0);
-
-  if (barrier == NULL) {
-    return;
-  }
-
-  xpc_connection_send_barrier(connection, ^{
-    dispatch_semaphore_signal(barrier);
-  });
-
-  dispatch_semaphore_wait(barrier, DISPATCH_TIME_FOREVER);
-#if !defined(OS_OBJECT_USE_OBJC) || !OS_OBJECT_USE_OBJC
-  dispatch_release(barrier);
-#endif
 }

@@ -36,6 +36,8 @@ const Color = Styles.Color;
 
 const DEFAULT_ISO_TITLE = "No ISO selected...";
 
+// This state is mutable and can be accessed from the main UI thread (draw/update)
+// and a worker/event thread (handleEvent). Access must be guarded by state.lock().
 pub const ISOFilePickerUIState = struct {
     isActive: bool = true,
     isoPath: ?[:0]u8 = null,

@@ -1,5 +1,8 @@
+// Deterministic and runtime time utilities used for logging timestamps and
+// simple delays without tying call-sites directly to std.time internals.
 const std = @import("std");
 
+/// Normalized representation of a civil timestamp used in debug logging.
 pub const DateTime = struct {
     month: u4,
     day: u5,
@@ -61,16 +64,6 @@ pub fn now(utcCorrectionHours: i8) DateTime {
     return fromTimestamp(std.time.timestamp(), utcCorrectionHours);
 }
 
-pub fn sleep(ms: u64) void {
-    const tStart = std.time.timestamp();
-
-    const ns = ms * 1_000_000;
-
-    while (std.time.timestamp() - tStart < ns) {
-        asm volatile ("wfi");
-    }
-}
-
 // Test block for the fromTimestamp function.
 test "DateTime fromTimestamp conversion with UTC offsets" {
     const testing = std.testing;
@@ -119,28 +112,3 @@ test "DateTime fromTimestamp conversion with UTC offsets" {
     const actual3 = fromTimestamp(timestamp1, -5);
     try testing.expectEqual(expected3, actual3);
 }
-
-// pub fn now(utcCorrectionHours: i8) DateTime {
-//     const timestamp = std.time.timestamp();
-//     const epoch_seconds = @as(u64, @intCast(timestamp));
-//
-//     // Add timezone offset directly to timestamp
-//     const offset_seconds = @as(i64, utcCorrectionHours) * 3600;
-//     const adjusted_timestamp = @as(i64, @intCast(epoch_seconds)) + offset_seconds;
-//     const adjusted_epoch_seconds = @as(u64, @intCast(adjusted_timestamp));
-//
-//     // Convert adjusted timestamp to datetime
-//     const datetime = std.time.epoch.EpochSeconds{ .secs = adjusted_epoch_seconds };
-//     const year_day = datetime.getEpochDay().calculateYearDay();
-//     const month_day = year_day.calculateMonthDay();
-//     const day_seconds = datetime.getDaySeconds();
-//
-//     return DateTime{
-//         .seconds = day_seconds.getSecondsIntoMinute(),
-//         .minutes = day_seconds.getMinutesIntoHour(),
-//         .hours = @intCast(day_seconds.getHoursIntoDay()),
-//         .day = month_day.day_index + 1,
-//         .month = month_day.month.numeric(),
-//         .year = year_day.year,
-//     };
-// }

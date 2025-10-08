@@ -1,5 +1,7 @@
-/// Collection of MacOS constants, imitating Apple's naming convention
-/// of its own system framework constants
+/// Canonical set of helper constants shared between the GUI and privileged
+/// helper. Mirrors Apple's naming style for system frameworks so the Zig code
+/// stays consistent with the underlying C APIs. Includes Mach message sizes,
+/// helper IPC codes, and character helpers used during sanitisation.
 pub const k = struct {
     pub const MachPortPacketSize: comptime_int = 512;
 

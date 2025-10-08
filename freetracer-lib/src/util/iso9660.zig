@@ -1,3 +1,5 @@
+// Data structures mirroring ISO9660 and El Torito headers so the parser can
+// safely interpret on-disk sectors without manual pointer arithmetic.
 const std = @import("std");
 const eltorito = @import("eltorito.zig");
 const endian = @import("../util/endian.zig");

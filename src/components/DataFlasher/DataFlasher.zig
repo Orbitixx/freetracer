@@ -20,6 +20,8 @@ const PrivilegedHelper = @import("../macos/PrivilegedHelper.zig");
 
 const DataFlasherUI = @import("./DataFlasherUI.zig");
 
+// This state is mutable and can be accessed from the main UI thread (draw/update)
+// and a worker/event thread (handleEvent). Access must be guarded by state.lock().
 const DataFlasherState = struct {
     isActive: bool = false,
     isoPath: ?[:0]const u8 = null,

@@ -1,3 +1,9 @@
+// Filesystem utilities shared between the GUI client and helper for
+// constructing safe user paths, whitelisting image locations, and inspecting
+// path metadata such as extensions and image types.
+// All helpers here avoid following symlinks unless explicitly resolved and
+// guard against buffer overflows on fixed-size stacks.
+// -------------------------------------------------------------------------------
 const std = @import("std");
 const Character = @import("../constants.zig").Character;
 const Debug = @import("../util/debug.zig");
@@ -30,11 +36,15 @@ pub fn unwrapUserHomePath(buffer: *[std.fs.max_path_bytes]u8, restOfPath: []cons
     // Safety check for buffer overflow and null terminator space.
     if (totalLen >= buffer.len) return PathError.PathTooLong;
 
+    if (restOfPath.len > 0 and restOfPath[0] != Character.RIGHT_SLASH) {
+        return PathError.PathConstructionFailed;
+    }
+
     @memcpy(buffer[0..userDir.len], userDir);
     @memcpy(buffer[userDir.len..totalLen], restOfPath);
     buffer[totalLen] = Character.NULL;
 
-    return @ptrCast(buffer[0..totalLen]);
+    return buffer[0..totalLen :0];
 }
 
 /// Checks if a given `pathString` is a descendant of one of the allowed directories

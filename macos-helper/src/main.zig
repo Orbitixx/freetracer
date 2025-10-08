@@ -151,7 +151,10 @@ fn xpcRequestHandler(connection: XPCConnection, message: XPCObject) callconv(.c)
 
 /// Zig-native message callback processor function, called by the C-conv callback: xpcRequestHandler
 fn processRequestMessage(connection: XPCConnection, data: XPCObject) void {
-    const request: HelperRequestCode = XPCService.parseRequest(data);
+    const request: HelperRequestCode = XPCService.parseRequest(data) catch |err| {
+        Debug.log(.ERROR, "Helper failed to parse request, error: {any}", .{err});
+        return;
+    };
 
     Debug.log(.INFO, "Received request: {any}", .{request});
 
@@ -159,7 +162,12 @@ fn processRequestMessage(connection: XPCConnection, data: XPCObject) void {
         .INITIAL_PING => processInitialPing(connection),
         .GET_HELPER_VERSION => processGetHelperVersion(connection),
         .UNMOUNT_DISK => Debug.log(.INFO, "Discrete unmount request received -- dropping request. Deprecated.", .{}),
-        .WRITE_ISO_TO_DEVICE => processRequestWriteImage(connection, data),
+        .WRITE_ISO_TO_DEVICE => processRequestWriteImage(connection, data) catch |err| {
+            respondWithErrorAndTerminate(
+                .{ .err = err, .message = "Helper failed to process the write image request" },
+                .{ .xpcConnection = connection, .xpcResponseCode = .ISO_WRITE_FAIL },
+            );
+        },
     }
 }
 
@@ -197,53 +205,26 @@ fn sendXPCReply(connection: XPCConnection, reply: HelperResponseCode, comptime l
     XPCService.releaseObject(replyObject);
 }
 
-fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) void {
+fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) !void {
     //
-    const isoPath: []const u8 = XPCService.parseString(data, "isoPath");
-    const deviceBsdName: []const u8 = XPCService.parseString(data, "disk");
-    const deviceServiceId: c_uint = @intCast(XPCService.getUInt64(data, "deviceServiceId"));
+    const isoPath: [:0]const u8 = try XPCService.parseString(data, "isoPath");
+    const deviceBsdName: [:0]const u8 = try XPCService.parseString(data, "disk");
 
-    const deviceType = meta.intToEnum(DeviceType, XPCService.getUInt64(data, "deviceType")) catch {
-        respondWithErrorAndTerminate(
-            .{ .err = RequestValidationError.InvalidDeviceType, .message = "Invalid device type provided by client." },
-            .{ .xpcConnection = connection, .xpcResponseCode = .DEVICE_INVALID },
-        );
-        return;
-    };
+    const deviceServiceId: c_uint = @intCast(XPCService.getUInt64(data, "deviceServiceId") catch 0);
+    if (deviceServiceId == 0) return error.FailedToParseDeviceServiceId;
 
-    const imageType = meta.intToEnum(ImageType, XPCService.getUInt64(data, "imageType")) catch {
-        respondWithErrorAndTerminate(
-            .{ .err = RequestValidationError.InvalidImageType, .message = "Invalid image type provided by client." },
-            .{ .xpcConnection = connection, .xpcResponseCode = .ISO_FILE_INVALID },
-        );
-        return;
-    };
+    const deviceTypeInt: u64 = try XPCService.getUInt64(data, "deviceType");
+    const imageTypeInt: u64 = try XPCService.getUInt64(data, "imageType");
 
-    if (isoPath.len == 0) {
-        respondWithErrorAndTerminate(
-            .{ .err = RequestValidationError.EmptyIsoPath, .message = "Received empty ISO path." },
-            .{ .xpcConnection = connection, .xpcResponseCode = .ISO_FILE_INVALID },
-        );
-        return;
-    }
+    const deviceType = try meta.intToEnum(DeviceType, deviceTypeInt);
+    const imageType = try meta.intToEnum(ImageType, imageTypeInt);
 
-    if (deviceBsdName.len == 0) {
-        respondWithErrorAndTerminate(
-            .{ .err = RequestValidationError.EmptyDeviceIdentifier, .message = "Received empty device identifier." },
-            .{ .xpcConnection = connection, .xpcResponseCode = .DEVICE_INVALID },
-        );
-        return;
-    }
+    if (isoPath.len == 0) return RequestValidationError.EmptyIsoPath;
+    if (deviceBsdName.len == 0) return RequestValidationError.EmptyDeviceIdentifier;
 
     Debug.log(.INFO, "Received service: {d}", .{deviceServiceId});
 
-    const userHomePath: []const u8 = XPCService.getUserHomePath(connection) catch |err| {
-        respondWithErrorAndTerminate(
-            .{ .err = err, .message = "Unable to retrieve user home path." },
-            .{ .xpcConnection = connection, .xpcResponseCode = .ISO_WRITE_FAIL },
-        );
-        return;
-    };
+    const userHomePath: []const u8 = try XPCService.getUserHomePath(connection);
 
     const isoFile = fsops.openFileValidated(isoPath, .{ .userHomePath = userHomePath, .imageType = imageType }) catch |err| {
         respondWithErrorAndTerminate(
@@ -299,11 +280,6 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) void {
     };
 
     sendXPCReply(connection, .WRITE_VERIFICATION_SUCCESS, "Written ISO image successfully verified!");
-    // XPCService.connectionFlush(connection);
-    ShutdownManager.exitSuccessfully();
 
-    // TODO:
-    // To prevent the operating system from automatically remounting volumes while the raw write is in progress,
-    // the helper should also register a DADissenter for the disk. This temporarily blocks mount attempts from other processes,
-    // ensuring an exclusive lock on the device during the critical write phase.
+    ShutdownManager.exitSuccessfully();
 }

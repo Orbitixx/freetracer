@@ -1,3 +1,7 @@
+// Lightweight logging facade shared between the GUI and helper, providing
+// mutex-protected formatting, optional file persistence, and timestamped
+// severity output that integrates with Zig's std.log.
+// -----------------------------------------------------------------------
 const std = @import("std");
 const time = @import("./time.zig");
 
@@ -7,6 +11,7 @@ const Debug = @This();
 
 var instance: ?Logger = null;
 var mutex: std.Thread.Mutex = .{};
+var latest_snapshot: ?[:0]u8 = null;
 
 pub const LoggerSettings = struct {
     utcCorrectionHours: i8 = -4,
@@ -58,6 +63,11 @@ pub fn deinit() void {
     defer mutex.unlock();
 
     if (instance) |*inst| {
+        if (latest_snapshot) |snapshot| {
+            inst.allocator.free(snapshot);
+            latest_snapshot = null;
+        }
+
         if (inst.logFile) |*file| {
             file.close();
         }
@@ -77,7 +87,17 @@ pub fn getLatestLog() [:0]const u8 {
 
     if (instance) |*inst| {
         if (inst.latestLog) |latestLog| {
-            return latestLog;
+            const duplicated = inst.allocator.dupeZ(u8, latestLog) catch |err| {
+                std.log.err("Debug.getLatestLog: failed to duplicate latest log: {any}", .{err});
+                return latest_snapshot orelse "";
+            };
+
+            if (latest_snapshot) |snapshot| {
+                inst.allocator.free(snapshot);
+            }
+
+            latest_snapshot = duplicated;
+            return duplicated;
         } else return "";
     } else return "";
 }
