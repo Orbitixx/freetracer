@@ -1,3 +1,7 @@
+// Renders the image selection panel UI, wiring component events to button, label, and layout updates.
+// Receives image path and active state notifications, relays layout geometry to listeners, and never performs disk I/O.
+// Owns allocator-backed copies of transient strings so UI state remains valid beyond the originating event scope.
+// ----------------------------------------------------------------------------------------------------
 const std = @import("std");
 const rl = @import("raylib");
 const Debug = @import("freetracer-lib").Debug;
@@ -52,7 +56,7 @@ headerLabel: Text = undefined,
 diskImg: Texture = undefined,
 button: Button = undefined,
 isoTitle: Text = undefined,
-displayNameBuffer: [36]u8 = undefined,
+displayNameBuffer: [AppConfig.IMAGE_DISPLAY_NAME_BUFFER_LEN:0]u8 = undefined,
 
 const BgRectParams = struct {
     width: f32,
@@ -130,8 +134,8 @@ pub fn update(self: *ISOFilePickerUI) !void {
 
 pub fn draw(self: *ISOFilePickerUI) !void {
     self.state.lock();
+    defer self.state.unlock();
     const isActive = self.state.data.isActive;
-    self.state.unlock();
 
     self.bgRect.draw();
     self.headerLabel.draw();
@@ -141,7 +145,7 @@ pub fn draw(self: *ISOFilePickerUI) !void {
 }
 
 pub fn deinit(self: *ISOFilePickerUI) void {
-    _ = self;
+    self.button.deinit();
 }
 
 pub fn dispatchComponentAction(self: *ISOFilePickerUI) void {
@@ -174,8 +178,7 @@ fn recalculateUI(self: *ISOFilePickerUI, bgRectParams: BgRectParams) void {
     self.diskImg.transform.x = self.bgRect.transform.relX(0.5) - self.diskImg.transform.getWidth() / 2;
     self.diskImg.transform.y = self.bgRect.transform.relY(0.5) - self.diskImg.transform.getHeight() / 2;
 
-    self.isoTitle.transform.x = self.bgRect.transform.relX(0.5) - self.isoTitle.getDimensions().width / 2;
-    self.isoTitle.transform.y = self.diskImg.transform.y + self.diskImg.transform.getHeight() + winRelY(0.02);
+    self.setImageTitlePosition();
 
     self.button.setPosition(.{ .x = self.bgRect.transform.relX(0.5) - self.button.rect.transform.getWidth() / 2, .y = self.button.rect.transform.y });
 }
@@ -254,7 +257,7 @@ fn initializeButton(self: *ISOFilePickerUI) !void {
 }
 
 fn initializeIsoTitle(self: *ISOFilePickerUI) void {
-    self.displayNameBuffer = std.mem.zeroes([36]u8);
+    self.displayNameBuffer = std.mem.zeroes([AppConfig.IMAGE_DISPLAY_NAME_BUFFER_LEN:0]u8);
     self.resetIsoTitle();
 }
 
@@ -269,6 +272,7 @@ fn broadcastUIDimensions(self: *ISOFilePickerUI) void {
     EventManager.broadcast(responseEvent);
 }
 
+/// Updates internal active state and reapplies panel styling; must be called on the main UI thread.
 fn setIsActive(self: *ISOFilePickerUI, isActive: bool) void {
     {
         self.state.lock();
@@ -323,10 +327,13 @@ fn updateIsoTitle(self: *ISOFilePickerUI, newName: [:0]const u8) void {
     self.displayNameBuffer[written] = Character.NULL;
 
     const label = std.mem.sliceTo(&self.displayNameBuffer, Character.NULL);
+
     self.isoTitle = Text.init(@ptrCast(label), .{
         .x = self.bgRect.transform.relX(0.5),
         .y = self.bgRect.transform.relY(0.5),
     }, .{ .fontSize = 14 });
+
+    self.setImageTitlePosition();
 }
 
 fn resetIsoTitle(self: *ISOFilePickerUI) void {
@@ -334,14 +341,15 @@ fn resetIsoTitle(self: *ISOFilePickerUI) void {
         .x = self.bgRect.transform.relX(0.5),
         .y = self.bgRect.transform.relY(0.5),
     }, .{ .fontSize = 14 });
+
+    self.setImageTitlePosition();
 }
 
-// fn handleGetUIDimensions(self: *ISOFilePickerUI) EventResult {
-//     var eventResult = EventResult.init();
-//     const responseEvent = Events.onGetUIDimensions.create(self.asComponentPtr(), &.{ .transform = self.bgRect.transform });
-//     EventManager.broadcast(responseEvent);
-//     return eventResult.succeed();
-// }
+/// Keeps the ISO title centered beneath the disk glyph after any layout or text change.
+fn setImageTitlePosition(self: *ISOFilePickerUI) void {
+    self.isoTitle.transform.x = self.bgRect.transform.relX(0.5) - self.isoTitle.getDimensions().width / 2;
+    self.isoTitle.transform.y = self.diskImg.transform.y + self.diskImg.transform.getHeight() + winRelY(0.02);
+}
 
 fn handleUIDimensionsQueried(self: *ISOFilePickerUI, event: ComponentEvent) !EventResult {
     var eventResult = EventResult.init();

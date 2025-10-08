@@ -1,3 +1,8 @@
+// Coordinates the GUI-side ISO/image selection workflow and bridges UI events to
+// worker thread that invokes the platform file dialog. Owns the selected image
+// memory and propagates state to other components via the ComponentFramework
+// event bus while ensuring allocator ownership and worker lifecycle safety.
+// ------------------------------------------------------------------------------
 const std = @import("std");
 const osd = @import("osdialog");
 
@@ -83,6 +88,9 @@ pub const Events = struct {
     );
 };
 
+/// Creates an ISOFilePickerComponent with an empty state; caller must invoke
+/// `initComponent` and `start` before dispatching events. Allocator is retained
+/// for the lifetime of the component and used by the worker thread.
 pub fn init(allocator: std.mem.Allocator) !ISOFilePickerComponent {
     Debug.log(.DEBUG, "ISOFilePickerComponent: component initialized!", .{});
 
@@ -118,6 +126,8 @@ pub fn initWorker(self: *ISOFilePickerComponent) !void {
     );
 }
 
+/// Starts the worker thread context and materializes UI children; must only be
+/// called once after `initComponent`. Subscribes the component to the event bus.
 pub fn start(self: *ISOFilePickerComponent) !void {
     Debug.log(.DEBUG, "ISOFilePickerComponent: start() function called!", .{});
 
@@ -152,6 +162,8 @@ pub fn draw(self: *ISOFilePickerComponent) !void {
     _ = self;
 }
 
+/// UI callback entry-point that safely dispatches the asynchronous selection
+/// workflow; errors are logged rather than propagated to avoid UI crashes.
 pub fn dispatchComponentAction(self: *ISOFilePickerComponent) void {
     self.selectFile() catch |err| {
         Debug.log(.ERROR, "ISOFilePickerComponent: Failed to dispatch component action. Error: {any}", .{err});
@@ -204,6 +216,8 @@ fn handleISOFilePathQueried(self: *ISOFilePickerComponent, event: ComponentEvent
 
 /// Handles the `onISOFileSelected` event after the worker finishes.
 /// This function is responsible for validating the file and updating state and other components.
+/// Validates the worker-selected path, updates component state, and notifies dependents.
+/// Requires the component state lock to be held when invoked.
 fn handleISOFileSelected(self: *ISOFilePickerComponent) !EventResult {
     self.state.lock();
     defer self.state.unlock();
@@ -221,14 +235,14 @@ fn handleISOFileSelected(self: *ISOFilePickerComponent) !EventResult {
     const newPath = selectedPath.?;
 
     // --- Validate extension
-    if (!fs.isExtensionAllowed(AppConfig.ALLOWED_ISO_EXTENSIONS.len, AppConfig.ALLOWED_ISO_EXTENSIONS, newPath)) {
+    if (!fs.isExtensionAllowed(AppConfig.ALLOWED_IMAGE_EXTENSIONS.len, AppConfig.ALLOWED_IMAGE_EXTENSIONS, newPath)) {
         const proceed = osd.message("The selected file extension is not a recognized image type (.iso, .img). Proceed anyway?", .{
             .level = .warning,
             .buttons = .yes_no,
         });
 
         if (!proceed) {
-            // If user cancelled, clean up the path.
+            // If user cancelled, clean up the path and restore previous state.
             self.allocator.free(newPath);
             self.state.data.selectedPath = null;
             return eventResult.succeed();
@@ -279,6 +293,9 @@ pub fn checkAndJoinWorker(self: *ISOFilePickerComponent) void {
     }
 }
 
+/// Runs on the worker thread to `synchronously` and `blockingly` invoke the OS file dialog
+/// on the same thread and then signal completion back to the component on the owning thread.
+/// Blocking because MacOS requires that new windows (like file picker) are spawned by the main thread.
 pub fn workerRun(worker: *ComponentWorker, context: *anyopaque) void {
     Debug.log(.DEBUG, "ISOFilePickerComponent: runWorker() started!", .{});
 

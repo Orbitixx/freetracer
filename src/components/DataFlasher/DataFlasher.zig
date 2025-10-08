@@ -101,50 +101,14 @@ pub fn draw(self: *DataFlasher) !void {
     _ = self;
 }
 pub fn handleEvent(self: *DataFlasher, event: ComponentEvent) !EventResult {
-    //
     var eventResult = EventResult.init();
 
-    eventLoop: switch (event.hash) {
-        //
-        DeviceList.Events.onDeviceListActiveStateChanged.Hash => {
-            //
-            const data = DeviceList.Events.onDeviceListActiveStateChanged.getData(event) orelse break :eventLoop;
-
-            // If DeviceList Component is active -- break out early.
-            if (data.isActive == true) break :eventLoop;
-
-            try self.queryAndSaveISOPath();
-            try self.queryAndSaveSelectedDevice();
-
-            Debug.log(.DEBUG, "DataFlasher.handleEvent.onDeviceListActiveStateChanged: successfully obtained path and devices responses.", .{});
-
-            // Update state in a block with shorter lifecycle
-            {
-                self.state.lock();
-                defer self.state.unlock();
-                self.state.data.isActive = true;
-
-                std.debug.assert(self.state.data.isoPath != null and self.state.data.isoPath.?.len > 2);
-                std.debug.assert(self.state.data.device != null and @TypeOf(self.state.data.device.?) == StorageDevice);
-
-                Debug.log(.DEBUG, "DataFlasher received:\n\tisoPath: {s}\n\tdevice: {s} ({any})\n", .{
-                    self.state.data.isoPath.?,
-                    self.state.data.device.?.getBsdNameSlice(),
-                    self.state.data.device.?.type,
-                });
-            }
-
-            eventResult.validate(.SUCCESS);
-
-            // Broadcast component's state change to active
-            EventManager.broadcast(Events.onActiveStateChanged.create(self.asComponentPtr(), &.{ .isActive = true }));
-        },
-
-        else => {},
-    }
-
-    return eventResult;
+    return switch (event.hash) {
+        DeviceList.Events.onDeviceListActiveStateChanged.Hash => try self.handleDeviceListActiveStateChanged(event),
+        else => return eventResult.fail(),
+    };
 }
+
 pub fn dispatchComponentAction(self: *DataFlasher) void {
     Debug.log(.DEBUG, "DataFlasher: dispatching component action!", .{});
 
@@ -269,6 +233,41 @@ fn queryAndSaveSelectedDevice(self: *DataFlasher) !void {
     }
 
     if (query.selectedDevice) |dev| self.state.data.device = dev;
+}
+
+fn handleDeviceListActiveStateChanged(self: *DataFlasher, event: ComponentEvent) !EventResult {
+    var eventResult = EventResult.init();
+    //
+    const data = DeviceList.Events.onDeviceListActiveStateChanged.getData(event) orelse return eventResult.fail();
+
+    // If DeviceList Component is active -- break out early.
+    if (data.isActive == true) return eventResult.succeed();
+
+    try self.queryAndSaveISOPath();
+    try self.queryAndSaveSelectedDevice();
+
+    Debug.log(.DEBUG, "DataFlasher.handleEvent.onDeviceListActiveStateChanged: successfully obtained path and devices responses.", .{});
+
+    // Update state in a block with shorter lifecycle
+    {
+        self.state.lock();
+        defer self.state.unlock();
+        self.state.data.isActive = true;
+
+        std.debug.assert(self.state.data.isoPath != null and self.state.data.isoPath.?.len > 2);
+        std.debug.assert(self.state.data.device != null and @TypeOf(self.state.data.device.?) == StorageDevice);
+
+        Debug.log(.DEBUG, "DataFlasher received:\n\tisoPath: {s}\n\tdevice: {s} ({any})\n", .{
+            self.state.data.isoPath.?,
+            self.state.data.device.?.getBsdNameSlice(),
+            self.state.data.device.?.type,
+        });
+    }
+
+    // Broadcast component's state change to active
+    EventManager.broadcast(Events.onActiveStateChanged.create(self.asComponentPtr(), &.{ .isActive = true }));
+
+    return eventResult.succeed();
 }
 
 pub const flashISOtoDeviceWrapper = struct {
