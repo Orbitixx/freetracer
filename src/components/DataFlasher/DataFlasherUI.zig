@@ -24,29 +24,39 @@ const DataFlasher = @import("./DataFlasher.zig");
 const DeviceList = @import("../DeviceList/DeviceList.zig");
 const DeviceListUI = @import("../DeviceList/DeviceListUI.zig");
 
-const SECTION_PADDING: f32 = 0.1;
-const PADDING_LEFT: f32 = SECTION_PADDING / 2;
-const PADDING_RIGHT: f32 = PADDING_LEFT;
+const SECTION_PADDING: f32 = AppConfig.APP_UI_MODULE_SECTION_PADDING;
+const PADDING_LEFT: f32 = AppConfig.APP_UI_MODULE_PADDING_LEFT;
+const PADDING_RIGHT: f32 = AppConfig.APP_UI_MODULE_PADDING_RIGHT;
 
-const HEADER_LABEL_OFFSET_X: f32 = 12.0;
-const HEADER_LABEL_REL_Y: f32 = 0.01;
-const FLASH_BUTTON_REL_Y: f32 = 0.9;
+const HEADER_LABEL_OFFSET_X: f32 = AppConfig.HEADER_LABEL_OFFSET_X;
+const HEADER_LABEL_REL_Y: f32 = AppConfig.HEADER_LABEL_REL_Y;
+const FLASH_BUTTON_REL_Y: f32 = AppConfig.FLASH_BUTTON_REL_Y;
 
-const TEXTURE_TILE_SIZE = 16;
+const TEXTURE_TILE_SIZE = AppConfig.TEXTURE_TILE_SIZE;
 
-const ICON_SIZE = 22;
-const ICON_TEXT_GAP_X = ICON_SIZE * 1.5;
+const ICON_SIZE = AppConfig.ICON_SIZE;
+const ICON_TEXT_GAP_X = AppConfig.ICON_TEXT_GAP_X;
 const ISO_ICON_POS_REL_X = PADDING_LEFT;
 const ISO_ICON_POS_REL_Y = SECTION_PADDING;
 const DEV_ICON_POS_REL_X = ISO_ICON_POS_REL_X;
 const DEV_ICON_POS_REL_Y = ISO_ICON_POS_REL_Y + ISO_ICON_POS_REL_Y / 2;
 
-// --- SpriteSheet Coordinates ---
-const ICON_SRC_ISO = rl.Rectangle{ .x = TEXTURE_TILE_SIZE * 9, .y = TEXTURE_TILE_SIZE * 10, .width = TEXTURE_TILE_SIZE, .height = TEXTURE_TILE_SIZE };
-const ICON_SRC_DEVICE = rl.Rectangle{ .x = TEXTURE_TILE_SIZE * 10, .y = TEXTURE_TILE_SIZE * 11, .width = TEXTURE_TILE_SIZE, .height = TEXTURE_TILE_SIZE };
+const ITEM_GAP_Y = AppConfig.ITEM_GAP_Y;
+const STATUS_INDICATOR_SIZE: f32 = AppConfig.STATUS_INDICATOR_SIZE;
 
-const ITEM_GAP_Y = 8;
-const STATUS_INDICATOR_SIZE: f32 = 20;
+// --- SpriteSheet Coordinates ---
+const ICON_SRC_ISO = rl.Rectangle{
+    .x = TEXTURE_TILE_SIZE * 9,
+    .y = TEXTURE_TILE_SIZE * 10,
+    .width = TEXTURE_TILE_SIZE,
+    .height = TEXTURE_TILE_SIZE,
+};
+const ICON_SRC_DEVICE = rl.Rectangle{
+    .x = TEXTURE_TILE_SIZE * 10,
+    .y = TEXTURE_TILE_SIZE * 11,
+    .width = TEXTURE_TILE_SIZE,
+    .height = TEXTURE_TILE_SIZE,
+};
 
 // This state is mutable and can be accessed from the main UI thread (draw/update)
 // and a worker/event thread (handleEvent). Access must be guarded by state.lock().
@@ -72,7 +82,9 @@ const Transform = UIFramework.Primitives.Transform;
 const Rectangle = UIFramework.Primitives.Rectangle;
 const Text = UIFramework.Primitives.Text;
 const Texture = UIFramework.Primitives.Texture;
-const Statusbox = UIFramework.Statuxbox;
+const Statusbox = UIFramework.Statusbox;
+const Progressbox = UIFramework.Progressbox;
+const StatusIndicator = UIFramework.StatusIndicator;
 
 const PrivilegedHelper = @import("../macos/PrivilegedHelper.zig");
 
@@ -84,68 +96,11 @@ const winRelX = WindowManager.relW;
 const winRelY = WindowManager.relH;
 
 const NULL_TEXT: [:0]const u8 = "NULL";
-const EMPTY_TEXT: [:0]const u8 = &[_:0]u8{0};
 
 const BgRectParams = struct {
     width: f32,
     color: rl.Color,
     borderColor: rl.Color,
-};
-
-const ProgressBox = struct {
-    value: u64 = 0,
-    text: Text = undefined,
-    percentTextBuf: [5]u8 = undefined,
-    percentText: Text = undefined,
-    rect: Rectangle = undefined,
-
-    pub fn draw(self: *ProgressBox) void {
-        self.text.draw();
-        self.percentText.draw();
-        self.rect.draw();
-    }
-
-    pub fn setProgressTo(self: *ProgressBox, referenceRect: Rectangle, newValue: u64) void {
-        const clamped = std.math.clamp(newValue, @as(u64, 0), @as(u64, 100));
-        self.value = clamped;
-
-        const width: f32 = referenceRect.transform.getWidth();
-        const percent_f32: f32 = @floatFromInt(clamped);
-        const percent_u8: u8 = @intCast(clamped);
-        self.percentTextBuf = std.mem.zeroes([5]u8);
-        self.percentText.value = std.fmt.bufPrintZ(self.percentTextBuf[0..], "{d}%", .{percent_u8}) catch EMPTY_TEXT;
-        self.rect.transform.w = (percent_f32 / 100.0) * (1 - SECTION_PADDING) * width;
-    }
-};
-
-const StatusIndicator = struct {
-    text: Text = undefined,
-    box: Statusbox = undefined,
-
-    pub fn init(text: [:0]const u8, size: f32) StatusIndicator {
-        var statusBox = Statusbox.init(.{ .x = 0, .y = 0 }, size, .Primary);
-        statusBox.switchState(.NONE);
-
-        return StatusIndicator{
-            .text = Text.init(text, .{ .x = 0, .y = 0 }, .{ .fontSize = 14 }),
-            .box = statusBox,
-        };
-    }
-
-    pub fn switchState(self: *StatusIndicator, newState: Statusbox.StatusboxState) void {
-        self.box.switchState(newState);
-    }
-
-    pub fn calculateUI(self: *StatusIndicator, transform: Transform) void {
-        self.text.transform.x = transform.x;
-        self.text.transform.y = transform.y + transform.h / 2 - self.text.getDimensions().height / 2;
-        self.box.setPosition(.{ .x = transform.x + transform.w - transform.h, .y = transform.y });
-    }
-
-    pub fn draw(self: *StatusIndicator) !void {
-        self.text.draw();
-        try self.box.draw();
-    }
 };
 
 const MAX_PATH_DISPLAY_LENGTH = 40;
@@ -165,7 +120,7 @@ uiSheetTexture: Texture = undefined,
 button: Button = undefined,
 isoText: Text = undefined,
 deviceText: Text = undefined,
-progressBox: ProgressBox = undefined,
+progressBox: Progressbox = undefined,
 displayISOTextBuffer: [std.fs.max_path_bytes]u8 = undefined,
 displayDeviceTextBuffer: [std.fs.max_path_bytes]u8 = undefined,
 
@@ -205,107 +160,14 @@ pub fn initComponent(self: *DataFlasherUI, parent: ?*Component) !void {
 pub fn start(self: *DataFlasherUI) !void {
     if (self.component == null) try self.initComponent(self.parent.asComponentPtr());
 
-    if (self.component) |*component| {
-        if (!EventManager.subscribe(ComponentName, component)) return error.UnableToSubscribeToEventManager;
-    } else return error.UnableToSubscribeToEventManager;
+    try self.subscribeToEvents();
 
-    self.bgRect = Rectangle{
-        .transform = .{
-            .x = winRelX(0.5),
-            .y = winRelY(AppConfig.APP_UI_MODULE_PANEL_Y),
-            .w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
-            .h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
-        },
-        .style = .{
-            .color = Styles.Color.darkGreen,
-            .borderStyle = .{
-                .color = Styles.Color.darkGreen,
-            },
-        },
-        .rounded = true,
-        .bordered = true,
-    };
-
-    // Get initial width of the preceding UI element
-    try self.queryDeviceListUIDimensions();
-
-    self.button = Button.init(
-        "Flash",
-        null,
-        self.bgRect.transform.getPosition(),
-        .Primary,
-        .{ .context = self.parent, .function = DataFlasher.flashISOtoDeviceWrapper.call },
-        self.allocator,
-    );
-    self.button.params.disableOnClick = true;
-    self.button.setEnabled(false);
-    try self.button.start();
-    self.button.setPosition(.{
-        .x = self.bgRect.transform.relX(0.5) - @divTrunc(self.button.rect.transform.getWidth(), 2),
-        .y = self.bgRect.transform.relY(0.9) - @divTrunc(self.button.rect.transform.getHeight(), 2),
-    });
-    self.button.rect.rounded = true;
-
-    self.isoText = Text.init("NULL", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
-    self.deviceText = Text.init("NULL", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
-
-    self.headerLabel = Text.init("flash", .{ .x = self.bgRect.transform.x + 12, .y = self.bgRect.transform.relY(0.01) }, .{
-        .font = .JERSEY10_REGULAR,
-        .fontSize = 34,
-        .textColor = Styles.Color.white,
-    });
-
-    self.uiSheetTexture = Texture.init(.BUTTON_UI, .{ .x = winRelX(1.5), .y = winRelY(1.5) });
-
-    self.moduleImg = Texture.init(.DISK_IMAGE, .{ .x = 0, .y = 0 });
-    self.moduleImg.transform.scale = 0.5;
-    self.moduleImg.transform.x = self.bgRect.transform.relX(0.5) - self.moduleImg.transform.getWidth() / 2;
-    self.moduleImg.transform.y = self.bgRect.transform.relY(0.5) - self.moduleImg.transform.getHeight() / 2;
-    self.moduleImg.tint = .{ .r = 255, .g = 255, .b = 255, .a = 150 };
-
-    self.statusSectionHeader = Text.init(
-        "status",
-        .{ .x = self.bgRect.transform.relX(PADDING_LEFT), .y = self.bgRect.transform.relY(0.26) },
-        .{ .fontSize = 24, .font = .JERSEY10_REGULAR },
-    );
-
-    self.isoStatus = StatusIndicator.init("ISO validated & stream open", STATUS_INDICATOR_SIZE);
-    self.deviceStatus = StatusIndicator.init("Device validated & stream open", STATUS_INDICATOR_SIZE);
-    self.permissionsStatus = StatusIndicator.init("Freetracer has necessary permissions", STATUS_INDICATOR_SIZE);
-    self.writeStatus = StatusIndicator.init("Write successfully completed", STATUS_INDICATOR_SIZE);
-    self.verificationStatus = StatusIndicator.init("Written bytes successfuly verified", STATUS_INDICATOR_SIZE);
-
-    self.progressBox = ProgressBox{
-        .text = Text.init("", .{
-            .x = self.bgRect.transform.relX(PADDING_LEFT),
-            .y = self.bgRect.transform.relY(0.75),
-        }, .{
-            .font = .ROBOTO_REGULAR,
-            .fontSize = 14,
-            .textColor = .white,
-        }),
-        .percentText = Text.init(
-            "",
-            .{ .x = self.bgRect.transform.relX(PADDING_LEFT), .y = self.bgRect.transform.relY(0.75) },
-            .{ .fontSize = 14 },
-        ),
-        .value = 0,
-        .percentTextBuf = std.mem.zeroes([5]u8),
-        .rect = .{
-            .bordered = true,
-            .rounded = true,
-            .style = .{ .color = Color.white, .borderStyle = .{ .color = Color.white, .thickness = 2.00 } },
-            .transform = .{
-                .x = self.bgRect.transform.relX(0.2),
-                .y = self.bgRect.transform.relY(0.7),
-                .h = 18.0,
-                .w = 0.0,
-            },
-        },
-    };
-
-    self.displayISOTextBuffer = std.mem.zeroes([std.fs.max_path_bytes]u8);
-    self.displayDeviceTextBuffer = std.mem.zeroes([std.fs.max_path_bytes]u8);
+    self.initBgRect();
+    self.initFlashButton();
+    self.initModuleLabels();
+    self.initTextures();
+    self.initStatusIndicators();
+    self.initProgressbox();
 }
 
 pub fn update(self: *DataFlasherUI) !void {
@@ -329,6 +191,7 @@ fn drawActive(self: *DataFlasherUI) !void {
     self.isoText.draw();
     self.deviceText.draw();
 
+    // TODO: Create separate label Component with optional icon
     rl.drawTexturePro(
         self.uiSheetTexture.texture,
         ICON_SRC_ISO,
@@ -434,15 +297,129 @@ pub fn deinit(self: *DataFlasherUI) void {
     self.button.deinit();
 }
 
+fn subscribeToEvents(self: *DataFlasherUI) !void {
+    if (self.component) |*component| {
+        if (!EventManager.subscribe(ComponentName, component)) return error.UnableToSubscribeToEventManager;
+    } else return error.UnableToSubscribeToEventManager;
+}
+
+fn initFlashButton(self: *DataFlasherUI) void {
+    self.button = Button.init(
+        "Flash",
+        null,
+        self.bgRect.transform.getPosition(),
+        .Primary,
+        .{ .context = self.parent, .function = DataFlasher.flashISOtoDeviceWrapper.call },
+        self.allocator,
+    );
+    self.button.params.disableOnClick = true;
+    self.button.setEnabled(false);
+    try self.button.start();
+    self.button.setPosition(.{
+        .x = self.bgRect.transform.relX(0.5) - @divTrunc(self.button.rect.transform.getWidth(), 2),
+        .y = self.bgRect.transform.relY(0.9) - @divTrunc(self.button.rect.transform.getHeight(), 2),
+    });
+    self.button.rect.rounded = true;
+}
+
 /// Pulls width/position hints from the DeviceList UI so the panels align horizontally.
-fn queryDeviceListUIDimensions(self: *DataFlasherUI) !void {
+fn queryDeviceListUIDimensions(self: *DataFlasherUI) !Transform {
     var transform = Transform{ .x = 0, .y = 0, .w = 0, .h = 0 };
     const queryDimensionsEvent = DeviceListUI.Events.onUITransformQueried.create(self.asComponentPtr(), &.{ .result = &transform });
 
     const eventResult = try EventManager.signal("device_list_ui", queryDimensionsEvent);
     if (!eventResult.success) return error.DataFlasherUICouldNotObtainInitialUIDimensions;
 
-    self.bgRect.transform.x = transform.x + transform.getWidth() + 20;
+    return transform;
+}
+
+fn initBgRect(self: *DataFlasherUI) void {
+    const deviceListBgRect: Transform = try self.queryDeviceListUIDimensions();
+
+    self.bgRect = Rectangle{
+        .transform = .{
+            .x = deviceListBgRect.x + deviceListBgRect.w + AppConfig.APP_UI_MODULE_GAP_X,
+            .y = winRelY(AppConfig.APP_UI_MODULE_PANEL_Y),
+            .w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
+            .h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
+        },
+        .style = .{
+            .color = Styles.Color.darkGreen,
+            .borderStyle = .{
+                .color = Styles.Color.darkGreen,
+            },
+        },
+        .rounded = true,
+        .bordered = true,
+    };
+}
+
+fn initModuleLabels(self: *DataFlasherUI) void {
+    self.displayISOTextBuffer = std.mem.zeroes([std.fs.max_path_bytes]u8);
+    self.displayDeviceTextBuffer = std.mem.zeroes([std.fs.max_path_bytes]u8);
+    self.isoText = Text.init("NULL", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
+    self.deviceText = Text.init("NULL", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
+
+    self.headerLabel = Text.init("flash", .{ .x = self.bgRect.transform.x + 12, .y = self.bgRect.transform.relY(0.01) }, .{
+        .font = .JERSEY10_REGULAR,
+        .fontSize = 34,
+        .textColor = Styles.Color.white,
+    });
+
+    self.statusSectionHeader = Text.init(
+        "status",
+        .{ .x = self.bgRect.transform.relX(PADDING_LEFT), .y = self.bgRect.transform.relY(0.26) },
+        .{ .fontSize = 24, .font = .JERSEY10_REGULAR },
+    );
+}
+
+fn initStatusIndicators(self: *DataFlasherUI) void {
+    self.isoStatus = StatusIndicator.init("ISO validated & stream open", STATUS_INDICATOR_SIZE);
+    self.deviceStatus = StatusIndicator.init("Device validated & stream open", STATUS_INDICATOR_SIZE);
+    self.permissionsStatus = StatusIndicator.init("Freetracer has necessary permissions", STATUS_INDICATOR_SIZE);
+    self.writeStatus = StatusIndicator.init("Write successfully completed", STATUS_INDICATOR_SIZE);
+    self.verificationStatus = StatusIndicator.init("Written bytes successfuly verified", STATUS_INDICATOR_SIZE);
+}
+
+fn initTextures(self: *DataFlasherUI) void {
+    self.uiSheetTexture = Texture.init(.BUTTON_UI, .{ .x = winRelX(1.5), .y = winRelY(1.5) });
+
+    self.moduleImg = Texture.init(.DISK_IMAGE, .{ .x = 0, .y = 0 });
+    self.moduleImg.transform.scale = 0.5;
+    self.moduleImg.transform.x = self.bgRect.transform.relX(0.5) - self.moduleImg.transform.getWidth() / 2;
+    self.moduleImg.transform.y = self.bgRect.transform.relY(0.5) - self.moduleImg.transform.getHeight() / 2;
+    self.moduleImg.tint = .{ .r = 255, .g = 255, .b = 255, .a = 150 };
+}
+
+fn initProgressbox(self: *DataFlasherUI) void {
+    self.progressBox = Progressbox{
+        .text = Text.init("", .{
+            .x = self.bgRect.transform.relX(PADDING_LEFT),
+            .y = self.bgRect.transform.relY(0.75),
+        }, .{
+            .font = .ROBOTO_REGULAR,
+            .fontSize = 14,
+            .textColor = .white,
+        }),
+        .percentText = Text.init(
+            "",
+            .{ .x = self.bgRect.transform.relX(PADDING_LEFT), .y = self.bgRect.transform.relY(0.75) },
+            .{ .fontSize = 14 },
+        ),
+        .value = 0,
+        .percentTextBuf = std.mem.zeroes([5]u8),
+        .rect = .{
+            .bordered = true,
+            .rounded = true,
+            .style = .{ .color = Color.white, .borderStyle = .{ .color = Color.white, .thickness = 2.00 } },
+            .transform = .{
+                .x = self.bgRect.transform.relX(0.2),
+                .y = self.bgRect.transform.relY(0.7),
+                .h = 18.0,
+                .w = 0.0,
+            },
+        },
+    };
 }
 
 /// Repositions child elements after background sizing/color changes.
