@@ -162,8 +162,8 @@ pub fn start(self: *DataFlasherUI) !void {
 
     try self.subscribeToEvents();
 
-    self.initBgRect();
-    self.initFlashButton();
+    try self.initBgRect();
+    try self.initFlashButton();
     self.initModuleLabels();
     self.initTextures();
     self.initStatusIndicators();
@@ -303,7 +303,7 @@ fn subscribeToEvents(self: *DataFlasherUI) !void {
     } else return error.UnableToSubscribeToEventManager;
 }
 
-fn initFlashButton(self: *DataFlasherUI) void {
+fn initFlashButton(self: *DataFlasherUI) !void {
     self.button = Button.init(
         "Flash",
         null,
@@ -333,7 +333,7 @@ fn queryDeviceListUIDimensions(self: *DataFlasherUI) !Transform {
     return transform;
 }
 
-fn initBgRect(self: *DataFlasherUI) void {
+fn initBgRect(self: *DataFlasherUI) !void {
     const deviceListBgRect: Transform = try self.queryDeviceListUIDimensions();
 
     self.bgRect = Rectangle{
@@ -546,7 +546,8 @@ pub fn handleOnActiveStateChanged(self: *DataFlasherUI, event: ComponentEvent) !
         self.state.data.isActive = data.isActive;
     }
 
-    try self.queryDeviceListUIDimensions();
+    const transform = try self.queryDeviceListUIDimensions();
+    self.bgRect.transform.x = transform.x + transform.w + AppConfig.APP_UI_MODULE_GAP_X;
 
     switch (data.isActive) {
         true => {

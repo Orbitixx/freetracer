@@ -11,6 +11,7 @@ const fs = freetracer_lib.fs;
 const ResourceManager = @import("./ResourceManager.zig").ResourceManagerSingleton;
 const WindowManager = @import("./WindowManager.zig").WindowManagerSingleton;
 const EventManager = @import("./EventManager.zig").EventManagerSingleton;
+const UpdateManager = @import("./UpdateManager.zig").UpdateManagerSingleton;
 
 const Font = ResourceManager.FONT;
 const Color = @import("../components/ui/Styles.zig").Color;
@@ -58,6 +59,10 @@ pub fn run(self: *AppManager) !void {
 
     try EventManager.init(self.allocator);
     defer EventManager.deinit();
+
+    try UpdateManager.init(self.allocator);
+    defer UpdateManager.deinit();
+    try UpdateManager.checkUpdates();
 
     //----------------------------------------------------------------------------------
     //--- @END MANAGERS ----------------------------------------------------------------
