@@ -1,3 +1,10 @@
+// Central export surface for the freetracer library used by both the GUI client
+// and the privileged helper. This module re-exports the Zig utility packages,
+// MacOS system bindings, and generated C XPC headers that make up the IPC and
+// disk management interface. Downstream code imports this file to access the
+// canonical types and subsystem modules without depending on individual file
+// paths.
+// ------------------------------------------------------------------------------
 const std = @import("std");
 const testing = std.testing;
 

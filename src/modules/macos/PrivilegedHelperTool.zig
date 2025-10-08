@@ -1,8 +1,11 @@
+// Handles client-side helper installation checks for the privileged SMJobBless helper.
+// Exposes APIs used by the unprivileged GUI to verify helper presence and trigger
+// installation by negotiating Authorization Services credentials and invoking SMJobBless.
+// Performs CoreFoundation resource management and surfaces status as HelperInstallCode enums.
+// -------------------------------------------------------------------------------------------
 const std = @import("std");
 const env = @import("../../env.zig");
-
 const freetracer_lib = @import("freetracer-lib");
-
 const c = freetracer_lib.c;
 const k = freetracer_lib.constants.k;
 const Debug = freetracer_lib.Debug;
@@ -13,10 +16,10 @@ const HelperInstallCode = freetracer_lib.constants.HelperInstallCode;
 const HelperUnmountRequestCode = freetracer_lib.constants.HelperUnmountRequestCode;
 const HelperResponseCode = freetracer_lib.constants.HelperResponseCode;
 
-/// MacOS-only
+/// MacOS-only.
 /// Checks via the SMJobBless system daemon if the privileged helper tool is installed.
-/// "Client"-side function, whereas Freetracer main process acts as the client for the Freetracer Privileged Tool
-/// @Returns HelperInstallCode = enum(bool) { FAILURE: bool = false, SUCCESS: bool = true}
+/// Caller must run on macOS and the helper bundle id constant must remain valid for the CFString lifetime.
+/// Returns HelperInstallCode.{SUCCESS, FAILURE} where FAILURE denotes helper absence or unexpected CF failure.
 pub fn isHelperToolInstalled() HelperInstallCode {
     if (!isMacOS) return HelperInstallCode.FAILURE;
 
@@ -26,6 +29,12 @@ pub fn isHelperToolInstalled() HelperInstallCode {
         c.kCFStringEncodingUTF8,
         c.kCFAllocatorNull,
     );
+
+    if (helperLabel == null) {
+        Debug.log(.ERROR, "isHelperToolInstalled(): failed to create CFString for helper bundle id.", .{});
+        return HelperInstallCode.FAILURE;
+    }
+
     defer _ = c.CFRelease(helperLabel);
 
     const smJobCopyDict = c.SMJobCopyDictionary(c.kSMDomainSystemLaunchd, helperLabel);
@@ -42,10 +51,10 @@ pub fn isHelperToolInstalled() HelperInstallCode {
     return HelperInstallCode.SUCCESS;
 }
 
-/// MacOS-only
-/// Installs the privileged helper tool via MacOS' SMJobBless.
-/// "Client"-side function, whereas Freetracer main process acts as the client for the Freetracer Privileged Tool
-/// @Returns HelperInstallCode = enum(bool) { FAILURE: bool = false, SUCCESS: bool = true}
+/// MacOS-only.
+/// Installs the privileged helper tool via macOS SMJobBless after acquiring the bless entitlement.
+/// Caller must be the GUI client with appropriate code signature and run off the UI thread due to potential prompts.
+/// Returns HelperInstallCode.{SUCCESS, FAILURE} where FAILURE denotes auth negotiation or SMJobBless problems.
 pub fn installPrivilegedHelperTool() HelperInstallCode {
     if (!isMacOS) return HelperInstallCode.FAILURE;
 
@@ -88,6 +97,12 @@ pub fn installPrivilegedHelperTool() HelperInstallCode {
     Debug.log(.DEBUG, "Install Helper Tool: successfully copied auth rights; attempting to create a bundle id CFStringRef.", .{});
 
     const helperLabel: c.CFStringRef = c.CFStringCreateWithCStringNoCopy(c.kCFAllocatorDefault, env.HELPER_BUNDLE_ID, c.kCFStringEncodingUTF8, c.kCFAllocatorNull);
+
+    if (helperLabel == null) {
+        Debug.log(.ERROR, "Install Helper Tool: failed to create helper label CFString.", .{});
+        return HelperInstallCode.FAILURE;
+    }
+
     defer _ = c.CFRelease(helperLabel);
 
     Debug.log(.DEBUG, "Install Helper Tool: successfully created a bundle id CFStringRef.", .{});
@@ -136,8 +151,13 @@ pub fn installPrivilegedHelperTool() HelperInstallCode {
             return HelperInstallCode.FAILURE;
         }
 
-        Debug.log(.ERROR, "Freetracer received SMJobBless error: {s}.", .{std.mem.sliceTo(&errDescBuffer, 0)});
+        const errLen = std.mem.indexOfScalar(u8, errDescBuffer[0..], 0x00) orelse errDescBuffer.len;
+        Debug.log(.ERROR, "Freetracer received SMJobBless error: {s}.", .{errDescBuffer[0..@min(errDescBuffer.len, errLen)]});
         return HelperInstallCode.FAILURE;
+    }
+
+    if (cfError != null) {
+        defer _ = c.CFRelease(cfError);
     }
 
     if (installStatus == c.TRUE) {

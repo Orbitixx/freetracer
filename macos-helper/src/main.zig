@@ -1,3 +1,8 @@
+// This file hosts the privileged helper's entry point and the XPC dispatch loop that services
+// requests from the unprivileged GUI process. It authenticates each incoming XPC message,
+// routes supported helper commands to filesystem/device utilities, and reports results back over
+// the connection while coordinating orderly shutdown through the ShutdownManager singleton.
+// -----------------------------------------------------------------------------------------
 const std = @import("std");
 const env = @import("env.zig");
 const fsops = @import("util/filesystem.zig");
@@ -29,6 +34,15 @@ const HelperResponseCode = freetracer_lib.constants.HelperResponseCode;
 const ReturnCode = freetracer_lib.constants.HelperReturnCode;
 const WriteRequestData = freetracer_lib.constants.WriteRequestData;
 
+const meta = std.meta;
+
+const RequestValidationError = error{
+    EmptyIsoPath,
+    EmptyDeviceIdentifier,
+    InvalidDeviceType,
+    InvalidImageType,
+};
+
 // NOTE: Critical compile-time .plist symbol exports
 // Apple requires these to be linked into the binary in their respective sections
 // in order for the helper to be correctly registered and launched by the system daemon.
@@ -47,6 +61,8 @@ comptime {
 // export var info_plist_data: [env.INFO_PLIST.len:0]u8 linksection("__TEXT,__info_plist") = env.INFO_PLIST.*;
 // export var launchd_plist_data: [env.LAUNCHD_PLIST.len:0]u8 linksection("__TEXT,__launchd_plist") = env.LAUNCHD_PLIST.*;
 
+/// Entry point for the SMJobBlessed helper. Installs logging, sets up the XPC service and hands
+/// execution over to the dispatch queue (which never returns under normal circumstances).
 pub fn main() !void {
     var debugAllocator = std.heap.DebugAllocator(.{ .thread_safe = true }).init;
     const allocator = debugAllocator.allocator();
@@ -93,7 +109,9 @@ pub fn main() !void {
     xpcServer.start();
 }
 
-/// C-convention callback; called anytime a message is received over the XPC connection.
+/// C-convention callback invoked by libxpc when the helper receives a message on its Mach service.
+/// Called for every inbound XPC message after dispatch authentication succeeds.
+/// Preconditions: `connection` is authenticated by `XPCService.authenticateMessage`.
 fn xpcRequestHandler(connection: XPCConnection, message: XPCObject) callconv(.c) void {
     Debug.log(.INFO, "Helper received a new message over XPC bridge. Attempting to authenticate requester...", .{});
 
@@ -158,6 +176,8 @@ fn processGetHelperVersion(connection: XPCConnection) void {
     XPCService.connectionSendMessage(connection, reply);
 }
 
+/// Packages an error response, sends it back to the caller, and schedules helper termination.
+/// Postcondition: the helper will exit via `ShutdownManager.terminateWithError`.
 fn respondWithErrorAndTerminate(
     err: struct { err: anyerror, message: []const u8 },
     response: struct { xpcConnection: XPCConnection, xpcResponseCode: HelperResponseCode },
@@ -169,6 +189,7 @@ fn respondWithErrorAndTerminate(
     ShutdownManager.terminateWithError(err.err);
 }
 
+/// Convenience helper to emit a success response and keep logging consistent across request stages.
 fn sendXPCReply(connection: XPCConnection, reply: HelperResponseCode, comptime logMessage: []const u8) void {
     Debug.log(.INFO, logMessage, .{});
     const replyObject = XPCService.createResponse(reply);
@@ -181,12 +202,40 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) void {
     const isoPath: []const u8 = XPCService.parseString(data, "isoPath");
     const deviceBsdName: []const u8 = XPCService.parseString(data, "disk");
     const deviceServiceId: c_uint = @intCast(XPCService.getUInt64(data, "deviceServiceId"));
-    const deviceType: DeviceType = @enumFromInt(XPCService.getUInt64(data, "deviceType"));
-    const imageType: ImageType = @enumFromInt(XPCService.getUInt64(data, "imageType"));
 
-    // defer XPCService.releaseObject(data);
+    const deviceType = meta.intToEnum(DeviceType, XPCService.getUInt64(data, "deviceType")) catch {
+        respondWithErrorAndTerminate(
+            .{ .err = RequestValidationError.InvalidDeviceType, .message = "Invalid device type provided by client." },
+            .{ .xpcConnection = connection, .xpcResponseCode = .DEVICE_INVALID },
+        );
+        return;
+    };
 
-    Debug.log(.INFO, "Recieved service: {d}", .{deviceServiceId});
+    const imageType = meta.intToEnum(ImageType, XPCService.getUInt64(data, "imageType")) catch {
+        respondWithErrorAndTerminate(
+            .{ .err = RequestValidationError.InvalidImageType, .message = "Invalid image type provided by client." },
+            .{ .xpcConnection = connection, .xpcResponseCode = .ISO_FILE_INVALID },
+        );
+        return;
+    };
+
+    if (isoPath.len == 0) {
+        respondWithErrorAndTerminate(
+            .{ .err = RequestValidationError.EmptyIsoPath, .message = "Received empty ISO path." },
+            .{ .xpcConnection = connection, .xpcResponseCode = .ISO_FILE_INVALID },
+        );
+        return;
+    }
+
+    if (deviceBsdName.len == 0) {
+        respondWithErrorAndTerminate(
+            .{ .err = RequestValidationError.EmptyDeviceIdentifier, .message = "Received empty device identifier." },
+            .{ .xpcConnection = connection, .xpcResponseCode = .DEVICE_INVALID },
+        );
+        return;
+    }
+
+    Debug.log(.INFO, "Received service: {d}", .{deviceServiceId});
 
     const userHomePath: []const u8 = XPCService.getUserHomePath(connection) catch |err| {
         respondWithErrorAndTerminate(

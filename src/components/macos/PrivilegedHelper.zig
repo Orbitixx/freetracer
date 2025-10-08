@@ -1,3 +1,9 @@
+/// PrivilegedHelper mediates between the GUI and the privileged helper by owning XPC client state,
+/// staging selected image/device metadata, and emitting component events in response to helper replies.
+/// Inbound: component events from the UI and XPC reply dictionaries; Outbound: XPC requests to the helper
+/// (write ISO, query version) plus UI events for progress/errors. No direct disk I/O occurs here beyond
+/// validating identifiers and retaining ISO/device selections for the helper.
+// ----------------------------------------------------------------------------------------------------
 const std = @import("std");
 const rl = @import("raylib");
 const osd = @import("osdialog");
@@ -535,6 +541,29 @@ fn waitForHelperToolInstall() void {
     std.Thread.sleep(1_000_000_000);
 }
 
+/// Ensures the BSD disk identifier we forward to the helper is well-formed and references a removable disk alias.
+/// Returns error.Invalid* on malformed strings; caller should abort the request before touching the helper.
+fn validateDeviceIdentifier(identifier: [:0]const u8) !void {
+    if (identifier.len == 0) return error.EmptyIdentifier;
+    if (identifier.len > 31) return error.IdentifierTooLong;
+
+    const valid_prefixes = [_][]const u8{ "disk", "rdisk" };
+    var has_valid_prefix = false;
+    for (valid_prefixes) |prefix| {
+        if (std.mem.startsWith(u8, identifier, prefix)) {
+            has_valid_prefix = true;
+            break;
+        }
+    }
+    if (!has_valid_prefix) return error.InvalidPrefix;
+
+    for (identifier) |ch| {
+        if (!(std.ascii.isAlphabetic(ch) or std.ascii.isDigit(ch))) {
+            return error.InvalidCharacter;
+        }
+    }
+}
+
 fn installHelperIfNotInstalled(self: *PrivilegedHelper) !void {
     if (!self.isHelperInstalled) {
         const installResult = PrivilegedHelperTool.installPrivilegedHelperTool();
@@ -547,10 +576,17 @@ fn installHelperIfNotInstalled(self: *PrivilegedHelper) !void {
     } else Debug.log(.INFO, "Determined that Freetracer Helper Tool is already installed.", .{});
 }
 
+/// Precondition: isoPath/targetDisk originate from trusted UI selection; this function performs final validation before XPC.
+/// Posts the WRITE_ISO_TO_DEVICE request and leaves ownership of state data with `self.state` for helper callbacks.
 fn requestWrite(self: *PrivilegedHelper, targetDisk: [:0]const u8, isoPath: [:0]const u8, deviceServiceId: c_uint, deviceType: DeviceType, imageType: ImageType) void {
     // Install or update the Privileged Helper Tool before sending unmount request
 
     Debug.log(.DEBUG, "requestWrite() received targetDisk: {s}", .{targetDisk});
+
+    if (isoPath.len == 0) {
+        Debug.log(.ERROR, "PrivilegedHelper.requestWrite(): empty isoPath provided. Aborting...", .{});
+        return;
+    }
 
     if (targetDisk.len < 2) {
         Debug.log(.ERROR, "PrivilegedHelper.requestWrite(): malformed targetDisk ('{any}') Aborting...", .{targetDisk});
@@ -558,15 +594,23 @@ fn requestWrite(self: *PrivilegedHelper, targetDisk: [:0]const u8, isoPath: [:0]
     }
 
     // TODO: outsource this to a common lib function which does sanitization and other sanity checks
+
+    validateDeviceIdentifier(targetDisk) catch |err| {
+        Debug.log(.ERROR, "PrivilegedHelper.requestWrite(): invalid targetDisk '{s}'. Err: {any}", .{ targetDisk, err });
+        return;
+    };
+
     const deviceDir = "/dev/";
+
     var devicePathBuf: [std.fs.max_name_bytes]u8 = std.mem.zeroes([std.fs.max_name_bytes]u8);
+
     const devicePath = String.concatStrings(std.fs.max_name_bytes, &devicePathBuf, deviceDir, @ptrCast(targetDisk)) catch |err| {
         Debug.log(.ERROR, "Error while concatenating devicePath from directory and target disk. Err: {any}", .{err});
         return;
     };
 
-    const fd: c_int = c.open(@ptrCast(devicePath), c.O_RDWR, @as(c_uint, 0o644));
-    _ = c.close(fd);
+    // NOTE: Critical and important permissions call
+    requestMacOSInteractivePermissionDialog(devicePath);
 
     const request = XPCService.createRequest(.WRITE_ISO_TO_DEVICE);
     defer XPCService.releaseObject(request);
@@ -578,23 +622,50 @@ fn requestWrite(self: *PrivilegedHelper, targetDisk: [:0]const u8, isoPath: [:0]
     XPCService.connectionSendMessage(self.xpcClient.service, request);
 }
 
+/// Critical function, whose C open syscall gets intercepted by MacOS to present
+/// and interactive dialog prompt to grant permission to Removable Volumes under
+/// `Settings -> Privacy & Security -> Files & Folders -> Freetracer -> Removable Volumes`
+/// Whether or not this returns an error is irrelevant (most likely will), the purpose
+/// is to serve the permissions dialog and once allowed by user, the permission is
+/// inherited by the privileged helper process.
+fn requestMacOSInteractivePermissionDialog(devicePath: [:0]u8) void {
+    const fd: c_int = c.open(@ptrCast(devicePath), c.O_RDWR, @as(c_uint, 0o644));
+    _ = c.close(fd);
+}
+
+/// Copies the UI-provided ISO and disk identifiers into component-owned storage; caller must hold no state lock.
+/// On failure previous state is cleared and ownership remains unchanged, preventing partial updates.
 fn acquireStateDataOwnership(self: *PrivilegedHelper, isoPath: [:0]const u8, targetDisk: [:0]const u8, device: StorageDevice, imageType: ImageType) !void {
     self.cleanupComponentState();
     self.state.lock();
     defer self.state.unlock();
-    self.state.data.isoPath = try self.allocator.dupeZ(u8, isoPath);
-    self.state.data.targetDisk = try self.allocator.dupeZ(u8, targetDisk);
+    const iso_copy = try self.allocator.dupeZ(u8, isoPath);
+    errdefer self.allocator.free(iso_copy);
+    const disk_copy = try self.allocator.dupeZ(u8, targetDisk);
+    errdefer self.allocator.free(disk_copy);
+    self.state.data.isoPath = iso_copy;
+    self.state.data.targetDisk = disk_copy;
     self.state.data.device = device;
     self.state.data.imageType = imageType;
     Debug.log(.INFO, "Set to state: \n\tISO Path: {s}\n\ttargetDisk: {s}", .{ self.state.data.isoPath.?, self.state.data.targetDisk.? });
 }
 
+/// Releases any retained ISO/device selections and resets state so future operations start from a clean slate.
 fn cleanupComponentState(self: *PrivilegedHelper) void {
     self.state.lock();
     defer self.state.unlock();
 
-    if (self.state.data.isoPath) |path| self.allocator.free(path);
-    if (self.state.data.targetDisk) |disk| self.allocator.free(disk);
+    if (self.state.data.isoPath) |path| {
+        self.allocator.free(path);
+        self.state.data.isoPath = null;
+    }
+    if (self.state.data.targetDisk) |disk| {
+        self.allocator.free(disk);
+        self.state.data.targetDisk = null;
+    }
+
+    self.state.data.device = null;
+    self.state.data.imageType = undefined;
 }
 
 const ComponentImplementation = ComponentFramework.ImplementComponent(PrivilegedHelper);
