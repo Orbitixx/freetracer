@@ -117,6 +117,7 @@ pub fn writeISO(connection: XPCConnection, imageFile: std.fs.File, device: std.f
     var currentByte: u64 = 0;
     var previousProgress: u64 = 0;
     var currentProgress: u64 = 0;
+    var xpcResponseTimer = try std.time.Timer.start();
 
     Debug.log(.INFO, "File and device are opened successfully! File size: {d}", .{imageSize});
     Debug.log(.INFO, "Writing ISO to device, please wait...", .{});
@@ -146,12 +147,13 @@ pub fn writeISO(connection: XPCConnection, imageFile: std.fs.File, device: std.f
         currentProgress = try std.math.divFloor(u64, currentByte * @as(u64, 100), imageSize);
 
         // Only send an XPC message if the progress moved at least 1%
-        if (currentProgress - previousProgress < 1) continue;
+        if (xpcResponseTimer.read() < 500_000 and currentProgress != 100) continue;
 
         const progressUpdate = XPCService.createResponse(.ISO_WRITE_PROGRESS);
         defer XPCService.releaseObject(progressUpdate);
         XPCService.createUInt64(progressUpdate, "write_progress", currentProgress);
         XPCService.connectionSendMessage(connection, progressUpdate);
+        _ = xpcResponseTimer.lap();
     }
 
     try device.sync();
@@ -169,6 +171,7 @@ pub fn verifyWrittenBytes(connection: XPCConnection, imageFile: std.fs.File, dev
     var currentByte: u64 = 0;
     var previousProgress: u64 = 0;
     var currentProgress: u64 = 0;
+    var xpcResponseTimer = try std.time.Timer.start();
 
     Debug.log(.INFO, "File and device are opened successfully! File size: {d}", .{imageSize});
     Debug.log(.INFO, "Verifying ISO bytes written to device, please wait...", .{});
@@ -200,7 +203,7 @@ pub fn verifyWrittenBytes(connection: XPCConnection, imageFile: std.fs.File, dev
         currentProgress = try std.math.divFloor(u64, currentByte * @as(u64, 100), imageSize);
 
         // Only send an XPC message if the progress moved at least 1%
-        if (currentProgress - previousProgress < 1) continue;
+        if (currentProgress != 100 or xpcResponseTimer.read() < 500_000) continue;
 
         Debug.log(.INFO, "Verification progress: {d}", .{currentProgress});
 
@@ -208,6 +211,7 @@ pub fn verifyWrittenBytes(connection: XPCConnection, imageFile: std.fs.File, dev
         defer XPCService.releaseObject(progressUpdate);
         XPCService.createUInt64(progressUpdate, "verification_progress", currentProgress);
         XPCService.connectionSendMessage(connection, progressUpdate);
+        _ = xpcResponseTimer.lap();
     }
 
     Debug.log(.INFO, "Finished verifying ISO image written to device!", .{});
