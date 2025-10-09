@@ -10,15 +10,21 @@ pub const Color = struct {
     pub const red = rl.Color.red;
     pub const green = rl.Color.green;
     pub const violet = rl.Color{ .r = 248, .g = 135, .b = 255, .a = 43 };
-    pub const darkViolet = rl.Color{ .r = 248, .g = 135, .b = 255, .a = 20 };
-    pub const blueGray = rl.Color{ .r = 49, .g = 85, .b = 100, .a = 255 };
-    pub const darkBlueGray = rl.Color{ .r = 49, .g = 65, .b = 84, .a = 255 };
+    // pub const violet = rl.Color{ .r = 248, .g = 135, .b = 255, .a = 43 };
+    pub const darkViolet = rl.Color{ .r = 248, .g = 135, .b = 255, .a = 50 };
+    // pub const darkViolet = rl.Color{ .r = 248, .g = 135, .b = 255, .a = 20 };
+    pub const blueGray = rl.Color{ .r = 49, .g = 85, .b = 100, .a = 100 };
+    // pub const blueGray = rl.Color{ .r = 49, .g = 85, .b = 100, .a = 255 };
+    pub const darkBlueGray = rl.Color{ .r = 49, .g = 65, .b = 84, .a = 110 };
+    // pub const darkBlueGray = rl.Color{ .r = 49, .g = 65, .b = 84, .a = 255 };
     pub const secondary = rl.Color{ .r = 78, .g = 96, .b = 121, .a = 255 };
     pub const transparent = rl.Color{ .r = 0, .g = 0, .b = 0, .a = 0 };
     pub const transparentDark = rl.Color{ .r = 0, .g = 0, .b = 0, .a = 60 };
     pub const lightGray = rl.Color.light_gray;
-    pub const darkGreen = rl.Color{ .r = 40, .g = 60, .b = 67, .a = 255 };
-    pub const activeGreen = rl.Color{ .r = 70, .g = 108, .b = 91, .a = 255 };
+    pub const darkGreen = rl.Color{ .r = 40, .g = 60, .b = 67, .a = 80 };
+    // pub const darkGreen = rl.Color{ .r = 40, .g = 60, .b = 67, .a = 255 };
+    pub const activeGreen = rl.Color{ .r = 70, .g = 108, .b = 91, .a = 80 };
+    // pub const activeGreen = rl.Color{ .r = 70, .g = 108, .b = 91, .a = 255 };
 };
 
 pub const TextStyle = struct {

@@ -62,7 +62,7 @@ pub fn run(self: *AppManager) !void {
 
     try UpdateManager.init(self.allocator);
     defer UpdateManager.deinit();
-    try UpdateManager.checkUpdates();
+    // try UpdateManager.checkUpdates();
 
     //----------------------------------------------------------------------------------
     //--- @END MANAGERS ----------------------------------------------------------------
@@ -95,7 +95,8 @@ pub fn run(self: *AppManager) !void {
     //--- @END COMPONENTS --------------------------------------------------------------
     //----------------------------------------------------------------------------------
 
-    const backgroundColor: rl.Color = .{ .r = 29, .g = 44, .b = 64, .a = 100 };
+    // const backgroundColor: rl.Color = .{ .r = 29, .g = 44, .b = 64, .a = 100 };
+    const backgroundColor: rl.Color = .{ .r = 0, .g = 0, .b = 0, .a = 255 };
 
     try componentRegistry.startAll();
 
@@ -117,23 +118,32 @@ pub fn run(self: *AppManager) !void {
         .{ .font = .JERSEY10_REGULAR, .fontSize = 16, .textColor = Color.secondary },
     );
 
-    var logText = UI.Text.init(
-        "",
-        .{ .x = relX(0.02), .y = relY(0.935) },
-        .{ .font = .ROBOTO_REGULAR, .fontSize = 14, .textColor = Color.lightGray },
-    );
+    // var logText = UI.Text.init(
+    //     "",
+    //     .{ .x = relX(0.02), .y = relY(0.935) },
+    //     .{ .font = .ROBOTO_REGULAR, .fontSize = 14, .textColor = Color.lightGray },
+    // );
+    //
+    // const logLineBgRect = UI.Rectangle{
+    //     .transform = .{
+    //         .x = 0,
+    //         .y = relY(0.95),
+    //         .w = WindowManager.getWindowWidth(),
+    //         .h = relY(0.05),
+    //     },
+    //     .style = .{
+    //         .color = Color.transparentDark,
+    //     },
+    // };
 
-    const logLineBgRect = UI.Rectangle{
-        .transform = .{
-            .x = 0,
-            .y = relY(0.95),
-            .w = WindowManager.getWindowWidth(),
-            .h = relY(0.05),
-        },
-        .style = .{
-            .color = Color.transparentDark,
-        },
-    };
+    var stars: [STARS]Star = std.mem.zeroes([STARS]Star);
+
+    for (0..STARS) |i| {
+        stars[i].x = rand() * WindowManager.getWindowWidth();
+        stars[i].y = rand() * WindowManager.getWindowHeight();
+        stars[i].z = rand();
+        std.debug.print("\n{any}", .{stars[i]});
+    }
 
     // Main application GUI.loop
     while (!rl.windowShouldClose()) { // Detect window close button or ESC key
@@ -141,11 +151,21 @@ pub fn run(self: *AppManager) !void {
         //--- @UPDATE COMPONENTS -----------------------------------------------------------
         //----------------------------------------------------------------------------------
 
+        UpdateManager.update();
         try componentRegistry.updateAll();
 
         //----------------------------------------------------------------------------------
         //--- @ENDUPDATE COMPONENTS --------------------------------------------------------
         //----------------------------------------------------------------------------------
+
+        for (0..STARS) |i| {
+            stars[i].x -= SCROLL_SPEED * stars[i].z;
+
+            if (stars[i].x <= 0) { // Check if the star has gone off screen
+                stars[i].x += WindowManager.getWindowWidth();
+                stars[i].y = rand() * WindowManager.getWindowHeight();
+            }
+        }
 
         //----------------------------------------------------------------------------------
         //--- @DRAW ------------------------------------------------------------------------
@@ -155,16 +175,21 @@ pub fn run(self: *AppManager) !void {
 
         rl.clearBackground(backgroundColor);
 
+        for (0..STARS) |i| {
+            rl.drawPixelV(.{ .x = stars[i].x, .y = stars[i].y }, .white);
+        }
+
         logoText.draw();
         subLogoText.draw();
 
         versionText.draw();
 
-        logLineBgRect.draw();
+        // logLineBgRect.draw();
+        //
+        // logText.value = Debug.getLatestLog();
+        // logText.draw();
 
-        logText.value = Debug.getLatestLog();
-        logText.draw();
-
+        UpdateManager.draw();
         try componentRegistry.drawAll();
 
         rl.endDrawing();
@@ -174,4 +199,18 @@ pub fn run(self: *AppManager) !void {
         //----------------------------------------------------------------------------------
 
     }
+}
+const STARS = 200;
+const SCROLL_SPEED = 12;
+
+const Star = struct {
+    x: f32,
+    y: f32,
+    z: f32,
+};
+
+fn rand() f32 {
+    const seed: u64 = @truncate(@as(u128, @bitCast(std.time.nanoTimestamp())));
+    var prng = std.Random.DefaultPrng.init(seed);
+    return prng.random().float(f32);
 }
