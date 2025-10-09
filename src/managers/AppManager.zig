@@ -96,7 +96,8 @@ pub fn run(self: *AppManager) !void {
     //----------------------------------------------------------------------------------
 
     // const backgroundColor: rl.Color = .{ .r = 29, .g = 44, .b = 64, .a = 100 };
-    const backgroundColor: rl.Color = .{ .r = 0, .g = 0, .b = 0, .a = 255 };
+    const backgroundColor: rl.Color = .{ .r = 7, .g = 30, .b = 56, .a = 255 };
+    // const backgroundColor: rl.Color = .{ .r = 5, .g = 23, .b = 43, .a = 255 };
 
     try componentRegistry.startAll();
 
@@ -142,7 +143,6 @@ pub fn run(self: *AppManager) !void {
         stars[i].x = rand() * WindowManager.getWindowWidth();
         stars[i].y = rand() * WindowManager.getWindowHeight();
         stars[i].z = rand();
-        std.debug.print("\n{any}", .{stars[i]});
     }
 
     // Main application GUI.loop
@@ -200,8 +200,8 @@ pub fn run(self: *AppManager) !void {
 
     }
 }
-const STARS = 200;
-const SCROLL_SPEED = 12;
+const STARS = 250;
+const SCROLL_SPEED = 1;
 
 const Star = struct {
     x: f32,
@@ -210,7 +210,5 @@ const Star = struct {
 };
 
 fn rand() f32 {
-    const seed: u64 = @truncate(@as(u128, @bitCast(std.time.nanoTimestamp())));
-    var prng = std.Random.DefaultPrng.init(seed);
-    return prng.random().float(f32);
+    return std.crypto.random.float(f32);
 }
