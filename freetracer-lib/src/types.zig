@@ -30,6 +30,8 @@ pub const c = if (isMac) @cImport({
     @cInclude("ServiceManagement/ServiceManagement.h");
     // --- DADiskRef Authorization
     @cInclude("Security/Authorization.h");
+    @cInclude("sys/disk.h");
+    @cInclude("sys/ioctl.h");
     // --- XPC Connection/Message validation
     @cInclude("Security/CSCommon.h");
     @cInclude("Security/SecBase.h");

@@ -34,36 +34,28 @@ pub fn requestUnmount(targetDisk: [:0]const u8, deviceType: DeviceType, statusRe
 
     if (targetDisk.len < 2) return error.MALFORMED_TARGET_DISK_STRING;
 
-    Debug.log(.INFO, "Received bsdName: {s}", .{targetDisk});
-
-    // const bsdName = std.mem.sliceTo(targetDisk, 0x00);
-    // Debug.log(.INFO, "Sliced bsdName: {s}", .{bsdName});
+    const bsdName = std.mem.sliceTo(targetDisk, 0x00);
+    Debug.log(.INFO, "Initiating unmount for: {s}", .{targetDisk});
 
     const daSession = c.DASessionCreate(c.kCFAllocatorDefault);
-
     if (daSession == null) return error.FAILED_TO_CREATE_DA_SESSION;
     defer c.CFRelease(daSession);
 
     Debug.log(.INFO, "Successfully started a blank DASession.", .{});
 
     const currentLoop = c.CFRunLoopGetCurrent();
-
     c.DASessionScheduleWithRunLoop(daSession, currentLoop, c.kCFRunLoopDefaultMode);
-
-    // Ensure unscheduling happens before the session is released
     defer c.DASessionUnscheduleFromRunLoop(daSession, currentLoop, c.kCFRunLoopDefaultMode);
 
     Debug.log(.INFO, "DASession is successfully scheduled with the run loop.", .{});
 
-    const daDiskRef: c.DADiskRef = c.DADiskCreateFromBSDName(c.kCFAllocatorDefault, daSession, targetDisk.ptr);
-
+    const daDiskRef: c.DADiskRef = c.DADiskCreateFromBSDName(c.kCFAllocatorDefault, daSession, bsdName.ptr);
     if (daDiskRef == null) return error.FAILED_TO_CREATE_DA_DISK_REF;
     defer c.CFRelease(daDiskRef);
 
     Debug.log(.INFO, "DA Disk refererence is successfuly created for the provided device BSD name.", .{});
 
     const diskInfo: c.CFDictionaryRef = @ptrCast(c.DADiskCopyDescription(daDiskRef));
-
     if (diskInfo == null) return error.FAILED_TO_OBTAIN_DISK_INFO_DICT_REF;
     defer c.CFRelease(diskInfo);
 
@@ -75,10 +67,42 @@ pub fn requestUnmount(targetDisk: [:0]const u8, deviceType: DeviceType, statusRe
         if (deviceType != .SD) return error.UNMOUNT_REQUEST_ON_INTERNAL_DEVICE;
     }
 
-    Debug.log(.INFO, "Unmount request passed checks. Initiating unmount call for disk: {s}.", .{targetDisk});
+    Debug.log(.INFO, "Unmount request passed checks. Initiating unmount call for disk: {s}.", .{bsdName});
 
     c.DADiskUnmount(daDiskRef, c.kDADiskUnmountOptionWhole, unmountDiskCallback, @ptrCast(statusResultPtr));
+    c.CFRunLoopRun();
+}
 
+/// Invokes DiskArbitration to eject the specified BSD disk. Returns once the
+/// run loop callback has been processed.
+pub fn requestEject(targetDisk: [:0]const u8, deviceType: DeviceType, statusResultPtr: *bool) !void {
+    if (targetDisk.len < 2) return error.MALFORMED_TARGET_DISK_STRING;
+
+    Debug.log(.INFO, "Received eject bsdName: {s}", .{targetDisk});
+
+    const daSession = c.DASessionCreate(c.kCFAllocatorDefault);
+    if (daSession == null) return error.FAILED_TO_CREATE_DA_SESSION;
+    defer c.CFRelease(daSession);
+
+    const currentLoop = c.CFRunLoopGetCurrent();
+    c.DASessionScheduleWithRunLoop(daSession, currentLoop, c.kCFRunLoopDefaultMode);
+    defer c.DASessionUnscheduleFromRunLoop(daSession, currentLoop, c.kCFRunLoopDefaultMode);
+
+    const daDiskRef: c.DADiskRef = c.DADiskCreateFromBSDName(c.kCFAllocatorDefault, daSession, targetDisk.ptr);
+    if (daDiskRef == null) return error.FAILED_TO_CREATE_DA_DISK_REF;
+    defer c.CFRelease(daDiskRef);
+
+    const diskInfo: c.CFDictionaryRef = @ptrCast(c.DADiskCopyDescription(daDiskRef));
+    if (diskInfo == null) return error.FAILED_TO_OBTAIN_DISK_INFO_DICT_REF;
+    defer c.CFRelease(diskInfo);
+
+    if (try isTargetDiskInternalDevice(diskInfo)) {
+        if (deviceType != .SD) return error.EJECT_REQUEST_ON_INTERNAL_DEVICE;
+    }
+
+    Debug.log(.INFO, "Eject request passed checks. Initiating eject call for disk: {s}.", .{targetDisk});
+
+    c.DADiskEject(daDiskRef, c.kDADiskEjectOptionDefault, ejectDiskCallback, @ptrCast(statusResultPtr));
     c.CFRunLoopRun();
 }
 
@@ -119,6 +143,47 @@ pub fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, conte
         unmountStatus.* = true;
         Debug.log(.INFO, "Successfully unmounted disk: {s}", .{bsdName});
         Debug.log(.INFO, "Finished unmounting all volumes for device.", .{});
+        const currentLoop = c.CFRunLoopGetCurrent();
+        c.CFRunLoopStop(currentLoop);
+    }
+}
+
+pub fn ejectDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context: ?*anyopaque) callconv(.c) void {
+    if (context == null) {
+        Debug.log(.ERROR, "Eject callback invoked without context pointer.", .{});
+        const currentLoop = c.CFRunLoopGetCurrent();
+        c.CFRunLoopStop(currentLoop);
+        return;
+    }
+
+    const ejectStatus: *bool = @ptrCast(context);
+    Debug.log(.INFO, "Processing ejectDiskCallback()...", .{});
+
+    const bsdNameCPtr: [*c]const u8 = c.DADiskGetBSDName(disk);
+    const bsdName: [:0]const u8 = @ptrCast(std.mem.sliceTo(bsdNameCPtr, 0x00));
+
+    if (bsdName.len == 0) {
+        Debug.log(.WARNING, "ejectDiskCallback(): bsdName received is of 0 length.", .{});
+    }
+
+    if (dissenter != null) {
+        Debug.log(.WARNING, "Disk Arbitration Dissenter returned a non-empty status for eject.", .{});
+
+        ejectStatus.* = false;
+        const status = c.DADissenterGetStatus(dissenter);
+        const statusStringRef = c.DADissenterGetStatusString(dissenter);
+        var statusString: [256]u8 = undefined;
+
+        if (statusStringRef != null) {
+            _ = c.CFStringGetCString(statusStringRef, &statusString, statusString.len, c.kCFStringEncodingUTF8);
+        }
+
+        Debug.log(.ERROR, "Failed to eject {s}. Dissenter status code: {any}, status message: {s}", .{ bsdName, status, statusString });
+        const currentLoop = c.CFRunLoopGetCurrent();
+        c.CFRunLoopStop(currentLoop);
+    } else {
+        ejectStatus.* = true;
+        Debug.log(.INFO, "Successfully ejected disk: {s}", .{bsdName});
         const currentLoop = c.CFRunLoopGetCurrent();
         c.CFRunLoopStop(currentLoop);
     }
