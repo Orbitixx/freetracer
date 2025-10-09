@@ -146,8 +146,11 @@ pub fn writeISO(connection: XPCConnection, imageFile: std.fs.File, device: std.f
         currentByte += @as(u64, @intCast(bytesWritten));
         currentProgress = try std.math.divFloor(u64, currentByte * @as(u64, 100), imageSize);
 
-        // Only send an XPC message if the progress moved at least 1%
-        if (xpcResponseTimer.read() < 500_000 and currentProgress != 100) continue;
+        // Only send an XPC message if the progress moved at least 1%; throttle message send rate
+        // TODO: Replace by XPC message barrier
+        if (xpcResponseTimer.read() < 500_000 or currentProgress == previousProgress) {
+            if (currentProgress != 100) continue;
+        }
 
         const progressUpdate = XPCService.createResponse(.ISO_WRITE_PROGRESS);
         defer XPCService.releaseObject(progressUpdate);
@@ -202,10 +205,13 @@ pub fn verifyWrittenBytes(connection: XPCConnection, imageFile: std.fs.File, dev
         currentByte += @as(u64, @intCast(imageBytesRead));
         currentProgress = try std.math.divFloor(u64, currentByte * @as(u64, 100), imageSize);
 
-        // Only send an XPC message if the progress moved at least 1%
-        if (currentProgress != 100 or xpcResponseTimer.read() < 500_000) continue;
+        // Only send an XPC message if the progress moved at least 1%; throttle message send rate
+        // TODO: Replace by XPC message barrier
+        if (xpcResponseTimer.read() < 500_000 or currentProgress == previousProgress) {
+            if (currentProgress != 100) continue;
+        }
 
-        Debug.log(.INFO, "Verification progress: {d}", .{currentProgress});
+        // Debug.log(.INFO, "Verification progress: {d}", .{currentProgress});
 
         const progressUpdate = XPCService.createResponse(.WRITE_VERIFICATION_PROGRESS);
         defer XPCService.releaseObject(progressUpdate);

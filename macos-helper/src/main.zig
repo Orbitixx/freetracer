@@ -238,7 +238,7 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) !void {
 
     sendXPCReply(connection, .ISO_FILE_VALID, "ISO File is determined to be valid and is successfully opened.");
 
-    const device = dev.openDeviceValidated(deviceBsdName, deviceType) catch |err| {
+    var deviceHandle = dev.openDeviceValidated(deviceBsdName, deviceType) catch |err| {
         switch (err) {
             error.AccessDenied => {
                 respondWithErrorAndTerminate(
@@ -257,11 +257,11 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) !void {
         }
     };
 
-    defer device.close();
+    errdefer deviceHandle.close();
 
     sendXPCReply(connection, .DEVICE_VALID, "Device is determined to be valid and is successfully opened.");
 
-    fsops.writeISO(connection, isoFile, device) catch |err| {
+    fsops.writeISO(connection, isoFile, deviceHandle.raw) catch |err| {
         respondWithErrorAndTerminate(
             .{ .err = err, .message = "Unable to write ISO to device." },
             .{ .xpcConnection = connection, .xpcResponseCode = .ISO_WRITE_FAIL },
@@ -271,7 +271,7 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) !void {
 
     sendXPCReply(connection, .ISO_WRITE_SUCCESS, "ISO image successfully written to device!");
 
-    fsops.verifyWrittenBytes(connection, isoFile, device) catch |err| {
+    fsops.verifyWrittenBytes(connection, isoFile, deviceHandle.raw) catch |err| {
         respondWithErrorAndTerminate(
             .{ .err = err, .message = "Unable to verify written ISO image." },
             .{ .xpcConnection = connection, .xpcResponseCode = .WRITE_VERIFICATION_FAIL },
@@ -280,6 +280,16 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) !void {
     };
 
     sendXPCReply(connection, .WRITE_VERIFICATION_SUCCESS, "Written ISO image successfully verified!");
+
+    deviceHandle.close();
+
+    dev.flushAndEject(&deviceHandle) catch |err| {
+        respondWithErrorAndTerminate(
+            .{ .err = err, .message = "Unable to flush disk caches or eject device." },
+            .{ .xpcConnection = connection, .xpcResponseCode = .WRITE_VERIFICATION_FAIL },
+        );
+        return;
+    };
 
     ShutdownManager.exitSuccessfully();
 }
