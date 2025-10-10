@@ -234,8 +234,8 @@ fn initBgRect(self: *DeviceListUI) void {
             .h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
         },
         .style = .{
-            .color = Styles.Color.darkBlueGray,
-            .borderStyle = .{ .color = Styles.Color.darkBlueGray },
+            .color = Styles.Color.themeSectionBg,
+            .borderStyle = .{ .color = Styles.Color.themeSectionBorder },
         },
         .rounded = true,
         .bordered = true,
@@ -406,8 +406,8 @@ fn handleOnDeviceListActiveStateChanged(self: *DeviceListUI, event: ComponentEve
 
             self.recalculateUI(.{
                 .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
-                .color = Color.blueGray,
-                .borderColor = Color.white,
+                .color = Color.themeSectionBg,
+                .borderColor = Color.themeSectionBorder,
             });
         },
 
@@ -418,8 +418,8 @@ fn handleOnDeviceListActiveStateChanged(self: *DeviceListUI, event: ComponentEve
 
             self.recalculateUI(.{
                 .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
-                .color = Color.darkBlueGray,
-                .borderColor = Color.transparentDark,
+                .color = Color.themeSectionBg,
+                .borderColor = Color.themeSectionBorder,
             });
         },
     }

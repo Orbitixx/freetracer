@@ -28,7 +28,11 @@ pub fn workerRun(worker: *DeviceListComponentWorker, context: *anyopaque) void {
     });
 
     for (devices.items) |device| {
-        Debug.log(.INFO, "{any}", .{device});
+        Debug.log(
+            .DEBUG,
+            "\n\tbsdName:\t{s}\n\tdeviceName:\t{s}\n\tserviceId:\t{d}\n\tsize:\t{d}",
+            .{ device.getBsdNameSlice(), device.getNameSlice(), device.serviceId, device.size },
+        );
     }
 
     // Important to toggle flag for self-notify override since we're targeting self (DeviceList)

@@ -212,8 +212,8 @@ fn initializeBackground(self: *ISOFilePickerUI) void {
             .h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
         },
         .style = .{
-            .color = Color.violet,
-            .borderStyle = .{ .color = Color.white },
+            .color = Color.themeSectionBg,
+            .borderStyle = .{ .color = Color.themeSectionBorder },
         },
         .rounded = true,
         .bordered = true,
@@ -285,14 +285,14 @@ fn setIsActive(self: *ISOFilePickerUI, isActive: bool) void {
     if (isActive) {
         self.applyAppearance(.{
             .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
-            .color = Color.violet,
-            .borderColor = Color.white,
+            .color = Color.themeSectionBg,
+            .borderColor = Color.themeSectionBorder,
         }, Color.white, 1.0);
     } else {
         self.applyAppearance(.{
             .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
-            .color = Color.darkViolet,
-            .borderColor = Color.transparentDark,
+            .color = Color.themeSectionBg,
+            .borderColor = Color.themeSectionBorder,
         }, Color.offWhite, 0.7);
     }
 

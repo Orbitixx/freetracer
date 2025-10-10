@@ -26,6 +26,14 @@ pub const Color = struct {
     // pub const darkGreen = rl.Color{ .r = 40, .g = 60, .b = 67, .a = 255 };
     pub const activeGreen = rl.Color{ .r = 70, .g = 108, .b = 91, .a = 120 };
     // pub const activeGreen = rl.Color{ .r = 70, .g = 108, .b = 91, .a = 255 };
+    pub const themeBg = rl.Color.init(20, 23, 37, 255);
+    pub const themeSectionBg = rl.Color.init(27, 30, 42, 255);
+    pub const themeSectionBorder = rl.Color.init(40, 43, 55, 255);
+    pub const themeDark = rl.Color.init(20, 23, 35, 255);
+    pub const themePrimary = rl.Color.init(120, 185, 185, 255);
+    pub const themePrimaryDark = rl.Color.init(56, 99, 120, 255);
+    pub const themeSecondary = rl.Color.init(193, 124, 160, 255);
+    pub const themeOutline = rl.Color.init(66, 66, 77, 255);
 };
 
 pub const TextStyle = struct {

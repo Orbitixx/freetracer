@@ -344,9 +344,9 @@ fn initBgRect(self: *DataFlasherUI) !void {
             .h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
         },
         .style = .{
-            .color = Styles.Color.darkGreen,
+            .color = Styles.Color.themeSectionBg,
             .borderStyle = .{
-                .color = Styles.Color.darkGreen,
+                .color = Styles.Color.themeSectionBorder,
             },
         },
         .rounded = true,
@@ -610,8 +610,8 @@ pub fn handleOnActiveStateChanged(self: *DataFlasherUI, event: ComponentEvent) !
 
             self.recalculateUI(.{
                 .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
-                .color = Color.darkBlueGray,
-                .borderColor = Color.transparentDark,
+                .color = Color.themeSectionBg,
+                .borderColor = Color.themeSectionBorder,
             });
 
             return eventResult.succeed();

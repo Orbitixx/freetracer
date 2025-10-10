@@ -96,7 +96,7 @@ pub fn run(self: *AppManager) !void {
     //----------------------------------------------------------------------------------
 
     // const backgroundColor: rl.Color = .{ .r = 29, .g = 44, .b = 64, .a = 100 };
-    const backgroundColor: rl.Color = .{ .r = 7, .g = 30, .b = 56, .a = 255 };
+    const backgroundColor: rl.Color = @import("../components/ui/Styles.zig").Color.themeBg;
     // const backgroundColor: rl.Color = .{ .r = 5, .g = 23, .b = 43, .a = 255 };
 
     try componentRegistry.startAll();
@@ -137,14 +137,6 @@ pub fn run(self: *AppManager) !void {
     //     },
     // };
 
-    var stars: [STARS]Star = std.mem.zeroes([STARS]Star);
-
-    for (0..STARS) |i| {
-        stars[i].x = rand() * WindowManager.getWindowWidth();
-        stars[i].y = rand() * WindowManager.getWindowHeight();
-        stars[i].z = rand();
-    }
-
     // Main application GUI.loop
     while (!rl.windowShouldClose()) { // Detect window close button or ESC key
         //----------------------------------------------------------------------------------
@@ -158,15 +150,6 @@ pub fn run(self: *AppManager) !void {
         //--- @ENDUPDATE COMPONENTS --------------------------------------------------------
         //----------------------------------------------------------------------------------
 
-        for (0..STARS) |i| {
-            stars[i].x -= SCROLL_SPEED * stars[i].z;
-
-            if (stars[i].x <= 0) { // Check if the star has gone off screen
-                stars[i].x += WindowManager.getWindowWidth();
-                stars[i].y = rand() * WindowManager.getWindowHeight();
-            }
-        }
-
         //----------------------------------------------------------------------------------
         //--- @DRAW ------------------------------------------------------------------------
         //----------------------------------------------------------------------------------
@@ -174,10 +157,6 @@ pub fn run(self: *AppManager) !void {
         rl.beginDrawing();
 
         rl.clearBackground(backgroundColor);
-
-        for (0..STARS) |i| {
-            rl.drawPixelV(.{ .x = stars[i].x, .y = stars[i].y }, .white);
-        }
 
         logoText.draw();
         subLogoText.draw();
@@ -199,16 +178,4 @@ pub fn run(self: *AppManager) !void {
         //----------------------------------------------------------------------------------
 
     }
-}
-const STARS = 250;
-const SCROLL_SPEED = 1;
-
-const Star = struct {
-    x: f32,
-    y: f32,
-    z: f32,
-};
-
-fn rand() f32 {
-    return std.crypto.random.float(f32);
 }
