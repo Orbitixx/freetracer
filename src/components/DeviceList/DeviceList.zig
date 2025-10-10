@@ -10,6 +10,7 @@ const Debug = freetracer_lib.Debug;
 
 const StorageDevice = types.StorageDevice;
 
+const AppManager = @import("../../managers/AppManager.zig");
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
 const ComponentName = EventManager.ComponentName.DEVICE_LIST;
 
@@ -305,6 +306,9 @@ fn handlePrecedingComponentStateChange(self: *DeviceListComponent, event: Compon
 
     if (data.isActive) return eventResult.succeed();
 
+    Debug.log(.DEBUG, "Requesting Device List activation, auth: {any}", .{AppManager.authorizeAction(.ActivateDeviceList)});
+    if (!AppManager.authorizeAction(.ActivateDeviceList)) return eventResult.fail();
+
     self.state.lock();
     self.state.data.isActive = true;
     self.state.unlock();
@@ -347,6 +351,8 @@ fn handleFinishedInteraction(self: *DeviceListComponent) !EventResult {
 
     self.state.data.isActive = false;
     self.state.unlock();
+
+    try AppManager.reportAction(.DeviceSelected);
 
     var responseEvent = Events.onDeviceListActiveStateChanged.create(
         self.asComponentPtr(),

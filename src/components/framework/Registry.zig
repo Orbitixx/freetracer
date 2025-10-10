@@ -26,11 +26,6 @@ pub const ComponentRegistry = struct {
 
     pub fn startAll(self: *ComponentRegistry) !void {
         _ = self;
-        // var iter = self.components.iterator();
-        //
-        // while (iter.next()) |component| {
-        //     try component.value_ptr.*.start();
-        // }
     }
 
     pub fn updateAll(self: *ComponentRegistry) !void {

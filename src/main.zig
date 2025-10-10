@@ -10,9 +10,9 @@ pub fn main() !void {
         _ = debugAllocator.deinit();
     }
 
-    var app = AppManager.init(allocator);
+    try AppManager.init(allocator);
 
-    app.run() catch |err| {
+    AppManager.startApp() catch |err| {
         std.log.err("\nFreetracer encountered critical error: {any}.\n", .{err});
         return err;
     };

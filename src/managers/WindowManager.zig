@@ -10,21 +10,27 @@ pub const Window = struct {
     height: f32 = 0,
 
     pub fn init(self: *Window) void {
-        rl.initWindow(0, 0, "");
+        rl.initWindow(0, 0, "Freetracer - free and open-source by orbitixx");
 
         const m = rl.getCurrentMonitor();
-        const mWidth: i32 = rl.getMonitorWidth(m);
-        const mHeight: i32 = rl.getMonitorHeight(m);
+        const mWidth: f32 = @floatFromInt(rl.getMonitorWidth(m));
+        const mHeight: f32 = @floatFromInt(rl.getMonitorHeight(m));
 
-        self.width = @as(f32, @floatFromInt(mWidth)) * AppConfig.WINDOW_WIDTH_FACTOR;
-        self.height = @as(f32, @floatFromInt(mHeight)) * AppConfig.WINDOW_HEIGHT_FACTOR;
+        Debug.log(.DEBUG, "WindowManager: Monitor dimensions: {d}x{d}", .{ mWidth, mHeight });
+
+        const newWidth: f32 = if (mWidth * AppConfig.WINDOW_WIDTH_FACTOR < 864) 864 else mWidth * AppConfig.WINDOW_WIDTH_FACTOR;
+
+        const newHeight: f32 = if (mHeight * AppConfig.WINDOW_HEIGHT_FACTOR < 581) 581 else mHeight * AppConfig.WINDOW_HEIGHT_FACTOR;
+
+        self.width = newWidth;
+        self.height = newHeight;
 
         Debug.log(.INFO, "WINDOW INITIALIZED: {d}x{d}\n", .{ self.width, self.height });
 
         rl.setWindowSize(@as(i32, @intFromFloat(self.width)), @as(i32, @intFromFloat(self.height)));
 
-        const newX: i32 = @intFromFloat(@as(f32, @floatFromInt(@divTrunc(mWidth, 2))) - self.width / 2);
-        const newY: i32 = @intFromFloat(@as(f32, @floatFromInt(@divTrunc(mHeight, 2))) - self.height / 2);
+        const newX: i32 = @intFromFloat(@divTrunc(mWidth, 2) - self.width / 2);
+        const newY: i32 = @intFromFloat(@divTrunc(mHeight, 2) - self.height / 2);
 
         rl.setWindowPosition(newX, newY);
 

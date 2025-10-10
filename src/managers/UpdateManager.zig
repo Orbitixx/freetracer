@@ -173,7 +173,7 @@ pub const UpdateManagerSingleton = struct {
 
             Debug.log(
                 .INFO,
-                "UpdateManagerLatest version: {s}; Latest version desc: {s}; Latest version URL: {s}",
+                "UpdateManager:\n\tLatest version: {s}\n\tLatest version desc: {s}\n\tLatest version URL: {s}",
                 .{ self.newVersion, self.newVersionDescription[0..@min(20, self.newVersionDescription.len)], self.newVersionUrl },
             );
         } else {

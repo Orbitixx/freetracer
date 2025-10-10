@@ -25,8 +25,7 @@ const EventManager = @import("../../managers/EventManager.zig").EventManagerSing
 pub const ComponentName = EventManager.ComponentName.DEVICE_LIST_UI;
 
 const DeviceList = @import("./DeviceList.zig");
-const ISOFilePicker = @import("../FilePicker/FilePicker.zig");
-const ISOFilePickerUI = @import("../FilePicker/FilePickerUI.zig");
+const FilePickerUI = @import("../FilePicker/FilePickerUI.zig");
 
 const ComponentFramework = @import("../framework/import/index.zig");
 const Component = ComponentFramework.Component;
@@ -40,6 +39,7 @@ const Rectangle = UIFramework.Primitives.Rectangle;
 const Text = UIFramework.Primitives.Text;
 const Transform = UIFramework.Primitives.Transform;
 const Texture = UIFramework.Primitives.Texture;
+const Layout = UIFramework.Layout;
 const UI = UIFramework.utils;
 
 const Styles = UIFramework.Styles;
@@ -79,6 +79,7 @@ deviceNameLabel: Text = undefined,
 noDevicesLabel: Text = undefined,
 refreshDevicesButton: Button = undefined,
 selectedDeviceNameBuf: [MAX_DISPLAY_STRING_LENGTH:0]u8 = undefined,
+frame: UIFramework.Layout.Bounds = undefined,
 
 const BgRectParams = struct {
     width: f32,
@@ -111,7 +112,7 @@ pub const Events = struct {
 
     pub const onUITransformQueried = ComponentFramework.defineEvent(
         EventManager.createEventName(ComponentName, "on_ui_transform_queried"),
-        struct { result: *UIFramework.Primitives.Transform },
+        struct { result: **UIFramework.Primitives.Transform },
         struct {},
     );
 };
@@ -148,7 +149,7 @@ pub fn start(self: *DeviceListUI) !void {
     try self.initComponent(&self.parent.component.?);
     try self.subscribeToEvents();
 
-    self.initBgRect();
+    try self.initBgRect();
     try self.initNextBtn();
     self.initRefreshDevicesBtn();
     self.initHeaderLabel();
@@ -157,6 +158,12 @@ pub fn start(self: *DeviceListUI) !void {
     self.initDeviceNameLabel();
 
     self.noDevicesLabel = Text.init("No external devices found...", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
+
+    self.recalculateUI(.{
+        .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
+        .color = Styles.Color.themeSectionBg,
+        .borderColor = Styles.Color.themeSectionBorder,
+    });
 
     Debug.log(.DEBUG, "DeviceListUI: component start() finished.", .{});
 }
@@ -194,12 +201,16 @@ pub fn update(self: *DeviceListUI) !void {
 pub fn draw(self: *DeviceListUI) !void {
     self.state.lock();
     const isActive = self.state.data.isActive;
+    const devicesFound = self.state.data.devices.items.len > 0;
     self.state.unlock();
+
+    self.bgRect.transform = self.frame.resolve();
+    self.applyLayoutFromBounds(devicesFound);
 
     self.bgRect.draw();
     self.headerLabel.draw();
 
-    if (isActive) try self.drawActive() else try self.drawInactive();
+    if (isActive) try self.drawActive(devicesFound) else try self.drawInactive(devicesFound);
 }
 
 pub fn deinit(self: *DeviceListUI) void {
@@ -222,17 +233,23 @@ fn subscribeToEvents(self: *DeviceListUI) !void {
     } else return error.UnableToSubscribeToEventManager;
 }
 
-fn initBgRect(self: *DeviceListUI) void {
-    // Obtain previous UI section's Transform
-    const filePickerBgRectTransform = UI.queryComponentTransform(ISOFilePickerUI);
+fn initBgRect(self: *DeviceListUI) !void {
+    const filePickerFrame = try UI.queryComponentTransform(FilePickerUI);
+
+    self.frame = UIFramework.Layout.Bounds.relative(
+        filePickerFrame,
+        .{
+            .x = Layout.UnitValue.mix(1.0, AppConfig.APP_UI_MODULE_GAP_X),
+            .y = Layout.UnitValue.pixels(0),
+        },
+        .{
+            .width = UIFramework.Layout.UnitValue.pixels(winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE)),
+            .height = UIFramework.Layout.UnitValue.pixels(winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT)),
+        },
+    );
 
     self.bgRect = Rectangle{
-        .transform = .{
-            .x = filePickerBgRectTransform.x + filePickerBgRectTransform.w + AppConfig.APP_UI_MODULE_GAP_X,
-            .y = winRelY(AppConfig.APP_UI_MODULE_PANEL_Y),
-            .w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
-            .h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
-        },
+        .transform = self.frame.resolve(),
         .style = .{
             .color = Styles.Color.themeSectionBg,
             .borderStyle = .{ .color = Styles.Color.themeSectionBorder },
@@ -295,12 +312,8 @@ fn initDeviceNameLabel(self: *DeviceListUI) void {
     self.updateDeviceNameLabel(kStringDeviceListNoDeviceSelected, null);
 }
 
-fn drawActive(self: *DeviceListUI) !void {
-    self.state.lock();
-    const foundDevices = self.state.data.devices.items.len > 0;
-    self.state.unlock();
-
-    if (!foundDevices) {
+fn drawActive(self: *DeviceListUI, devicesFound: bool) !void {
+    if (!devicesFound) {
         self.noDevicesLabel.draw();
     }
 
@@ -312,32 +325,42 @@ fn drawActive(self: *DeviceListUI) !void {
     try self.nextButton.draw();
 }
 
-fn drawInactive(self: *DeviceListUI) !void {
-    self.state.lock();
-    const foundDevices = self.state.data.devices.items.len > 0;
-    self.state.unlock();
-
-    if (foundDevices) self.deviceNameLabel.draw();
+fn drawInactive(self: *DeviceListUI, devicesFound: bool) !void {
+    if (devicesFound) self.deviceNameLabel.draw();
     self.moduleImg.draw();
 }
 
 fn recalculateUI(self: *DeviceListUI, bgRectParams: BgRectParams) void {
     Debug.log(.DEBUG, "DeviceListUI: updating self.bgRect properties!", .{});
 
-    self.bgRect.transform.w = bgRectParams.width;
+    self.frame.size.width = UIFramework.Layout.UnitValue.pixels(bgRectParams.width);
+    const resolved = self.frame.resolve();
+    self.bgRect.transform = resolved;
     self.bgRect.style.color = bgRectParams.color;
     self.bgRect.style.borderStyle.color = bgRectParams.borderColor;
-
-    self.headerLabel.transform.x = self.bgRect.transform.x + 12;
-    self.headerLabel.transform.y = self.bgRect.transform.relY(0.01);
-
-    const dims = self.noDevicesLabel.getDimensions();
-    self.noDevicesLabel.transform.x = self.bgRect.transform.relX(0.5) - dims.width / 2;
-    self.noDevicesLabel.transform.y = self.bgRect.transform.relY(0.5) - dims.height / 2;
 
     self.state.lock();
     const devicesFound = self.state.data.devices.items.len > 0;
     self.state.unlock();
+
+    self.applyLayoutFromBounds(devicesFound);
+}
+
+fn applyLayoutFromBounds(self: *DeviceListUI, devicesFound: bool) void {
+    const noDevicesDims = self.noDevicesLabel.getDimensions();
+    self.noDevicesLabel.transform.x = self.bgRect.transform.relX(0.5) - noDevicesDims.width / 2;
+    self.noDevicesLabel.transform.y = self.bgRect.transform.relY(0.5) - noDevicesDims.height / 2;
+
+    self.headerLabel.transform.x = self.bgRect.transform.x + 12;
+    self.headerLabel.transform.y = self.bgRect.transform.relY(0.01);
+
+    self.moduleImg.transform.x = self.bgRect.transform.relX(0.5) - self.moduleImg.transform.getWidth() / 2;
+    self.moduleImg.transform.y = self.bgRect.transform.relY(0.5) - self.moduleImg.transform.getHeight() / 2;
+
+    self.nextButton.setPosition(.{
+        .x = self.bgRect.transform.relX(0.5) - self.nextButton.rect.transform.getWidth() / 2,
+        .y = self.bgRect.transform.relY(0.9) - self.nextButton.rect.transform.getHeight() / 2,
+    });
 
     if (devicesFound) {
         self.refreshDevicesButton.setPosition(.{
@@ -353,19 +376,6 @@ fn recalculateUI(self: *DeviceListUI, bgRectParams: BgRectParams) void {
             .y = self.noDevicesLabel.transform.y + self.noDevicesLabel.transform.h + winRelY(0.02),
         });
     }
-
-    self.moduleImg.transform.x = self.bgRect.transform.relX(0.5) - self.moduleImg.transform.getWidth() / 2;
-    self.moduleImg.transform.y = self.bgRect.transform.relY(0.5) - self.moduleImg.transform.getHeight() / 2;
-
-    self.refreshDevicesButton.setPosition(.{
-        .x = self.bgRect.transform.relX(0.95) - self.refreshDevicesButton.rect.transform.getWidth(),
-        .y = self.bgRect.transform.relY(0.05),
-    });
-
-    self.nextButton.setPosition(.{
-        .x = self.bgRect.transform.relX(0.5) - self.nextButton.rect.transform.getWidth() / 2,
-        .y = self.nextButton.rect.transform.y,
-    });
 }
 
 const refreshDevices = struct {
@@ -394,9 +404,6 @@ fn handleOnDeviceListActiveStateChanged(self: *DeviceListUI, event: ComponentEve
         defer self.state.unlock();
         self.state.data.isActive = data.isActive;
     }
-
-    const filePickerBgRectTransform = UI.queryComponentTransform(ISOFilePickerUI);
-    self.bgRect.transform.x = filePickerBgRectTransform.x + filePickerBgRectTransform.w + AppConfig.APP_UI_MODULE_GAP_X;
 
     switch (data.isActive) {
         true => {
@@ -459,7 +466,7 @@ fn updateDeviceNameLabel(self: *DeviceListUI, value: [:0]const u8, truncate_len:
 fn handleOnUITransformQueried(self: *DeviceListUI, event: ComponentEvent) !EventResult {
     var eventResult = EventResult.init();
     const data = Events.onUITransformQueried.getData(event) orelse return eventResult.fail();
-    data.result.* = self.bgRect.transform;
+    data.result.* = &self.bgRect.transform;
     return eventResult.succeed();
 }
 

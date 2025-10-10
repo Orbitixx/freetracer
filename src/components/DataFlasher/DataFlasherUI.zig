@@ -85,6 +85,7 @@ const Texture = UIFramework.Primitives.Texture;
 const Statusbox = UIFramework.Statusbox;
 const Progressbox = UIFramework.Progressbox;
 const StatusIndicator = UIFramework.StatusIndicator;
+const Layout = UIFramework.Layout;
 
 const PrivilegedHelper = @import("../macos/PrivilegedHelper.zig");
 
@@ -123,6 +124,7 @@ deviceText: Text = undefined,
 progressBox: Progressbox = undefined,
 displayISOTextBuffer: [std.fs.max_path_bytes]u8 = undefined,
 displayDeviceTextBuffer: [std.fs.max_path_bytes]u8 = undefined,
+frame: Layout.Bounds = undefined,
 
 flashRequested: bool = false,
 
@@ -168,6 +170,12 @@ pub fn start(self: *DataFlasherUI) !void {
     self.initTextures();
     self.initStatusIndicators();
     self.initProgressbox();
+
+    self.recalculateUI(.{
+        .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
+        .color = Styles.Color.themeSectionBg,
+        .borderColor = Styles.Color.themeSectionBorder,
+    });
 }
 
 pub fn update(self: *DataFlasherUI) !void {
@@ -179,6 +187,9 @@ pub fn draw(self: *DataFlasherUI) !void {
     self.state.lock();
     defer self.state.unlock();
     const isActive = self.state.data.isActive;
+
+    self.bgRect.transform = self.frame.resolve();
+    self.applyLayoutFromBounds();
 
     self.bgRect.draw();
     self.headerLabel.draw();
@@ -323,26 +334,34 @@ fn initFlashButton(self: *DataFlasherUI) !void {
 }
 
 /// Pulls width/position hints from the DeviceList UI so the panels align horizontally.
-fn queryDeviceListUIDimensions(self: *DataFlasherUI) !Transform {
-    var transform = Transform{ .x = 0, .y = 0, .w = 0, .h = 0 };
-    const queryDimensionsEvent = DeviceListUI.Events.onUITransformQueried.create(self.asComponentPtr(), &.{ .result = &transform });
-
-    const eventResult = try EventManager.signal("device_list_ui", queryDimensionsEvent);
-    if (!eventResult.success) return error.DataFlasherUICouldNotObtainInitialUIDimensions;
-
-    return transform;
-}
+// fn queryDeviceListUIDimensions(self: *DataFlasherUI) !*Transform {
+//     var transform: *Transform = undefined;
+//
+//     const queryDimensionsEvent = DeviceListUI.Events.onUITransformQueried.create(self.asComponentPtr(), &.{ .result = &transform });
+//
+//     const eventResult = try EventManager.signal(EventManager.ComponentName.DEVICE_LIST_UI, queryDimensionsEvent);
+//     if (!eventResult.success) return error.DataFlasherUICouldNotObtainInitialUIDimensions;
+//
+//     return transform;
+// }
 
 fn initBgRect(self: *DataFlasherUI) !void {
-    const deviceListBgRect: Transform = try self.queryDeviceListUIDimensions();
+    const deviceListTransform = try UIFramework.utils.queryComponentTransform(DeviceListUI);
+
+    self.frame = Layout.Bounds.relative(
+        deviceListTransform,
+        .{
+            .x = Layout.UnitValue.mix(1.0, AppConfig.APP_UI_MODULE_GAP_X),
+            .y = Layout.UnitValue.pixels(0),
+        },
+        .{
+            .width = Layout.UnitValue.pixels(winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE)),
+            .height = Layout.UnitValue.pixels(winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT)),
+        },
+    );
 
     self.bgRect = Rectangle{
-        .transform = .{
-            .x = deviceListBgRect.x + deviceListBgRect.w + AppConfig.APP_UI_MODULE_GAP_X,
-            .y = winRelY(AppConfig.APP_UI_MODULE_PANEL_Y),
-            .w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
-            .h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
-        },
+        .transform = self.frame.resolve(),
         .style = .{
             .color = Styles.Color.themeSectionBg,
             .borderStyle = .{
@@ -426,10 +445,16 @@ fn initProgressbox(self: *DataFlasherUI) void {
 fn recalculateUI(self: *DataFlasherUI, bgRectParams: BgRectParams) void {
     Debug.log(.DEBUG, "DataFlasherUI: updating bgRect properties!", .{});
 
-    self.bgRect.transform.w = bgRectParams.width;
+    self.frame.size.width = Layout.UnitValue.pixels(bgRectParams.width);
+    self.bgRect.transform = self.frame.resolve();
+
     self.bgRect.style.color = bgRectParams.color;
     self.bgRect.style.borderStyle.color = bgRectParams.borderColor;
 
+    self.applyLayoutFromBounds();
+}
+
+fn applyLayoutFromBounds(self: *DataFlasherUI) void {
     const leftPadding = self.bgRect.transform.relX(PADDING_LEFT);
     const centerX = self.bgRect.transform.relX(0.5);
 
@@ -546,8 +571,7 @@ pub fn handleOnActiveStateChanged(self: *DataFlasherUI, event: ComponentEvent) !
         self.state.data.isActive = data.isActive;
     }
 
-    const transform = try self.queryDeviceListUIDimensions();
-    self.bgRect.transform.x = transform.x + transform.w + AppConfig.APP_UI_MODULE_GAP_X;
+    // self.bgRect.transform.x = transform.x + transform.w + AppConfig.APP_UI_MODULE_GAP_X;
 
     switch (data.isActive) {
         true => {
@@ -578,8 +602,8 @@ pub fn handleOnActiveStateChanged(self: *DataFlasherUI, event: ComponentEvent) !
 
             self.recalculateUI(.{
                 .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
-                .color = Color.activeGreen,
-                .borderColor = Color.white,
+                .color = Color.themeSectionBg,
+                .borderColor = Color.themeSectionBorder,
             });
 
             const tempText = Text.init(isoPath, .{ .x = winRelX(1.5), .y = winRelY(1.5) }, self.isoText.style);

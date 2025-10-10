@@ -17,6 +17,8 @@ const fs = freetracer_lib.fs;
 const AppConfig = @import("../../config.zig");
 const MAX_EXT_LEN = AppConfig.MAX_EXT_LEN;
 
+const AppManager = @import("../../managers/AppManager.zig");
+
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
 const ComponentName = EventManager.ComponentName.ISO_FILE_PICKER;
 const ComponentFramework = @import("../framework/import/index.zig");
@@ -44,9 +46,9 @@ const ComponentEvent = ComponentFramework.Event;
 const EventResult = ComponentFramework.EventResult;
 const WorkerStatus = ComponentFramework.WorkerStatus;
 
-const ISOFilePickerUI = @import("./FilePickerUI.zig");
+const FilePickerUI = @import("./FilePickerUI.zig");
 
-pub const ISOFilePickerComponent = @This();
+pub const FilePicker = @This();
 
 // Component-agnostic props
 state: ComponentState,
@@ -55,7 +57,7 @@ component: ?Component = null,
 
 // Component-specific, unique props
 allocator: std.mem.Allocator,
-uiComponent: ?ISOFilePickerUI = null,
+uiComponent: ?FilePickerUI = null,
 
 pub const Events = struct {
 
@@ -90,13 +92,13 @@ pub const Events = struct {
     );
 };
 
-/// Creates an ISOFilePickerComponent with an empty state; caller must invoke
+/// Creates an FilePicker with an empty state; caller must invoke
 /// `initComponent` and `start` before dispatching events. Allocator is retained
 /// for the lifetime of the component and used by the worker thread.
-pub fn init(allocator: std.mem.Allocator) !ISOFilePickerComponent {
-    Debug.log(.DEBUG, "ISOFilePickerComponent: component initialized!", .{});
+pub fn init(allocator: std.mem.Allocator) !FilePicker {
+    Debug.log(.DEBUG, "FilePicker: component initialized!", .{});
 
-    return ISOFilePickerComponent{
+    return FilePicker{
         .allocator = allocator,
         .state = ComponentState.init(FilePickerState{}),
     };
@@ -105,21 +107,21 @@ pub fn init(allocator: std.mem.Allocator) !ISOFilePickerComponent {
     // address in the scope of this function instead of the struct.
 }
 
-pub fn initComponent(self: *ISOFilePickerComponent, parent: ?*Component) !void {
+pub fn initComponent(self: *FilePicker, parent: ?*Component) !void {
     if (self.component != null) return error.BaseComponentAlreadyInitialized;
     self.component = try Component.init(self, &ComponentImplementation.vtable, parent, self.allocator);
 }
 
-pub fn initWorker(self: *ISOFilePickerComponent) !void {
+pub fn initWorker(self: *FilePicker) !void {
     if (self.worker != null) return error.ComponentWorkerAlreadyInitialized;
 
     self.worker = ComponentWorker.init(
         self.allocator,
         &self.state,
         .{
-            .run_fn = ISOFilePickerComponent.workerRun,
+            .run_fn = FilePicker.workerRun,
             .run_context = self,
-            .callback_fn = ISOFilePickerComponent.workerCallback,
+            .callback_fn = FilePicker.workerCallback,
             .callback_context = self,
         },
         .{
@@ -130,8 +132,8 @@ pub fn initWorker(self: *ISOFilePickerComponent) !void {
 
 /// Starts the worker thread context and materializes UI children; must only be
 /// called once after `initComponent`. Subscribes the component to the event bus.
-pub fn start(self: *ISOFilePickerComponent) !void {
-    Debug.log(.DEBUG, "ISOFilePickerComponent: start() function called!", .{});
+pub fn start(self: *FilePicker) !void {
+    Debug.log(.DEBUG, "FilePicker: start() function called!", .{});
 
     try self.initWorker();
 
@@ -140,10 +142,10 @@ pub fn start(self: *ISOFilePickerComponent) !void {
 
         if (!EventManager.subscribe(ComponentName, component)) return error.UnableToSubscribeToEventManager;
 
-        Debug.log(.DEBUG, "ISOFilePickerComponent: attempting to initialize children...", .{});
+        Debug.log(.DEBUG, "FilePicker: attempting to initialize children...", .{});
 
         component.children = std.ArrayList(Component).empty;
-        self.uiComponent = try ISOFilePickerUI.init(self.allocator, self);
+        self.uiComponent = try FilePickerUI.init(self.allocator, self);
 
         if (component.children) |*children| {
             if (self.uiComponent) |*uiComponent| {
@@ -152,48 +154,50 @@ pub fn start(self: *ISOFilePickerComponent) !void {
             }
         }
 
-        Debug.log(.DEBUG, "ISOFilePickerComponent: finished initializing children.", .{});
+        Debug.log(.DEBUG, "FilePicker: finished initializing children.", .{});
     }
 }
 
-pub fn update(self: *ISOFilePickerComponent) !void {
+pub fn update(self: *FilePicker) !void {
     self.checkAndJoinWorker();
 }
 
-pub fn draw(self: *ISOFilePickerComponent) !void {
+pub fn draw(self: *FilePicker) !void {
     _ = self;
 }
 
 /// UI callback entry-point that safely dispatches the asynchronous selection
 /// workflow; errors are logged rather than propagated to avoid UI crashes.
-pub fn dispatchComponentAction(self: *ISOFilePickerComponent) void {
+pub fn dispatchComponentAction(self: *FilePicker) void {
     self.selectFile() catch |err| {
-        Debug.log(.ERROR, "ISOFilePickerComponent: Failed to dispatch component action. Error: {any}", .{err});
+        Debug.log(.ERROR, "FilePicker: Failed to dispatch component action. Error: {any}", .{err});
     };
 }
 
 /// Primary event handler. Dispatcher to more specialized functions.
-pub fn handleEvent(self: *ISOFilePickerComponent, event: ComponentEvent) !EventResult {
-    Debug.log(.DEBUG, "ISOFilePickerComponent: handleEvent received: \"{s}\"", .{event.name});
+pub fn handleEvent(self: *FilePicker, event: ComponentEvent) !EventResult {
+    Debug.log(.DEBUG, "FilePicker: handleEvent received: \"{s}\"", .{event.name});
 
     var eventResult = EventResult.init();
 
     return switch (event.hash) {
         Events.onISOFileSelected.Hash => try self.handleISOFileSelected(),
         Events.onISOFilePathQueried.Hash => try self.handleISOFilePathQueried(event),
+        AppManager.Events.AppResetEvent.Hash => self.handleAppResetRequest(),
         else => eventResult.fail(),
     };
 }
 
-pub fn deinit(self: *ISOFilePickerComponent) void {
+pub fn deinit(self: *FilePicker) void {
     self.state.lock();
     defer self.state.unlock();
     if (self.state.data.selectedPath) |path| self.allocator.free(path);
+    self.state.data.image = .{};
 }
 
 /// Handles the `onISOFilePathQueried` event, providing the currently selected path to the requester.
 /// Avoids heap allocation by having the requester provide memory for the response.
-fn handleISOFilePathQueried(self: *ISOFilePickerComponent, event: ComponentEvent) !EventResult {
+fn handleISOFilePathQueried(self: *FilePicker, event: ComponentEvent) !EventResult {
     self.state.lock();
     defer self.state.unlock();
 
@@ -220,7 +224,7 @@ fn handleISOFilePathQueried(self: *ISOFilePickerComponent, event: ComponentEvent
 /// This function is responsible for validating the file and updating state and other components.
 /// Validates the worker-selected path, updates component state, and notifies dependents.
 /// Requires the component state lock to be held when invoked.
-fn handleISOFileSelected(self: *ISOFilePickerComponent) !EventResult {
+fn handleISOFileSelected(self: *FilePicker) !EventResult {
     self.state.lock();
     defer self.state.unlock();
 
@@ -256,24 +260,26 @@ fn handleISOFileSelected(self: *ISOFilePickerComponent) !EventResult {
     self.state.data.image.type = fs.getImageType(fs.getExtensionFromPath(newPath));
 
     if (self.uiComponent) |*ui| {
-        const pathChangedEvent = ISOFilePickerUI.Events.onISOFilePathChanged.create(self.asComponentPtr(), &.{
+        const pathChangedEvent = FilePickerUI.Events.onISOFilePathChanged.create(self.asComponentPtr(), &.{
             .newPath = newPath,
         });
 
         _ = try ui.handleEvent(pathChangedEvent);
     }
 
+    try AppManager.reportAction(.ImageSelected);
+
     // --- Notify other components
     const deactivateEvent = Events.onActiveStateChanged.create(self.asComponentPtr(), &.{ .isActive = false });
 
     // signal() instead of broadcast() because order of operation matters here.
-    _ = try EventManager.signal("iso_file_picker_ui", deactivateEvent);
-    _ = try EventManager.signal("device_list", deactivateEvent);
+    _ = try EventManager.signal(EventManager.ComponentName.ISO_FILE_PICKER_UI, deactivateEvent);
+    _ = try EventManager.signal(EventManager.ComponentName.DEVICE_LIST, deactivateEvent);
 
     return eventResult.succeed();
 }
 
-pub fn selectFile(self: *ISOFilePickerComponent) !void {
+pub fn selectFile(self: *FilePicker) !void {
     if (self.worker) |*worker| {
         try worker.start();
     }
@@ -281,13 +287,13 @@ pub fn selectFile(self: *ISOFilePickerComponent) !void {
 
 pub const dispatchComponentActionWrapper = struct {
     pub fn call(ptr: *anyopaque) void {
-        ISOFilePickerComponent.asInstance(ptr).selectFile() catch |err| {
-            Debug.log(.ERROR, "ISOFilePickerComponent: Failed to dispatch component action. Error: {any}", .{err});
+        FilePicker.asInstance(ptr).selectFile() catch |err| {
+            Debug.log(.ERROR, "FilePicker: Failed to dispatch component action. Error: {any}", .{err});
         };
     }
 };
 
-pub fn checkAndJoinWorker(self: *ISOFilePickerComponent) void {
+pub fn checkAndJoinWorker(self: *FilePicker) void {
     if (self.worker) |*worker| {
         if (worker.status == WorkerStatus.NEEDS_JOINING) {
             worker.join();
@@ -295,11 +301,17 @@ pub fn checkAndJoinWorker(self: *ISOFilePickerComponent) void {
     }
 }
 
+pub fn handleAppResetRequest(self: *FilePicker) EventResult {
+    var eventResult = EventResult.init();
+    self.deinit();
+    return eventResult.succeed();
+}
+
 /// Runs on the worker thread to `synchronously` and `blockingly` invoke the OS file dialog
 /// on the same thread and then signal completion back to the component on the owning thread.
 /// Blocking because MacOS requires that new windows (like file picker) are spawned by the main thread.
 pub fn workerRun(worker: *ComponentWorker, context: *anyopaque) void {
-    Debug.log(.DEBUG, "ISOFilePickerComponent: runWorker() started!", .{});
+    Debug.log(.DEBUG, "FilePicker: runWorker() started!", .{});
 
     _ = context;
 
@@ -322,31 +334,31 @@ pub fn workerRun(worker: *ComponentWorker, context: *anyopaque) void {
     worker.state.data.selectedPath = selectedPath;
     worker.state.unlock();
 
-    const event = ISOFilePickerComponent.Events.onISOFileSelected.create(
-        &ISOFilePickerComponent.asInstance(worker.context.run_context).component.?,
+    const event = FilePicker.Events.onISOFileSelected.create(
+        &FilePicker.asInstance(worker.context.run_context).component.?,
         &.{},
     );
 
-    _ = ISOFilePickerComponent.asInstance(worker.context.run_context).handleEvent(event) catch |err| {
-        Debug.log(.DEBUG, "ISOFilePickerComponent Worker caught error: {any}", .{err});
+    _ = FilePicker.asInstance(worker.context.run_context).handleEvent(event) catch |err| {
+        Debug.log(.DEBUG, "FilePicker Worker caught error: {any}", .{err});
     };
 
-    Debug.log(.DEBUG, "ISOFilePickerComponent: runWorker() finished executing!", .{});
+    Debug.log(.DEBUG, "FilePicker: runWorker() finished executing!", .{});
 }
 
 pub fn workerCallback(worker: *ComponentWorker, context: *anyopaque) void {
-    Debug.log(.DEBUG, "ISOFilePickerComponent: workerCallback() called!", .{});
+    Debug.log(.DEBUG, "FilePicker: workerCallback() called!", .{});
 
     _ = worker;
     _ = context;
 
-    Debug.log(.DEBUG, "ISOFilePickerComponent: workerCallback() joined!", .{});
+    Debug.log(.DEBUG, "FilePicker: workerCallback() joined!", .{});
 }
 
-pub const ComponentImplementation = ComponentFramework.ImplementComponent(ISOFilePickerComponent);
+pub const ComponentImplementation = ComponentFramework.ImplementComponent(FilePicker);
 pub const asComponent = ComponentImplementation.asComponent;
 pub const asComponentPtr = ComponentImplementation.asComponentPtr;
 pub const asInstance = ComponentImplementation.asInstance;
 
-pub const FilePickerComponent = @import("../framework/Component.zig").implementInterface(Component, ISOFilePickerComponent);
+pub const FilePickerComponent = @import("../framework/Component.zig").implementInterface(Component, FilePicker);
 // FilePickerComponent.

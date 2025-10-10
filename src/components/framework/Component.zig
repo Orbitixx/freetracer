@@ -1,8 +1,6 @@
 const std = @import("std");
 const Debug = @import("freetracer-lib").Debug;
 
-const ascii = std.ascii;
-
 const ComponentState = @import("./import/index.zig").ComponentState;
 
 const EventFramework = @import("Event.zig");

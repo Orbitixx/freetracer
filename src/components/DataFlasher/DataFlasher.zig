@@ -9,6 +9,7 @@ const DeviceType = types.DeviceType;
 const ImageType = types.ImageType;
 const Image = types.Image;
 
+const AppManager = @import("../../managers/AppManager.zig");
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
 const ComponentName = EventManager.ComponentName.DATA_FLASHER;
 
@@ -240,9 +241,11 @@ fn queryAndSaveSelectedDevice(self: *DataFlasher) !void {
 fn handleDeviceListActiveStateChanged(self: *DataFlasher, event: ComponentEvent) !EventResult {
     var eventResult = EventResult.init();
     //
-    const data = DeviceList.Events.onDeviceListActiveStateChanged.getData(event) orelse return eventResult.fail();
 
-    // If DeviceList Component is active -- break out early.
+    Debug.log(.DEBUG, "DataFlasher: auth check: {any}", .{AppManager.authorizeAction(.ActivateDataFlasher)});
+    if (!AppManager.authorizeAction(.ActivateDataFlasher)) return eventResult.fail();
+
+    const data = DeviceList.Events.onDeviceListActiveStateChanged.getData(event) orelse return eventResult.fail();
     if (data.isActive == true) return eventResult.succeed();
 
     try self.queryAndSaveISOPath();
