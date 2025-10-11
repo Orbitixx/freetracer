@@ -14,7 +14,7 @@ TODO.md
 *.app/
 zig-out/
 src/resources/
+Icons/
 
 .vscode/
 .zig-cache/
-

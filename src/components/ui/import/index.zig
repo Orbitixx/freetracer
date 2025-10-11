@@ -3,6 +3,7 @@ pub const Styles = @import("../Styles.zig");
 pub const Layout = @import("../Layout.zig");
 
 pub const Button = @import("../Button.zig");
+pub const FileDropzone = @import("../FileDropzone.zig");
 pub const Checkbox = @import("../Checkbox.zig");
 pub const Statusbox = @import("../Statusbox.zig");
 pub const Progressbox = @import("../StatusIndicator.zig").ProgressBox;

@@ -28,7 +28,7 @@ pub const TextboxStyle = struct {
     text: TextStyle = .{},
     padding: Layout.Padding = Layout.Padding.uniform(Layout.Space.sm),
     selectionTextTint: rl.Color = Color.white,
-    selectionBackgroundTint: rl.Color = Color.themePrimaryDark,
+    selectionBackgroundTint: rl.Color = Color.themePrimary,
     /// Additional vertical spacing between wrapped lines.
     lineSpacing: f32 = 0,
 };

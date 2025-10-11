@@ -239,8 +239,12 @@ fn handleISOFileSelected(self: *FilePicker) !EventResult {
     }
 
     const newPath = selectedPath.?;
+    try self.processSelectedPathLocked(newPath);
 
-    // --- Validate extension
+    return eventResult.succeed();
+}
+
+fn processSelectedPathLocked(self: *FilePicker, newPath: [:0]u8) !void {
     if (!fs.isExtensionAllowed(AppConfig.ALLOWED_IMAGE_EXTENSIONS.len, AppConfig.ALLOWED_IMAGE_EXTENSIONS, newPath)) {
         const proceed = osd.message("The selected file extension is not a recognized image type (.iso, .img). Proceed anyway?", .{
             .level = .warning,
@@ -248,14 +252,12 @@ fn handleISOFileSelected(self: *FilePicker) !EventResult {
         });
 
         if (!proceed) {
-            // If user cancelled, clean up the path and restore previous state.
             self.allocator.free(newPath);
             self.state.data.selectedPath = null;
-            return eventResult.succeed();
+            return;
         }
     }
 
-    // --- Update state & notify UI
     self.state.data.image.path = newPath;
     self.state.data.image.type = fs.getImageType(fs.getExtensionFromPath(newPath));
 
@@ -269,15 +271,43 @@ fn handleISOFileSelected(self: *FilePicker) !EventResult {
 
     try AppManager.reportAction(.ImageSelected);
 
-    // --- Notify other components
     const deactivateEvent = Events.onActiveStateChanged.create(self.asComponentPtr(), &.{ .isActive = false });
-
-    // signal() instead of broadcast() because order of operation matters here.
     _ = try EventManager.signal(EventManager.ComponentName.ISO_FILE_PICKER_UI, deactivateEvent);
     _ = try EventManager.signal(EventManager.ComponentName.DEVICE_LIST, deactivateEvent);
-
-    return eventResult.succeed();
 }
+
+pub fn acceptDroppedFile(self: *FilePicker, path: []const u8) !void {
+    if (path.len == 0) return;
+
+    const owned = try self.allocator.alloc(u8, path.len + 1);
+    @memcpy(owned[0..path.len], path);
+    owned[path.len] = 0;
+    const ownedZ = owned[0..path.len :0];
+
+    self.state.lock();
+    defer self.state.unlock();
+
+    if (self.state.data.selectedPath) |prev| {
+        self.allocator.free(prev);
+    }
+
+    self.state.data.selectedPath = ownedZ;
+    self.state.data.isSelecting = false;
+
+    self.processSelectedPathLocked(ownedZ) catch |err| {
+        self.allocator.free(owned);
+        self.state.data.selectedPath = null;
+        return err;
+    };
+}
+
+pub const HandleFileDropWrapper = struct {
+    pub fn call(ptr: *anyopaque, path: []const u8) void {
+        FilePicker.asInstance(ptr).acceptDroppedFile(path) catch |err| {
+            Debug.log(.ERROR, "FilePicker: Failed to accept dropped file. Error: {any}", .{err});
+        };
+    }
+};
 
 pub fn selectFile(self: *FilePicker) !void {
     if (self.worker) |*worker| {

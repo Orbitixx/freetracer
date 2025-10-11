@@ -3,6 +3,12 @@ const rl = @import("raylib");
 const Debug = @import("freetracer-lib").Debug;
 const AppConfig = @import("../config.zig");
 
+// const c = @cImport({
+//     @cInclude("GLFW/glfw3.h");
+// });
+
+extern fn rl_drag_install_on_nswindow(win: ?*anyopaque) callconv(.c) void;
+
 pub const Window = struct {
     x: f32 = 0,
     y: f32 = 0,
@@ -33,6 +39,9 @@ pub const Window = struct {
         const newY: i32 = @intFromFloat(@divTrunc(mHeight, 2) - self.height / 2);
 
         rl.setWindowPosition(newX, newY);
+
+        const glfw_win = rl.getWindowHandle();
+        rl_drag_install_on_nswindow(glfw_win);
 
         rl.setTargetFPS(AppConfig.WINDOW_FPS);
     }

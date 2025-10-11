@@ -30,7 +30,6 @@ const Button = UIFramework.Button;
 const Rectangle = UIFramework.Primitives.Rectangle;
 const Transform = UIFramework.Primitives.Transform;
 const Text = UIFramework.Primitives.Text;
-const Texture = UIFramework.Primitives.Texture;
 const Textbox = UIFramework.Textbox;
 
 const Styles = UIFramework.Styles;
@@ -48,6 +47,34 @@ const SectionHeader = struct {
 };
 
 const DEFAULT_ISO_TITLE = "No ISO selected...";
+
+fn dropzoneStyleActive() UIFramework.FileDropzone.Style {
+    return .{
+        .backgroundColor = Styles.Color.themeSectionBg,
+        .hoverBackgroundColor = rl.Color.init(35, 39, 55, 255),
+        .borderColor = Styles.Color.themeOutline,
+        .hoverBorderColor = rl.Color.init(90, 110, 120, 255),
+        .dashLength = 10,
+        .gapLength = 6,
+        .borderThickness = 2,
+        .cornerRadius = 0.12,
+        .iconScale = 0.3,
+    };
+}
+
+fn dropzoneStyleInactive() UIFramework.FileDropzone.Style {
+    return .{
+        .backgroundColor = rl.Color{ .r = 32, .g = 36, .b = 48, .a = 130 },
+        .hoverBackgroundColor = rl.Color{ .r = 45, .g = 50, .b = 64, .a = 170 },
+        .borderColor = Styles.Color.themeOutline,
+        .hoverBorderColor = Styles.Color.lightGray,
+        .dashLength = 12,
+        .gapLength = 6,
+        .borderThickness = 2,
+        .cornerRadius = 0.12,
+        .iconScale = 0.3,
+    };
+}
 
 // This state is mutable and can be accessed from the main UI thread (draw/update)
 // and a worker/event thread (handleEvent). Access must be guarded by state.lock().
@@ -68,11 +95,13 @@ component: ?Component = null,
 allocator: std.mem.Allocator,
 bgRect: Rectangle = undefined,
 headerLabel: Text = undefined,
-diskImg: Texture = undefined,
 button: Button = undefined,
 isoTitle: Text = undefined,
 displayNameBuffer: [AppConfig.IMAGE_DISPLAY_NAME_BUFFER_LEN:0]u8 = undefined,
 header: SectionHeader = undefined,
+stepTexture: UIFramework.Texture = undefined,
+dropzoneFrame: Bounds = undefined,
+dropzone: UIFramework.FileDropzone = undefined,
 // headerFrame: UIFramework.Layout.Bounds = undefined,
 
 const BgRectParams = struct {
@@ -147,7 +176,14 @@ pub fn handleEvent(self: *FilePickerUI, event: ComponentEvent) !EventResult {
 }
 
 pub fn update(self: *FilePickerUI) !void {
-    try self.button.update();
+    self.state.lock();
+    const isActive = self.state.data.isActive;
+    self.state.unlock();
+
+    if (isActive) {
+        self.dropzone.update();
+        try self.button.update();
+    }
 }
 
 pub fn draw(self: *FilePickerUI) !void {
@@ -156,8 +192,7 @@ pub fn draw(self: *FilePickerUI) !void {
     const isActive = self.state.data.isActive;
 
     self.bgRect.draw();
-    // self.headerLabel.draw();
-    self.diskImg.draw();
+    self.stepTexture.draw();
     try self.header.textbox.draw();
 
     if (isActive) try self.drawActive() else try self.drawInactive();
@@ -177,6 +212,7 @@ pub const asComponentPtr = ComponentImplementation.asComponentPtr;
 pub const asInstance = ComponentImplementation.asInstance;
 
 fn drawActive(self: *FilePickerUI) !void {
+    self.dropzone.draw();
     try self.button.draw();
 }
 
@@ -194,8 +230,7 @@ fn recalculateUI(self: *FilePickerUI, bgRectParams: BgRectParams) void {
     self.headerLabel.transform.x = self.bgRect.transform.x + 12;
     self.headerLabel.transform.y = self.bgRect.transform.relY(0.01);
 
-    self.diskImg.transform.x = self.bgRect.transform.relX(0.5) - self.diskImg.transform.getWidth() / 2;
-    self.diskImg.transform.y = self.bgRect.transform.relY(0.5) - self.diskImg.transform.getHeight() / 2;
+    self.dropzoneFrame.parent = &self.bgRect.transform;
 
     self.setImageTitlePosition();
 
@@ -215,7 +250,7 @@ fn subscribeToEvents(component: *Component) !void {
 fn initializeUIElements(self: *FilePickerUI) !void {
     self.initializeBackground();
     self.initializeHeader();
-    self.initializeDiskImage();
+    self.initializeDropzone();
     self.initializeIsoTitle();
     try self.initializeButton();
 }
@@ -247,10 +282,26 @@ fn initializeHeader(self: *FilePickerUI) void {
         .textColor = Color.white,
     });
 
+    self.stepTexture = UIFramework.Texture.init(.STEP_1_INACTIVE, .{
+        .x = self.bgRect.transform.relX(0.05),
+        .y = self.bgRect.transform.relY(0.01),
+    });
+
+    self.stepTexture.transform.scale = 0.5;
+
     self.header = .{
+        // .textboxFrame = Bounds.relative(
+        //     &self.bgRect.transform,
+        //     PositionSpec.percent(0.05, 0),
+        //     .{
+        //         .width = UnitValue.mix(1.0, -48),
+        //         .height = UnitValue.percent(0.25),
+        //     },
+        // ),
+
         .textboxFrame = Bounds.relative(
             &self.bgRect.transform,
-            PositionSpec.pixels(10, 0),
+            PositionSpec.percent(0.14, 0),
             .{
                 .width = UnitValue.mix(1.0, -48),
                 .height = UnitValue.percent(0.25),
@@ -280,11 +331,27 @@ fn initializeHeader(self: *FilePickerUI) void {
     };
 }
 
-fn initializeDiskImage(self: *FilePickerUI) void {
-    self.diskImg = Texture.init(.DISK_IMAGE, .{ .x = 0, .y = 0 });
-    self.diskImg.transform.x = self.bgRect.transform.relX(0.5) - self.diskImg.transform.w / 2;
-    self.diskImg.transform.y = self.bgRect.transform.relY(0.5) - self.diskImg.transform.h / 2;
-    self.diskImg.tint = .{ .r = 255, .g = 255, .b = 255, .a = 150 };
+fn initializeDropzone(self: *FilePickerUI) void {
+    const dropzonePosition = PositionSpec.mix(
+        UnitValue.percent(0.05),
+        UnitValue.percent(0.15),
+    );
+
+    const dropzoneSize = Layout.SizeSpec.percent(0.9, 0.3);
+
+    self.dropzoneFrame = Bounds.relative(&self.bgRect.transform, dropzonePosition, dropzoneSize);
+
+    self.dropzone = UIFramework.FileDropzone.init(
+        &self.dropzoneFrame,
+        .DOC_IMAGE,
+        dropzoneStyleActive(),
+        .{
+            .onClick = .{ .context = self.parent, .function = FilePicker.dispatchComponentActionWrapper.call },
+            .onDrop = .{ .context = self.parent, .function = FilePicker.HandleFileDropWrapper.call },
+        },
+    );
+
+    // self.dropzone.texture.icon
 }
 
 fn initializeButton(self: *FilePickerUI) !void {
@@ -312,9 +379,9 @@ fn initializeIsoTitle(self: *FilePickerUI) void {
     self.resetIsoTitle();
 }
 
-fn applyAppearance(self: *FilePickerUI, params: BgRectParams, headerColor: rl.Color, diskScale: f32) void {
+fn applyAppearance(self: *FilePickerUI, params: BgRectParams, headerColor: rl.Color, dropzoneStyle: UIFramework.FileDropzone.Style) void {
     self.headerLabel.style.textColor = headerColor;
-    self.diskImg.transform.scale = diskScale;
+    self.dropzone.setStyle(dropzoneStyle);
     self.recalculateUI(params);
 }
 
@@ -336,13 +403,13 @@ fn setIsActive(self: *FilePickerUI, isActive: bool) void {
             .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
             .color = Color.themeSectionBg,
             .borderColor = Color.themeSectionBorder,
-        }, Color.white, 1.0);
+        }, Color.white, dropzoneStyleActive());
     } else {
         self.applyAppearance(.{
             .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
             .color = Color.themeSectionBg,
             .borderColor = Color.themeSectionBorder,
-        }, Color.offWhite, 0.7);
+        }, Color.offWhite, dropzoneStyleInactive());
     }
 
     self.broadcastUIDimensions();
@@ -380,8 +447,8 @@ fn updateIsoTitle(self: *FilePickerUI, newName: [:0]const u8) void {
     const label = std.mem.sliceTo(&self.displayNameBuffer, Character.NULL);
 
     self.isoTitle = Text.init(@ptrCast(label), .{
-        .x = self.bgRect.transform.relX(0.5),
-        .y = self.bgRect.transform.relY(0.5),
+        .x = 0,
+        .y = 0,
     }, .{ .fontSize = 14 });
 
     self.setImageTitlePosition();
@@ -389,8 +456,8 @@ fn updateIsoTitle(self: *FilePickerUI, newName: [:0]const u8) void {
 
 fn resetIsoTitle(self: *FilePickerUI) void {
     self.isoTitle = Text.init(DEFAULT_ISO_TITLE, .{
-        .x = self.bgRect.transform.relX(0.5),
-        .y = self.bgRect.transform.relY(0.5),
+        .x = 0,
+        .y = 0,
     }, .{ .fontSize = 14 });
 
     self.setImageTitlePosition();
@@ -398,8 +465,10 @@ fn resetIsoTitle(self: *FilePickerUI) void {
 
 /// Keeps the ISO title centered beneath the disk glyph after any layout or text change.
 fn setImageTitlePosition(self: *FilePickerUI) void {
-    self.isoTitle.transform.x = self.bgRect.transform.relX(0.5) - self.isoTitle.getDimensions().width / 2;
-    self.isoTitle.transform.y = self.diskImg.transform.y + self.diskImg.transform.getHeight() + winRelY(0.02);
+    const dropBounds = self.dropzoneFrame.resolve();
+    const dims = self.isoTitle.getDimensions();
+    self.isoTitle.transform.x = dropBounds.x + (dropBounds.w / 2) - dims.width / 2;
+    self.isoTitle.transform.y = dropBounds.y + dropBounds.h + winRelY(0.02);
 }
 
 fn handleUIDimensionsQueried(self: *FilePickerUI, event: ComponentEvent) !EventResult {
@@ -413,6 +482,7 @@ fn handleActiveStateChanged(self: *FilePickerUI, event: ComponentEvent) !EventRe
     var eventResult = EventResult.init();
     const data = FilePicker.Events.onActiveStateChanged.getData(event) orelse return eventResult.fail();
     self.setIsActive(data.isActive);
+    if (!data.isActive) rl.setMouseCursor(.default);
     return eventResult.succeed();
 }
 

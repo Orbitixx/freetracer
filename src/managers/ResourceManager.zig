@@ -12,13 +12,15 @@ pub const FONT = enum(u8) {
 };
 
 const FONTS_COUNT: usize = 2;
-const TEXTURES_COUNT: usize = 4;
+const TEXTURES_COUNT: usize = 6;
 
 pub const TEXTURE = enum(u8) {
     DISK_IMAGE = 0,
     USB_IMAGE = 1,
     RELOAD_ICON = 2,
     BUTTON_UI = 3,
+    DOC_IMAGE = 4,
+    STEP_1_INACTIVE = 5,
 };
 
 pub const Texture = rl.Texture2D;
@@ -63,11 +65,11 @@ pub const ResourceManagerSingleton = struct {
         const jerseyFontFile = try getResourcePath(allocator, "Jersey10-Regular.ttf");
         defer allocator.free(jerseyFontFile);
 
-        const robotoRegular = try rl.loadFontEx(robotoFontFile, 512, null);
+        const robotoRegular = try rl.loadFontEx(robotoFontFile, 32, null);
         rl.setTextureFilter(robotoRegular.texture, .trilinear);
 
-        const jersey10Regular = try rl.loadFontEx(jerseyFontFile, 512, null);
-        rl.setTextureFilter(jersey10Regular.texture, .trilinear);
+        const jersey10Regular = try rl.loadFontEx(jerseyFontFile, 64, null);
+        rl.setTextureFilter(jersey10Regular.texture, .point);
 
         Debug.log(.DEBUG, "ResourceManager: fonts successfully loaded!", .{});
 
@@ -80,6 +82,14 @@ pub const ResourceManagerSingleton = struct {
         const diskTextureFile = try getResourcePath(allocator, "disk_image.png");
         defer allocator.free(diskTextureFile);
         const diskTexture = try rl.loadTexture(diskTextureFile);
+
+        const docImageFile = try getResourcePath(allocator, "doc_image.png");
+        defer allocator.free(docImageFile);
+        const docImageTexture = try rl.loadTexture(docImageFile);
+
+        const step1IFile = try getResourcePath(allocator, "step-1-inactive.png");
+        defer allocator.free(step1IFile);
+        const step1ITexture = try rl.loadTexture(step1IFile);
 
         const usbTextureFile = try getResourcePath(allocator, "usb_image.png");
         defer allocator.free(usbTextureFile);
@@ -113,6 +123,8 @@ pub const ResourceManagerSingleton = struct {
             inst.textures[1] = usbTexture;
             inst.textures[2] = reloadIconTexture;
             inst.textures[3] = buttonUiTexture;
+            inst.textures[4] = docImageTexture;
+            inst.textures[5] = step1ITexture;
         }
 
         Debug.log(.INFO, "ResourceManager: finished initialization!", .{});

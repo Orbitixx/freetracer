@@ -48,6 +48,7 @@ innerRect: Rectangle,
 text: Text,
 textBuf: [AppConfig.CHECKBOX_TEXT_BUFFER_SIZE]u8,
 state: CheckboxState = .NORMAL,
+cursorActive: bool = false,
 styles: CheckboxVariant,
 clickHandler: CheckboxHandler,
 
@@ -115,8 +116,18 @@ pub fn initComponent(self: *Checkbox, parent: ?*Component) !void {
 
 pub fn update(self: *Checkbox) !void {
     const mousePos: rl.Vector2 = rl.getMousePosition();
-    const isCheckboxClicked: bool = rl.isMouseButtonReleased(.left);
     const isCheckboxHovered: bool = self.transform.isPointWithinBounds(mousePos);
+    const wantsCursor = isCheckboxHovered;
+
+    if (wantsCursor and !self.cursorActive) {
+        rl.setMouseCursor(.pointing_hand);
+        self.cursorActive = true;
+    } else if (!wantsCursor and self.cursorActive) {
+        rl.setMouseCursor(.default);
+        self.cursorActive = false;
+    }
+
+    const isCheckboxClicked: bool = rl.isMouseButtonReleased(.left);
 
     // Don't bother updating if state change triggers are not present
     if (self.state == CheckboxState.NORMAL and (!isCheckboxHovered and !isCheckboxClicked)) return;

@@ -31,7 +31,7 @@ pub const Color = struct {
     pub const themeSectionBorder = rl.Color.init(40, 43, 55, 255);
     pub const themeDark = rl.Color.init(20, 23, 35, 255);
     pub const themePrimary = rl.Color.init(120, 185, 185, 255);
-    pub const themePrimaryDark = rl.Color.init(56, 99, 120, 255);
+    pub const themeTertiary = rl.Color.init(56, 99, 120, 255);
     pub const themeSecondary = rl.Color.init(193, 124, 160, 255);
     pub const themeOutline = rl.Color.init(66, 66, 77, 255);
 };

@@ -60,6 +60,7 @@ styles: ButtonStyles,
 state: ButtonState = ButtonState.NORMAL,
 clickHandler: ButtonHandler,
 params: ButtonParams = .{},
+cursorActive: bool = false,
 
 pub const Events = struct {
     pub const onButtonToggleEnabled = defineEvent(
@@ -126,11 +127,21 @@ pub fn setPosition(self: *ButtonComponent, position: rl.Vector2) void {
 }
 
 pub fn update(self: *ButtonComponent) !void {
+    const mousePos: rl.Vector2 = rl.getMousePosition();
+    const isButtonHovered: bool = self.rect.transform.isPointWithinBounds(mousePos);
+    const wantsCursor = isButtonHovered and self.state != ButtonState.DISABLED;
+
+    if (wantsCursor and !self.cursorActive) {
+        rl.setMouseCursor(.pointing_hand);
+        self.cursorActive = true;
+    } else if (!wantsCursor and self.cursorActive) {
+        rl.setMouseCursor(.default);
+        self.cursorActive = false;
+    }
+
     if (self.state == ButtonState.DISABLED) return;
 
-    const mousePos: rl.Vector2 = rl.getMousePosition();
     const isButtonClicked: bool = rl.isMouseButtonPressed(.left);
-    const isButtonHovered: bool = self.rect.transform.isPointWithinBounds(mousePos);
 
     // Don't bother updating if state change triggers are not present
     if (self.state == ButtonState.NORMAL and (!isButtonHovered and !isButtonClicked)) return;
@@ -186,7 +197,7 @@ pub fn handleEvent(self: *ButtonComponent, event: Event) !EventResult {
         Events.onButtonToggleEnabled.Hash => {
             //
             const data = Events.onButtonToggleEnabled.getData(event) orelse break :eventLoop;
-            if (data.isEnabled) self.state = .NORMAL else self.state = .DISABLED;
+            self.setEnabled(data.isEnabled);
             eventResult.validate(.SUCCESS);
         },
         else => {},
@@ -203,6 +214,10 @@ pub fn setEnabled(self: *ButtonComponent, flag: bool) void {
             self.text.style = self.styles.normal.textStyle;
         },
         false => {
+            if (self.cursorActive) {
+                rl.setMouseCursor(.default);
+                self.cursorActive = false;
+            }
             self.state = .DISABLED;
             self.rect.style = self.styles.disabled.bgStyle;
             self.text.style = self.styles.disabled.textStyle;
