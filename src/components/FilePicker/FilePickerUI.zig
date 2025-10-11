@@ -503,6 +503,17 @@ fn handleIsoFilePathChanged(self: *FilePickerUI, event: ComponentEvent) !EventRe
 
 pub fn handleAppResetRequest(self: *FilePickerUI) EventResult {
     var eventResult = EventResult.init();
-    _ = self;
+
+    self.resetIsoTitle();
+
+    {
+        self.state.lock();
+        defer self.state.unlock();
+        self.state.data.isActive = true;
+        self.state.data.isoPath = null;
+    }
+
+    self.setIsActive(true);
+
     return eventResult.succeed();
 }

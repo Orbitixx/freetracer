@@ -192,6 +192,7 @@ pub fn deinit(self: *FilePicker) void {
     self.state.lock();
     defer self.state.unlock();
     if (self.state.data.selectedPath) |path| self.allocator.free(path);
+    self.state.data.selectedPath = null;
     self.state.data.image = .{};
 }
 

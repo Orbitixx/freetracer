@@ -118,11 +118,12 @@ const AppManager = struct {
 
     pub fn resetState(self: *AppManager) void {
         self.appState = .ImageSelection;
+        self.lastAction = null;
 
         const resetEvent = Events.AppResetEvent.create(null, null);
         EventManager.broadcast(resetEvent);
 
-        Debug.log(.INFO, "AppManager: state rest to {any}.", .{AppState.ImageSelection});
+        Debug.log(.INFO, "AppManager: state reset to {any}.", .{self.appState});
     }
 
     pub fn isValidAction(self: *AppManager, action: ActionRequest) bool {
@@ -183,6 +184,19 @@ const AppManager = struct {
         var privilegedHelper = try PrivilegedHelper.init(self.allocator);
         try componentRegistry.register(ComponentID.PrivilegedHelper, @constCast(privilegedHelper.asComponentPtr()));
         try privilegedHelper.start();
+
+        var resetAppButton = Button.init(
+            "Restart",
+            null,
+            .{ .x = WindowManager.relW(0.7), .y = WindowManager.relH(0.05) },
+            .Primary,
+            .{ .context = self, .function = AppManagerSingleton.resetStateButtonHandler },
+            self.allocator,
+        );
+
+        try resetAppButton.start();
+        resetAppButton.setPosition(.{ .x = 0, .y = 0 });
+        resetAppButton.rect.rounded = true;
 
         //----------------------------------------------------------------------------------
         //--- @END COMPONENTS --------------------------------------------------------------
@@ -258,6 +272,9 @@ const AppManager = struct {
 
             versionText.draw();
 
+            try resetAppButton.update();
+            try resetAppButton.draw();
+
             // logLineBgRect.draw();
             //
             // logText.value = Debug.getLatestLog();
@@ -275,3 +292,8 @@ const AppManager = struct {
         }
     }
 };
+
+pub fn resetStateButtonHandler(ctx: *anyopaque) void {
+    var self: *AppManager = @ptrCast(@alignCast(ctx));
+    self.resetState();
+}

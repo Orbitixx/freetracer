@@ -25,7 +25,9 @@ const DataFlasherUI = @import("./DataFlasherUI.zig");
 // and a worker/event thread (handleEvent). Access must be guarded by state.lock().
 const DataFlasherState = struct {
     isActive: bool = false,
+    // owned by FilePicker
     isoPath: ?[:0]const u8 = null,
+    // owned by DeviceList (via state ArrayList)
     device: ?StorageDevice = null,
     image: Image = .{},
 };
@@ -108,6 +110,7 @@ pub fn handleEvent(self: *DataFlasher, event: ComponentEvent) !EventResult {
 
     return switch (event.hash) {
         DeviceList.Events.onDeviceListActiveStateChanged.Hash => try self.handleDeviceListActiveStateChanged(event),
+        AppManager.Events.AppResetEvent.Hash => self.handleAppResetRequest(),
         else => return eventResult.fail(),
     };
 }
@@ -282,3 +285,16 @@ pub const flashISOtoDeviceWrapper = struct {
         self.dispatchComponentAction();
     }
 };
+
+pub fn handleAppResetRequest(self: *DataFlasher) EventResult {
+    var eventResult = EventResult.init();
+
+    self.state.lock();
+    defer self.state.unlock();
+
+    self.state.data.isActive = false;
+    self.state.data.device = null;
+    self.state.data.isoPath = null;
+
+    return eventResult.succeed();
+}

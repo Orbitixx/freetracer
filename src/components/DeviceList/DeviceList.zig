@@ -169,10 +169,11 @@ pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResu
     var eventResult = EventResult.init();
 
     return switch (event.hash) {
-        ISOFilePicker.Events.onActiveStateChanged.Hash => try self.handlePrecedingComponentStateChange(event),
         Events.onDiscoverDevicesEnd.Hash => try self.handleDevicesDiscovered(event),
         Events.onFinishedComponentInteraction.Hash => try self.handleFinishedInteraction(),
         Events.onSelectedDeviceQueried.Hash => try self.handleSelectedDeviceQuery(event),
+        ISOFilePicker.Events.onActiveStateChanged.Hash => try self.handlePrecedingComponentStateChange(event),
+        AppManager.Events.AppResetEvent.Hash => self.handleAppResetRequest(),
         else => eventResult.fail(),
     };
 }
@@ -181,6 +182,7 @@ pub fn deinit(self: *DeviceListComponent) void {
     self.state.lock();
     defer self.state.unlock();
 
+    self.state.data.devices.clearAndFree(self.allocator);
     self.state.data.devices.deinit(self.allocator);
 }
 
@@ -262,41 +264,8 @@ pub const selectDeviceActionWrapper = struct {
     pub fn call(ctx: *anyopaque) void {
         const context: *SelectDeviceCallbackContext = @ptrCast(@alignCast(ctx));
 
-        const new_selection = context.component.toggleSelectedDevice(context.selectedDevice);
-        context.component.publishSelectionChanged(new_selection);
-
-        //     var isSameUnselected: bool = false;
-        //
-        //     context.component.state.lock();
-        //
-        //     // TODO: ugly block, refactor
-        //     if (context.component.state.data.selectedDevice) |currentlySelectedDevice| {
-        //         // If the same device is already selected -- then unselect it
-        //         if (currentlySelectedDevice.serviceId == context.selectedDevice.serviceId) {
-        //             context.component.state.data.selectedDevice = null;
-        //             isSameUnselected = true;
-        //         } else context.component.state.data.selectedDevice = context.selectedDevice;
-        //     } else {
-        //         // Otherwise, assign a device
-        //         context.component.state.data.selectedDevice = context.selectedDevice;
-        //     }
-        //
-        //     Debug.log(
-        //         .INFO,
-        //         "DeviceList: selected device set to: {s}",
-        //         .{
-        //             if (context.component.state.data.selectedDevice != null) context.selectedDevice.getBsdNameSlice() else "NULL",
-        //         },
-        //     );
-        //
-        //     context.component.state.unlock();
-        //
-        //     // TODO: CHECK: changed context.state.data.selectedDevice to context.selectedDevice -- probably not right but fixing another issue
-        //     const event = DeviceListUI.Events.onSelectedDeviceNameChanged.create(
-        //         &context.component.component.?,
-        //         &.{ .selectedDevice = if (isSameUnselected) null else context.selectedDevice },
-        //     );
-        //     _ = EventManager.broadcast(event);
+        const newSelection = context.component.toggleSelectedDevice(context.selectedDevice);
+        context.component.publishSelectionChanged(newSelection);
     }
 };
 
@@ -417,10 +386,23 @@ fn publishSelectionChanged(self: *DeviceListComponent, selection: ?StorageDevice
 }
 
 /// Requests a fresh device scan, clearing any existing devices.
-fn refreshDevices(self: *DeviceListComponent) void {
-    if (self.uiComponent) |*ui| {
-        ui.clearDeviceCheckboxes();
-    }
+// fn refreshDevices(self: *DeviceListComponent) void {
+//     // if (self.uiComponent) |*ui| {
+//     //     ui.clearDeviceCheckboxes();
+//     // }
+//
+//     self.dispatchComponentAction();
+// }
 
-    self.dispatchComponentAction();
+pub fn handleAppResetRequest(self: *DeviceListComponent) EventResult {
+    var eventResult = EventResult.init();
+
+    self.state.lock();
+    defer self.state.unlock();
+
+    self.state.data.isActive = false;
+    self.state.data.devices.clearAndFree(self.allocator);
+    self.state.data.selectedDevice = null;
+
+    return eventResult.succeed();
 }

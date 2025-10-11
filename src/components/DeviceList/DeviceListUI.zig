@@ -17,6 +17,7 @@ const StorageDevice = types.StorageDevice;
 
 const AppConfig = @import("../../config.zig");
 
+const AppManager = @import("../../managers/AppManager.zig");
 const WindowManager = @import("../../managers/WindowManager.zig").WindowManagerSingleton;
 const winRelX = WindowManager.relW;
 const winRelY = WindowManager.relH;
@@ -179,6 +180,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
         Events.onUITransformQueried.Hash => try self.handleOnUITransformQueried(event),
         Events.onDevicesReadyToRender.Hash => try self.handleOnDevicesReadyToRender(),
         Events.onSelectedDeviceNameChanged.Hash => try self.handleOnSelectedDeviceNameChanged(event),
+        AppManager.Events.AppResetEvent.Hash => self.handleAppResetRequest(),
         else => return eventResult.fail(),
     };
 }
@@ -599,6 +601,33 @@ fn handleOnSelectedDeviceNameChanged(self: *DeviceListUI, event: ComponentEvent)
     // Toggle the "Next" button based on whether or not a device is selected
     self.nextButton.setEnabled(data.selectedDevice != null);
     self.updateDeviceNameLabel(displayName, if (truncateDisplay) MAX_SELECTED_DEVICE_NAME_LEN else null);
+
+    return eventResult.succeed();
+}
+
+pub fn handleAppResetRequest(self: *DeviceListUI) EventResult {
+    var eventResult = EventResult.init();
+
+    {
+        self.state.lock();
+        defer self.state.unlock();
+        self.state.data.selectedDevice = null;
+        self.state.data.isActive = false;
+    }
+
+    if (self.deviceCheckboxes.items.len > 0) {
+        self.destroyDeviceCheckboxContexts();
+        self.deviceCheckboxes.clearAndFree(self.allocator);
+    }
+
+    self.updateDeviceNameLabel(kStringDeviceListNoDeviceSelected, kStringDeviceListNoDeviceSelected.len);
+
+    self.headerLabel.style.textColor = Color.lightGray;
+    self.recalculateUI(.{
+        .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
+        .color = Color.themeSectionBg,
+        .borderColor = Color.themeSectionBorder,
+    });
 
     return eventResult.succeed();
 }

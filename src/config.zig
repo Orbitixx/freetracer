@@ -14,7 +14,7 @@ pub const IMAGE_DISPLAY_NAME_BUFFER_LEN = 36;
 
 pub const WINDOW_WIDTH_FACTOR: f32 = 0.5;
 pub const WINDOW_HEIGHT_FACTOR: f32 = 0.52;
-pub const WINDOW_FPS: i32 = 30;
+pub const WINDOW_FPS: i32 = 60;
 
 pub const APP_UI_MODULE_PANEL_WIDTH_ACTIVE: f32 = 0.49;
 pub const APP_UI_MODULE_PANEL_WIDTH_INACTIVE: f32 = 0.16;
