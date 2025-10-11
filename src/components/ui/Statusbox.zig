@@ -15,9 +15,11 @@ const StatusboxStyles = Styles.StatusboxStyles;
 
 const Color = Styles.Color;
 
-const ResourceManager = @import("../../managers/ResourceManager.zig");
-const Font = ResourceManager.FONT;
-const getTexture = ResourceManager.ResourceManagerSingleton.getTexture;
+const ResourceImport = @import("../../managers/ResourceManager.zig");
+const ResourceManager = ResourceImport.ResourceManagerSingleton;
+const getTexture = ResourceManager.getTexture;
+const Font = ResourceImport.FONT;
+const Texture = ResourceImport.Texture;
 
 pub const StatusboxState = enum {
     NONE,
@@ -45,7 +47,7 @@ outerRect: Rectangle,
 innerRect: Rectangle,
 state: StatusboxState = .NONE,
 styles: StatusboxVariant,
-texture: ?ResourceManager.Texture = null,
+texture: ?Texture = null,
 textureOffsetX: f32 = 0,
 textureOffsetY: f32 = 0,
 textureSize: f32,
@@ -84,7 +86,7 @@ pub fn init(position: rl.Vector2, size: f32, variant: StatusboxVariant) Statusbo
         .outerRect = outerRect,
         .innerRect = innerRect,
         .styles = variant,
-        .texture = getTexture(.BUTTON_UI),
+        .texture = getTexture(.BUTTON_UI) catch ResourceManager.defaultTexture,
         .textureSize = size,
     };
 }

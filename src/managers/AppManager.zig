@@ -51,6 +51,7 @@ const ActionReport = enum(u8) {
     ImageSelected,
     DeviceSelected,
     SelectionConfirmed,
+    DataFlashed,
 };
 
 pub const Events = struct {
@@ -87,7 +88,7 @@ pub fn authorizeAction(action: ActionRequest) bool {
 
 pub fn reportAction(action: ActionReport) !void {
     if (instance) |*inst| {
-        if (action == .ImageSelected or action == .DeviceSelected or action == .SelectionConfirmed) {
+        if (action == .ImageSelected or action == .DeviceSelected or action == .SelectionConfirmed or action == .DataFlashed) {
             Debug.log(.DEBUG, "AppManager: action reported: {any}, current state: {any}", .{ action, inst.appState });
             inst.lastAction = action;
             try inst.advanceState();
@@ -117,6 +118,11 @@ const AppManager = struct {
     }
 
     pub fn resetState(self: *AppManager) void {
+        if (self.appState == .DataFlashing) {
+            Debug.log(.WARNING, "AppManager: Cannot reset app state while flashing is in progress...", .{});
+            return;
+        }
+
         self.appState = .ImageSelection;
         self.lastAction = null;
 
@@ -274,6 +280,9 @@ const AppManager = struct {
 
             try resetAppButton.update();
             try resetAppButton.draw();
+
+            // TODO: unnecessary call on every frame -- extract the whole component out, save as flag
+            if (self.appState == .DataFlashing) resetAppButton.setEnabled(false) else resetAppButton.setEnabled(true);
 
             // logLineBgRect.draw();
             //

@@ -274,6 +274,7 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
         PrivilegedHelper.Events.onHelperVerificationSuccess.Hash => {
             self.verificationStatus.switchState(.SUCCESS);
             self.progressBox.text.value = "Finished writing ISO. You may now eject the device.";
+            try AppManager.reportAction(.DataFlashed);
             return eventResult.succeed();
         },
 

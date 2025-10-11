@@ -6,13 +6,14 @@ pub const ResourceError = error{
     NoFontsLoadedError,
 };
 
+const FONTS_COUNT: usize = 2;
+const TEXTURES_COUNT: usize = 8;
+const IMAGE_COUNT: usize = 1;
+
 pub const FONT = enum(u8) {
     ROBOTO_REGULAR = 0,
     JERSEY10_REGULAR = 1,
 };
-
-const FONTS_COUNT: usize = 2;
-const TEXTURES_COUNT: usize = 8;
 
 pub const TEXTURE = enum(u8) {
     DISK_IMAGE = 0,
@@ -25,17 +26,24 @@ pub const TEXTURE = enum(u8) {
     STAR_V2 = 7,
 };
 
+pub const IMAGE = enum(u8) {
+    APP_WINDOW_IMAGE = 0,
+};
+
 pub const Texture = rl.Texture2D;
 pub const TextureResource = TEXTURE;
 
 pub const ResourceManagerSingleton = struct {
     var allocator: std.mem.Allocator = undefined;
     var instance: ?ResourceManager = null;
+    pub var defaultFont: rl.Font = undefined;
+    pub var defaultTexture: rl.Texture2D = undefined;
 
     pub const ResourceManager = struct {
         allocator: std.mem.Allocator,
         fonts: []rl.Font,
         textures: []rl.Texture2D,
+        images: []rl.Image,
 
         pub fn getFont(self: ResourceManager, font: FONT) rl.Font {
             // if (self.fonts.len < 1) return ResourceError.NoFontsLoaded;
@@ -44,6 +52,10 @@ pub const ResourceManagerSingleton = struct {
 
         pub fn getTexture(self: ResourceManager, texture: TEXTURE) rl.Texture2D {
             return self.textures[@intFromEnum(texture)];
+        }
+
+        pub fn getImage(self: ResourceManager, image: IMAGE) rl.Image {
+            return self.images[@intFromEnum(image)];
         }
     };
 
@@ -74,6 +86,8 @@ pub const ResourceManagerSingleton = struct {
         rl.setTextureFilter(jersey10Regular.texture, .point);
 
         Debug.log(.DEBUG, "ResourceManager: fonts successfully loaded!", .{});
+
+        defaultFont = robotoRegular;
 
         //----------------------------------------//
         //-------- *** LOAD TEXTURES *** ---------//
@@ -113,6 +127,8 @@ pub const ResourceManagerSingleton = struct {
         defer allocator.free(starV2File);
         const starV2Texture = try rl.loadTexture(starV2File);
 
+        defaultTexture = starV2Texture;
+
         Debug.log(.DEBUG, "ResourceManager: textures successfully loaded!", .{});
 
         //----------------------------------------//
@@ -123,6 +139,7 @@ pub const ResourceManagerSingleton = struct {
             .allocator = allocator,
             .fonts = try allocator.alloc(rl.Font, FONTS_COUNT),
             .textures = try allocator.alloc(rl.Texture2D, TEXTURES_COUNT),
+            .images = try allocator.alloc(rl.Image, IMAGE_COUNT),
         };
 
         if (instance) |*inst| {
@@ -137,19 +154,25 @@ pub const ResourceManagerSingleton = struct {
             inst.textures[5] = step1ITexture;
             inst.textures[6] = starV1Texture;
             inst.textures[7] = starV2Texture;
+
+            inst.images[@intFromEnum(IMAGE.APP_WINDOW_IMAGE)] = try registerImage(allocator, "icon.png");
         }
 
         Debug.log(.INFO, "ResourceManager: finished initialization!", .{});
     }
 
     // TODO: handle unhappy path
-    pub fn getFont(font: FONT) rl.Font {
-        return instance.?.getFont(font);
+    pub fn getFont(font: FONT) !rl.Font {
+        return if (instance) |inst| inst.getFont(font) else error.UnableToGetFont;
     }
 
     // TODO: handle unhappy path
-    pub fn getTexture(texture: TextureResource) rl.Texture2D {
-        return instance.?.getTexture(texture);
+    pub fn getTexture(texture: TextureResource) !rl.Texture2D {
+        return if (instance) |inst| inst.getTexture(texture) else error.UnableToGetTexture;
+    }
+
+    pub fn getImage(image: IMAGE) !rl.Image {
+        return if (instance) |inst| inst.getImage(image) else error.UnableToGetImage;
     }
 
     pub fn deinit() void {
@@ -166,8 +189,16 @@ pub const ResourceManagerSingleton = struct {
             texture.unload();
         }
 
+        for (instance.?.images) |image| {
+            image.unload();
+        }
+
         allocator.free(instance.?.fonts);
         allocator.free(instance.?.textures);
+        allocator.free(instance.?.images);
+
+        // defaultFont.unload();
+        // defaultTexture.unload();
 
         instance = null;
     }
@@ -204,4 +235,10 @@ fn getResourcePath(allocator: std.mem.Allocator, resourceName: []const u8) ![:0]
             cwd, "src/resources", resourceName,
         });
     }
+}
+
+fn registerImage(allocator: std.mem.Allocator, path: []const u8) !rl.Image {
+    const imageFile = try getResourcePath(allocator, path);
+    defer allocator.free(imageFile);
+    return try rl.loadImage(imageFile);
 }

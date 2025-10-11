@@ -35,6 +35,7 @@ const ISOFilePicker = @import("../FilePicker/FilePicker.zig");
 const PrivilegedHelperTool = @import("../../modules/macos/PrivilegedHelperTool.zig");
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
 const WindowManager = @import("../../managers/WindowManager.zig").WindowManagerSingleton;
+const AppManager = @import("../../managers/AppManager.zig");
 const winRelX = WindowManager.relW;
 const winRelY = WindowManager.relH;
 

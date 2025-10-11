@@ -2,10 +2,7 @@ const std = @import("std");
 const rl = @import("raylib");
 const Debug = @import("freetracer-lib").Debug;
 const AppConfig = @import("../config.zig");
-
-// const c = @cImport({
-//     @cInclude("GLFW/glfw3.h");
-// });
+const ResourceManager = @import("./ResourceManager.zig").ResourceManagerSingleton;
 
 extern fn rl_drag_install_on_nswindow(win: ?*anyopaque) callconv(.c) void;
 
@@ -14,11 +11,12 @@ pub const Window = struct {
     y: f32 = 0,
     width: f32 = 0,
     height: f32 = 0,
+    // windowIcon: rl.Image = undefined,
 
-    pub fn init(self: *Window) void {
+    pub fn init(self: *Window) !void {
         rl.initWindow(0, 0, "Freetracer");
 
-        // rl.setWindowIcon(image: Image);
+        // rl.setWindowIcon(try ResourceManager.getImage(.APP_WINDOW_IMAGE));
 
         const m = rl.getCurrentMonitor();
         const mWidth: f32 = @floatFromInt(rl.getMonitorWidth(m));
@@ -27,7 +25,6 @@ pub const Window = struct {
         Debug.log(.DEBUG, "WindowManager: Monitor dimensions: {d}x{d}", .{ mWidth, mHeight });
 
         const newWidth: f32 = if (mWidth * AppConfig.WINDOW_WIDTH_FACTOR < 864) 864 else mWidth * AppConfig.WINDOW_WIDTH_FACTOR;
-
         const newHeight: f32 = if (mHeight * AppConfig.WINDOW_HEIGHT_FACTOR < 581) 581 else mHeight * AppConfig.WINDOW_HEIGHT_FACTOR;
 
         self.width = newWidth;
@@ -64,7 +61,7 @@ pub const WindowManagerSingleton = struct {
         }
 
         instance = Window{};
-        instance.?.init();
+        try instance.?.init();
     }
 
     pub fn getWindowWidth() f32 {

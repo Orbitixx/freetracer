@@ -118,6 +118,11 @@ pub fn handleEvent(self: *DataFlasher, event: ComponentEvent) !EventResult {
 pub fn dispatchComponentAction(self: *DataFlasher) void {
     Debug.log(.DEBUG, "DataFlasher: dispatching component action!", .{});
 
+    AppManager.reportAction(.SelectionConfirmed) catch |err| {
+        Debug.log(.ERROR, "DataFlasher: Unable to report 'SelectionConfirmed' action to AppManager, error: {any}", .{err});
+        return;
+    };
+
     // NOTE: Need to be careful with the memory access operations here since targetDisk (and obtained slice below)
     // live/s only within the scope of this function.
     var device: StorageDevice = undefined;
@@ -281,7 +286,7 @@ fn handleDeviceListActiveStateChanged(self: *DataFlasher, event: ComponentEvent)
 pub const flashISOtoDeviceWrapper = struct {
     pub fn call(ctx: *anyopaque) void {
         var self = DataFlasher.asInstance(ctx);
-        self.ui.?.flashRequested = true;
+        if (self.ui) |*ui| ui.flashRequested = true;
         self.dispatchComponentAction();
     }
 };

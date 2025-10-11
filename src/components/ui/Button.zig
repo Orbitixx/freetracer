@@ -1,9 +1,9 @@
 const std = @import("std");
 const rl = @import("raylib");
 
-const ResourceManager = @import("../../managers/ResourceManager.zig");
-const Texture = ResourceManager.Texture;
-const TextureResource = ResourceManager.TextureResource;
+const ResourceManager = @import("../../managers/ResourceManager.zig").ResourceManagerSingleton;
+const Texture = @import("../../managers/ResourceManager.zig").Texture;
+const TextureResource = @import("../../managers/ResourceManager.zig").TextureResource;
 
 const ComponentFramework = @import("../framework/import/index.zig");
 const Component = ComponentFramework.Component;
@@ -72,7 +72,14 @@ pub const Events = struct {
     );
 };
 
-pub fn init(text: [:0]const u8, texture: ?TextureResource, position: rl.Vector2, variant: ButtonVariant, clickHandler: ButtonHandler, allocator: std.mem.Allocator) ButtonComponent {
+pub fn init(
+    text: [:0]const u8,
+    texture: ?TextureResource,
+    position: rl.Vector2,
+    variant: ButtonVariant,
+    clickHandler: ButtonHandler,
+    allocator: std.mem.Allocator,
+) ButtonComponent {
     const btnText = Text.init(text, position, variant.normal.textStyle);
 
     const textDimensions = btnText.getDimensions();
@@ -98,7 +105,7 @@ pub fn init(text: [:0]const u8, texture: ?TextureResource, position: rl.Vector2,
             },
             variant.normal.textStyle,
         ),
-        .texture = if (texture) |resource| ResourceManager.ResourceManagerSingleton.getTexture(resource) else null,
+        .texture = if (texture) |resource| ResourceManager.getTexture(resource) catch null else null,
         .styles = variant.asButtonStyles(),
         .clickHandler = clickHandler,
     };
