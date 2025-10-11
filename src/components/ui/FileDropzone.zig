@@ -3,6 +3,8 @@ const rl = @import("raylib");
 
 extern fn rl_drag_is_hovering() bool;
 
+const Debug = @import("freetracer-lib").Debug;
+
 const Layout = @import("Layout.zig");
 const Primitives = @import("Primitives.zig");
 const TexturePrimitive = Primitives.Texture;
@@ -15,7 +17,7 @@ const TextureResource = ResourceManagerImport.TEXTURE;
 
 pub const FileDropzone = @This();
 
-const FileDropText = "Drag & Drop File Here";
+const FILE_DRAG_AND_DROP_STRING = "Drag & Drop File Here";
 
 /// Visual configuration for the dropzone.
 pub const Style = struct {
@@ -52,7 +54,6 @@ icon: TexturePrimitive,
 hover: bool = false,
 drag: bool = false,
 dropText: Text,
-dropTextFrame: Layout.Bounds,
 resolvedBounds: Primitives.Transform,
 layoutDirty: bool = false,
 cursorActive: bool = false,
@@ -68,24 +69,13 @@ pub fn init(frame: *Layout.Bounds, iconResource: TextureResource, style: Style, 
         .style = style,
         .callbacks = callbacks,
         .icon = icon,
-        .dropText = Text.init(FileDropText, resolved.getPosition(), .{
+        .dropText = Text.init(FILE_DRAG_AND_DROP_STRING, resolved.getPosition(), .{
             .font = .JERSEY10_REGULAR,
             .fontSize = 24,
             .textColor = rl.Color.light_gray,
         }),
-        .dropTextFrame = undefined,
         .resolvedBounds = resolved,
     };
-
-    const textDims = dropzone.dropText.getDimensions();
-    dropzone.dropTextFrame = Layout.Bounds.relative(
-        &dropzone.resolvedBounds,
-        .{
-            .x = Layout.UnitValue.mix(0.5, -textDims.width / 2),
-            .y = Layout.UnitValue.mix(0.5, -textDims.height / 2),
-        },
-        Layout.SizeSpec.pixels(textDims.width, textDims.height),
-    );
 
     const iconWidth = dropzone.icon.transform.getWidth();
     const iconHeight = dropzone.icon.transform.getHeight();
@@ -93,9 +83,7 @@ pub fn init(frame: *Layout.Bounds, iconResource: TextureResource, style: Style, 
     dropzone.icon.transform.y = resolved.y + (resolved.h / 2) - iconHeight / 2;
     dropzone.icon.transform.rotation = 0;
 
-    const textTransform = dropzone.dropTextFrame.resolve();
-    dropzone.dropText.transform.x = textTransform.x;
-    dropzone.dropText.transform.y = textTransform.y;
+    dropzone.updateDropTextPosition();
 
     return dropzone;
 }
@@ -159,9 +147,7 @@ pub fn update(self: *FileDropzone) void {
         self.icon.transform.y = bounds.y + (bounds.h / 2) - iconHeight / 2;
         self.icon.transform.rotation = 0;
 
-        const textTransform = self.dropTextFrame.resolve();
-        self.dropText.transform.x = textTransform.x;
-        self.dropText.transform.y = textTransform.y;
+        self.updateDropTextPosition();
 
         self.layoutDirty = false;
     }
@@ -174,6 +160,7 @@ pub fn draw(self: *FileDropzone) void {
     rl.drawRectangleRec(rect, if (highlight) self.style.hoverBackgroundColor else self.style.backgroundColor);
 
     const borderColor = if (highlight) self.style.hoverBorderColor else self.style.borderColor;
+
     drawDashedBorder(
         rect,
         borderColor,
@@ -215,6 +202,12 @@ fn drawDashedBorder(
         rl.drawLineEx(startPoint, endPoint, thickness, color);
         progress += step;
     }
+}
+
+fn updateDropTextPosition(self: *FileDropzone) void {
+    const textDims = self.dropText.getDimensions();
+    self.dropText.transform.x = self.resolvedBounds.x + (self.resolvedBounds.w - textDims.width) / 2;
+    self.dropText.transform.y = self.resolvedBounds.y + (self.resolvedBounds.h - textDims.height) / 2;
 }
 
 fn pointAlongRect(rect: rl.Rectangle, distance: f32) rl.Vector2 {

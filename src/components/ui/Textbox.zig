@@ -55,7 +55,7 @@ params: Params = .{},
 selection: ?Selection = null,
 
 pub fn init(frame: *const Layout.Bounds, text: [:0]const u8, style: TextboxStyle, params: Params, allocator: std.mem.Allocator) Textbox {
-    const font = ResourceManager.getFont(style.text.font) catch ResourceManager.defaultFont;
+    const font = ResourceManager.getFont(style.text.font);
     const resolvedBounds = frame.resolve();
     const backgroundRect = RectanglePrimitive{
         .transform = resolvedBounds,

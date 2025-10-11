@@ -86,7 +86,7 @@ pub fn init(position: rl.Vector2, size: f32, variant: StatusboxVariant) Statusbo
         .outerRect = outerRect,
         .innerRect = innerRect,
         .styles = variant,
-        .texture = getTexture(.BUTTON_UI) catch ResourceManager.defaultTexture,
+        .texture = getTexture(.BUTTON_UI),
         .textureSize = size,
     };
 }

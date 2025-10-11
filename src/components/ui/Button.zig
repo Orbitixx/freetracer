@@ -105,7 +105,7 @@ pub fn init(
             },
             variant.normal.textStyle,
         ),
-        .texture = if (texture) |resource| ResourceManager.getTexture(resource) catch null else null,
+        .texture = if (texture) |resource| ResourceManager.getTexture(resource) else null,
         .styles = variant.asButtonStyles(),
         .clickHandler = clickHandler,
     };

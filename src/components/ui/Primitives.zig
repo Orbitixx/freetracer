@@ -123,7 +123,7 @@ pub const Text = struct {
 
     /// Static init() function; returns a new instance of Text
     pub fn init(value: [:0]const u8, position: rl.Vector2, style: TextStyle) Text {
-        const _font: rl.Font = ResourceManager.getFont(style.font) catch ResourceManager.defaultFont;
+        const _font: rl.Font = ResourceManager.getFont(style.font);
 
         const textDims: rl.Vector2 = rl.measureTextEx(_font, value, style.fontSize, style.spacing);
 
@@ -164,7 +164,7 @@ pub const Texture = struct {
     tint: rl.Color = Styles.Color.white,
 
     pub fn init(resource: TextureResource, position: rl.Vector2) Texture {
-        const texture: rl.Texture2D = ResourceManager.getTexture(resource) catch ResourceManager.defaultTexture;
+        const texture: rl.Texture2D = ResourceManager.getTexture(resource);
 
         return .{
             .transform = .{

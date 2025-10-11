@@ -161,14 +161,15 @@ pub const ResourceManagerSingleton = struct {
         Debug.log(.INFO, "ResourceManager: finished initialization!", .{});
     }
 
-    // TODO: handle unhappy path
-    pub fn getFont(font: FONT) !rl.Font {
-        return if (instance) |inst| inst.getFont(font) else error.UnableToGetFont;
+    // TODO: reworked back to unsafe/non-throwing method. To contemplate solution.
+    // rl.getFontDefault() does not work on MacOS; throws error.LoadFont (zig-dev 5.6.0)
+    pub fn getFont(font: FONT) rl.Font {
+        return instance.?.getFont(font);
     }
 
-    // TODO: handle unhappy path
-    pub fn getTexture(texture: TextureResource) !rl.Texture2D {
-        return if (instance) |inst| inst.getTexture(texture) else error.UnableToGetTexture;
+    // TODO: reworked back to unsafe/non-throwing method. To contemplate solution.
+    pub fn getTexture(texture: TextureResource) rl.Texture2D {
+        return instance.?.getTexture(texture);
     }
 
     pub fn getImage(image: IMAGE) !rl.Image {

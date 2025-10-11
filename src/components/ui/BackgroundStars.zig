@@ -15,7 +15,7 @@ pub fn draw() void {
     var centers: [star_definitions.len]rl.Vector2 = undefined;
 
     for (star_definitions, 0..) |def, idx| {
-        const texture = ResourceManager.getTexture(def.texture) catch ResourceManager.defaultTexture;
+        const texture = ResourceManager.getTexture(def.texture);
         const textureWidth = @as(f32, @floatFromInt(texture.width)) * def.scale;
         const textureHeight = @as(f32, @floatFromInt(texture.height)) * def.scale;
 
