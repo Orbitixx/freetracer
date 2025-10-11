@@ -12,7 +12,7 @@ pub const FONT = enum(u8) {
 };
 
 const FONTS_COUNT: usize = 2;
-const TEXTURES_COUNT: usize = 6;
+const TEXTURES_COUNT: usize = 8;
 
 pub const TEXTURE = enum(u8) {
     DISK_IMAGE = 0,
@@ -21,6 +21,8 @@ pub const TEXTURE = enum(u8) {
     BUTTON_UI = 3,
     DOC_IMAGE = 4,
     STEP_1_INACTIVE = 5,
+    STAR_V1 = 6,
+    STAR_V2 = 7,
 };
 
 pub const Texture = rl.Texture2D;
@@ -103,6 +105,14 @@ pub const ResourceManagerSingleton = struct {
         defer allocator.free(buttonUiTextureFile);
         const buttonUiTexture = try rl.loadTexture(buttonUiTextureFile);
 
+        const starV1File = try getResourcePath(allocator, "star_v1.png");
+        defer allocator.free(starV1File);
+        const starV1Texture = try rl.loadTexture(starV1File);
+
+        const starV2File = try getResourcePath(allocator, "star_v2.png");
+        defer allocator.free(starV2File);
+        const starV2Texture = try rl.loadTexture(starV2File);
+
         Debug.log(.DEBUG, "ResourceManager: textures successfully loaded!", .{});
 
         //----------------------------------------//
@@ -125,6 +135,8 @@ pub const ResourceManagerSingleton = struct {
             inst.textures[3] = buttonUiTexture;
             inst.textures[4] = docImageTexture;
             inst.textures[5] = step1ITexture;
+            inst.textures[6] = starV1Texture;
+            inst.textures[7] = starV2Texture;
         }
 
         Debug.log(.INFO, "ResourceManager: finished initialization!", .{});

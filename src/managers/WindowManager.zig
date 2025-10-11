@@ -16,7 +16,7 @@ pub const Window = struct {
     height: f32 = 0,
 
     pub fn init(self: *Window) void {
-        rl.initWindow(0, 0, "Freetracer - free and open-source by orbitixx");
+        rl.initWindow(0, 0, "Freetracer");
 
         const m = rl.getCurrentMonitor();
         const mWidth: f32 = @floatFromInt(rl.getMonitorWidth(m));

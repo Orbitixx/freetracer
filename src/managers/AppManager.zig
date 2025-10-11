@@ -113,6 +113,7 @@ const AppManager = struct {
             .DataFlashing => .Idle,
             .Idle => return error.CannotAdvanceStatePastDataFlashedState,
         };
+        rl.setMouseCursor(.default);
     }
 
     pub fn resetState(self: *AppManager) void {
@@ -249,6 +250,8 @@ const AppManager = struct {
             rl.beginDrawing();
 
             rl.clearBackground(backgroundColor);
+
+            UI.BackgroundStars.draw();
 
             logoText.draw();
             subLogoText.draw();
