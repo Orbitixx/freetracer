@@ -18,6 +18,8 @@ pub const Window = struct {
     pub fn init(self: *Window) void {
         rl.initWindow(0, 0, "Freetracer");
 
+        // rl.setWindowIcon(image: Image);
+
         const m = rl.getCurrentMonitor();
         const mWidth: f32 = @floatFromInt(rl.getMonitorWidth(m));
         const mHeight: f32 = @floatFromInt(rl.getMonitorHeight(m));

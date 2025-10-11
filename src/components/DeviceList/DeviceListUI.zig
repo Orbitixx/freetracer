@@ -34,6 +34,7 @@ const ComponentEvent = ComponentFramework.Event;
 const EventResult = ComponentFramework.EventResult;
 
 const UIFramework = @import("../ui/import/index.zig");
+const Panel = UIFramework.Panel;
 const Button = UIFramework.Button;
 const Checkbox = UIFramework.Checkbox;
 const Rectangle = UIFramework.Primitives.Rectangle;
@@ -58,7 +59,6 @@ pub const ComponentState = ComponentFramework.ComponentState(DeviceListUIState);
 
 const DeviceListUI = @This();
 
-const COMPONENT_UI_GAP: f32 = 20;
 const MAX_DISPLAY_STRING_LENGTH: usize = 254;
 const MAX_SELECTED_DEVICE_NAME_LEN: usize = 12;
 
@@ -82,11 +82,27 @@ refreshDevicesButton: Button = undefined,
 selectedDeviceNameBuf: [MAX_DISPLAY_STRING_LENGTH:0]u8 = undefined,
 frame: UIFramework.Layout.Bounds = undefined,
 
-const BgRectParams = struct {
-    width: f32,
-    color: rl.Color,
-    borderColor: rl.Color,
-};
+fn panelAppearanceActive() Panel.Appearance {
+    return .{
+        .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
+        .backgroundColor = Styles.Color.themeSectionBg,
+        .borderColor = Styles.Color.themeSectionBorder,
+        .headerColor = Color.white,
+    };
+}
+
+fn panelAppearanceInactive() Panel.Appearance {
+    return .{
+        .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
+        .backgroundColor = Styles.Color.themeSectionBg,
+        .borderColor = Styles.Color.themeSectionBorder,
+        .headerColor = Color.lightGray,
+    };
+}
+
+fn panelAppearanceFor(isActive: bool) Panel.Appearance {
+    return if (isActive) panelAppearanceActive() else panelAppearanceInactive();
+}
 
 pub const Events = struct {
     //
@@ -160,11 +176,7 @@ pub fn start(self: *DeviceListUI) !void {
 
     self.noDevicesLabel = Text.init("No external devices found...", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
 
-    self.recalculateUI(.{
-        .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
-        .color = Styles.Color.themeSectionBg,
-        .borderColor = Styles.Color.themeSectionBorder,
-    });
+    self.applyPanelMode(panelAppearanceInactive());
 
     Debug.log(.DEBUG, "DeviceListUI: component start() finished.", .{});
 }
@@ -186,11 +198,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
 }
 
 pub fn update(self: *DeviceListUI) !void {
-    self.state.lock();
-    const isActive = self.state.data.isActive;
-    self.state.unlock();
-
-    if (!isActive) return;
+    if (!self.readIsActive()) return;
 
     for (self.deviceCheckboxes.items) |*checkbox| {
         try checkbox.update();
@@ -201,13 +209,10 @@ pub fn update(self: *DeviceListUI) !void {
 }
 
 pub fn draw(self: *DeviceListUI) !void {
-    self.state.lock();
-    const isActive = self.state.data.isActive;
-    const devicesFound = self.state.data.devices.items.len > 0;
-    self.state.unlock();
+    const isActive = self.readIsActive();
+    const devicesFound = self.hasDevices();
 
-    self.bgRect.transform = self.frame.resolve();
-    self.applyLayoutFromBounds(devicesFound);
+    self.refreshLayout(devicesFound);
 
     self.bgRect.draw();
     self.headerLabel.draw();
@@ -332,29 +337,59 @@ fn drawInactive(self: *DeviceListUI, devicesFound: bool) !void {
     self.moduleImg.draw();
 }
 
-fn recalculateUI(self: *DeviceListUI, bgRectParams: BgRectParams) void {
-    Debug.log(.DEBUG, "DeviceListUI: updating self.bgRect properties!", .{});
+fn panelElements(self: *DeviceListUI) Panel.Elements {
+    return .{
+        .frame = &self.frame,
+        .rect = &self.bgRect,
+        .header = &self.headerLabel,
+    };
+}
 
-    self.frame.size.width = UIFramework.Layout.UnitValue.pixels(bgRectParams.width);
-    const resolved = self.frame.resolve();
-    self.bgRect.transform = resolved;
-    self.bgRect.style.color = bgRectParams.color;
-    self.bgRect.style.borderStyle.color = bgRectParams.borderColor;
+fn applyPanelMode(self: *DeviceListUI, appearance: Panel.Appearance) void {
+    Debug.log(.DEBUG, "DeviceListUI: applying panel appearance.", .{});
+    Panel.applyAppearance(self.panelElements(), appearance);
+    self.updateLayout();
+}
 
-    self.state.lock();
-    const devicesFound = self.state.data.devices.items.len > 0;
-    self.state.unlock();
-
+fn refreshLayout(self: *DeviceListUI, devicesFound: bool) void {
+    self.bgRect.transform = self.frame.resolve();
+    self.headerLabel.transform.x = self.bgRect.transform.x + 12;
+    self.headerLabel.transform.y = self.bgRect.transform.relY(0.01);
     self.applyLayoutFromBounds(devicesFound);
+}
+
+fn updateLayout(self: *DeviceListUI) void {
+    self.refreshLayout(self.hasDevices());
+}
+
+fn storeIsActive(self: *DeviceListUI, isActive: bool) void {
+    self.state.lock();
+    defer self.state.unlock();
+    self.state.data.isActive = isActive;
+}
+
+fn readIsActive(self: *DeviceListUI) bool {
+    self.state.lock();
+    defer self.state.unlock();
+    return self.state.data.isActive;
+}
+
+fn hasDevices(self: *DeviceListUI) bool {
+    self.state.lock();
+    defer self.state.unlock();
+    return self.state.data.devices.items.len > 0;
+}
+
+fn storeSelectedDevice(self: *DeviceListUI, selected: ?StorageDevice) void {
+    self.state.lock();
+    defer self.state.unlock();
+    self.state.data.selectedDevice = selected;
 }
 
 fn applyLayoutFromBounds(self: *DeviceListUI, devicesFound: bool) void {
     const noDevicesDims = self.noDevicesLabel.getDimensions();
     self.noDevicesLabel.transform.x = self.bgRect.transform.relX(0.5) - noDevicesDims.width / 2;
     self.noDevicesLabel.transform.y = self.bgRect.transform.relY(0.5) - noDevicesDims.height / 2;
-
-    self.headerLabel.transform.x = self.bgRect.transform.x + 12;
-    self.headerLabel.transform.y = self.bgRect.transform.relY(0.01);
 
     self.moduleImg.transform.x = self.bgRect.transform.relX(0.5) - self.moduleImg.transform.getWidth() / 2;
     self.moduleImg.transform.y = self.bgRect.transform.relY(0.5) - self.moduleImg.transform.getHeight() / 2;
@@ -380,15 +415,101 @@ fn applyLayoutFromBounds(self: *DeviceListUI, devicesFound: bool) void {
     }
 }
 
+fn clearDeviceCheckboxes(self: *DeviceListUI) void {
+    if (self.deviceCheckboxes.items.len == 0) return;
+    self.destroyDeviceCheckboxContexts();
+    self.deviceCheckboxes.clearAndFree(self.allocator);
+}
+
+fn updateCheckboxSelection(self: *DeviceListUI, selection: ?StorageDevice) void {
+    for (self.deviceCheckboxes.items) |*checkbox| {
+        if (selection) |device| {
+            if (device.serviceId == checkbox.deviceId) {
+                checkbox.setState(.CHECKED);
+            } else {
+                checkbox.setState(.NORMAL);
+            }
+        } else {
+            checkbox.setState(.NORMAL);
+        }
+    }
+}
+
+fn makeSelectDeviceContext(self: *DeviceListUI, device: StorageDevice) !*DeviceList.SelectDeviceCallbackContext {
+    const ctx = try self.allocator.create(DeviceList.SelectDeviceCallbackContext);
+    errdefer self.allocator.destroy(ctx);
+
+    ctx.* = .{ .component = self.parent, .selectedDevice = device };
+    return ctx;
+}
+
+fn deviceTypeLabel(device: StorageDevice) []const u8 {
+    return switch (device.type) {
+        .USB => "USB",
+        .SD => "SD",
+        else => "Other",
+    };
+}
+
+fn writeCheckboxLabel(buffer: []u8, device: StorageDevice) ![:0]const u8 {
+    const deviceName = std.mem.sliceTo(device.deviceName[0..], Character.NULL);
+    const bsdName = device.getBsdNameSlice();
+
+    return std.fmt.bufPrintZ(
+        buffer,
+        "{s} - {s} ({d:.0}GB) [{s}]",
+        .{
+            if (deviceName.len > 20) deviceName[0..20] else deviceName,
+            if (bsdName.len > 10) bsdName[0..10] else bsdName,
+            @divTrunc(device.size, 1_000_000_000),
+            deviceTypeLabel(device),
+        },
+    );
+}
+
+fn appendDeviceCheckbox(self: *DeviceListUI, device: StorageDevice, index: usize) !void {
+    const context = try self.makeSelectDeviceContext(device);
+    errdefer self.allocator.destroy(context);
+
+    var textBuf: [AppConfig.CHECKBOX_TEXT_BUFFER_SIZE]u8 = std.mem.zeroes([AppConfig.CHECKBOX_TEXT_BUFFER_SIZE]u8);
+    const label = writeCheckboxLabel(textBuf[0..], device) catch |err| {
+        Debug.log(.ERROR, "DeviceListUI: failed to format checkbox label: {any}", .{err});
+        return err;
+    };
+
+    try self.deviceCheckboxes.append(self.allocator, Checkbox.init(
+        self.allocator,
+        device.serviceId,
+        textBuf,
+        .{
+            .x = self.bgRect.transform.relX(0.05),
+            .y = self.bgRect.transform.relY(0.12) + @as(f32, @floatFromInt(index)) * AppConfig.DEVICE_CHECKBOXES_GAP_FACTOR_Y,
+        },
+        20,
+        .Primary,
+        .{
+            .context = context,
+            .function = DeviceList.selectDeviceActionWrapper.call,
+        },
+    ));
+
+    Debug.log(.DEBUG, "DeviceListUI: formatted string is: {s}", .{label});
+
+    const checkboxPtr = &self.deviceCheckboxes.items[self.deviceCheckboxes.items.len - 1];
+
+    checkboxPtr.outerRect.bordered = true;
+    checkboxPtr.outerRect.rounded = true;
+    checkboxPtr.innerRect.rounded = true;
+
+    try checkboxPtr.*.start();
+}
+
 const refreshDevices = struct {
     fn call(ctx: *anyopaque) void {
         const component = DeviceList.asInstance(ctx);
 
         if (component.uiComponent) |*ui| {
-            if (ui.deviceCheckboxes.items.len > 0) {
-                ui.destroyDeviceCheckboxContexts();
-                ui.deviceCheckboxes.clearAndFree(ui.allocator);
-            }
+            ui.clearDeviceCheckboxes();
         }
 
         component.dispatchComponentAction();
@@ -400,37 +521,18 @@ fn handleOnDeviceListActiveStateChanged(self: *DeviceListUI, event: ComponentEve
 
     const data = DeviceList.Events.onDeviceListActiveStateChanged.getData(event) orelse return eventResult.fail();
 
-    // Update state in a block with a shorter lifecycle
-    {
-        self.state.lock();
-        defer self.state.unlock();
-        self.state.data.isActive = data.isActive;
+    self.storeIsActive(data.isActive);
+
+    if (data.isActive) {
+        Debug.log(.DEBUG, "DeviceListUI: setting UI to ACTIVE.", .{});
+    } else {
+        Debug.log(.DEBUG, "DeviceListUI: setting UI to INACTIVE.", .{});
     }
 
-    switch (data.isActive) {
-        true => {
-            Debug.log(.DEBUG, "DeviceListUI: setting UI to ACTIVE.", .{});
+    self.applyPanelMode(panelAppearanceFor(data.isActive));
 
-            self.headerLabel.style.textColor = Color.white;
-
-            self.recalculateUI(.{
-                .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
-                .color = Color.themeSectionBg,
-                .borderColor = Color.themeSectionBorder,
-            });
-        },
-
-        false => {
-            Debug.log(.DEBUG, "DeviceListUI: setting UI to INACTIVE.", .{});
-
-            self.headerLabel.style.textColor = Color.lightGray;
-
-            self.recalculateUI(.{
-                .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
-                .color = Color.themeSectionBg,
-                .borderColor = Color.themeSectionBorder,
-            });
-        },
+    if (!data.isActive) {
+        self.nextButton.setEnabled(false);
     }
 
     return eventResult.succeed();
@@ -474,10 +576,11 @@ fn handleOnUITransformQueried(self: *DeviceListUI, event: ComponentEvent) !Event
 
 fn handleOnDevicesCleanup(self: *DeviceListUI) !EventResult {
     var eventResult = EventResult.init();
-    self.state.lock();
-    self.state.data.selectedDevice = null;
-    self.state.unlock();
+    self.storeSelectedDevice(null);
+    self.clearDeviceCheckboxes();
+    self.nextButton.setEnabled(false);
     self.updateDeviceNameLabel(kStringDeviceListNoDeviceSelected, null);
+    self.refreshLayout(false);
     return eventResult.succeed();
 }
 
@@ -486,78 +589,29 @@ fn handleOnDevicesReadyToRender(self: *DeviceListUI) !EventResult {
     var eventResult = EventResult.init();
     //
     Debug.log(.DEBUG, "DeviceListUI: onDevicesReadyToRender() start.", .{});
-
-    self.destroyDeviceCheckboxContexts();
-    self.deviceCheckboxes.clearAndFree(self.allocator);
+    self.clearDeviceCheckboxes();
+    self.nextButton.setEnabled(false);
 
     self.state.lock();
     defer self.state.unlock();
 
     if (self.state.data.devices.items.len < 1) {
         Debug.log(.WARNING, "DeviceListUI: onDevicesReadyToRender(): no devices discovered, breaking the event loop.", .{});
+        self.refreshLayout(false);
         return eventResult.fail();
     }
 
     Debug.log(.DEBUG, "DeviceListUI: onDevicesReadyToRender(): processing checkboxes for {d} devices.", .{self.state.data.devices.items.len});
 
+    self.bgRect.transform = self.frame.resolve();
+
     for (self.state.data.devices.items, 0..) |*device, i| {
-        //
-        const selectDeviceContext = try self.allocator.create(DeviceList.SelectDeviceCallbackContext);
-        errdefer self.allocator.destroy(selectDeviceContext);
-
-        // Define context for the checkbox's on-click behavior/callback
-        selectDeviceContext.* = DeviceList.SelectDeviceCallbackContext{
-            .component = self.parent,
-            .selectedDevice = device.*,
-        };
-
-        var textBuf: [AppConfig.CHECKBOX_TEXT_BUFFER_SIZE]u8 = std.mem.zeroes([AppConfig.CHECKBOX_TEXT_BUFFER_SIZE]u8);
-
-        const deviceName = std.mem.sliceTo(device.deviceName[0..], Character.NULL);
-        const bsdName = device.getBsdNameSlice();
-
-        _ = std.fmt.bufPrintZ(
-            textBuf[0..],
-            "{s} - {s} ({d:.0}GB) [{s}]",
-            .{
-                if (deviceName.len > 20) deviceName[0..20] else deviceName,
-                if (bsdName.len > 10) bsdName[0..10] else bsdName,
-                @divTrunc(device.size, 1_000_000_000),
-                if (device.type == .USB) "USB" else if (device.type == .SD) "SD" else "Other",
-            },
-        ) catch |err| {
-            Debug.log(.ERROR, "DeviceListUI: failed to format checkbox label: {any}", .{err});
-            return eventResult.fail();
-        };
-
-        Debug.log(.DEBUG, "ComponentUI: formatted string is: {s}", .{std.mem.sliceTo(textBuf[0..], Character.NULL)});
-
-        try self.deviceCheckboxes.append(self.allocator, Checkbox.init(
-            self.allocator,
-            device.serviceId,
-            textBuf,
-            .{
-                .x = self.bgRect.transform.relX(0.05),
-                .y = self.bgRect.transform.relY(0.12) + @as(f32, @floatFromInt(i)) * AppConfig.DEVICE_CHECKBOXES_GAP_FACTOR_Y,
-            },
-            20,
-            .Primary,
-            .{
-                .context = selectDeviceContext,
-                .function = DeviceList.selectDeviceActionWrapper.call,
-            },
-        ));
-
-        const checkboxPtr = &self.deviceCheckboxes.items[self.deviceCheckboxes.items.len - 1];
-
-        checkboxPtr.outerRect.bordered = true;
-        checkboxPtr.outerRect.rounded = true;
-        checkboxPtr.innerRect.rounded = true;
-
-        try checkboxPtr.*.start();
+        try self.appendDeviceCheckbox(device.*, i);
     }
 
     Debug.log(.DEBUG, "DeviceListUI: onDevicesReadyToRender() end.", .{});
+
+    self.refreshLayout(true);
 
     return eventResult.succeed();
 }
@@ -568,24 +622,8 @@ fn handleOnSelectedDeviceNameChanged(self: *DeviceListUI, event: ComponentEvent)
 
     const data = Events.onSelectedDeviceNameChanged.getData(event) orelse return eventResult.fail();
 
-    var displayName: [:0]const u8 = kStringDeviceListNoDeviceSelected;
-    var truncateDisplay: bool = false;
-
-    self.state.lock();
-    defer self.state.unlock();
-    self.state.data.selectedDevice = data.selectedDevice;
-
-    for (self.deviceCheckboxes.items) |*checkbox| {
-        if (data.selectedDevice) |device| {
-            if (device.serviceId == checkbox.deviceId) {
-                checkbox.setState(.CHECKED);
-            } else {
-                checkbox.setState(.NORMAL);
-            }
-        } else {
-            checkbox.setState(.NORMAL);
-        }
-    }
+    self.storeSelectedDevice(data.selectedDevice);
+    self.updateCheckboxSelection(data.selectedDevice);
 
     Debug.log(
         .DEBUG,
@@ -593,14 +631,11 @@ fn handleOnSelectedDeviceNameChanged(self: *DeviceListUI, event: ComponentEvent)
         .{if (data.selectedDevice) |device| device.getNameSlice() else kStringDeviceListNoDeviceSelected},
     );
 
-    if (self.state.data.selectedDevice) |*device| {
-        displayName = device.getNameSlice();
-        truncateDisplay = true;
-    }
+    const hasSelection = data.selectedDevice != null;
+    const displayName: [:0]const u8 = if (data.selectedDevice) |device| device.getNameSlice() else kStringDeviceListNoDeviceSelected;
 
-    // Toggle the "Next" button based on whether or not a device is selected
-    self.nextButton.setEnabled(data.selectedDevice != null);
-    self.updateDeviceNameLabel(displayName, if (truncateDisplay) MAX_SELECTED_DEVICE_NAME_LEN else null);
+    self.nextButton.setEnabled(hasSelection);
+    self.updateDeviceNameLabel(displayName, if (hasSelection) MAX_SELECTED_DEVICE_NAME_LEN else null);
 
     return eventResult.succeed();
 }
@@ -615,19 +650,11 @@ pub fn handleAppResetRequest(self: *DeviceListUI) EventResult {
         self.state.data.isActive = false;
     }
 
-    if (self.deviceCheckboxes.items.len > 0) {
-        self.destroyDeviceCheckboxContexts();
-        self.deviceCheckboxes.clearAndFree(self.allocator);
-    }
+    self.clearDeviceCheckboxes();
+    self.nextButton.setEnabled(false);
 
-    self.updateDeviceNameLabel(kStringDeviceListNoDeviceSelected, kStringDeviceListNoDeviceSelected.len);
-
-    self.headerLabel.style.textColor = Color.lightGray;
-    self.recalculateUI(.{
-        .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
-        .color = Color.themeSectionBg,
-        .borderColor = Color.themeSectionBorder,
-    });
+    self.updateDeviceNameLabel(kStringDeviceListNoDeviceSelected, null);
+    self.applyPanelMode(panelAppearanceInactive());
 
     return eventResult.succeed();
 }

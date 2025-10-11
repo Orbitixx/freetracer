@@ -26,6 +26,7 @@ const ComponentEvent = ComponentFramework.Event;
 const EventResult = ComponentFramework.EventResult;
 
 const UIFramework = @import("../ui/import/index.zig");
+const Panel = UIFramework.Panel;
 const Button = UIFramework.Button;
 const Rectangle = UIFramework.Primitives.Rectangle;
 const Transform = UIFramework.Primitives.Transform;
@@ -47,34 +48,12 @@ const SectionHeader = struct {
 };
 
 const DEFAULT_ISO_TITLE = "No ISO selected...";
+const DISPLAY_NAME_SUFFIX_LEN: usize = 14;
 
-fn dropzoneStyleActive() UIFramework.FileDropzone.Style {
-    return .{
-        .backgroundColor = Styles.Color.themeSectionBg,
-        .hoverBackgroundColor = rl.Color.init(35, 39, 55, 255),
-        .borderColor = Styles.Color.themeOutline,
-        .hoverBorderColor = rl.Color.init(90, 110, 120, 255),
-        .dashLength = 10,
-        .gapLength = 6,
-        .borderThickness = 2,
-        .cornerRadius = 0.12,
-        .iconScale = 0.3,
-    };
-}
-
-fn dropzoneStyleInactive() UIFramework.FileDropzone.Style {
-    return .{
-        .backgroundColor = rl.Color{ .r = 32, .g = 36, .b = 48, .a = 130 },
-        .hoverBackgroundColor = rl.Color{ .r = 45, .g = 50, .b = 64, .a = 170 },
-        .borderColor = Styles.Color.themeOutline,
-        .hoverBorderColor = Styles.Color.lightGray,
-        .dashLength = 12,
-        .gapLength = 6,
-        .borderThickness = 2,
-        .cornerRadius = 0.12,
-        .iconScale = 0.3,
-    };
-}
+const PanelMode = struct {
+    appearance: Panel.Appearance,
+    dropzoneStyle: UIFramework.FileDropzone.Style,
+};
 
 // This state is mutable and can be accessed from the main UI thread (draw/update)
 // and a worker/event thread (handleEvent). Access must be guarded by state.lock().
@@ -103,12 +82,6 @@ stepTexture: UIFramework.Texture = undefined,
 dropzoneFrame: Bounds = undefined,
 dropzone: UIFramework.FileDropzone = undefined,
 // headerFrame: UIFramework.Layout.Bounds = undefined,
-
-const BgRectParams = struct {
-    width: f32,
-    color: rl.Color,
-    borderColor: rl.Color,
-};
 
 pub const Events = struct {
     pub const onISOFilePathChanged = ComponentFramework.defineEvent(
@@ -176,20 +149,14 @@ pub fn handleEvent(self: *FilePickerUI, event: ComponentEvent) !EventResult {
 }
 
 pub fn update(self: *FilePickerUI) !void {
-    self.state.lock();
-    const isActive = self.state.data.isActive;
-    self.state.unlock();
+    if (!self.readIsActive()) return;
 
-    if (isActive) {
-        self.dropzone.update();
-        try self.button.update();
-    }
+    self.dropzone.update();
+    try self.button.update();
 }
 
 pub fn draw(self: *FilePickerUI) !void {
-    self.state.lock();
-    defer self.state.unlock();
-    const isActive = self.state.data.isActive;
+    const isActive = self.readIsActive();
 
     self.bgRect.draw();
     self.stepTexture.draw();
@@ -211,6 +178,70 @@ pub const asComponent = ComponentImplementation.asComponent;
 pub const asComponentPtr = ComponentImplementation.asComponentPtr;
 pub const asInstance = ComponentImplementation.asInstance;
 
+fn dropzoneStyleActive() UIFramework.FileDropzone.Style {
+    return .{
+        .backgroundColor = Styles.Color.themeSectionBg,
+        .hoverBackgroundColor = rl.Color.init(35, 39, 55, 255),
+        .borderColor = Styles.Color.themeOutline,
+        .hoverBorderColor = rl.Color.init(90, 110, 120, 255),
+        .dashLength = 10,
+        .gapLength = 6,
+        .borderThickness = 2,
+        .cornerRadius = 0.12,
+        .iconScale = 0.3,
+    };
+}
+
+fn dropzoneStyleInactive() UIFramework.FileDropzone.Style {
+    return .{
+        .backgroundColor = rl.Color{ .r = 32, .g = 36, .b = 48, .a = 130 },
+        .hoverBackgroundColor = rl.Color{ .r = 45, .g = 50, .b = 64, .a = 170 },
+        .borderColor = Styles.Color.themeOutline,
+        .hoverBorderColor = Styles.Color.lightGray,
+        .dashLength = 12,
+        .gapLength = 6,
+        .borderThickness = 2,
+        .cornerRadius = 0.12,
+        .iconScale = 0.3,
+    };
+}
+
+fn panelAppearanceActive() Panel.Appearance {
+    return .{
+        .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
+        .backgroundColor = Color.themeSectionBg,
+        .borderColor = Color.themeSectionBorder,
+        .headerColor = Color.white,
+    };
+}
+
+fn panelAppearanceInactive() Panel.Appearance {
+    return .{
+        .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
+        .backgroundColor = Color.themeSectionBg,
+        .borderColor = Color.themeSectionBorder,
+        .headerColor = Color.offWhite,
+    };
+}
+
+fn panelModeActive() PanelMode {
+    return .{
+        .appearance = panelAppearanceActive(),
+        .dropzoneStyle = dropzoneStyleActive(),
+    };
+}
+
+fn panelModeInactive() PanelMode {
+    return .{
+        .appearance = panelAppearanceInactive(),
+        .dropzoneStyle = dropzoneStyleInactive(),
+    };
+}
+
+fn panelModeFor(isActive: bool) PanelMode {
+    return if (isActive) panelModeActive() else panelModeInactive();
+}
+
 fn drawActive(self: *FilePickerUI) !void {
     self.dropzone.draw();
     try self.button.draw();
@@ -220,21 +251,38 @@ fn drawInactive(self: *FilePickerUI) !void {
     self.isoTitle.draw();
 }
 
-fn recalculateUI(self: *FilePickerUI, bgRectParams: BgRectParams) void {
-    Debug.log(.DEBUG, "FilePickerUI: recalculating UI...", .{});
+fn panelElements(self: *FilePickerUI) Panel.Elements {
+    return .{
+        .frame = null,
+        .rect = &self.bgRect,
+        .header = &self.headerLabel,
+    };
+}
 
-    self.bgRect.transform.w = bgRectParams.width;
-    self.bgRect.style.color = bgRectParams.color;
-    self.bgRect.style.borderStyle.color = bgRectParams.borderColor;
+fn applyPanelMode(self: *FilePickerUI, mode: PanelMode) void {
+    Debug.log(.DEBUG, "FilePickerUI: applying panel mode.", .{});
+    Panel.applyAppearance(self.panelElements(), mode.appearance);
+    self.dropzone.setStyle(mode.dropzoneStyle);
+    self.dropzoneFrame.parent = &self.bgRect.transform;
+    self.dropzone.layoutDirty = true;
+    self.refreshLayout();
+}
 
+fn refreshLayout(self: *FilePickerUI) void {
     self.headerLabel.transform.x = self.bgRect.transform.x + 12;
     self.headerLabel.transform.y = self.bgRect.transform.relY(0.01);
 
-    self.dropzoneFrame.parent = &self.bgRect.transform;
-
     self.setImageTitlePosition();
+    self.updateButtonPosition();
+}
 
-    self.button.setPosition(.{ .x = self.bgRect.transform.relX(0.5) - self.button.rect.transform.getWidth() / 2, .y = self.button.rect.transform.y });
+fn updateButtonPosition(self: *FilePickerUI) void {
+    const buttonWidth = self.button.rect.transform.getWidth();
+    const buttonHeight = self.button.rect.transform.getHeight();
+    self.button.setPosition(.{
+        .x = self.bgRect.transform.relX(0.5) - buttonWidth / 2,
+        .y = self.bgRect.transform.relY(0.9) - buttonHeight / 2,
+    });
 }
 
 fn ensureComponentInitialized(self: *FilePickerUI) !*Component {
@@ -253,6 +301,7 @@ fn initializeUIElements(self: *FilePickerUI) !void {
     self.initializeDropzone();
     self.initializeIsoTitle();
     try self.initializeButton();
+    self.applyPanelMode(panelModeFor(self.readIsActive()));
 }
 
 fn initializeBackground(self: *FilePickerUI) void {
@@ -290,15 +339,6 @@ fn initializeHeader(self: *FilePickerUI) void {
     self.stepTexture.transform.scale = 0.5;
 
     self.header = .{
-        // .textboxFrame = Bounds.relative(
-        //     &self.bgRect.transform,
-        //     PositionSpec.percent(0.05, 0),
-        //     .{
-        //         .width = UnitValue.mix(1.0, -48),
-        //         .height = UnitValue.percent(0.25),
-        //     },
-        // ),
-
         .textboxFrame = Bounds.relative(
             &self.bgRect.transform,
             PositionSpec.percent(0.14, 0),
@@ -366,23 +406,18 @@ fn initializeButton(self: *FilePickerUI) !void {
 
     try self.button.start();
 
-    self.button.setPosition(.{
-        .x = self.bgRect.transform.relX(0.5) - @divTrunc(self.button.rect.transform.w, 2),
-        .y = self.bgRect.transform.relY(0.9) - @divTrunc(self.button.rect.transform.h, 2),
-    });
+    self.updateButtonPosition();
 
     self.button.rect.rounded = true;
 }
 
 fn initializeIsoTitle(self: *FilePickerUI) void {
     self.displayNameBuffer = std.mem.zeroes([AppConfig.IMAGE_DISPLAY_NAME_BUFFER_LEN:0]u8);
-    self.resetIsoTitle();
-}
-
-fn applyAppearance(self: *FilePickerUI, params: BgRectParams, headerColor: rl.Color, dropzoneStyle: UIFramework.FileDropzone.Style) void {
-    self.headerLabel.style.textColor = headerColor;
-    self.dropzone.setStyle(dropzoneStyle);
-    self.recalculateUI(params);
+    self.isoTitle = Text.init(DEFAULT_ISO_TITLE, .{
+        .x = 0,
+        .y = 0,
+    }, .{ .fontSize = 14 });
+    self.setIsoTitleValue(DEFAULT_ISO_TITLE);
 }
 
 fn broadcastUIDimensions(self: *FilePickerUI) void {
@@ -392,27 +427,21 @@ fn broadcastUIDimensions(self: *FilePickerUI) void {
 
 /// Updates internal active state and reapplies panel styling; must be called on the main UI thread.
 fn setIsActive(self: *FilePickerUI, isActive: bool) void {
-    {
-        self.state.lock();
-        defer self.state.unlock();
-        self.state.data.isActive = isActive;
-    }
-
-    if (isActive) {
-        self.applyAppearance(.{
-            .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
-            .color = Color.themeSectionBg,
-            .borderColor = Color.themeSectionBorder,
-        }, Color.white, dropzoneStyleActive());
-    } else {
-        self.applyAppearance(.{
-            .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
-            .color = Color.themeSectionBg,
-            .borderColor = Color.themeSectionBorder,
-        }, Color.offWhite, dropzoneStyleInactive());
-    }
-
+    self.storeIsActive(isActive);
+    self.applyPanelMode(panelModeFor(isActive));
     self.broadcastUIDimensions();
+}
+
+fn storeIsActive(self: *FilePickerUI, isActive: bool) void {
+    self.state.lock();
+    defer self.state.unlock();
+    self.state.data.isActive = isActive;
+}
+
+fn readIsActive(self: *FilePickerUI) bool {
+    self.state.lock();
+    defer self.state.unlock();
+    return self.state.data.isActive;
 }
 
 fn updateIsoPathState(self: *FilePickerUI, newPath: [:0]u8) void {
@@ -422,44 +451,62 @@ fn updateIsoPathState(self: *FilePickerUI, newPath: [:0]u8) void {
 }
 
 fn extractDisplayName(path: [:0]u8) [:0]const u8 {
-    var lastSlash: usize = 0;
-    for (0..path.len) |i| {
-        if (path[i] == '/') lastSlash = i;
+    if (std.mem.lastIndexOfScalar(u8, path, '/')) |index| {
+        return path[index + 1 .. path.len :0];
     }
-    return path[lastSlash + 1 .. path.len :0];
+    return path;
 }
 
 fn updateIsoTitle(self: *FilePickerUI, newName: [:0]const u8) void {
-    @memset(&self.displayNameBuffer, Character.NULL);
-
-    const written = if (newName.len > 14) blk: {
-        const prefix = "...";
-        @memcpy(self.displayNameBuffer[0..prefix.len], prefix);
-        @memcpy(self.displayNameBuffer[prefix.len .. prefix.len + 14], newName[newName.len - 14 ..]);
-        break :blk prefix.len + 14;
-    } else blk: {
-        @memcpy(self.displayNameBuffer[0..newName.len], newName);
-        break :blk newName.len;
-    };
-
-    self.displayNameBuffer[written] = Character.NULL;
-
-    const label = std.mem.sliceTo(&self.displayNameBuffer, Character.NULL);
-
-    self.isoTitle = Text.init(@ptrCast(label), .{
-        .x = 0,
-        .y = 0,
-    }, .{ .fontSize = 14 });
-
-    self.setImageTitlePosition();
+    const label = self.prepareDisplayName(newName);
+    self.setIsoTitleValue(label);
 }
 
 fn resetIsoTitle(self: *FilePickerUI) void {
-    self.isoTitle = Text.init(DEFAULT_ISO_TITLE, .{
-        .x = 0,
-        .y = 0,
-    }, .{ .fontSize = 14 });
+    self.displayNameBuffer[0] = Character.NULL;
+    self.setIsoTitleValue(DEFAULT_ISO_TITLE);
+}
 
+fn prepareDisplayName(self: *FilePickerUI, newName: [:0]const u8) [:0]const u8 {
+    @memset(&self.displayNameBuffer, Character.NULL);
+
+    const capacity = self.displayNameBuffer.len - 1;
+
+    if (newName.len > DISPLAY_NAME_SUFFIX_LEN and capacity > 0) {
+        const prefix = "...";
+        if (capacity <= prefix.len) {
+            const copyLen = @min(newName.len, capacity);
+            const startC = newName.len - copyLen;
+            @memcpy(self.displayNameBuffer[0..copyLen], newName[startC .. startC + copyLen]);
+            self.displayNameBuffer[copyLen] = Character.NULL;
+            return self.displayNameBuffer[0..copyLen :0];
+        }
+
+        const suffix_len = @min(DISPLAY_NAME_SUFFIX_LEN, capacity - prefix.len);
+        const suffix_start = if (suffix_len >= newName.len) 0 else newName.len - suffix_len;
+
+        @memcpy(self.displayNameBuffer[0..prefix.len], prefix);
+        @memcpy(
+            self.displayNameBuffer[prefix.len .. prefix.len + suffix_len],
+            newName[suffix_start .. suffix_start + suffix_len],
+        );
+
+        const written = prefix.len + suffix_len;
+        self.displayNameBuffer[written] = Character.NULL;
+        return self.displayNameBuffer[0..written :0];
+    }
+
+    const copyLen = @min(newName.len, capacity);
+    @memcpy(self.displayNameBuffer[0..copyLen], newName[0..copyLen]);
+    self.displayNameBuffer[copyLen] = Character.NULL;
+    return self.displayNameBuffer[0..copyLen :0];
+}
+
+fn setIsoTitleValue(self: *FilePickerUI, value: [:0]const u8) void {
+    self.isoTitle.value = value;
+    const dims = self.isoTitle.getDimensions();
+    self.isoTitle.transform.w = dims.width;
+    self.isoTitle.transform.h = dims.height;
     self.setImageTitlePosition();
 }
 

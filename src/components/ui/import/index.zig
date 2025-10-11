@@ -1,6 +1,7 @@
 pub const Primitives = @import("../Primitives.zig");
 pub const Styles = @import("../Styles.zig");
 pub const Layout = @import("../Layout.zig");
+pub const Panel = @import("../Panel.zig");
 
 pub const Button = @import("../Button.zig");
 pub const FileDropzone = @import("../FileDropzone.zig");
