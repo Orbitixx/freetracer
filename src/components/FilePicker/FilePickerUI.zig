@@ -3,6 +3,7 @@
 // Owns allocator-backed copies of transient strings so UI state remains valid beyond the originating event scope.
 // ----------------------------------------------------------------------------------------------------
 const std = @import("std");
+const osd = @import("osdialog");
 const rl = @import("raylib");
 const Debug = @import("freetracer-lib").Debug;
 
@@ -28,6 +29,7 @@ const EventResult = ComponentFramework.EventResult;
 const UIFramework = @import("../ui/import/index.zig");
 const Panel = UIFramework.Panel;
 const Button = UIFramework.Button;
+const SpriteButton = UIFramework.SpriteButton;
 const Rectangle = UIFramework.Primitives.Rectangle;
 const Transform = UIFramework.Primitives.Transform;
 const Text = UIFramework.Primitives.Text;
@@ -75,6 +77,7 @@ allocator: std.mem.Allocator,
 bgRect: Rectangle = undefined,
 headerLabel: Text = undefined,
 button: Button = undefined,
+confirmButton: SpriteButton = undefined,
 isoTitle: Text = undefined,
 displayNameBuffer: [AppConfig.IMAGE_DISPLAY_NAME_BUFFER_LEN:0]u8 = undefined,
 header: SectionHeader = undefined,
@@ -131,6 +134,17 @@ pub fn start(self: *FilePickerUI) !void {
     try subscribeToEvents(component);
     try self.initializeUIElements();
 
+    self.confirmButton = try SpriteButton.init(
+        "Confirm",
+        .JERSEY10_REGULAR,
+        24,
+        Color.themePrimary,
+        .BUTTON_FRAME,
+        .{ .x = 400, .y = 400, .h = 0, .w = 0 },
+        .{ .context = self, .function = FilePickerUI.ConfirmButtonClickHandler.call },
+    );
+    self.confirmButton.start();
+
     Debug.log(.DEBUG, "FilePickerUI: component start() finished.", .{});
 }
 
@@ -153,6 +167,7 @@ pub fn update(self: *FilePickerUI) !void {
 
     self.dropzone.update();
     try self.button.update();
+    try self.confirmButton.update();
 }
 
 pub fn draw(self: *FilePickerUI) !void {
@@ -163,6 +178,8 @@ pub fn draw(self: *FilePickerUI) !void {
     try self.header.textbox.draw();
 
     if (isActive) try self.drawActive() else try self.drawInactive();
+
+    self.confirmButton.draw();
 }
 
 pub fn deinit(self: *FilePickerUI) void {
@@ -509,6 +526,26 @@ fn setIsoTitleValue(self: *FilePickerUI, value: [:0]const u8) void {
     self.isoTitle.transform.h = dims.height;
     self.setImageTitlePosition();
 }
+
+const ConfirmButtonClickHandler = struct {
+    pub fn call(ctx: *anyopaque) void {
+        const self: *FilePickerUI = @ptrCast(@alignCast(ctx));
+
+        self.parent.*.confirmSelectedImageFile() catch |err| {
+            Debug.log(.ERROR, "FilePickerUI: Unable to confirm selected image file. {any}", .{err});
+
+            const response = osd.message(
+                "Error: unable to confirm the selected image file. Submit bug report on github.com?",
+                .{ .level = .err, .buttons = .yes_no },
+            );
+
+            if (!response) return;
+            const argv: []const []const u8 = &.{ "open", "https://github.com/orbitixx/freetracer/issues/new/choose" };
+            var ch = std.process.Child.init(argv, self.allocator);
+            ch.spawn() catch return;
+        };
+    }
+};
 
 /// Keeps the ISO title centered beneath the disk glyph after any layout or text change.
 fn setImageTitlePosition(self: *FilePickerUI) void {

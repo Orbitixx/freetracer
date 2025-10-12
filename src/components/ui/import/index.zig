@@ -4,6 +4,7 @@ pub const Layout = @import("../Layout.zig");
 pub const Panel = @import("../Panel.zig");
 
 pub const Button = @import("../Button.zig");
+pub const SpriteButton = @import("../SpriteButton.zig");
 pub const FileDropzone = @import("../FileDropzone.zig");
 pub const BackgroundStars = @import("../BackgroundStars.zig");
 pub const Checkbox = @import("../Checkbox.zig");

@@ -245,6 +245,14 @@ fn handleISOFileSelected(self: *FilePicker) !EventResult {
     return eventResult.succeed();
 }
 
+pub fn confirmSelectedImageFile(self: *FilePicker) !void {
+    try AppManager.reportAction(.ImageSelected);
+
+    const deactivateEvent = Events.onActiveStateChanged.create(self.asComponentPtr(), &.{ .isActive = false });
+    _ = try EventManager.signal(EventManager.ComponentName.ISO_FILE_PICKER_UI, deactivateEvent);
+    _ = try EventManager.signal(EventManager.ComponentName.DEVICE_LIST, deactivateEvent);
+}
+
 fn processSelectedPathLocked(self: *FilePicker, newPath: [:0]u8) !void {
     if (!fs.isExtensionAllowed(AppConfig.ALLOWED_IMAGE_EXTENSIONS.len, AppConfig.ALLOWED_IMAGE_EXTENSIONS, newPath)) {
         const proceed = osd.message("The selected file extension is not a recognized image type (.iso, .img). Proceed anyway?", .{
@@ -270,11 +278,7 @@ fn processSelectedPathLocked(self: *FilePicker, newPath: [:0]u8) !void {
         _ = try ui.handleEvent(pathChangedEvent);
     }
 
-    try AppManager.reportAction(.ImageSelected);
-
-    const deactivateEvent = Events.onActiveStateChanged.create(self.asComponentPtr(), &.{ .isActive = false });
-    _ = try EventManager.signal(EventManager.ComponentName.ISO_FILE_PICKER_UI, deactivateEvent);
-    _ = try EventManager.signal(EventManager.ComponentName.DEVICE_LIST, deactivateEvent);
+    // self.confirmSelectedImageFile();
 }
 
 pub fn acceptDroppedFile(self: *FilePicker, path: []const u8) !void {

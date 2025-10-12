@@ -7,7 +7,7 @@ pub const ResourceError = error{
 };
 
 const FONTS_COUNT: usize = 2;
-const TEXTURES_COUNT: usize = 8;
+const TEXTURES_COUNT: usize = 9;
 const IMAGE_COUNT: usize = 1;
 
 pub const FONT = enum(u8) {
@@ -24,6 +24,7 @@ pub const TEXTURE = enum(u8) {
     STEP_1_INACTIVE = 5,
     STAR_V1 = 6,
     STAR_V2 = 7,
+    BUTTON_FRAME = 8,
 };
 
 pub const IMAGE = enum(u8) {
@@ -154,6 +155,7 @@ pub const ResourceManagerSingleton = struct {
             inst.textures[5] = step1ITexture;
             inst.textures[6] = starV1Texture;
             inst.textures[7] = starV2Texture;
+            inst.textures[@intFromEnum(TEXTURE.BUTTON_FRAME)] = try registerTexture(allocator, "button_frame.png");
 
             inst.images[@intFromEnum(IMAGE.APP_WINDOW_IMAGE)] = try registerImage(allocator, "icon.png");
         }
@@ -238,8 +240,16 @@ fn getResourcePath(allocator: std.mem.Allocator, resourceName: []const u8) ![:0]
     }
 }
 
-fn registerImage(allocator: std.mem.Allocator, path: []const u8) !rl.Image {
-    const imageFile = try getResourcePath(allocator, path);
+fn registerImage(allocator: std.mem.Allocator, fileName: []const u8) !rl.Image {
+    const imageFile = try getResourcePath(allocator, fileName);
     defer allocator.free(imageFile);
     return try rl.loadImage(imageFile);
+}
+
+fn registerTexture(allocator: std.mem.Allocator, fileName: []const u8) !rl.Texture2D {
+    const textureFile = try getResourcePath(allocator, fileName);
+    defer allocator.free(textureFile);
+    const texture = try rl.loadTexture(textureFile);
+    rl.setTextureFilter(texture, .point);
+    return texture;
 }
