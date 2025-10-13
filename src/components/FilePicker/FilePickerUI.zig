@@ -49,6 +49,17 @@ const SectionHeader = struct {
     textboxFrame: UIFramework.Layout.Bounds,
 };
 
+const ImageInfoBox = struct {
+    textbox: Textbox,
+    textboxFrame: UIFramework.Layout.Bounds,
+    extraText: Text = undefined,
+
+    pub fn draw(self: *ImageInfoBox) !void {
+        try self.textbox.draw();
+        // self.extraText.draw();
+    }
+};
+
 const DEFAULT_ISO_TITLE = "No ISO selected...";
 const DISPLAY_NAME_SUFFIX_LEN: usize = 14;
 
@@ -84,7 +95,7 @@ header: SectionHeader = undefined,
 stepTexture: UIFramework.Texture = undefined,
 dropzoneFrame: Bounds = undefined,
 dropzone: UIFramework.FileDropzone = undefined,
-// headerFrame: UIFramework.Layout.Bounds = undefined,
+imageInfoBox: ImageInfoBox = undefined,
 
 pub const Events = struct {
     pub const onISOFilePathChanged = ComponentFramework.defineEvent(
@@ -261,6 +272,7 @@ fn panelModeFor(isActive: bool) PanelMode {
 
 fn drawActive(self: *FilePickerUI) !void {
     self.dropzone.draw();
+    try self.imageInfoBox.draw();
     try self.button.draw();
 }
 
@@ -316,6 +328,7 @@ fn initializeUIElements(self: *FilePickerUI) !void {
     self.initializeBackground();
     self.initializeHeader();
     self.initializeDropzone();
+    self.initializeImageInfoBox();
     self.initializeIsoTitle();
     try self.initializeButton();
     self.applyPanelMode(panelModeFor(self.readIsActive()));
@@ -407,8 +420,36 @@ fn initializeDropzone(self: *FilePickerUI) void {
             .onDrop = .{ .context = self.parent, .function = FilePicker.HandleFileDropWrapper.call },
         },
     );
+}
 
-    // self.dropzone.texture.icon
+fn initializeImageInfoBox(self: *FilePickerUI) void {
+    const textboxFrame = Bounds.relative(&self.dropzoneFrame.resolve(), PositionSpec.mix(.percent(0), .percent(1.10)), .percent(1.0, 1.0));
+
+    self.imageInfoBox = ImageInfoBox{
+        .textboxFrame = textboxFrame,
+        .textbox = Textbox.init(
+            &self.imageInfoBox.textboxFrame,
+            "Ubuntu 24.04 LTS.iso",
+            .{
+                .background = .{
+                    .color = Color.transparent,
+                    .borderStyle = .{
+                        .color = Color.transparent,
+                        .thickness = 0,
+                    },
+                    .roundness = 0,
+                },
+                .lineSpacing = 1,
+                .text = .{
+                    .font = .ROBOTO_REGULAR,
+                    .fontSize = 16,
+                    .textColor = Color.lightGray,
+                },
+            },
+            .{ .wordWrap = true },
+            self.allocator,
+        ),
+    };
 }
 
 fn initializeButton(self: *FilePickerUI) !void {
