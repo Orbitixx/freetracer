@@ -394,6 +394,3 @@ pub const ComponentImplementation = ComponentFramework.ImplementComponent(FilePi
 pub const asComponent = ComponentImplementation.asComponent;
 pub const asComponentPtr = ComponentImplementation.asComponentPtr;
 pub const asInstance = ComponentImplementation.asInstance;
-
-pub const FilePickerComponent = @import("../framework/Component.zig").implementInterface(Component, FilePicker);
-// FilePickerComponent.

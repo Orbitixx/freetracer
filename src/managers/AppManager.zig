@@ -28,6 +28,9 @@ const UI = @import("../components/ui/import/index.zig");
 const Button = @import("../components/ui/Button.zig");
 const Checkbox = @import("../components/ui/Checkbox.zig");
 
+const UIElement = @import("../components/ui/UIElement.zig").UIElement;
+const View = @import("../components/ui/UIElement.zig").View;
+
 const relY = WindowManager.relH;
 const relX = WindowManager.relW;
 
@@ -164,6 +167,34 @@ const AppManager = struct {
         try UpdateManager.init(self.allocator);
         defer UpdateManager.deinit();
 
+        const globalTransform = UI.Transform{ .w = WindowManager.getWindowWidth(), .h = WindowManager.getWindowHeight() };
+
+        var view = View.init(
+            .{
+                .parent = &globalTransform,
+                .position = .{ .x = .percent(0.2), .y = .percent(0.5) },
+            },
+            UI.Rectangle{
+                .transform = .{ .x = relX(0.2), .y = relY(0.4), .w = 150, .h = 100 },
+                .style = .{ .color = UI.Styles.Color.red },
+            },
+            &[_]UIElement{
+                View.init(
+                    .{
+                        .parent = &globalTransform,
+                        .position = .{ .x = .percent(0.25), .y = .percent(0.55) },
+                    },
+                    UI.Rectangle{
+                        .transform = .{ .x = relX(0.2), .y = relY(0.4), .w = 150, .h = 100 },
+                        .style = .{ .color = UI.Styles.Color.blueGray },
+                    },
+                    null,
+                ),
+            },
+        );
+
+        try view.start();
+
         //----------------------------------------------------------------------------------
         //--- @END MANAGERS ----------------------------------------------------------------
         //----------------------------------------------------------------------------------
@@ -291,6 +322,8 @@ const AppManager = struct {
 
             UpdateManager.draw();
             try componentRegistry.drawAll();
+
+            try view.draw();
 
             rl.endDrawing();
 
