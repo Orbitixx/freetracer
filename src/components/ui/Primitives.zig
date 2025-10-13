@@ -12,10 +12,10 @@ const RectangleStyle = Styles.RectangleStyle;
 const AppFont = ResourceManagerImport.FONT;
 
 pub const Transform = struct {
-    x: f32,
-    y: f32,
-    w: f32,
-    h: f32,
+    x: f32 = 0,
+    y: f32 = 0,
+    w: f32 = 0,
+    h: f32 = 0,
 
     scale: f32 = 1.0,
     rotation: f32 = 0.0,

@@ -1,3 +1,4 @@
+const std = @import("std");
 const rl = @import("raylib");
 
 const Primitives = @import("./Primitives.zig");
@@ -25,7 +26,7 @@ pub const Radius = struct {
     pub const sm: f32 = 4;
     pub const md: f32 = 8;
     pub const lg: f32 = 12;
-    pub const pill: f32 = 999;
+    pub const full: f32 = 999;
 };
 
 pub const Padding = struct {
@@ -136,6 +137,17 @@ pub const Bounds = struct {
     position: PositionSpec = .{},
     size: SizeSpec = .{},
     space: CoordinateSpace = .relative,
+    cache: Cache = .{},
+
+    const Cache = struct {
+        valid: bool = false,
+        transform: Transform = .{},
+        parentPtr: ?*const Transform = null,
+        parentTransform: Transform = .{},
+        position: PositionSpec = .{},
+        size: SizeSpec = .{},
+        space: CoordinateSpace = .relative,
+    };
 
     pub fn relative(parent: *const Transform, position: PositionSpec, size: SizeSpec) Bounds {
         return .{
@@ -143,6 +155,7 @@ pub const Bounds = struct {
             .position = position,
             .size = size,
             .space = .relative,
+            .cache = .{},
         };
     }
 
@@ -152,29 +165,44 @@ pub const Bounds = struct {
             .position = position,
             .size = size,
             .space = .absolute,
+            .cache = .{},
         };
     }
 
+    pub fn invalidate(self: *Bounds) void {
+        self.cache.valid = false;
+    }
+
     pub fn resolve(self: *const Bounds) Transform {
-        const parent_transform: Transform = if (self.parent) |parent_ptr| parent_ptr.* else .{
-            .x = 0,
-            .y = 0,
-            .w = 0,
-            .h = 0,
-            .scale = 1,
-            .rotation = 0,
-        };
+        const mutable = @constCast(self);
 
-        const reference_width: f32 = if (self.parent != null) parent_transform.w else 0;
-        const reference_height: f32 = if (self.parent != null) parent_transform.h else 0;
+        if (mutable.cache.valid and
+            mutable.cache.space == mutable.space and
+            std.meta.eql(mutable.cache.position, mutable.position) and
+            std.meta.eql(mutable.cache.size, mutable.size) and
+            mutable.cache.parentPtr == mutable.parent)
+        {
+            if (mutable.parent) |parent_ptr| {
+                if (transformEquals(parent_ptr.*, mutable.cache.parentTransform)) {
+                    return mutable.cache.transform;
+                }
+            } else {
+                return mutable.cache.transform;
+            }
+        }
 
-        const resolved_width = @max(0, self.size.width.resolve(reference_width));
-        const resolved_height = @max(0, self.size.height.resolve(reference_height));
+        const parent_transform: Transform = if (mutable.parent) |parent_ptr| parent_ptr.* else .{};
 
-        var offset_x = self.position.x.resolve(reference_width);
-        var offset_y = self.position.y.resolve(reference_height);
+        const reference_width: f32 = if (mutable.parent != null) parent_transform.w else 0;
+        const reference_height: f32 = if (mutable.parent != null) parent_transform.h else 0;
 
-        switch (self.space) {
+        const resolved_width = @max(0, mutable.size.width.resolve(reference_width));
+        const resolved_height = @max(0, mutable.size.height.resolve(reference_height));
+
+        var offset_x = mutable.position.x.resolve(reference_width);
+        var offset_y = mutable.position.y.resolve(reference_height);
+
+        switch (mutable.space) {
             .relative => {
                 offset_x = parent_transform.x + offset_x;
                 offset_y = parent_transform.y + offset_y;
@@ -185,7 +213,7 @@ pub const Bounds = struct {
             },
         }
 
-        return .{
+        const resolved = Transform{
             .x = offset_x,
             .y = offset_y,
             .w = resolved_width,
@@ -193,6 +221,25 @@ pub const Bounds = struct {
             .scale = parent_transform.scale,
             .rotation = 0,
         };
+
+        mutable.cache.transform = resolved;
+        mutable.cache.parentPtr = mutable.parent;
+        mutable.cache.parentTransform = parent_transform;
+        mutable.cache.position = mutable.position;
+        mutable.cache.size = mutable.size;
+        mutable.cache.space = mutable.space;
+        mutable.cache.valid = true;
+
+        return resolved;
+    }
+
+    fn transformEquals(a: Transform, b: Transform) bool {
+        return a.x == b.x and
+            a.y == b.y and
+            a.w == b.w and
+            a.h == b.h and
+            a.scale == b.scale and
+            a.rotation == b.rotation;
     }
 };
 

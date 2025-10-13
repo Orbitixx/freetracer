@@ -134,7 +134,7 @@ pub fn setText(self: *Textbox, text: [:0]const u8) void {
 
 pub fn setFrame(self: *Textbox, frame: *const Layout.Bounds) void {
     self.frame = frame;
-    self.backgroundRect.transform = frame.resolve();
+    self.backgroundRect.transform = self.frame.resolve();
 }
 
 pub fn setStyle(self: *Textbox, style: TextboxStyle) void {
