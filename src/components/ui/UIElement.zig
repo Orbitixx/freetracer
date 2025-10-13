@@ -44,6 +44,7 @@ pub const UIElement = struct {
     vtable: *const VTable,
 
     pub const VTable = struct {
+        start: *const fn (*anyopaque) anyerror!void,
         update: *const fn (*anyopaque) anyerror!void,
         draw: *const fn (*anyopaque) anyerror!void,
         deinit: *const fn (*anyopaque) void,

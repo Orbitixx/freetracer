@@ -169,6 +169,24 @@ const AppManager = struct {
 
         const globalTransform = UI.Transform{ .w = WindowManager.getWindowWidth(), .h = WindowManager.getWindowHeight() };
 
+        var childView = View.init(
+            .{
+                .parent = &globalTransform,
+                .position = .{ .x = .percent(0.25), .y = .percent(0.55) },
+            },
+            UI.Rectangle{
+                .transform = .{ .x = relX(0.25), .y = relY(0.45), .w = 150, .h = 100 },
+                .style = .{ .color = UI.Styles.Color.blueGray },
+            },
+            null,
+        );
+
+        childView.element.ptr = @as(*anyopaque, @ptrCast(@alignCast(&childView)));
+
+        const children: ?[]UIElement = @ptrCast(@constCast(&[_]UIElement{
+            childView.element,
+        }));
+
         var view = View.init(
             .{
                 .parent = &globalTransform,
@@ -178,19 +196,7 @@ const AppManager = struct {
                 .transform = .{ .x = relX(0.2), .y = relY(0.4), .w = 150, .h = 100 },
                 .style = .{ .color = UI.Styles.Color.red },
             },
-            &[_]UIElement{
-                View.init(
-                    .{
-                        .parent = &globalTransform,
-                        .position = .{ .x = .percent(0.25), .y = .percent(0.55) },
-                    },
-                    UI.Rectangle{
-                        .transform = .{ .x = relX(0.2), .y = relY(0.4), .w = 150, .h = 100 },
-                        .style = .{ .color = UI.Styles.Color.blueGray },
-                    },
-                    null,
-                ),
-            },
+            children,
         );
 
         try view.start();
