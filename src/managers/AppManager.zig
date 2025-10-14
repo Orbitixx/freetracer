@@ -27,8 +27,9 @@ const PrivilegedHelper = @import("../components/macos/PrivilegedHelper.zig");
 const UI = @import("../components/ui/import/index.zig");
 const Button = @import("../components/ui/Button.zig");
 const Checkbox = @import("../components/ui/Checkbox.zig");
+const Rectangle = UI.RectanglePro;
+const Transform = @import("../components/ui/Transform.zig");
 
-const UIElement = @import("../components/ui/UIElement.zig").UIElement;
 const View = @import("../components/ui/UIElement.zig").View;
 
 const relY = WindowManager.relH;
@@ -167,37 +168,35 @@ const AppManager = struct {
         try UpdateManager.init(self.allocator);
         defer UpdateManager.deinit();
 
-        const globalTransform = UI.Transform{ .w = WindowManager.getWindowWidth(), .h = WindowManager.getWindowHeight() };
-
-        var childView = View.init(
-            .{
-                .parent = &globalTransform,
-                .position = .{ .x = .percent(0.25), .y = .percent(0.55) },
-            },
-            UI.Rectangle{
-                .transform = .{ .x = relX(0.25), .y = relY(0.45), .w = 150, .h = 100 },
-                .style = .{ .color = UI.Styles.Color.blueGray },
-            },
-            null,
-        );
-
-        childView.element.ptr = @as(*anyopaque, @ptrCast(@alignCast(&childView)));
-
-        const children: ?[]UIElement = @ptrCast(@constCast(&[_]UIElement{
-            childView.element,
-        }));
+        var globalTransform: Transform = .{ .size = .pixels(WindowManager.getWindowWidth(), WindowManager.getWindowHeight()) };
+        _ = globalTransform.resolve();
 
         var view = View.init(
+            self.allocator,
             .{
-                .parent = &globalTransform,
-                .position = .{ .x = .percent(0.2), .y = .percent(0.5) },
+                .relativeRef = &globalTransform,
+                .position = .{ .x = .percent(0.2), .y = .percent(0.45) },
+                .size = .{ .width = .pixels(150), .height = .pixels(100) },
             },
-            UI.Rectangle{
-                .transform = .{ .x = relX(0.2), .y = relY(0.4), .w = 150, .h = 100 },
+            Rectangle{
+                .transform = .{},
                 .style = .{ .color = UI.Styles.Color.red },
             },
-            children,
         );
+        defer view.deinit();
+
+        try view.addChild(.{ .View = View.init(
+            self.allocator,
+            .{
+                .relativeRef = &view.transform,
+                .position = .{ .x = .percent(0.25), .y = .percent(0.55) },
+                .size = .{ .width = .pixels(150), .height = .pixels(100) },
+            },
+            Rectangle{
+                .transform = .{},
+                .style = .{ .color = UI.Styles.Color.blueGray },
+            },
+        ) });
 
         try view.start();
 
@@ -329,6 +328,8 @@ const AppManager = struct {
             UpdateManager.draw();
             try componentRegistry.drawAll();
 
+            view.transform.position.x.px = view.transform.position.x.px + 0.5;
+            try view.update();
             try view.draw();
 
             rl.endDrawing();

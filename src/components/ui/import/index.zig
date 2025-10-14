@@ -18,5 +18,6 @@ pub const utils = @import("util.zig");
 pub const Transform = Primitives.Transform;
 pub const Text = Primitives.Text;
 pub const Rectangle = Primitives.Rectangle;
+pub const RectanglePro = Primitives.RectanglePro;
 pub const TextDimensions = Primitives.TextDimensions;
 pub const Texture = Primitives.Texture;

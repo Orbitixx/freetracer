@@ -11,6 +11,8 @@ const RectangleStyle = Styles.RectangleStyle;
 
 const AppFont = ResourceManagerImport.FONT;
 
+const TransformPro = @import("./Transform.zig");
+
 pub const Transform = struct {
     x: f32 = 0,
     y: f32 = 0,
@@ -99,6 +101,75 @@ pub const Rectangle = struct {
         if (self.bordered) {
             rl.drawRectangleRoundedLinesEx(
                 self.transform.asRaylibRectangle(),
+                self.style.roundness,
+                self.style.segments,
+                self.style.borderStyle.thickness,
+                self.style.borderStyle.color,
+            );
+        }
+
+        return;
+    }
+};
+
+pub const RectanglePro = struct {
+    transform: TransformPro,
+    rounded: bool = false,
+    bordered: bool = false,
+    style: RectangleStyle = .{},
+
+    pub fn draw(self: *RectanglePro) void {
+        //
+        if (self.rounded) {
+            self.drawRounded();
+            return;
+        }
+
+        self.transform.resolve();
+
+        const bakedRect = rl.Rectangle{
+            .x = self.transform.x,
+            .y = self.transform.y,
+            .width = self.transform.w,
+            .height = self.transform.h,
+        };
+
+        rl.drawRectanglePro(
+            bakedRect,
+            .{ .x = 0, .y = 0 },
+            self.transform.rotation,
+            self.style.color,
+        );
+
+        if (self.bordered) {
+            rl.drawRectangleLinesEx(
+                bakedRect,
+                self.style.borderStyle.thickness,
+                self.style.borderStyle.color,
+            );
+        }
+    }
+
+    fn drawRounded(self: *RectanglePro) void {
+        self.transform.resolve();
+
+        const bakedRect = rl.Rectangle{
+            .x = self.transform.x,
+            .y = self.transform.y,
+            .width = self.transform.w,
+            .height = self.transform.h,
+        };
+
+        rl.drawRectangleRounded(
+            bakedRect,
+            self.style.roundness,
+            self.style.segments,
+            self.style.color,
+        );
+
+        if (self.bordered) {
+            rl.drawRectangleRoundedLinesEx(
+                bakedRect,
                 self.style.roundness,
                 self.style.segments,
                 self.style.borderStyle.thickness,
