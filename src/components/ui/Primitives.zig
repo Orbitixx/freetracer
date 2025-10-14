@@ -3,7 +3,7 @@ const std = @import("std");
 const rl = @import("raylib");
 const ResourceManagerImport = @import("../../managers/ResourceManager.zig");
 const ResourceManager = ResourceManagerImport.ResourceManagerSingleton;
-const TextureResource = ResourceManagerImport.TEXTURE;
+pub const TextureResource = ResourceManagerImport.TEXTURE;
 
 const Styles = @import("./Styles.zig");
 const TextStyle = Styles.TextStyle;

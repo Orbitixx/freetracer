@@ -66,6 +66,7 @@ const ImageInfoBox = struct {
 };
 
 const DEFAULT_ISO_TITLE = "No ISO selected...";
+const DEFAULT_SECTION_HEADER = "Select image";
 const DISPLAY_NAME_SUFFIX_LEN: usize = 14;
 
 const PanelMode = struct {
@@ -97,7 +98,7 @@ confirmButton: SpriteButton = undefined,
 isoTitle: Text = undefined,
 displayNameBuffer: [AppConfig.IMAGE_DISPLAY_NAME_BUFFER_LEN:0]u8 = undefined,
 header: SectionHeader = undefined,
-stepTexture: UIFramework.Texture = undefined,
+// stepTexture: UIFramework.Texture = undefined,
 dropzoneFrame: Bounds = undefined,
 dropzone: UIFramework.FileDropzone = undefined,
 imageInfoBox: ImageInfoBox = undefined,
@@ -152,16 +153,16 @@ pub fn start(self: *FilePickerUI) !void {
     try subscribeToEvents(component);
     try self.initializeUIElements();
 
-    self.confirmButton = try SpriteButton.init(
-        "Confirm",
-        .JERSEY10_REGULAR,
-        24,
-        Color.themePrimary,
-        .BUTTON_FRAME,
-        .{ .x = 400, .y = 400, .h = 0, .w = 0 },
-        .{ .context = self, .function = FilePickerUI.ConfirmButtonClickHandler.call },
-    );
-    self.confirmButton.start();
+    // self.confirmButton = try SpriteButton.init(
+    //     "Confirm",
+    //     .JERSEY10_REGULAR,
+    //     24,
+    //     Color.themePrimary,
+    //     .BUTTON_FRAME,
+    //     .{ .x = 400, .y = 400, .h = 0, .w = 0 },
+    //     .{ .context = self, .function = FilePickerUI.ConfirmButtonClickHandler.call },
+    // );
+    // self.confirmButton.start();
 
     Debug.log(.DEBUG, "FilePickerUI: component start() finished.", .{});
 }
@@ -186,7 +187,7 @@ pub fn update(self: *FilePickerUI) !void {
     try self.layout.update();
     self.dropzone.update();
     try self.button.update();
-    try self.confirmButton.update();
+    // try self.confirmButton.update();
 }
 
 pub fn draw(self: *FilePickerUI) !void {
@@ -194,12 +195,12 @@ pub fn draw(self: *FilePickerUI) !void {
 
     self.bgRect.draw();
     try self.layout.draw();
-    self.stepTexture.draw();
-    try self.header.textbox.draw();
+    // self.stepTexture.draw();
+    // try self.header.textbox.draw();
 
     if (isActive) try self.drawActive() else try self.drawInactive();
 
-    self.confirmButton.draw();
+    // self.confirmButton.draw();
 }
 
 pub fn deinit(self: *FilePickerUI) void {
@@ -360,7 +361,7 @@ fn initializeBackground(self: *FilePickerUI) !void {
         .bordered = true,
     };
 
-    self.layout = View.init(self.allocator, .{
+    self.layout = View.init(self.allocator, null, .{
         .position = .percent(AppConfig.APP_UI_MODULE_PANEL_FILE_PICKER_X, AppConfig.APP_UI_MODULE_PANEL_Y),
         .size = .percent(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE, AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
         .relativeRef = try AppManager.getGlobalTransform(),
@@ -374,22 +375,55 @@ fn initializeBackground(self: *FilePickerUI) !void {
         .bordered = true,
     });
 
-    try self.layout.addChild(.{ .Text = TextPro.init(
-        "HELLO TEstttt!",
+    try self.layout.addChild(.{ .Texture = .init(
+        null,
+        .STEP_1_INACTIVE,
         .{
-            .position = .percent(0.5, 0.5),
+            .position = .percent(0.05, 0.03),
+            .scale = 0.5,
         },
-        .{
+        null,
+    ) }, null);
+
+    try self.layout.addChild(.{ .Textbox = .init(self.allocator, DEFAULT_SECTION_HEADER, .{
+        .position = .percent(0.15, 0.025),
+        .size = .percent(0.8, 0.1),
+    }, .{
+        .background = .{
+            .color = Color.transparent,
+            .borderStyle = .{ .color = Color.transparent, .thickness = 0 },
+            .roundness = 0,
+        },
+        .text = .{
             .font = .JERSEY10_REGULAR,
-            .fontSize = 24,
+            .fontSize = 34,
             .textColor = Color.white,
         },
-    ) }, null);
+        .lineSpacing = -5,
+    }, null, .{ .wordWrap = true }) }, null);
+
+    try self.layout.addChild(.{ .Textbox = .init(self.allocator, "Ubuntu 24.04 LTS.iso", .{
+        .position = .percent(1, 1),
+        .size = .percent(1, 1),
+    }, .{
+        .background = .{
+            .color = Color.transparent,
+            .borderStyle = .{ .color = Color.transparent, .thickness = 0 },
+            .roundness = 0,
+        },
+        .text = .{
+            .font = .ROBOTO_REGULAR,
+            .fontSize = 20,
+            .textColor = Color.offWhite,
+        },
+        .lineSpacing = -5,
+    }, null, .{ .wordWrap = true }) }, null);
 
     try self.layout.start();
 }
 
 fn initializeHeader(self: *FilePickerUI) void {
+    // TODO: To remove
     self.headerLabel = Text.init("image", .{
         .x = self.bgRect.transform.x + 12,
         .y = self.bgRect.transform.relY(0.01),
@@ -398,45 +432,45 @@ fn initializeHeader(self: *FilePickerUI) void {
         .fontSize = 34,
         .textColor = Color.white,
     });
+    // TODO: To remove
+    // self.stepTexture = UIFramework.Texture.init(.STEP_1_INACTIVE, .{
+    //     .x = self.bgRect.transform.relX(0.05),
+    //     .y = self.bgRect.transform.relY(0.01),
+    // });
 
-    self.stepTexture = UIFramework.Texture.init(.STEP_1_INACTIVE, .{
-        .x = self.bgRect.transform.relX(0.05),
-        .y = self.bgRect.transform.relY(0.01),
-    });
-
-    self.stepTexture.transform.scale = 0.5;
-
-    self.header = .{
-        .textboxFrame = Bounds.relative(
-            &self.bgRect.transform,
-            PositionSpec.percent(0.14, 0),
-            .{
-                .width = UnitValue.mix(1.0, -48),
-                .height = UnitValue.percent(0.25),
-            },
-        ),
-
-        .textbox = Textbox.init(
-            &self.header.textboxFrame,
-            "Select image",
-            .{
-                .background = .{
-                    .color = Color.transparent,
-                    .borderStyle = .{ .color = Color.transparent, .thickness = 0 },
-                    .roundness = 0,
-                },
-                .text = .{
-                    .font = .JERSEY10_REGULAR,
-                    .fontSize = 34,
-                    .textColor = Color.white,
-                },
-                .padding = Padding.uniform(Spacing.xs),
-                .lineSpacing = -5,
-            },
-            .{ .wordWrap = true },
-            self.allocator,
-        ),
-    };
+    // self.stepTexture.transform.scale = 0.5;
+    // TODO: To remove
+    // self.header = .{
+    //     .textboxFrame = Bounds.relative(
+    //         &self.bgRect.transform,
+    //         PositionSpec.percent(0.14, 0),
+    //         .{
+    //             .width = UnitValue.mix(1.0, -48),
+    //             .height = UnitValue.percent(0.25),
+    //         },
+    //     ),
+    //
+    //     .textbox = Textbox.init(
+    //         &self.header.textboxFrame,
+    //         "Select image",
+    //         .{
+    //             .background = .{
+    //                 .color = Color.transparent,
+    //                 .borderStyle = .{ .color = Color.transparent, .thickness = 0 },
+    //                 .roundness = 0,
+    //             },
+    //             .text = .{
+    //                 .font = .JERSEY10_REGULAR,
+    //                 .fontSize = 34,
+    //                 .textColor = Color.white,
+    //             },
+    //             .padding = Padding.uniform(Spacing.xs),
+    //             .lineSpacing = -5,
+    //         },
+    //         .{ .wordWrap = true },
+    //         self.allocator,
+    //     ),
+    // };
 }
 
 fn initializeDropzone(self: *FilePickerUI) void {
@@ -658,6 +692,8 @@ fn handleIsoFilePathChanged(self: *FilePickerUI, event: ComponentEvent) !EventRe
     if (data.newPath.len > 0) {
         self.updateIsoPathState(data.newPath);
         const displayName = extractDisplayName(data.newPath);
+        const payloadPtr: *const anyopaque = @ptrCast(displayName.ptr);
+        self.layout.emitEvent(.create(.TextChangedEvent, .ImageInfoBoxText, payloadPtr, @ptrCast(@constCast(displayName))));
         self.updateIsoTitle(displayName);
     } else {
         self.resetIsoTitle();

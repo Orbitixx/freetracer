@@ -2,8 +2,8 @@ const std = @import("std");
 const rl = @import("raylib");
 
 const UIFramework = @import("../ui/import/index.zig");
-const Transform = UIFramework.Transform;
-const Text = UIFramework.Text;
+const Transform = @import("./Transform.zig");
+const TextPrimitive = UIFramework.Text;
 const Color = @import("./Styles.zig").Color;
 
 const ResourceImport = @import("../../managers/ResourceManager.zig");
@@ -22,6 +22,13 @@ pub const ButtonState = enum {
     HOVER,
     ACTIVE,
     DISABLED,
+};
+
+const TextConfig = struct {
+    fontResource: FontResource = .ROBOTO_REGULAR,
+    fontSize: f32 = 14,
+    textColor: rl.Color = Color.white,
+    textValue: []const u8,
 };
 
 const StateStyle = struct {
@@ -45,49 +52,35 @@ pub const ButtonHandler = struct {
     }
 };
 
-textBuffer: [TILED_BUTTON_MAX_TEXT_LENGTH]u8,
-texture: Texture,
-text: Text,
-transform: Transform,
 state: ButtonState = .NORMAL,
+transform: Transform,
+texture: Texture,
+textureTint: rl.Color = Color.white,
+textBuffer: [TILED_BUTTON_MAX_TEXT_LENGTH]u8,
+textConfig: TextConfig,
 clickHandler: ButtonHandler,
 cursorActive: bool = false,
-textureTint: rl.Color = Color.white,
 
-pub fn init(
-    value: []const u8,
-    font: FontResource,
-    fontSize: f32,
-    color: rl.Color,
-    texture: TextureResource,
-    transform: Transform,
-    clickHandler: ButtonHandler,
-) !SpriteButton {
-    if (value.len > TILED_BUTTON_MAX_TEXT_LENGTH) return error.SpriteButtonValueExceedsMax;
-
+pub fn init(textConfig: TextConfig, texture: TextureResource, transform: Transform, clickHandler: ButtonHandler) SpriteButton {
     var buff = std.mem.zeroes([TILED_BUTTON_MAX_TEXT_LENGTH]u8);
-    @memcpy(buff[0..value.len], value);
 
-    const text = Text.init(
-        "",
-        .{ .x = 0, .y = 0 },
-        .{
-            .font = font,
-            .fontSize = fontSize,
-            .textColor = color,
-        },
+    @memcpy(
+        buff[0..if (textConfig.textValue.len > TILED_BUTTON_MAX_TEXT_LENGTH) TILED_BUTTON_MAX_TEXT_LENGTH],
+        if (textConfig.textValue.value.len > TILED_BUTTON_MAX_TEXT_LENGTH) textConfig.textValue[0..TILED_BUTTON_MAX_TEXT_LENGTH] else textConfig.textValue,
     );
 
     return .{
         .textBuffer = buff,
-        .text = text,
+        .textConfig = textConfig,
         .texture = ResourceManager.getTexture(texture),
         .transform = transform,
         .clickHandler = clickHandler,
     };
 }
 
-pub fn start(self: *SpriteButton) void {
+pub fn start(self: *SpriteButton) !void {
+    self.transform.resolve();
+
     self.text.value = @ptrCast(std.mem.sliceTo(&self.textBuffer, 0x00));
 
     self.transform.w = @floatFromInt(self.texture.width);
@@ -101,6 +94,8 @@ pub fn start(self: *SpriteButton) void {
 }
 
 pub fn update(self: *SpriteButton) !void {
+    self.transform.resolve();
+
     const mousePos: rl.Vector2 = rl.getMousePosition();
     const isButtonHovered: bool = self.transform.isPointWithinBounds(mousePos);
     const wantsCursor = isButtonHovered and self.state != ButtonState.DISABLED;
@@ -151,13 +146,24 @@ pub fn update(self: *SpriteButton) !void {
     }
 }
 
-pub fn draw(self: *SpriteButton) void {
+pub fn draw(self: *SpriteButton) !void {
     self.texture.drawEx(
-        .{ .x = self.transform.x, .y = self.transform.y },
+        self.transform.positionAsVector2(),
         0,
         self.transform.scale,
         self.textureTint,
     );
 
-    self.text.draw();
+    rl.drawTextEx(
+        self.font,
+        @ptrCast(std.mem.sliceTo(&self.textBuffer, 0x00)),
+        self.transform.positionAsVector2(),
+        self.style.fontSize,
+        self.style.spacing,
+        self.style.textColor,
+    );
+}
+
+pub fn deinit(self: *SpriteButton) void {
+    _ = self;
 }

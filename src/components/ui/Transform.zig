@@ -49,3 +49,12 @@ pub fn sizeAsVector2(self: Transform) rl.Vector2 {
         .y = self.h,
     };
 }
+
+pub fn asRaylibRectangle(self: Transform) rl.Rectangle {
+    return .{
+        .x = self.x,
+        .y = self.y,
+        .width = self.w,
+        .height = self.h,
+    };
+}

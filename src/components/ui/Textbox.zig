@@ -4,14 +4,16 @@
 const std = @import("std");
 const rl = @import("raylib");
 
-const ComponentFramework = @import("../framework/import/index.zig");
-const Component = ComponentFramework.Component;
-const Event = ComponentFramework.Event;
-const EventResult = ComponentFramework.EventResult;
+// const ComponentFramework = @import("../framework/import/index.zig");
+// const Component = ComponentFramework.Component;
+// const Event = ComponentFramework.Event;
+// const EventResult = ComponentFramework.EventResult;
+
+const UIEvent = @import("./UIElement.zig").UIEvent;
 
 const Primitives = @import("Primitives.zig");
-const Transform = Primitives.Transform;
-const RectanglePrimitive = Primitives.Rectangle;
+const Transform = @import("./Transform.zig");
+const Rectangle = Primitives.RectanglePro;
 
 const Styles = @import("./Styles.zig");
 const RectangleStyle = Styles.RectangleStyle;
@@ -26,7 +28,6 @@ const ResourceManager = ResourceManagerImport.ResourceManagerSingleton;
 pub const TextboxStyle = struct {
     background: RectangleStyle = .{},
     text: TextStyle = .{},
-    padding: Layout.Padding = Layout.Padding.uniform(Layout.Space.sm),
     selectionTextTint: rl.Color = Color.white,
     selectionBackgroundTint: rl.Color = Color.themePrimary,
     /// Additional vertical spacing between wrapped lines.
@@ -44,107 +45,90 @@ pub const Selection = struct {
 
 const Textbox = @This();
 
-component: ?Component = null,
+// component: ?Component = null,
 allocator: std.mem.Allocator,
-frame: *const Layout.Bounds,
-backgroundRect: RectanglePrimitive,
+transform: Transform,
 style: TextboxStyle,
 text: [:0]const u8,
 font: rl.Font,
 params: Params = .{},
 selection: ?Selection = null,
+background: ?Rectangle = null,
 
-pub fn init(frame: *const Layout.Bounds, text: [:0]const u8, style: TextboxStyle, params: Params, allocator: std.mem.Allocator) Textbox {
-    const font = ResourceManager.getFont(style.text.font);
-    const resolvedBounds = frame.resolve();
-    const backgroundRect = RectanglePrimitive{
-        .transform = resolvedBounds,
-        .rounded = style.background.roundness > 0,
-        .bordered = style.background.borderStyle.thickness > 0 and style.background.borderStyle.color.a > 0,
-        .style = style.background,
-    };
-
+pub fn init(allocator: std.mem.Allocator, text: [:0]const u8, transform: Transform, style: TextboxStyle, background: ?Rectangle, params: Params) Textbox {
     return .{
         .allocator = allocator,
-        .frame = frame,
-        .backgroundRect = backgroundRect,
+        .transform = transform,
+        .background = background,
         .style = style,
         .text = text,
-        .font = font,
+        .font = ResourceManager.getFont(style.text.font),
         .params = params,
     };
 }
 
-pub fn initComponent(self: *Textbox, parent: ?*Component) !void {
-    if (self.component != null) return error.TextboxBaseComponentAlreadyInitialized;
-    self.component = try Component.init(self, &ComponentImplementation.vtable, parent, self.allocator);
-}
-
+// pub fn initComponent(self: *Textbox, parent: ?*Component) !void {
+//     if (self.component != null) return error.TextboxBaseComponentAlreadyInitialized;
+//     self.component = try Component.init(self, &ComponentImplementation.vtable, parent, self.allocator);
+// }
+//
 pub fn start(self: *Textbox) !void {
-    if (self.component == null) try self.initComponent(null);
+    // if (self.component == null) try self.initComponent(null);
+    self.transform.resolve();
+    if (self.background) |*bg| bg.transform.resolve();
+
+    std.debug.print("\nTextbox resolved() Transform in start().", .{});
 }
 
 pub fn update(self: *Textbox) !void {
-    _ = self;
+    self.transform.resolve();
+    if (self.background) |*bg| bg.transform.resolve();
 }
 
 pub fn draw(self: *Textbox) !void {
-    const resolvedBounds = self.frame.resolve();
-    self.backgroundRect.transform = resolvedBounds;
+    if (self.background) |*bg| bg.draw();
 
-    if (self.style.background.color.a > 0 or self.backgroundRect.bordered or self.backgroundRect.rounded) {
-        self.backgroundRect.draw();
-    }
-
-    const content = Layout.applyPadding(resolvedBounds, self.style.padding);
-    const contentRect = content.asRaylibRectangle();
-
-    if (self.selection) |sel| {
-        drawTextBoxedSelectable(
-            self.font,
-            self.text,
-            contentRect,
-            self.style.text.fontSize,
-            self.style.text.spacing,
-            self.params.wordWrap,
-            self.style.text.textColor,
-            sel.start,
-            sel.length,
-            self.style.selectionTextTint,
-            self.style.selectionBackgroundTint,
-            self.style.lineSpacing,
-        );
-    } else {
-        drawTextBoxed(
-            self.font,
-            self.text,
-            contentRect,
-            self.style.text.fontSize,
-            self.style.text.spacing,
-            self.params.wordWrap,
-            self.style.text.textColor,
-            self.style.lineSpacing,
-        );
-    }
+    // if (self.selection) |sel| {
+    // drawTextBoxedSelectable(
+    //     self.font,
+    //     self.text,
+    //     self.transform.asRaylibRectangle(),
+    //     self.style.text.fontSize,
+    //     self.style.text.spacing,
+    //     self.params.wordWrap,
+    //     self.style.text.textColor,
+    //     sel.start,
+    //     sel.length,
+    //     self.style.selectionTextTint,
+    //     self.style.selectionBackgroundTint,
+    //     self.style.lineSpacing,
+    // );
+    // } else {
+    drawTextBoxed(
+        self.font,
+        self.text,
+        self.transform.asRaylibRectangle(),
+        self.style.text.fontSize,
+        self.style.text.spacing,
+        self.params.wordWrap,
+        self.style.text.textColor,
+        self.style.lineSpacing,
+    );
+    // }
 }
 
 pub fn setText(self: *Textbox, text: [:0]const u8) void {
     self.text = text;
 }
 
-pub fn setFrame(self: *Textbox, frame: *const Layout.Bounds) void {
-    self.frame = frame;
-    self.backgroundRect.transform = self.frame.resolve();
-}
-
-pub fn setStyle(self: *Textbox, style: TextboxStyle) void {
-    self.style = style;
-    self.backgroundRect.style = style.background;
-    self.backgroundRect.rounded = style.background.roundness > 0;
-    self.backgroundRect.bordered = style.background.borderStyle.thickness > 0 and style.background.borderStyle.color.a > 0;
-    self.backgroundRect.transform = self.frame.resolve();
-    self.font = ResourceManager.getFont(style.text.font);
-}
+// pub fn setStyle(self: *Textbox, style: TextboxStyle) void {
+//     self.style = style;
+//     self.backgroundRect.style = style.background;
+//     self.backgroundRect.rounded = style.background.roundness > 0;
+//     self.backgroundRect.bordered = style.background.borderStyle.thickness > 0 and style.background.borderStyle.color.a > 0;
+//     self.backgroundRect.transform = self.frame.resolve();
+//     self.font = ResourceManager.getFont(style.text.font);
+// }
 
 pub fn setSelection(self: *Textbox, selection: ?Selection) void {
     self.selection = selection;
@@ -154,25 +138,30 @@ pub fn setWordWrap(self: *Textbox, flag: bool) void {
     self.params.wordWrap = flag;
 }
 
-pub fn handleEvent(self: *Textbox, event: Event) !EventResult {
+pub fn handleUIEvent(self: *Textbox, event: UIEvent) void {
     _ = self;
     _ = event;
-
-    return EventResult.init();
 }
 
-pub fn dispatchComponentAction(self: *Textbox) void {
-    _ = self;
-}
+// pub fn handleEvent(self: *Textbox, event: Event) !EventResult {
+//     _ = self;
+//     _ = event;
+//
+//     return EventResult.init();
+// }
 
+// pub fn dispatchComponentAction(self: *Textbox) void {
+//     _ = self;
+// }
+//
 pub fn deinit(self: *Textbox) void {
     _ = self;
 }
 
-const ComponentImplementation = ComponentFramework.ImplementComponent(Textbox);
-pub const asComponent = ComponentImplementation.asComponent;
-pub const asComponentPtr = ComponentImplementation.asComponentPtr;
-pub const asInstance = ComponentImplementation.asInstance;
+// const ComponentImplementation = ComponentFramework.ImplementComponent(Textbox);
+// pub const asComponent = ComponentImplementation.asComponent;
+// pub const asComponentPtr = ComponentImplementation.asComponentPtr;
+// pub const asInstance = ComponentImplementation.asInstance;
 
 pub fn drawTextBoxed(
     font: rl.Font,

@@ -81,7 +81,7 @@ const TextStyle = Style.TextStyle;
 pub const UIElement = union(enum) {
     View: View,
     Text: Text,
-    Textbox: Textbox,
+    // Textbox: Textbox,
     Texture: Texture,
     // Button: Button,
     // SpriteButton: SpriteButton,
@@ -111,6 +111,11 @@ pub const UIElement = union(enum) {
     }
 
     pub fn handleUIEvent(self: *UIElement, event: UIEvent) void {
+        const cstr: [*:0]const u8 = @ptrCast(event.payload.?);
+        const msg: [:0]const u8 = std.mem.span(cstr);
+
+        Debug.log(.DEBUG, "UIElement received event payload: {s}", .{msg});
+
         switch (self.*) {
             inline else => |*element| @constCast(element).handleUIEvent(event),
         }
@@ -130,12 +135,14 @@ pub const UIEvent = struct {
     target: ?UIElementIdentifier = null,
     payload: ?*const anyopaque = null,
     result: ?*anyopaque = null,
+    slice: [:0]u8 = undefined,
 
-    pub fn create(eventType: UIEventType, eventTarget: ?UIElementIdentifier, payload: ?*const anyopaque) UIEvent {
+    pub fn create(eventType: UIEventType, eventTarget: ?UIElementIdentifier, payload: ?*const anyopaque, slice: [:0]u8) UIEvent {
         return UIEvent{
             .type = eventType,
             .target = eventTarget,
             .payload = payload,
+            .slice = slice,
         };
     }
 };
@@ -209,6 +216,12 @@ pub const View = struct {
     }
 
     pub fn emitEvent(self: *View, event: UIEvent) void {
+        const cstr: [*:0]const u8 = @ptrCast(event.payload.?);
+        const msg: [:0]const u8 = std.mem.span(cstr);
+
+        Debug.log(.DEBUG, "View received slice: {s}", .{event.slice});
+        Debug.log(.DEBUG, "View received event payload: {s}", .{msg});
+
         for (self.children.items) |*child| {
             child.handleUIEvent(event);
         }
@@ -274,13 +287,10 @@ pub const Text = struct {
 
         switch (event.type) {
             .TextChangedEvent => {
-                if (event.payload) |data| {
-                    const cstr: [*:0]const u8 = @ptrCast(data);
-                    const msg: [:0]const u8 = std.mem.span(cstr);
-
-                    Debug.log(.DEBUG, "Text recevied payload with UIEvent: {s}", .{msg});
-                    self.setValue(msg);
-                }
+                // if (event.payload) |data| {
+                Debug.log(.DEBUG, "Text recevied payload with UIEvent: {s}", .{event.slice});
+                self.setValue(@ptrCast(event.slice));
+                // }
             },
         }
     }
@@ -289,7 +299,7 @@ pub const Text = struct {
         _ = self;
     }
 
-    pub fn setValue(self: *Text, newValue: [:0]const u8) void {
+    pub fn setValue(self: *Text, newValue: []const u8) void {
         self.textBuffer = std.mem.zeroes([256]u8);
         @memcpy(self.textBuffer[0..if (newValue.len > 256) 256 else newValue.len], if (newValue.len > 256) newValue[0..256] else newValue);
     }
@@ -321,9 +331,6 @@ pub const Texture = struct {
     }
 
     pub fn start(self: *Texture) !void {
-        const tWidth: f32 = @floatFromInt(self.texture.width);
-        const tHeight: f32 = @floatFromInt(self.texture.height);
-        self.transform.size = .pixels(tWidth, tHeight);
         self.transform.resolve();
     }
 
