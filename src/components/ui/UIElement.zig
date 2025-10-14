@@ -1,16 +1,23 @@
 const std = @import("std");
+const rl = @import("raylib");
 const Debug = @import("freetracer-lib").Debug;
 
 const ArrayList = std.ArrayList;
 const Allocator = std.mem.Allocator;
 
+const ResourceManager = @import("../../managers/ResourceManager.zig").ResourceManagerSingleton;
+
 const Primitives = @import("./Primitives.zig");
 const Rectangle = Primitives.RectanglePro;
-const Text = Primitives.Text;
+const TextDimensions = Primitives.TextDimensions;
 const Texture = Primitives.Texture;
+const Textbox = @import("./Textbox.zig");
 const Button = @import("./Button.zig");
 const SpriteButton = @import("./SpriteButton.zig");
 const Transform = @import("./Transform.zig");
+
+const Style = @import("./Styles.zig");
+const TextStyle = Style.TextStyle;
 
 const Layout = @import("./Layout.zig");
 const Bounds = Layout.Bounds;
@@ -43,106 +50,111 @@ pub fn autoVTable(comptime VTableType: type, comptime ImplType: type) VTableType
     return vt;
 }
 
-pub const UIElement = struct {
-    ptr: *anyopaque = undefined,
-    vtable: *const VTable,
+// pub const UIElement = struct {
+//     ptr: *anyopaque = undefined,
+//     vtable: *const VTable,
+//
+//     pub const VTable = struct {
+//         start: *const fn (*anyopaque) anyerror!void,
+//         update: *const fn (*anyopaque) anyerror!void,
+//         draw: *const fn (*anyopaque) anyerror!void,
+//         deinit: *const fn (*anyopaque) void,
+//     };
+//
+//     pub fn start(self: *UIElement) !void {
+//         return self.vtable.start(self.ptr);
+//     }
+//
+//     pub fn update(self: *UIElement) !void {
+//         return self.vtable.update(self.ptr);
+//     }
+//
+//     pub fn draw(self: *UIElement) !void {
+//         return self.vtable.draw(self.ptr);
+//     }
+//
+//     pub fn deinit(self: *UIElement) void {
+//         return self.vtable.deinit(self.ptr);
+//     }
+// };
 
-    pub const VTable = struct {
-        start: *const fn (*anyopaque) anyerror!void,
-        update: *const fn (*anyopaque) anyerror!void,
-        draw: *const fn (*anyopaque) anyerror!void,
-        deinit: *const fn (*anyopaque) void,
-    };
-
-    pub fn start(self: *UIElement) !void {
-        return self.vtable.start(self.ptr);
-    }
-
-    pub fn update(self: *UIElement) !void {
-        return self.vtable.update(self.ptr);
-    }
-
-    pub fn draw(self: *UIElement) !void {
-        return self.vtable.draw(self.ptr);
-    }
-
-    pub fn deinit(self: *UIElement) void {
-        return self.vtable.deinit(self.ptr);
-    }
-};
-
-pub const ElementWrapper = union(enum) {
+pub const UIElement = union(enum) {
     View: View,
+    Text: Text,
+    // Textbox: Textbox,
+    // Texture: Texture,
+    // Button: Button,
+    // SpriteButton: SpriteButton,
 
-    pub fn start(self: *ElementWrapper) anyerror!void {
+    pub fn start(self: *UIElement) anyerror!void {
         switch (self.*) {
             inline else => |*element| try @constCast(element).start(),
         }
     }
 
-    pub fn update(self: *ElementWrapper) anyerror!void {
+    pub fn update(self: *UIElement) anyerror!void {
         switch (self.*) {
             inline else => |*element| try @constCast(element).update(),
         }
     }
 
-    pub fn draw(self: *ElementWrapper) anyerror!void {
+    pub fn draw(self: *UIElement) anyerror!void {
         switch (self.*) {
             inline else => |*element| try @constCast(element).draw(),
         }
     }
 
-    pub fn deinit(self: *ElementWrapper) void {
+    pub fn deinit(self: *UIElement) void {
         switch (self.*) {
             inline else => |*element| @constCast(element).deinit(),
         }
     }
 
-    pub fn asElementPointer(self: *ElementWrapper) *UIElement {
-        switch (self.*) {
-            inline else => |*element| return @constCast(element).asElementPtr(),
-        }
-    }
+    // pub fn asElementPointer(self: *UIElement) *UIElement {
+    //     switch (self.*) {
+    //         inline else => |*element| return @constCast(element).asElementPtr(),
+    //     }
+    // }
 };
 
 pub const View = struct {
-    const vtable: UIElement.VTable = autoVTable(UIElement.VTable, View);
-
-    element: UIElement = .{ .vtable = &vtable },
+    // const vtable: UIElement.VTable = autoVTable(UIElement.VTable, View);
+    // element: UIElement = .{ .vtable = &vtable },
 
     allocator: Allocator,
     transform: Transform = .{},
     background: ?Rectangle = null,
-    children: ArrayList(ElementWrapper),
+    children: ArrayList(UIElement),
 
     pub fn init(allocator: Allocator, transform: Transform, background: ?Rectangle) View {
         return .{
             .allocator = allocator,
             .transform = transform,
             .background = background,
-            .children = ArrayList(ElementWrapper).empty,
+            .children = ArrayList(UIElement).empty,
         };
     }
 
-    pub fn addChild(self: *View, child: ElementWrapper) !void {
-        try self.children.append(self.allocator, child);
+    pub fn addChild(self: *View, child: UIElement, relativeTransform: ?*Transform) !void {
+        var mutableChild = child;
+
+        switch (mutableChild) {
+            inline else => |*el| {
+                if (relativeTransform) |rt| el.transform.relativeRef = rt else el.transform.relativeRef = &self.transform;
+            },
+        }
+
+        try self.children.append(self.allocator, mutableChild);
     }
 
     pub fn start(self: *View) !void {
         Debug.log(.DEBUG, "View start() called.", .{});
-        self.element.ptr = self;
+        // self.element.ptr = self;
 
         self.layoutSelf();
 
         for (self.children.items) |*child| {
             try child.start();
-        }
-    }
-
-    fn layoutSelf(self: *View) void {
-        _ = self.transform.resolve();
-        if (self.background) |*bg| {
-            bg.transform = self.transform;
         }
     }
 
@@ -169,8 +181,70 @@ pub const View = struct {
         self.children.deinit(self.allocator);
     }
 
-    pub fn asElementPtr(self: *View) *UIElement {
-        return &self.element;
+    fn layoutSelf(self: *View) void {
+        _ = self.transform.resolve();
+
+        if (self.background) |*bg| {
+            bg.transform = self.transform;
+        }
+    }
+
+    // pub fn asElementPtr(self: *View) *UIElement {
+    //     return &self.element;
+    // }
+};
+
+pub const Text = struct {
+    transform: Transform = .{},
+    textBuffer: [256]u8,
+    style: TextStyle,
+    font: rl.Font,
+    background: ?Rectangle = null,
+
+    pub fn init(value: [:0]const u8, transform: Transform, style: TextStyle) Text {
+
+        // TODO: Extract magic number to a constant
+        if (value.len > 256) Debug.log(.WARNING, "Text UIElement's value length exceeded allowed max: {s}", .{value});
+
+        var textValue: [256]u8 = std.mem.zeroes([256]u8);
+        @memcpy(textValue[0..if (value.len > 256) 255 else value.len], if (value.len > 256) value[0..255] else value);
+
+        return .{
+            .transform = transform,
+            .textBuffer = textValue,
+            .style = style,
+            .font = ResourceManager.getFont(style.font),
+        };
+    }
+
+    pub fn start(self: *Text) !void {
+        self.transform.resolve();
+        const textDims: rl.Vector2 = rl.measureTextEx(self.font, @ptrCast(std.mem.sliceTo(&self.textBuffer, 0x00)), self.style.fontSize, self.style.spacing);
+        self.transform.size = .pixels(textDims.x, textDims.y);
+    }
+
+    pub fn update(self: *Text) !void {
+        self.transform.resolve();
+    }
+
+    pub fn draw(self: *Text) !void {
+        rl.drawTextEx(
+            self.font,
+            @ptrCast(std.mem.sliceTo(&self.textBuffer, 0x00)),
+            self.transform.positionAsVector2(),
+            self.style.fontSize,
+            self.style.spacing,
+            self.style.textColor,
+        );
+    }
+
+    pub fn deinit(self: *Text) void {
+        _ = self;
+    }
+
+    pub fn getDimensions(self: Text) TextDimensions {
+        const dims = rl.measureTextEx(self.font, self.value, self.style.fontSize, self.style.spacing);
+        return .{ .width = dims.x, .height = dims.y };
     }
 };
 

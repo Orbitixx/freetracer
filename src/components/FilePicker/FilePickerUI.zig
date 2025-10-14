@@ -35,6 +35,11 @@ const Transform = UIFramework.Primitives.Transform;
 const Text = UIFramework.Primitives.Text;
 const Textbox = UIFramework.Textbox;
 
+const UIElementFramework = @import("../ui/UIElement.zig");
+const View = UIElementFramework.View;
+const TextPro = UIElementFramework.Text;
+const TransformPro = @import("../ui/Transform.zig");
+
 const Styles = UIFramework.Styles;
 const Color = Styles.Color;
 const Layout = UIFramework.Layout;
@@ -96,6 +101,8 @@ stepTexture: UIFramework.Texture = undefined,
 dropzoneFrame: Bounds = undefined,
 dropzone: UIFramework.FileDropzone = undefined,
 imageInfoBox: ImageInfoBox = undefined,
+
+layout: View = undefined,
 
 pub const Events = struct {
     pub const onISOFilePathChanged = ComponentFramework.defineEvent(
@@ -176,6 +183,7 @@ pub fn handleEvent(self: *FilePickerUI, event: ComponentEvent) !EventResult {
 pub fn update(self: *FilePickerUI) !void {
     if (!self.readIsActive()) return;
 
+    try self.layout.update();
     self.dropzone.update();
     try self.button.update();
     try self.confirmButton.update();
@@ -185,6 +193,7 @@ pub fn draw(self: *FilePickerUI) !void {
     const isActive = self.readIsActive();
 
     self.bgRect.draw();
+    try self.layout.draw();
     self.stepTexture.draw();
     try self.header.textbox.draw();
 
@@ -195,6 +204,7 @@ pub fn draw(self: *FilePickerUI) !void {
 
 pub fn deinit(self: *FilePickerUI) void {
     self.button.deinit();
+    self.layout.deinit();
 }
 
 pub fn dispatchComponentAction(self: *FilePickerUI) void {
@@ -272,7 +282,7 @@ fn panelModeFor(isActive: bool) PanelMode {
 
 fn drawActive(self: *FilePickerUI) !void {
     self.dropzone.draw();
-    try self.imageInfoBox.draw();
+    // try self.imageInfoBox.draw();
     try self.button.draw();
 }
 
@@ -325,16 +335,16 @@ fn subscribeToEvents(component: *Component) !void {
 }
 
 fn initializeUIElements(self: *FilePickerUI) !void {
-    self.initializeBackground();
+    try self.initializeBackground();
     self.initializeHeader();
     self.initializeDropzone();
-    self.initializeImageInfoBox();
+    try self.initializeImageInfoBox();
     self.initializeIsoTitle();
     try self.initializeButton();
     self.applyPanelMode(panelModeFor(self.readIsActive()));
 }
 
-fn initializeBackground(self: *FilePickerUI) void {
+fn initializeBackground(self: *FilePickerUI) !void {
     self.bgRect = Rectangle{
         .transform = .{
             .x = winRelX(AppConfig.APP_UI_MODULE_PANEL_FILE_PICKER_X),
@@ -343,12 +353,40 @@ fn initializeBackground(self: *FilePickerUI) void {
             .h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
         },
         .style = .{
+            .color = Color.white,
+            .borderStyle = .{ .color = Color.white },
+        },
+        .rounded = true,
+        .bordered = true,
+    };
+
+    self.layout = View.init(self.allocator, .{
+        .position = .percent(AppConfig.APP_UI_MODULE_PANEL_FILE_PICKER_X, AppConfig.APP_UI_MODULE_PANEL_Y),
+        .size = .percent(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE, AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
+        .relativeRef = try AppManager.getGlobalTransform(),
+    }, .{
+        .transform = .{},
+        .style = .{
             .color = Color.themeSectionBg,
             .borderStyle = .{ .color = Color.themeSectionBorder },
         },
         .rounded = true,
         .bordered = true,
-    };
+    });
+
+    try self.layout.addChild(.{ .Text = TextPro.init(
+        "HELLO TEstttt!",
+        .{
+            .position = .percent(0.5, 0.5),
+        },
+        .{
+            .font = .JERSEY10_REGULAR,
+            .fontSize = 24,
+            .textColor = Color.white,
+        },
+    ) }, null);
+
+    try self.layout.start();
 }
 
 fn initializeHeader(self: *FilePickerUI) void {
@@ -422,34 +460,36 @@ fn initializeDropzone(self: *FilePickerUI) void {
     );
 }
 
-fn initializeImageInfoBox(self: *FilePickerUI) void {
-    const textboxFrame = Bounds.relative(&self.dropzoneFrame.resolve(), PositionSpec.mix(.percent(0), .percent(1.10)), .percent(1.0, 1.0));
+fn initializeImageInfoBox(self: *FilePickerUI) !void {
+    _ = self;
 
-    self.imageInfoBox = ImageInfoBox{
-        .textboxFrame = textboxFrame,
-        .textbox = Textbox.init(
-            &self.imageInfoBox.textboxFrame,
-            "Ubuntu 24.04 LTS.iso",
-            .{
-                .background = .{
-                    .color = Color.transparent,
-                    .borderStyle = .{
-                        .color = Color.transparent,
-                        .thickness = 0,
-                    },
-                    .roundness = 0,
-                },
-                .lineSpacing = 1,
-                .text = .{
-                    .font = .ROBOTO_REGULAR,
-                    .fontSize = 16,
-                    .textColor = Color.lightGray,
-                },
-            },
-            .{ .wordWrap = true },
-            self.allocator,
-        ),
-    };
+    // const textboxFrame = Bounds.relative(&self.dropzoneFrame.resolve(), PositionSpec.mix(.percent(0), .percent(1.10)), .percent(1.0, 1.0));
+
+    // self.imageInfoBox = ImageInfoBox{
+    //     .textboxFrame = textboxFrame,
+    //     .textbox = Textbox.init(
+    //         &self.imageInfoBox.textboxFrame,
+    //         "Ubuntu 24.04 LTS.iso",
+    //         .{
+    //             .background = .{
+    //                 .color = Color.transparent,
+    //                 .borderStyle = .{
+    //                     .color = Color.transparent,
+    //                     .thickness = 0,
+    //                 },
+    //                 .roundness = 0,
+    //             },
+    //             .lineSpacing = 1,
+    //             .text = .{
+    //                 .font = .ROBOTO_REGULAR,
+    //                 .fontSize = 16,
+    //                 .textColor = Color.lightGray,
+    //             },
+    //         },
+    //         .{ .wordWrap = true },
+    //         self.allocator,
+    //     ),
+    // };
 }
 
 fn initializeButton(self: *FilePickerUI) !void {

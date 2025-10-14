@@ -78,6 +78,7 @@ pub fn init(allocator: std.mem.Allocator) !void {
         .allocator = allocator,
         .appState = .ImageSelection,
         .lastAction = null,
+        .globalTransform = .{},
     };
 }
 
@@ -105,10 +106,15 @@ pub fn getState() !AppState {
     return if (instance) |inst| return inst.appState else return error.AppManagerInstanceIsNULL;
 }
 
+pub fn getGlobalTransform() !*Transform {
+    if (instance) |*inst| return &inst.*.globalTransform else return error.AppManagerInstanceIsNULL;
+}
+
 const AppManager = struct {
     allocator: std.mem.Allocator,
     appState: AppState,
     lastAction: ?ActionReport,
+    globalTransform: Transform,
 
     pub fn advanceState(self: *AppManager) !void {
         self.appState = switch (self.appState) {
@@ -168,37 +174,43 @@ const AppManager = struct {
         try UpdateManager.init(self.allocator);
         defer UpdateManager.deinit();
 
-        var globalTransform: Transform = .{ .size = .pixels(WindowManager.getWindowWidth(), WindowManager.getWindowHeight()) };
-        _ = globalTransform.resolve();
+        // Belongs in WindowManager maybe?
+        self.globalTransform = .{
+            .size = .pixels(WindowManager.getWindowWidth(), WindowManager.getWindowHeight()),
+        };
+        self.globalTransform.resolve();
 
-        var view = View.init(
-            self.allocator,
-            .{
-                .relativeRef = &globalTransform,
-                .position = .{ .x = .percent(0.2), .y = .percent(0.45) },
-                .size = .{ .width = .pixels(150), .height = .pixels(100) },
-            },
-            Rectangle{
-                .transform = .{},
-                .style = .{ .color = UI.Styles.Color.red },
-            },
-        );
-        defer view.deinit();
-
-        try view.addChild(.{ .View = View.init(
-            self.allocator,
-            .{
-                .relativeRef = &view.transform,
-                .position = .{ .x = .percent(0.25), .y = .percent(0.55) },
-                .size = .{ .width = .pixels(150), .height = .pixels(100) },
-            },
-            Rectangle{
-                .transform = .{},
-                .style = .{ .color = UI.Styles.Color.blueGray },
-            },
-        ) });
-
-        try view.start();
+        // var globalTransform: Transform = .{ .size = .pixels(WindowManager.getWindowWidth(), WindowManager.getWindowHeight()) };
+        // _ = globalTransform.resolve();
+        //
+        // var view = View.init(
+        //     self.allocator,
+        //     .{
+        //         .relativeRef = &globalTransform,
+        //         .position = .{ .x = .percent(0.2), .y = .percent(0.45) },
+        //         .size = .{ .width = .pixels(150), .height = .pixels(100) },
+        //     },
+        //     Rectangle{
+        //         .transform = .{},
+        //         .style = .{ .color = UI.Styles.Color.red },
+        //     },
+        // );
+        // defer view.deinit();
+        //
+        // try view.addChild(.{ .View = View.init(
+        //     self.allocator,
+        //     .{
+        //         .relativeRef = &view.transform,
+        //         .position = .{ .x = .percent(0.25), .y = .percent(0.55) },
+        //         .size = .{ .width = .pixels(150), .height = .pixels(100) },
+        //     },
+        //     Rectangle{
+        //         .transform = .{},
+        //         .style = .{ .color = UI.Styles.Color.blueGray },
+        //     },
+        // ) });
+        //
+        // try view.start();
 
         //----------------------------------------------------------------------------------
         //--- @END MANAGERS ----------------------------------------------------------------
@@ -328,9 +340,9 @@ const AppManager = struct {
             UpdateManager.draw();
             try componentRegistry.drawAll();
 
-            view.transform.position.x.px = view.transform.position.x.px + 0.5;
-            try view.update();
-            try view.draw();
+            // view.transform.position.x.px = view.transform.position.x.px + 0.5;
+            // try view.update();
+            // try view.draw();
 
             rl.endDrawing();
 

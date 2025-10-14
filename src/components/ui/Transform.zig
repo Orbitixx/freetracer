@@ -1,5 +1,5 @@
 //
-//
+const rl = @import("raylib");
 const Layout = @import("./Layout.zig");
 const UnitValue = Layout.UnitValue;
 const PositionSpec = Layout.PositionSpec;
@@ -34,4 +34,18 @@ pub fn resolve(self: *Transform) void {
 
     self.w = self.size.width.resolve(if (ref) |r| r.w else 0);
     self.h = self.size.height.resolve(if (ref) |r| r.h else 0);
+}
+
+pub fn positionAsVector2(self: Transform) rl.Vector2 {
+    return .{
+        .x = self.x,
+        .y = self.y,
+    };
+}
+
+pub fn sizeAsVector2(self: Transform) rl.Vector2 {
+    return .{
+        .x = self.w,
+        .y = self.h,
+    };
 }
