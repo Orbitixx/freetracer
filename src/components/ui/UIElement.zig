@@ -110,9 +110,9 @@ pub const UIElement = union(enum) {
         }
     }
 
-    pub fn handleUIEvent(self: *UIElement, event: UIEvent) void {
+    pub fn onEvent(self: *UIElement, event: UIEvent) void {
         switch (self.*) {
-            inline else => |*element| @constCast(element).handleUIEvent(event),
+            inline else => |*element| @constCast(element).onEvent(event),
         }
     }
 };
@@ -125,19 +125,8 @@ pub const UIEventType = enum(u8) {
     TextChangedEvent,
 };
 
-pub const UIEvent = struct {
-    type: UIEventType,
-    target: ?UIElementIdentifier = null,
-    payload: ?*const anyopaque = null,
-    result: ?*anyopaque = null,
-
-    pub fn create(eventType: UIEventType, eventTarget: ?UIElementIdentifier, payload: ?*const anyopaque) UIEvent {
-        return UIEvent{
-            .type = eventType,
-            .target = eventTarget,
-            .payload = payload,
-        };
-    }
+pub const UIEvent = union(enum) {
+    TextChanged: struct { target: UIElementIdentifier, text: [:0]const u8 },
 };
 
 pub const View = struct {
@@ -202,7 +191,7 @@ pub const View = struct {
         self.children.deinit(self.allocator);
     }
 
-    pub fn handleUIEvent(self: *View, event: UIEvent) void {
+    pub fn onEvent(self: *View, event: UIEvent) void {
         _ = self;
         _ = event;
         Debug.log(.DEBUG, "View recevied a UIEvent.", .{});
@@ -210,7 +199,7 @@ pub const View = struct {
 
     pub fn emitEvent(self: *View, event: UIEvent) void {
         for (self.children.items) |*child| {
-            child.handleUIEvent(event);
+            child.onEvent(event);
         }
     }
 
@@ -269,18 +258,16 @@ pub const Text = struct {
         );
     }
 
-    pub fn handleUIEvent(self: *Text, event: UIEvent) void {
-        Debug.log(.DEBUG, "Text recevied a UIEvent: {any}", .{event.type});
+    pub fn onEvent(self: *Text, event: UIEvent) void {
+        Debug.log(.DEBUG, "Text recevied a UIEvent: {any}", .{event});
 
-        switch (event.type) {
-            .TextChangedEvent => {
-                if (event.payload) |data| {
-                    const cstr: [*:0]const u8 = @ptrCast(data);
-                    const msg: [:0]const u8 = std.mem.span(cstr);
+        switch (event) {
+            inline else => |e| if (e.target != self.identifier) return,
+        }
 
-                    Debug.log(.DEBUG, "Text recevied payload with UIEvent: {s}", .{msg});
-                    self.setValue(msg);
-                }
+        switch (event) {
+            .TextChanged => |e| {
+                self.setValue(e.text);
             },
         }
     }
@@ -341,7 +328,7 @@ pub const Texture = struct {
         );
     }
 
-    pub fn handleUIEvent(self: *Texture, event: UIEvent) void {
+    pub fn onEvent(self: *Texture, event: UIEvent) void {
         _ = self;
         _ = event;
         Debug.log(.DEBUG, "Texture recevied a UIEvent.", .{});

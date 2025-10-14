@@ -138,7 +138,7 @@ pub fn setWordWrap(self: *Textbox, flag: bool) void {
     self.params.wordWrap = flag;
 }
 
-pub fn handleUIEvent(self: *Textbox, event: UIEvent) void {
+pub fn onEvent(self: *Textbox, event: UIEvent) void {
     _ = self;
     _ = event;
 }

@@ -375,6 +375,14 @@ fn initializeBackground(self: *FilePickerUI) !void {
         .bordered = true,
     });
 
+    try self.layout.addChild(.{ .Text = .init(.ImageInfoBoxText, "Hellooooo!", .{
+        .position = .percent(0.2, 0.7),
+    }, .{
+        .font = .ROBOTO_REGULAR,
+        .fontSize = 20,
+        .textColor = Color.white,
+    }) }, null);
+
     try self.layout.addChild(.{ .Texture = .init(
         null,
         .STEP_1_INACTIVE,
@@ -401,6 +409,8 @@ fn initializeBackground(self: *FilePickerUI) !void {
         },
         .lineSpacing = -5,
     }, null, .{ .wordWrap = true }) }, null);
+
+    // try self.layout.addChild(.{ .View =  }, null)
 
     try self.layout.addChild(.{ .Textbox = .init(self.allocator, "Ubuntu 24.04 LTS.iso", .{
         .position = .percent(1, 1),
@@ -692,8 +702,7 @@ fn handleIsoFilePathChanged(self: *FilePickerUI, event: ComponentEvent) !EventRe
     if (data.newPath.len > 0) {
         self.updateIsoPathState(data.newPath);
         const displayName = extractDisplayName(data.newPath);
-        const payloadPtr: *const anyopaque = @ptrCast(displayName.ptr);
-        self.layout.emitEvent(.create(.TextChangedEvent, .ImageInfoBoxText, payloadPtr, @ptrCast(@constCast(displayName))));
+        self.layout.emitEvent(.{ .TextChanged = .{ .target = .ImageInfoBoxText, .text = displayName } });
         self.updateIsoTitle(displayName);
     } else {
         self.resetIsoTitle();
