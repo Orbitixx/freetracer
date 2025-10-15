@@ -174,11 +174,12 @@ const AppManager = struct {
         try EventManager.init(self.allocator);
         defer EventManager.deinit();
 
-        try UpdateManager.init(self.allocator);
-        defer UpdateManager.deinit();
+        // TODO: Remember to undo
+        // try UpdateManager.init(self.allocator);
+        // defer UpdateManager.deinit();
 
         // Belongs in WindowManager maybe?
-        self.globalTransform = .{
+        self.globalTransform = Transform{
             .x = 0,
             .y = 0,
             .w = WindowManager.getWindowWidth(),
@@ -191,37 +192,7 @@ const AppManager = struct {
         };
         self.globalTransform.resolve();
 
-        // var globalTransform: Transform = .{ .size = .pixels(WindowManager.getWindowWidth(), WindowManager.getWindowHeight()) };
-        // _ = globalTransform.resolve();
-        //
-        // var view = View.init(
-        //     self.allocator,
-        //     .{
-        //         .relativeRef = &globalTransform,
-        //         .position = .{ .x = .percent(0.2), .y = .percent(0.45) },
-        //         .size = .{ .width = .pixels(150), .height = .pixels(100) },
-        //     },
-        //     Rectangle{
-        //         .transform = .{},
-        //         .style = .{ .color = UI.Styles.Color.red },
-        //     },
-        // );
-        // defer view.deinit();
-        //
-        // try view.addChild(.{ .View = View.init(
-        //     self.allocator,
-        //     .{
-        //         .relativeRef = &view.transform,
-        //         .position = .{ .x = .percent(0.25), .y = .percent(0.55) },
-        //         .size = .{ .width = .pixels(150), .height = .pixels(100) },
-        //     },
-        //     Rectangle{
-        //         .transform = .{},
-        //         .style = .{ .color = UI.Styles.Color.blueGray },
-        //     },
-        // ) });
-        //
-        // try view.start();
+        Debug.log(.DEBUG, "Global Transform set: {any}", .{self.globalTransform});
 
         //----------------------------------------------------------------------------------
         //--- @END MANAGERS ----------------------------------------------------------------
@@ -351,10 +322,6 @@ const AppManager = struct {
 
             // UpdateManager.draw();
             try componentRegistry.drawAll();
-
-            // view.transform.position.x.px = view.transform.position.x.px + 0.5;
-            // try view.update();
-            // try view.draw();
 
             rl.endDrawing();
 

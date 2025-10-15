@@ -67,10 +67,25 @@ pub fn addChildNamed(self: *View, id: []const u8, child: UIElement, relative: Re
     // Append, then map the ID -> index (dup the string to own it)
     try self.children.append(self.allocator, mutableChild);
     const idx = self.children.items.len - 1;
-
     const owned = try self.allocator.dupe(u8, id);
 
     try self.idMap.put(owned, idx);
+}
+
+pub fn addChildWithRelative(self: *View, child: UIElement, relative: RelativeRef) !void {
+    var mutableChild = child;
+
+    switch (mutableChild) {
+        inline else => |*el| {
+            el.transform.relativeRef = null; // ignore legacy pointer
+            el.transform.relative = relative;
+            // Resolver context will be rebound in start(); set a provisional one now:
+            el.transform._resolver_ctx = self;
+            el.transform._resolver_fn = resolveRelative;
+        },
+    }
+
+    try self.children.append(self.allocator, mutableChild);
 }
 
 pub fn start(self: *View) !void {
@@ -82,6 +97,12 @@ pub fn start(self: *View) !void {
     self.layoutSelf();
 
     for (self.children.items) |*child| {
+        switch (child.*) {
+            inline else => |*el| {
+                el.transform._resolver_ctx = self;
+                el.transform._resolver_fn = resolveRelative;
+            },
+        }
         try child.start();
     }
 }
@@ -131,7 +152,7 @@ pub fn emitEvent(self: *View, event: UIEvent) void {
 }
 
 fn layoutSelf(self: *View) void {
-    _ = self.transform.resolve();
+    self.transform.resolve();
 
     if (self.background) |*bg| {
         bg.transform = self.transform;

@@ -1,6 +1,10 @@
 pub const Rectangle = @import("./Rectangle.zig");
 pub const Transform = @import("./Transform.zig");
 
+pub const Builder = @import("./Builder.zig");
+pub const ElementChain = Builder.ElementChain;
+pub const UIChain = Builder.UIChain;
+
 pub const View = @import("./View.zig");
 pub const Text = @import("./Text.zig");
 pub const Textbox = @import("./Textbox.zig");

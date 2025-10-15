@@ -1,9 +1,10 @@
-const UIEvent = @import("./UIEvent.zig").UIEvent;
-
-const View = @import("./View.zig");
-const Text = @import("./Text.zig");
-const Textbox = @import("./Textbox.zig");
-const Texture = @import("./Texture.zig");
+const UIFramework = @import("./import.zig");
+const Transform = UIFramework.Transform;
+const View = UIFramework.View;
+const Text = UIFramework.Text;
+const Textbox = UIFramework.Textbox;
+const Texture = UIFramework.Texture;
+const UIEvent = UIFramework.UIEvent;
 
 pub const UIElement = union(enum) {
     View: View,
@@ -41,5 +42,15 @@ pub const UIElement = union(enum) {
         switch (self.*) {
             inline else => |*element| @constCast(element).onEvent(event),
         }
+    }
+
+    pub fn transformPtr(self: *UIElement) *Transform {
+        return switch (self.*) {
+            .View => |*v| &v.transform,
+            .Text => |*t| &t.transform,
+            .Textbox => |*tb| &tb.transform,
+            .Texture => |*tex| &tex.transform,
+            // inline else => unreachable,
+        };
     }
 };

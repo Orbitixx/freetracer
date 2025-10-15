@@ -37,6 +37,7 @@ const Textbox = DeprecatedUI.Textbox;
 
 const UIFramework = @import("../ui/framework/import.zig");
 const View = UIFramework.View;
+const UIChain = UIFramework.UIChain;
 // const TransformPro = UIFramework.Transform;
 
 const Styles = DeprecatedUI.Styles;
@@ -360,19 +361,111 @@ fn initializeBackground(self: *FilePickerUI) !void {
         .bordered = true,
     };
 
-    self.layout = View.init(
-        self.allocator,
-        null,
-        .{
-            .position = .percent(AppConfig.APP_UI_MODULE_PANEL_FILE_PICKER_X, AppConfig.APP_UI_MODULE_PANEL_Y),
-            .size = .percent(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE, AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
-            .relative = null,
-            .position_ref = null,
-            .size_ref = null,
-            .relativeRef = try AppManager.getGlobalTransform(), // still fine (legacy)
+    // self.layout = View.init(
+    //     self.allocator,
+    //     null,
+    //     .{
+    //         .position = .percent(AppConfig.APP_UI_MODULE_PANEL_FILE_PICKER_X, AppConfig.APP_UI_MODULE_PANEL_Y),
+    //         .size = .percent(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE, AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
+    //         .relative = null,
+    //         .position_ref = null,
+    //         .size_ref = null,
+    //         .relativeRef = try AppManager.getGlobalTransform(), // still fine (legacy)
+    //     },
+    //     .{
+    //         .transform = .{},
+    //         .style = .{
+    //             .color = Color.themeSectionBg,
+    //             .borderStyle = .{ .color = Color.themeSectionBorder },
+    //         },
+    //         .rounded = true,
+    //         .bordered = true,
+    //     },
+    // );
+    //
+    // try self.layout.addChildNamed(
+    //     "step_icon",
+    //     .{ .Texture = .init(
+    //         null,
+    //         .STEP_1_INACTIVE,
+    //         .{ .position = .percent(0.05, 0.03), .scale = 0.5 },
+    //         null,
+    //     ) },
+    //     .Parent,
+    // );
+    //
+    // try self.layout.addChildNamed("header", .{
+    //     .Textbox = .init(self.allocator, DEFAULT_SECTION_HEADER, .{
+    //         .position = .percent(1, 0),
+    //         .position_ref = .{ .NodeId = "step_icon" },
+    //         .size = .percent(0.8, 0.1),
+    //         .size_ref = .Parent,
+    //         .offset_x = 10,
+    //         .offset_y = -2,
+    //     }, .{
+    //         .background = .{
+    //             .color = Color.transparent,
+    //             .borderStyle = .{ .color = Color.transparent, .thickness = 0 },
+    //             .roundness = 0,
+    //         },
+    //         .text = .{ .font = .JERSEY10_REGULAR, .fontSize = 34, .textColor = Color.white },
+    //         .lineSpacing = -5,
+    //     }, null, .{ .wordWrap = true }),
+    // }, .Parent);
+    //
+    // // self.layout.children.items[self.layout.children.items.len - 1].Textbox.transform.offset_x = 10;
+    //
+    // try self.layout.addChildNamed("file_name", .{
+    //     .Textbox = .init(self.allocator, "Ubuntu 24.04 LTS.iso", .{
+    //         .position = .percent(0.2, 0.5),
+    //         .position_ref = .Parent,
+    //         .size = .percent(0.8, 0.1),
+    //         .size_ref = .Parent,
+    //     }, .{
+    //         .background = .{
+    //             .color = Color.transparent,
+    //             .borderStyle = .{ .color = Color.transparent, .thickness = 0 },
+    //             .roundness = 0,
+    //         },
+    //         .text = .{ .font = .ROBOTO_REGULAR, .fontSize = 20, .textColor = Color.offWhite },
+    //         .lineSpacing = -5,
+    //     }, null, .{ .wordWrap = true }),
+    // }, .Parent);
+    //
+    // try self.layout.start();
+
+    const headerStyle: UIFramework.Textbox.TextboxStyle = .{
+        .background = .{ .color = Color.transparent, .borderStyle = .{ .color = Color.transparent, .thickness = 0 }, .roundness = 0 },
+        .text = .{ .font = .JERSEY10_REGULAR, .fontSize = 34, .textColor = Color.white },
+        .lineSpacing = -5,
+    };
+    const imageInfoTextboxStyle: UIFramework.Textbox.TextboxStyle = .{
+        .background = .{
+            .color = Color.transparent,
+            .borderStyle = .{
+                .color = Color.transparent,
+                .thickness = 0,
+            },
+            .roundness = 0,
         },
-        .{
-            .transform = .{},
+        .text = .{ .font = .ROBOTO_REGULAR, .fontSize = 20, .textColor = Color.offWhite },
+        .lineSpacing = -5,
+    };
+
+    var ui = UIChain.init(self.allocator);
+
+    Debug.log(.DEBUG, "GlobalTransform: {any}", .{try AppManager.getGlobalTransform()});
+
+    self.layout = try ui.view(.{
+        .id = null,
+        .position = .percent(AppConfig.APP_UI_MODULE_PANEL_FILE_PICKER_X, AppConfig.APP_UI_MODULE_PANEL_Y),
+        .size = .percent(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE, AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
+        .relativeRef = try AppManager.getGlobalTransform(), // legacy root ref
+        .background = .{
+            .transform = .{
+                .position_ref = null,
+                .relative = null,
+            },
             .style = .{
                 .color = Color.themeSectionBg,
                 .borderStyle = .{ .color = Color.themeSectionBorder },
@@ -380,58 +473,37 @@ fn initializeBackground(self: *FilePickerUI) !void {
             .rounded = true,
             .bordered = true,
         },
-    );
+    }).children(.{
+        //
+        ui.texture(.STEP_1_INACTIVE)
+            .id("header_icon")
+            .position(.percent(0.05, 0.03))
+            .positionRef(.Parent)
+            .scale(0.5),
 
-    try self.layout.addChildNamed(
-        "step_icon",
-        .{ .Texture = .init(
-            null,
-            .STEP_1_INACTIVE,
-            .{ .position = .percent(0.05, 0.03), .scale = 0.5 },
-            null,
-        ) },
-        .Parent,
-    );
+        ui.textbox(DEFAULT_SECTION_HEADER, headerStyle, UIFramework.Textbox.Params{ .wordWrap = true })
+            .id("header_textbox")
+            .position(.percent(1, 0))
+            .offset(10, -4)
+            .positionRef(.{ .NodeId = "header_icon" })
+            .size(.percent(0.8, 0.1))
+            .sizeRef(.Parent),
 
-    try self.layout.addChildNamed("header", .{
-        .Textbox = .init(self.allocator, DEFAULT_SECTION_HEADER, .{
-            .position = .percent(1, 0),
-            .position_ref = .{ .NodeId = "step_icon" },
-            .size = .percent(0.8, 0.1),
-            .size_ref = .Parent,
-            .offset_x = 10,
-            .offset_y = -2,
-        }, .{
-            .background = .{
-                .color = Color.transparent,
-                .borderStyle = .{ .color = Color.transparent, .thickness = 0 },
-                .roundness = 0,
-            },
-            .text = .{ .font = .JERSEY10_REGULAR, .fontSize = 34, .textColor = Color.white },
-            .lineSpacing = -5,
-        }, null, .{ .wordWrap = true }),
-    }, .Parent);
+        ui.textbox("Ubuntu 24.04 LTS.iso", imageInfoTextboxStyle, UIFramework.Textbox.Params{ .wordWrap = true })
+            .id("image_info_textbox")
+            .position(.percent(0, 0))
+            .positionRef(.Parent)
+            .size(.percent(0.9, 0.1))
+            .sizeRef(.Parent),
+    });
 
-    // self.layout.children.items[self.layout.children.items.len - 1].Textbox.transform.offset_x = 10;
-
-    try self.layout.addChildNamed("file_name", .{
-        .Textbox = .init(self.allocator, "Ubuntu 24.04 LTS.iso", .{
-            .position = .percent(0.2, 0.5),
-            .position_ref = .Parent,
-            .size = .percent(0.8, 0.1),
-            .size_ref = .Parent,
-        }, .{
-            .background = .{
-                .color = Color.transparent,
-                .borderStyle = .{ .color = Color.transparent, .thickness = 0 },
-                .roundness = 0,
-            },
-            .text = .{ .font = .ROBOTO_REGULAR, .fontSize = 20, .textColor = Color.offWhite },
-            .lineSpacing = -5,
-        }, null, .{ .wordWrap = true }),
-    }, .Parent);
-
+    self.layout.transform.position_ref = null;
+    self.layout.transform.relative = null;
+    self.layout.transform.size_ref = null;
+    self.layout.transform.relativeRef = try AppManager.getGlobalTransform();
     try self.layout.start();
+
+    Debug.log(.DEBUG, "View transform: {any}", .{self.layout.transform});
 }
 
 fn initializeHeader(self: *FilePickerUI) void {
