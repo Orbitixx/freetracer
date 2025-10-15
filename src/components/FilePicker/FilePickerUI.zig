@@ -38,6 +38,7 @@ const Textbox = DeprecatedUI.Textbox;
 const UIFramework = @import("../ui/framework/import.zig");
 const View = UIFramework.View;
 const UIChain = UIFramework.UIChain;
+
 // const TransformPro = UIFramework.Transform;
 
 const Styles = DeprecatedUI.Styles;
@@ -185,7 +186,7 @@ pub fn update(self: *FilePickerUI) !void {
     if (!self.readIsActive()) return;
 
     try self.layout.update();
-    self.dropzone.update();
+    // self.dropzone.update();
     try self.button.update();
     // try self.confirmButton.update();
 }
@@ -282,7 +283,7 @@ fn panelModeFor(isActive: bool) PanelMode {
 }
 
 fn drawActive(self: *FilePickerUI) !void {
-    self.dropzone.draw();
+    // self.dropzone.draw();
     // try self.imageInfoBox.draw();
     try self.button.draw();
 }
@@ -452,9 +453,13 @@ fn initializeBackground(self: *FilePickerUI) !void {
         .lineSpacing = -5,
     };
 
+    // const fileDropzoneStyle = "";
+
     var ui = UIChain.init(self.allocator);
 
     Debug.log(.DEBUG, "GlobalTransform: {any}", .{try AppManager.getGlobalTransform()});
+
+    // const dropzone_node_id = std.mem.span("file_picker_dropzone");
 
     self.layout = try ui.view(.{
         .id = null,
@@ -481,23 +486,53 @@ fn initializeBackground(self: *FilePickerUI) !void {
         ui.textbox(DEFAULT_SECTION_HEADER, headerStyle, UIFramework.Textbox.Params{ .wordWrap = true })
             .id("header_textbox")
             .position(.percent(1, 0))
-            .offset(10, -4)
+            .offset(10, -2)
             .positionRef(.{ .NodeId = "header_icon" })
             .size(.percent(0.8, 0.1))
             .sizeRef(.Parent),
 
+        ui.fileDropzone(.{
+            .identifier = .FilePickerFileDropzone,
+            .icon = .DOC_IMAGE,
+            .callbacks = .{
+                .onClick = .{
+                    .function = FilePicker.dispatchComponentActionWrapper.call,
+                    .context = self.parent,
+                },
+                .onDrop = .{
+                    .function = FilePicker.HandleFileDropWrapper.call,
+                    .context = self.parent,
+                },
+            },
+        }).id("file_picker_dropzone")
+            .position(.percent(0, 1))
+            .offset(0, 15)
+            .positionRef(.{ .NodeId = "header_icon" })
+            .size(.percent(0.9, 0.25)),
+
+        ui.view(.{
+            .position = .percent(0, 1),
+            .position_ref = .{ .NodeId = "file_picker_dropzone" },
+            .size = .percent(0.9, 0.25),
+            .size_ref = .Parent,
+            .background = .{
+                .transform = .{},
+                .style = .{
+                    .color = Color.themeDark,
+                },
+            },
+        }).id("image_info_box")
+            .positionRef(.{ .NodeId = "file_picker_dropzone" })
+            .sizeRef(.Parent),
+
         ui.textbox("Ubuntu 24.04 LTS.iso", imageInfoTextboxStyle, UIFramework.Textbox.Params{ .wordWrap = true })
             .id("image_info_textbox")
-            .position(.percent(0, 0))
-            .positionRef(.Parent)
-            .size(.percent(0.9, 0.1))
-            .sizeRef(.Parent),
+            .position(.percent(0.25, 1))
+            .offset(0, 15)
+            .positionRef(.{ .NodeId = "file_picker_dropzone" })
+            .size(.percent(0.9, 0.1)),
     });
 
-    // self.layout.transform.position_ref = null;
-    // self.layout.transform.relative = null;
-    // self.layout.transform.size_ref = null;
-    // self.layout.transform.relativeRef = try AppManager.getGlobalTransform();
     try self.layout.start();
 
     Debug.log(.DEBUG, "View transform: {any}", .{self.layout.transform});

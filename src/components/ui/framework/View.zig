@@ -54,7 +54,7 @@ pub fn addChild(self: *View, child: UIElement, relativeTransform: ?*Transform) !
 pub fn addChildNamed(self: *View, id: []const u8, child: UIElement, relative: RelativeRef) !void {
     var mutableChild = child;
 
-    // 1) install resolver context and relative ref
+    // Set resolver context and relative ref
     switch (mutableChild) {
         inline else => |*el| {
             el.transform.relativeRef = null; // ignore legacy path for this child
@@ -90,9 +90,6 @@ pub fn addChildWithRelative(self: *View, child: UIElement, relative: RelativeRef
 
 pub fn start(self: *View) !void {
     Debug.log(.DEBUG, "View start() called.", .{});
-
-    self.transform._resolver_ctx = self;
-    self.transform._resolver_fn = resolveRelative;
 
     self.layoutSelf();
 

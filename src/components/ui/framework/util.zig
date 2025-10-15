@@ -32,6 +32,7 @@ pub fn getTransformOf(el: *const UIElement) *const Transform {
         .Text => |*t| &t.transform,
         .Textbox => |*tb| &tb.transform,
         .Texture => |*tex| &tex.transform,
+        .FileDropzone => |*fdz| &fdz.transform,
         // inline else => unreachable, // extend as you add kinds
     };
 }

@@ -4,6 +4,7 @@ const View = UIFramework.View;
 const Text = UIFramework.Text;
 const Textbox = UIFramework.Textbox;
 const Texture = UIFramework.Texture;
+const FileDropzone = UIFramework.FileDropzone;
 const UIEvent = UIFramework.UIEvent;
 
 pub const UIElement = union(enum) {
@@ -11,6 +12,7 @@ pub const UIElement = union(enum) {
     Text: Text,
     Textbox: Textbox,
     Texture: Texture,
+    FileDropzone: FileDropzone,
     // Button: Button,
     // SpriteButton: SpriteButton,
 
@@ -50,6 +52,7 @@ pub const UIElement = union(enum) {
             .Text => |*t| &t.transform,
             .Textbox => |*tb| &tb.transform,
             .Texture => |*tex| &tex.transform,
+            .FileDropzone => |*fdz| &fdz.transform,
             // inline else => unreachable,
         };
     }

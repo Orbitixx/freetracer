@@ -1,4 +1,5 @@
 pub const UIElementIdentifier = enum(u8) {
+    FilePickerFileDropzone,
     ImageInfoBoxText,
 };
 

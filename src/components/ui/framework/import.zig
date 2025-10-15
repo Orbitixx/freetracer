@@ -9,6 +9,7 @@ pub const View = @import("./View.zig");
 pub const Text = @import("./Text.zig");
 pub const Textbox = @import("./Textbox.zig");
 pub const Texture = @import("./Texture.zig");
+pub const FileDropzone = @import("./FileDropzone.zig");
 
 pub const UIElement = @import("./UIElement.zig").UIElement;
 pub const UIEvent = @import("./UIEvent.zig").UIEvent;

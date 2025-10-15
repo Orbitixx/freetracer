@@ -10,6 +10,7 @@ const View = UIFramework.View;
 const Text = UIFramework.Text;
 const Textbox = UIFramework.Textbox;
 const Texture = UIFramework.Texture;
+const FileDropzone = UIFramework.FileDropzone;
 
 const UIElementIdentifier = UIFramework.UIElementIdentifier;
 
@@ -159,7 +160,9 @@ pub const UIChain = struct {
     pub const ViewConfig = struct {
         id: ?UIElementIdentifier = null,
         position: PositionSpec = .{},
+        position_ref: ?RelativeRef = null,
         size: SizeSpec = .{},
+        size_ref: ?RelativeRef = null,
         relativeRef: ?*const Transform = null,
         relative: ?RelativeRef = null,
         background: ?Rectangle = null,
@@ -168,7 +171,9 @@ pub const UIChain = struct {
     pub fn view(self: UIChain, cfg: ViewConfig) ElementChain {
         var t: Transform = .{};
         t.position = cfg.position;
+        t.position_ref = cfg.position_ref;
         t.size = cfg.size;
+        t.size_ref = cfg.size_ref;
         t.relativeRef = cfg.relativeRef;
         t.relative = cfg.relative;
         return .{
@@ -190,5 +195,10 @@ pub const UIChain = struct {
     pub fn textbox(self: UIChain, value: [:0]const u8, style: anytype, options: anytype) ElementChain {
         const tb = Textbox.init(self.allocator, value, .{}, style, null, options);
         return .{ .allocator = self.allocator, .el = UIElement{ .Textbox = tb } };
+    }
+
+    pub fn fileDropzone(self: UIChain, cfg: FileDropzone.Config) ElementChain {
+        const dz = FileDropzone.init(cfg);
+        return .{ .allocator = self.allocator, .el = UIElement{ .FileDropzone = dz } };
     }
 };
