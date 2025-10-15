@@ -3,12 +3,11 @@ const rl = @import("raylib");
 
 const Debug = @import("freetracer-lib").Debug;
 
-const Transform = @import("./Transform.zig");
-const Rectangle = @import("./Rectangle.zig");
-
-const Event = @import("./UIEvent.zig");
-const UIEvent = Event.UIEvent;
-const UIElementIdentifier = Event.UIElementIdentifier;
+const UIFramework = @import("./import.zig");
+const Transform = UIFramework.Transform;
+const Rectangle = UIFramework.Rectangle;
+const UIEvent = UIFramework.UIEvent;
+const UIElementIdentifier = UIFramework.UIElementIdentifier;
 
 const Styles = @import("../Styles.zig");
 const RectangleStyle = Styles.RectangleStyle;

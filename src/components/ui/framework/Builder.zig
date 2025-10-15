@@ -187,6 +187,11 @@ pub const UIChain = struct {
         };
     }
 
+    pub fn rectangle(self: UIChain, config: Rectangle.Config) ElementChain {
+        const rect = Rectangle.init(.{}, config);
+        return .{ .allocator = self.allocator, .el = UIElement{ .Rectangle = rect } };
+    }
+
     pub fn texture(self: UIChain, resource: anytype) ElementChain {
         const tex = Texture.init(null, resource, .{}, null);
         return .{ .allocator = self.allocator, .el = UIElement{ .Texture = tex } };

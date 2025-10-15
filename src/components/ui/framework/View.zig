@@ -112,7 +112,7 @@ pub fn update(self: *View) !void {
 }
 
 pub fn draw(self: *View) !void {
-    if (self.background) |*bg| bg.draw();
+    if (self.background) |*bg| try bg.draw();
 
     for (self.children.items) |*child| {
         try child.draw();

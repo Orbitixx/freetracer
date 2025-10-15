@@ -1,5 +1,6 @@
 const UIFramework = @import("./import.zig");
 const Transform = UIFramework.Transform;
+const Rectangle = UIFramework.Rectangle;
 const View = UIFramework.View;
 const Text = UIFramework.Text;
 const Textbox = UIFramework.Textbox;
@@ -8,6 +9,7 @@ const FileDropzone = UIFramework.FileDropzone;
 const UIEvent = UIFramework.UIEvent;
 
 pub const UIElement = union(enum) {
+    Rectangle: Rectangle,
     View: View,
     Text: Text,
     Textbox: Textbox,
@@ -48,12 +50,12 @@ pub const UIElement = union(enum) {
 
     pub fn transformPtr(self: *UIElement) *Transform {
         return switch (self.*) {
-            .View => |*v| &v.transform,
-            .Text => |*t| &t.transform,
-            .Textbox => |*tb| &tb.transform,
-            .Texture => |*tex| &tex.transform,
-            .FileDropzone => |*fdz| &fdz.transform,
-            // inline else => unreachable,
+            // .View => |*v| &v.transform,
+            // .Text => |*t| &t.transform,
+            // .Textbox => |*tb| &tb.transform,
+            // .Texture => |*tex| &tex.transform,
+            // .FileDropzone => |*fdz| &fdz.transform,
+            inline else => |*el| &el.transform,
         };
     }
 };

@@ -510,27 +510,21 @@ fn initializeBackground(self: *FilePickerUI) !void {
             .positionRef(.{ .NodeId = "header_icon" })
             .size(.percent(0.9, 0.25)),
 
-        ui.view(.{
-            .position = .percent(0, 1),
-            .position_ref = .{ .NodeId = "file_picker_dropzone" },
-            .size = .percent(0.9, 0.25),
-            .size_ref = .Parent,
-            .background = .{
-                .transform = .{},
-                .style = .{
-                    .color = Color.themeDark,
-                },
-            },
-        }).id("image_info_box")
+        ui.rectangle(.{ .style = .{
+            .color = Color.themeDark,
+        } }).id("image_info_bg")
+            .position(.percent(0, 1))
+            .offset(0, 15)
             .positionRef(.{ .NodeId = "file_picker_dropzone" })
+            .size(.percent(0.9, 0.25))
             .sizeRef(.Parent),
 
         ui.textbox("Ubuntu 24.04 LTS.iso", imageInfoTextboxStyle, UIFramework.Textbox.Params{ .wordWrap = true })
             .id("image_info_textbox")
-            .position(.percent(0.25, 1))
-            .offset(0, 15)
-            .positionRef(.{ .NodeId = "file_picker_dropzone" })
-            .size(.percent(0.9, 0.1)),
+            .position(.percent(0.2, 0.25))
+            .positionRef(.{ .NodeId = "image_info_bg" })
+            .size(.percent(0.8, 0.5))
+            .sizeRef(.{ .NodeId = "image_info_bg" }),
     });
 
     try self.layout.start();

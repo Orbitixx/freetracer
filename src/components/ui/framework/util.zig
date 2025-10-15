@@ -28,11 +28,12 @@ pub fn resolveRelative(ctx: *const anyopaque, ref: RelativeRef) rl.Rectangle {
 /// Extract a *const Transform from any UIElement (no recursion).
 pub fn getTransformOf(el: *const UIElement) *const Transform {
     return switch (el.*) {
-        .View => |*v| &v.transform,
-        .Text => |*t| &t.transform,
-        .Textbox => |*tb| &tb.transform,
-        .Texture => |*tex| &tex.transform,
-        .FileDropzone => |*fdz| &fdz.transform,
-        // inline else => unreachable, // extend as you add kinds
+        // .View => |*v| &v.transform,
+        // .Text => |*t| &t.transform,
+        // .Textbox => |*tb| &tb.transform,
+        // .Texture => |*tex| &tex.transform,
+        // .FileDropzone => |*fdz| &fdz.transform,
+        // inline else => unreachable,
+        inline else => |*concrete| &concrete.transform,
     };
 }

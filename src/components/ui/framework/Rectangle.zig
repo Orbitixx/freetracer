@@ -1,10 +1,19 @@
 const rl = @import("raylib");
 
-const Transform = @import("./Transform.zig");
+const UIFramework = @import("./import.zig");
+const Transform = UIFramework.Transform;
+const UIEvent = UIFramework.UIEvent;
 
 const Styles = @import("../Styles.zig");
 const TextStyle = Styles.TextStyle;
 const RectangleStyle = Styles.RectangleStyle;
+
+pub const Config = struct {
+    identifier: ?UIFramework.UIElementIdentifier = null,
+    style: RectangleStyle = .{},
+    rounded: bool = false,
+    bordered: bool = false,
+};
 
 const Rectangle = @This();
 
@@ -13,14 +22,29 @@ rounded: bool = false,
 bordered: bool = false,
 style: RectangleStyle = .{},
 
-pub fn draw(self: *Rectangle) void {
+pub fn init(transform: Transform, config: Config) Rectangle {
+    return .{
+        .transform = transform,
+        .rounded = config.rounded,
+        .bordered = config.bordered,
+        .style = config.style,
+    };
+}
+
+pub fn start(self: *Rectangle) !void {
+    self.transform.resolve();
+}
+
+pub fn update(self: *Rectangle) !void {
+    self.transform.resolve();
+}
+
+pub fn draw(self: *Rectangle) !void {
     //
     if (self.rounded) {
         self.drawRounded();
         return;
     }
-
-    self.transform.resolve();
 
     const bakedRect = rl.Rectangle{
         .x = self.transform.x,
@@ -45,9 +69,12 @@ pub fn draw(self: *Rectangle) void {
     }
 }
 
-fn drawRounded(self: *Rectangle) void {
-    self.transform.resolve();
+pub fn onEvent(self: *Rectangle, event: UIEvent) void {
+    _ = self;
+    _ = event;
+}
 
+fn drawRounded(self: *Rectangle) void {
     const bakedRect = rl.Rectangle{
         .x = self.transform.x,
         .y = self.transform.y,
@@ -73,4 +100,8 @@ fn drawRounded(self: *Rectangle) void {
     }
 
     return;
+}
+
+pub fn deinit(self: *Rectangle) void {
+    _ = self;
 }

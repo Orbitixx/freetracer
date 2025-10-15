@@ -71,7 +71,7 @@ pub fn update(self: *Textbox) !void {
 }
 
 pub fn draw(self: *Textbox) !void {
-    if (self.background) |*bg| bg.draw();
+    if (self.background) |*bg| try bg.draw();
 
     drawTextBoxed(
         self.font,
