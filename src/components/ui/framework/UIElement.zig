@@ -6,6 +6,7 @@ const Text = UIFramework.Text;
 const Textbox = UIFramework.Textbox;
 const Texture = UIFramework.Texture;
 const FileDropzone = UIFramework.FileDropzone;
+const SpriteButton = UIFramework.SpriteButton;
 const UIEvent = UIFramework.UIEvent;
 
 pub const UIElement = union(enum) {
@@ -15,6 +16,7 @@ pub const UIElement = union(enum) {
     Textbox: Textbox,
     Texture: Texture,
     FileDropzone: FileDropzone,
+    SpriteButton: SpriteButton,
     // Button: Button,
     // SpriteButton: SpriteButton,
 

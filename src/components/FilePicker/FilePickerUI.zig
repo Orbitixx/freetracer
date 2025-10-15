@@ -525,6 +525,28 @@ fn initializeBackground(self: *FilePickerUI) !void {
             .positionRef(.{ .NodeId = "image_info_bg" })
             .size(.percent(0.8, 0.5))
             .sizeRef(.{ .NodeId = "image_info_bg" }),
+
+        ui.spriteButton(.{
+            .text = "Confirm",
+            .texture = .BUTTON_FRAME,
+            .callbacks = .{
+                .onClick = .{
+                    .function = FilePickerUI.ConfirmButtonClickHandler.call,
+                    .context = self,
+                },
+            },
+            .style = .{
+                .font = .JERSEY10_REGULAR,
+                .fontSize = 24,
+                .textColor = Color.themePrimary,
+                .tint = Color.themePrimary,
+                .hoverTint = Color.themeTertiary,
+                .hoverTextColor = Color.themeTertiary,
+            },
+        }).position(.percent(0.7, 0.85))
+            .positionRef(.Parent)
+            .size(.percent(0.1, 0.05))
+            .sizeRef(.Parent),
     });
 
     try self.layout.start();
@@ -542,45 +564,6 @@ fn initializeHeader(self: *FilePickerUI) void {
         .fontSize = 34,
         .textColor = Color.white,
     });
-    // TODO: To remove
-    // self.stepTexture = DeprecatedUI.Texture.init(.STEP_1_INACTIVE, .{
-    //     .x = self.bgRect.transform.relX(0.05),
-    //     .y = self.bgRect.transform.relY(0.01),
-    // });
-
-    // self.stepTexture.transform.scale = 0.5;
-    // TODO: To remove
-    // self.header = .{
-    //     .textboxFrame = Bounds.relative(
-    //         &self.bgRect.transform,
-    //         PositionSpec.percent(0.14, 0),
-    //         .{
-    //             .width = UnitValue.mix(1.0, -48),
-    //             .height = UnitValue.percent(0.25),
-    //         },
-    //     ),
-    //
-    //     .textbox = Textbox.init(
-    //         &self.header.textboxFrame,
-    //         "Select image",
-    //         .{
-    //             .background = .{
-    //                 .color = Color.transparent,
-    //                 .borderStyle = .{ .color = Color.transparent, .thickness = 0 },
-    //                 .roundness = 0,
-    //             },
-    //             .text = .{
-    //                 .font = .JERSEY10_REGULAR,
-    //                 .fontSize = 34,
-    //                 .textColor = Color.white,
-    //             },
-    //             .padding = Padding.uniform(Spacing.xs),
-    //             .lineSpacing = -5,
-    //         },
-    //         .{ .wordWrap = true },
-    //         self.allocator,
-    //     ),
-    // };
 }
 
 fn initializeDropzone(self: *FilePickerUI) void {
@@ -606,34 +589,6 @@ fn initializeDropzone(self: *FilePickerUI) void {
 
 fn initializeImageInfoBox(self: *FilePickerUI) !void {
     _ = self;
-
-    // const textboxFrame = Bounds.relative(&self.dropzoneFrame.resolve(), PositionSpec.mix(.percent(0), .percent(1.10)), .percent(1.0, 1.0));
-
-    // self.imageInfoBox = ImageInfoBox{
-    //     .textboxFrame = textboxFrame,
-    //     .textbox = Textbox.init(
-    //         &self.imageInfoBox.textboxFrame,
-    //         "Ubuntu 24.04 LTS.iso",
-    //         .{
-    //             .background = .{
-    //                 .color = Color.transparent,
-    //                 .borderStyle = .{
-    //                     .color = Color.transparent,
-    //                     .thickness = 0,
-    //                 },
-    //                 .roundness = 0,
-    //             },
-    //             .lineSpacing = 1,
-    //             .text = .{
-    //                 .font = .ROBOTO_REGULAR,
-    //                 .fontSize = 16,
-    //                 .textColor = Color.lightGray,
-    //             },
-    //         },
-    //         .{ .wordWrap = true },
-    //         self.allocator,
-    //     ),
-    // };
 }
 
 fn initializeButton(self: *FilePickerUI) !void {

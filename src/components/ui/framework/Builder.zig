@@ -11,6 +11,7 @@ const Text = UIFramework.Text;
 const Textbox = UIFramework.Textbox;
 const Texture = UIFramework.Texture;
 const FileDropzone = UIFramework.FileDropzone;
+const SpriteButton = UIFramework.SpriteButton;
 
 const UIElementIdentifier = UIFramework.UIElementIdentifier;
 
@@ -205,5 +206,10 @@ pub const UIChain = struct {
     pub fn fileDropzone(self: UIChain, cfg: FileDropzone.Config) ElementChain {
         const dz = FileDropzone.init(cfg);
         return .{ .allocator = self.allocator, .el = UIElement{ .FileDropzone = dz } };
+    }
+
+    pub fn spriteButton(self: UIChain, cfg: SpriteButton.Config) ElementChain {
+        const btn = SpriteButton.init(cfg);
+        return .{ .allocator = self.allocator, .el = UIElement{ .SpriteButton = btn } };
     }
 };
