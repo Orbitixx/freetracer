@@ -1,0 +1,45 @@
+const UIEvent = @import("./UIEvent.zig").UIEvent;
+
+const View = @import("./View.zig");
+const Text = @import("./Text.zig");
+const Textbox = @import("./Textbox.zig");
+const Texture = @import("./Texture.zig");
+
+pub const UIElement = union(enum) {
+    View: View,
+    Text: Text,
+    Textbox: Textbox,
+    Texture: Texture,
+    // Button: Button,
+    // SpriteButton: SpriteButton,
+
+    pub fn start(self: *UIElement) anyerror!void {
+        switch (self.*) {
+            inline else => |*element| try @constCast(element).start(),
+        }
+    }
+
+    pub fn update(self: *UIElement) anyerror!void {
+        switch (self.*) {
+            inline else => |*element| try @constCast(element).update(),
+        }
+    }
+
+    pub fn draw(self: *UIElement) anyerror!void {
+        switch (self.*) {
+            inline else => |*element| try @constCast(element).draw(),
+        }
+    }
+
+    pub fn deinit(self: *UIElement) void {
+        switch (self.*) {
+            inline else => |*element| @constCast(element).deinit(),
+        }
+    }
+
+    pub fn onEvent(self: *UIElement, event: UIEvent) void {
+        switch (self.*) {
+            inline else => |*element| @constCast(element).onEvent(event),
+        }
+    }
+};

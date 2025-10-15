@@ -28,7 +28,10 @@ const UI = @import("../components/ui/import/index.zig");
 const Button = @import("../components/ui/Button.zig");
 const Checkbox = @import("../components/ui/Checkbox.zig");
 const Rectangle = UI.RectanglePro;
-const Transform = @import("../components/ui/Transform.zig");
+// const Transform = @import("../components/ui/Transform.zig");
+
+const UIFramework = @import("../components/ui/framework/import.zig");
+const Transform = UIFramework.Transform;
 
 const View = @import("../components/ui/UIElement.zig").View;
 
@@ -176,7 +179,15 @@ const AppManager = struct {
 
         // Belongs in WindowManager maybe?
         self.globalTransform = .{
+            .x = 0,
+            .y = 0,
+            .w = WindowManager.getWindowWidth(),
+            .h = WindowManager.getWindowHeight(),
             .size = .pixels(WindowManager.getWindowWidth(), WindowManager.getWindowHeight()),
+            .position_ref = null,
+            .size_ref = null,
+            .relative = null,
+            .relativeRef = null,
         };
         self.globalTransform.resolve();
 
@@ -304,7 +315,8 @@ const AppManager = struct {
             //--- @UPDATE COMPONENTS -----------------------------------------------------------
             //----------------------------------------------------------------------------------
 
-            UpdateManager.update();
+            // TODO: Remember to re-enable and update Releases URI
+            // UpdateManager.update();
             try componentRegistry.updateAll();
 
             //----------------------------------------------------------------------------------
@@ -337,7 +349,7 @@ const AppManager = struct {
             // logText.value = Debug.getLatestLog();
             // logText.draw();
 
-            UpdateManager.draw();
+            // UpdateManager.draw();
             try componentRegistry.drawAll();
 
             // view.transform.position.x.px = view.transform.position.x.px + 0.5;

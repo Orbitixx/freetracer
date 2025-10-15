@@ -80,7 +80,7 @@ pub const ResourceManagerSingleton = struct {
         const jerseyFontFile = try getResourcePath(allocator, "Jersey10-Regular.ttf");
         defer allocator.free(jerseyFontFile);
 
-        const robotoRegular = try rl.loadFontEx(robotoFontFile, 32, null);
+        const robotoRegular = try rl.loadFontEx(robotoFontFile, 64, null);
         rl.setTextureFilter(robotoRegular.texture, .trilinear);
 
         const jersey10Regular = try rl.loadFontEx(jerseyFontFile, 64, null);

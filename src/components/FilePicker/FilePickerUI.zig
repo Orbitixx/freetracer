@@ -26,23 +26,22 @@ const Component = ComponentFramework.Component;
 const ComponentEvent = ComponentFramework.Event;
 const EventResult = ComponentFramework.EventResult;
 
-const UIFramework = @import("../ui/import/index.zig");
-const Panel = UIFramework.Panel;
-const Button = UIFramework.Button;
-const SpriteButton = UIFramework.SpriteButton;
-const Rectangle = UIFramework.Primitives.Rectangle;
-const Transform = UIFramework.Primitives.Transform;
-const Text = UIFramework.Primitives.Text;
-const Textbox = UIFramework.Textbox;
+const DeprecatedUI = @import("../ui/import/index.zig");
+const Panel = DeprecatedUI.Panel;
+const Button = DeprecatedUI.Button;
+const SpriteButton = DeprecatedUI.SpriteButton;
+const Rectangle = DeprecatedUI.Primitives.Rectangle;
+const Transform = DeprecatedUI.Primitives.Transform;
+const Text = DeprecatedUI.Primitives.Text;
+const Textbox = DeprecatedUI.Textbox;
 
-const UIElementFramework = @import("../ui/UIElement.zig");
-const View = UIElementFramework.View;
-const TextPro = UIElementFramework.Text;
-const TransformPro = @import("../ui/Transform.zig");
+const UIFramework = @import("../ui/framework/import.zig");
+const View = UIFramework.View;
+// const TransformPro = UIFramework.Transform;
 
-const Styles = UIFramework.Styles;
+const Styles = DeprecatedUI.Styles;
 const Color = Styles.Color;
-const Layout = UIFramework.Layout;
+const Layout = DeprecatedUI.Layout;
 const Bounds = Layout.Bounds;
 const PositionSpec = Layout.PositionSpec;
 const UnitValue = Layout.UnitValue;
@@ -51,12 +50,12 @@ const Spacing = Layout.Space;
 
 const SectionHeader = struct {
     textbox: Textbox,
-    textboxFrame: UIFramework.Layout.Bounds,
+    textboxFrame: DeprecatedUI.Layout.Bounds,
 };
 
 const ImageInfoBox = struct {
     textbox: Textbox,
-    textboxFrame: UIFramework.Layout.Bounds,
+    textboxFrame: DeprecatedUI.Layout.Bounds,
     extraText: Text = undefined,
 
     pub fn draw(self: *ImageInfoBox) !void {
@@ -71,7 +70,7 @@ const DISPLAY_NAME_SUFFIX_LEN: usize = 14;
 
 const PanelMode = struct {
     appearance: Panel.Appearance,
-    dropzoneStyle: UIFramework.FileDropzone.Style,
+    dropzoneStyle: DeprecatedUI.FileDropzone.Style,
 };
 
 // This state is mutable and can be accessed from the main UI thread (draw/update)
@@ -98,9 +97,9 @@ confirmButton: SpriteButton = undefined,
 isoTitle: Text = undefined,
 displayNameBuffer: [AppConfig.IMAGE_DISPLAY_NAME_BUFFER_LEN:0]u8 = undefined,
 header: SectionHeader = undefined,
-// stepTexture: UIFramework.Texture = undefined,
+// stepTexture: DeprecatedUI.Texture = undefined,
 dropzoneFrame: Bounds = undefined,
-dropzone: UIFramework.FileDropzone = undefined,
+dropzone: DeprecatedUI.FileDropzone = undefined,
 imageInfoBox: ImageInfoBox = undefined,
 
 layout: View = undefined,
@@ -217,7 +216,7 @@ pub const asComponent = ComponentImplementation.asComponent;
 pub const asComponentPtr = ComponentImplementation.asComponentPtr;
 pub const asInstance = ComponentImplementation.asInstance;
 
-fn dropzoneStyleActive() UIFramework.FileDropzone.Style {
+fn dropzoneStyleActive() DeprecatedUI.FileDropzone.Style {
     return .{
         .backgroundColor = Styles.Color.themeSectionBg,
         .hoverBackgroundColor = rl.Color.init(35, 39, 55, 255),
@@ -231,7 +230,7 @@ fn dropzoneStyleActive() UIFramework.FileDropzone.Style {
     };
 }
 
-fn dropzoneStyleInactive() UIFramework.FileDropzone.Style {
+fn dropzoneStyleInactive() DeprecatedUI.FileDropzone.Style {
     return .{
         .backgroundColor = rl.Color{ .r = 32, .g = 36, .b = 48, .a = 130 },
         .hoverBackgroundColor = rl.Color{ .r = 45, .g = 50, .b = 64, .a = 170 },
@@ -361,73 +360,76 @@ fn initializeBackground(self: *FilePickerUI) !void {
         .bordered = true,
     };
 
-    self.layout = View.init(self.allocator, null, .{
-        .position = .percent(AppConfig.APP_UI_MODULE_PANEL_FILE_PICKER_X, AppConfig.APP_UI_MODULE_PANEL_Y),
-        .size = .percent(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE, AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
-        .relativeRef = try AppManager.getGlobalTransform(),
-    }, .{
-        .transform = .{},
-        .style = .{
-            .color = Color.themeSectionBg,
-            .borderStyle = .{ .color = Color.themeSectionBorder },
-        },
-        .rounded = true,
-        .bordered = true,
-    });
-
-    try self.layout.addChild(.{ .Text = .init(.ImageInfoBoxText, "Hellooooo!", .{
-        .position = .percent(0.2, 0.7),
-    }, .{
-        .font = .ROBOTO_REGULAR,
-        .fontSize = 20,
-        .textColor = Color.white,
-    }) }, null);
-
-    try self.layout.addChild(.{ .Texture = .init(
+    self.layout = View.init(
+        self.allocator,
         null,
-        .STEP_1_INACTIVE,
         .{
-            .position = .percent(0.05, 0.03),
-            .scale = 0.5,
+            .position = .percent(AppConfig.APP_UI_MODULE_PANEL_FILE_PICKER_X, AppConfig.APP_UI_MODULE_PANEL_Y),
+            .size = .percent(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE, AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
+            .relative = null,
+            .position_ref = null,
+            .size_ref = null,
+            .relativeRef = try AppManager.getGlobalTransform(), // still fine (legacy)
         },
-        null,
-    ) }, null);
+        .{
+            .transform = .{},
+            .style = .{
+                .color = Color.themeSectionBg,
+                .borderStyle = .{ .color = Color.themeSectionBorder },
+            },
+            .rounded = true,
+            .bordered = true,
+        },
+    );
 
-    try self.layout.addChild(.{ .Textbox = .init(self.allocator, DEFAULT_SECTION_HEADER, .{
-        .position = .percent(0.15, 0.025),
-        .size = .percent(0.8, 0.1),
-    }, .{
-        .background = .{
-            .color = Color.transparent,
-            .borderStyle = .{ .color = Color.transparent, .thickness = 0 },
-            .roundness = 0,
-        },
-        .text = .{
-            .font = .JERSEY10_REGULAR,
-            .fontSize = 34,
-            .textColor = Color.white,
-        },
-        .lineSpacing = -5,
-    }, null, .{ .wordWrap = true }) }, null);
+    try self.layout.addChildNamed(
+        "step_icon",
+        .{ .Texture = .init(
+            null,
+            .STEP_1_INACTIVE,
+            .{ .position = .percent(0.05, 0.03), .scale = 0.5 },
+            null,
+        ) },
+        .Parent,
+    );
 
-    // try self.layout.addChild(.{ .View =  }, null)
+    try self.layout.addChildNamed("header", .{
+        .Textbox = .init(self.allocator, DEFAULT_SECTION_HEADER, .{
+            .position = .percent(1, 0),
+            .position_ref = .{ .NodeId = "step_icon" },
+            .size = .percent(0.8, 0.1),
+            .size_ref = .Parent,
+            .offset_x = 10,
+            .offset_y = -2,
+        }, .{
+            .background = .{
+                .color = Color.transparent,
+                .borderStyle = .{ .color = Color.transparent, .thickness = 0 },
+                .roundness = 0,
+            },
+            .text = .{ .font = .JERSEY10_REGULAR, .fontSize = 34, .textColor = Color.white },
+            .lineSpacing = -5,
+        }, null, .{ .wordWrap = true }),
+    }, .Parent);
 
-    try self.layout.addChild(.{ .Textbox = .init(self.allocator, "Ubuntu 24.04 LTS.iso", .{
-        .position = .percent(1, 1),
-        .size = .percent(1, 1),
-    }, .{
-        .background = .{
-            .color = Color.transparent,
-            .borderStyle = .{ .color = Color.transparent, .thickness = 0 },
-            .roundness = 0,
-        },
-        .text = .{
-            .font = .ROBOTO_REGULAR,
-            .fontSize = 20,
-            .textColor = Color.offWhite,
-        },
-        .lineSpacing = -5,
-    }, null, .{ .wordWrap = true }) }, null);
+    // self.layout.children.items[self.layout.children.items.len - 1].Textbox.transform.offset_x = 10;
+
+    try self.layout.addChildNamed("file_name", .{
+        .Textbox = .init(self.allocator, "Ubuntu 24.04 LTS.iso", .{
+            .position = .percent(0.2, 0.5),
+            .position_ref = .Parent,
+            .size = .percent(0.8, 0.1),
+            .size_ref = .Parent,
+        }, .{
+            .background = .{
+                .color = Color.transparent,
+                .borderStyle = .{ .color = Color.transparent, .thickness = 0 },
+                .roundness = 0,
+            },
+            .text = .{ .font = .ROBOTO_REGULAR, .fontSize = 20, .textColor = Color.offWhite },
+            .lineSpacing = -5,
+        }, null, .{ .wordWrap = true }),
+    }, .Parent);
 
     try self.layout.start();
 }
@@ -443,7 +445,7 @@ fn initializeHeader(self: *FilePickerUI) void {
         .textColor = Color.white,
     });
     // TODO: To remove
-    // self.stepTexture = UIFramework.Texture.init(.STEP_1_INACTIVE, .{
+    // self.stepTexture = DeprecatedUI.Texture.init(.STEP_1_INACTIVE, .{
     //     .x = self.bgRect.transform.relX(0.05),
     //     .y = self.bgRect.transform.relY(0.01),
     // });
@@ -493,7 +495,7 @@ fn initializeDropzone(self: *FilePickerUI) void {
 
     self.dropzoneFrame = Bounds.relative(&self.bgRect.transform, dropzonePosition, dropzoneSize);
 
-    self.dropzone = UIFramework.FileDropzone.init(
+    self.dropzone = DeprecatedUI.FileDropzone.init(
         &self.dropzoneFrame,
         .DOC_IMAGE,
         dropzoneStyleActive(),

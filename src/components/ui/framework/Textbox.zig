@@ -4,20 +4,18 @@
 const std = @import("std");
 const rl = @import("raylib");
 
-const UIEvent = @import("./UIElement.zig").UIEvent;
+const Event = @import("./UIEvent.zig");
+const UIEvent = Event.UIEvent;
 
-const Primitives = @import("Primitives.zig");
 const Transform = @import("./Transform.zig");
-const Rectangle = Primitives.RectanglePro;
+const Rectangle = @import("./Rectangle.zig");
 
-const Styles = @import("./Styles.zig");
+const Styles = @import("../Styles.zig");
 const RectangleStyle = Styles.RectangleStyle;
 const TextStyle = Styles.TextStyle;
 const Color = Styles.Color;
 
-const Layout = @import("./Layout.zig");
-
-const ResourceManagerImport = @import("../../managers/ResourceManager.zig");
+const ResourceManagerImport = @import("../../../managers/ResourceManager.zig");
 const ResourceManager = ResourceManagerImport.ResourceManagerSingleton;
 
 pub const TextboxStyle = struct {
