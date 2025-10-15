@@ -462,10 +462,7 @@ fn initializeBackground(self: *FilePickerUI) !void {
         .size = .percent(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE, AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
         .relativeRef = try AppManager.getGlobalTransform(), // legacy root ref
         .background = .{
-            .transform = .{
-                .position_ref = null,
-                .relative = null,
-            },
+            .transform = .{},
             .style = .{
                 .color = Color.themeSectionBg,
                 .borderStyle = .{ .color = Color.themeSectionBorder },
@@ -497,10 +494,10 @@ fn initializeBackground(self: *FilePickerUI) !void {
             .sizeRef(.Parent),
     });
 
-    self.layout.transform.position_ref = null;
-    self.layout.transform.relative = null;
-    self.layout.transform.size_ref = null;
-    self.layout.transform.relativeRef = try AppManager.getGlobalTransform();
+    // self.layout.transform.position_ref = null;
+    // self.layout.transform.relative = null;
+    // self.layout.transform.size_ref = null;
+    // self.layout.transform.relativeRef = try AppManager.getGlobalTransform();
     try self.layout.start();
 
     Debug.log(.DEBUG, "View transform: {any}", .{self.layout.transform});

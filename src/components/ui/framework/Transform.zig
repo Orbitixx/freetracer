@@ -28,43 +28,56 @@ relative: ?RelativeRef = .Parent,
 _resolver_ctx: ?*const anyopaque = null,
 _resolver_fn: ?TransformResolverFn = null,
 
+isRootElement: bool = false,
+
 offset_x: f32 = 0,
 offset_y: f32 = 0,
 
+inline fn rectZero() rl.Rectangle {
+    return .{ .x = 0, .y = 0, .width = 0, .height = 0 };
+}
+inline fn rectFromPtr(t: *const Transform) rl.Rectangle {
+    return .{ .x = t.x, .y = t.y, .width = t.w * t.scale, .height = t.h * t.scale };
+}
+inline fn rectFromResolver(self: *Transform, rr: RelativeRef) rl.Rectangle {
+    if (self._resolver_fn) |f| if (self._resolver_ctx) |ctx| return f(ctx, rr);
+    return rectZero();
+}
+inline fn parentRect(self: *Transform) rl.Rectangle {
+    if (self.relativeRef) |p| return rectFromPtr(p);
+    return rectFromResolver(self, .Parent);
+}
+
 pub fn resolve(self: *Transform) void {
-    // 1) Choose the reference rectangle
-    const ref_rect = blk: {
-        // Legacy pointer path first (for backward compatibility)
-        if (self.relativeRef) |r| {
-            break :blk rl.Rectangle{
-                .x = r.x,
-                .y = r.y,
-                .width = r.w * r.scale,
-                .height = r.h * r.scale,
-            };
-        }
-
-        if (self.relative) |rr| {
-            if (self._resolver_fn) |f| {
-                if (self._resolver_ctx) |ctx| {
-                    break :blk f(ctx, rr);
-                }
-            }
-        }
-
-        // Fallback: no ref -> resolve against origin with zero size
-        break :blk rl.Rectangle{ .x = 0, .y = 0, .width = self.w + self.scale, .height = self.h * self.scale };
+    // --- choose reference rects for position and size ---
+    const pos_ref_rect: rl.Rectangle = blk: {
+        if (self.position_ref) |pr| switch (pr) {
+            .Parent => break :blk parentRect(self),
+            .NodeId => |id| break :blk rectFromResolver(self, .{ .NodeId = id }),
+        };
+        if (self.relative) |r| switch (r) {
+            .Parent => break :blk parentRect(self),
+            .NodeId => |id| break :blk rectFromResolver(self, .{ .NodeId = id }),
+        };
+        if (self.relativeRef) |p| break :blk rectFromPtr(p);
+        break :blk rectZero();
     };
 
-    // 2) Compute absolute frame
-    const pos_ref_rect = if (self.position_ref) |pr| blk: {
-        break :blk self._resolver_fn.?(self._resolver_ctx.?, pr);
-    } else if (self.relative) |r| blk: {
-        break :blk self._resolver_fn.?(self._resolver_ctx.?, r);
-    } else ref_rect; // from legacy or fallback
+    const size_ref_rect: rl.Rectangle = blk: {
+        if (self.size_ref) |sr| switch (sr) {
+            .Parent => break :blk parentRect(self),
+            .NodeId => |id| break :blk rectFromResolver(self, .{ .NodeId = id }),
+        };
+        if (self.relative) |r| switch (r) {
+            .Parent => break :blk parentRect(self),
+            .NodeId => |id| break :blk rectFromResolver(self, .{ .NodeId = id }),
+        };
+        if (self.relativeRef) |p| break :blk rectFromPtr(p);
+        // fallback: size against whatever we used for position
+        break :blk pos_ref_rect;
+    };
 
-    const size_ref_rect = if (self.size_ref) |sr| self._resolver_fn.?(self._resolver_ctx.?, sr) else if (self.relative) |r| self._resolver_fn.?(self._resolver_ctx.?, r) else ref_rect;
-
+    // --- compute absolute frame ---
     self.w = self.size.width.resolve(size_ref_rect.width);
     self.h = self.size.height.resolve(size_ref_rect.height);
     self.x = pos_ref_rect.x + self.position.x.resolve(pos_ref_rect.width) + self.offset_x;

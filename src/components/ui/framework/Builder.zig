@@ -90,49 +90,52 @@ pub const ElementChain = struct {
 
     // ---- build protocol: add into a parent View ----
     pub fn buildInto(self: ElementChain, parent: *View) !void {
-        // Apply the chosen stable ref to the element’s transform
         var me = self.el; // local copy
         const tr = UIElement.transformPtr(&me);
-        tr.relativeRef = null; // prefer stable path
 
-        if (self.relative) |r| tr.relative = r;
+        // Apply the explicit per-axis refs if provided.
         if (self._positionRef) |r| tr.position_ref = r;
         if (self._sizeRef) |r| tr.size_ref = r;
 
-        // Let parent own/resolve id mapping and resolver context
+        // Leep 'relative' as a general fallback for 'both'
+        if (self.relative) |r| tr.relative = r;
+
+        // Add into parent with a sane default fallback
+        const fallback_rel: RelativeRef = self._positionRef orelse self.relative orelse .Parent;
         if (self._id) |sid| {
-            try parent.addChildNamed(sid, me, self.relative orelse .Parent);
+            try parent.addChildNamed(sid, me, fallback_rel);
+        } else if (self._positionRef) |r| {
+            try parent.addChildWithRelative(me, r);
         } else if (self.relative) |r| {
             try parent.addChildWithRelative(me, r);
         } else {
-            try parent.addChild(me, null); // defaults to parent via legacy or resolver
+            try parent.addChild(me, null); // defaults to parent pointer (safe)
         }
     }
 
     // ---- only valid if this ElementChain wraps a View ----
     pub fn children(self: ElementChain, kids: anytype) !View {
-        // Extract the View value we’re wrapping (runtime-checked).
-        var view_value: View = undefined;
-        switch (self.el) {
-            .View => |v| view_value = v, // copy the View out of the union
+        var view_value: View = switch (self.el) {
+            .View => |v| v,
             else => return error.ChildrenOnNonView,
-        }
+        };
 
-        // Apply the intended relative (if any) to the View itself.
-        if (self.relative) |r| {
-            view_value.transform.relativeRef = null; // prefer stable path
-            view_value.transform.relative = r;
-        }
+        // Don’t override pointer parent for .Parent
+        if (self.relative) |r| switch (r) {
+            .NodeId => {
+                view_value.transform.relativeRef = null;
+                view_value.transform.relative = r;
+            },
+            .Parent => {
+                if (view_value.transform.relativeRef == null) view_value.transform.relative = .Parent;
+            },
+        };
 
         if (self._positionRef) |r| view_value.transform.position_ref = r;
         if (self._sizeRef) |r| view_value.transform.size_ref = r;
 
-        // Build children into this temporary View.
-        inline for (kids) |kid| {
-            try kid.buildInto(&view_value);
-        }
-
-        return view_value; // return the finished View by value
+        inline for (kids) |kid| try kid.buildInto(&view_value);
+        return view_value;
     }
 };
 
