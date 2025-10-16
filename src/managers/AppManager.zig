@@ -28,12 +28,9 @@ const UI = @import("../components/ui/import/index.zig");
 const Button = @import("../components/ui/Button.zig");
 const Checkbox = @import("../components/ui/Checkbox.zig");
 const Rectangle = UI.RectanglePro;
-// const Transform = @import("../components/ui/Transform.zig");
 
 const UIFramework = @import("../components/ui/framework/import.zig");
 const Transform = UIFramework.Transform;
-
-const View = @import("../components/ui/UIElement.zig").View;
 
 const relY = WindowManager.relH;
 const relX = WindowManager.relW;
