@@ -6,29 +6,32 @@ pub const ResourceError = error{
     NoFontsLoadedError,
 };
 
-const FONTS_COUNT: usize = 2;
-const TEXTURES_COUNT: usize = 9;
-const IMAGE_COUNT: usize = 1;
+const FONTS_COUNT = std.meta.fields(FONT).len;
+const TEXTURES_COUNT = std.meta.fields(TEXTURE).len;
+const IMAGE_COUNT = std.meta.fields(IMAGE).len;
+const SHADERS_COUNT = std.meta.fields(ShaderResource).len;
 
-pub const FONT = enum(u8) {
-    ROBOTO_REGULAR = 0,
-    JERSEY10_REGULAR = 1,
-};
+pub const FONT = enum(u8) { ROBOTO_REGULAR, JERSEY10_REGULAR };
+pub const IMAGE = enum(u8) { APP_WINDOW_IMAGE };
+pub const ShaderResource = enum(u8) { PIXELATE, SHADOW };
 
 pub const TEXTURE = enum(u8) {
-    DISK_IMAGE = 0,
-    USB_IMAGE = 1,
-    RELOAD_ICON = 2,
-    BUTTON_UI = 3,
-    DOC_IMAGE = 4,
-    STEP_1_INACTIVE = 5,
-    STAR_V1 = 6,
-    STAR_V2 = 7,
-    BUTTON_FRAME = 8,
+    DISK_IMAGE,
+    USB_IMAGE,
+    RELOAD_ICON,
+    BUTTON_UI,
+    DOC_IMAGE,
+    STEP_1_INACTIVE,
+    STAR_V1,
+    STAR_V2,
+    BUTTON_FRAME,
 };
 
-pub const IMAGE = enum(u8) {
-    APP_WINDOW_IMAGE = 0,
+pub const Asset = union(enum) {
+    Font: FONT,
+    Image: IMAGE,
+    Texture: TEXTURE,
+    Shader: ShaderResource,
 };
 
 pub const Texture = rl.Texture2D;
@@ -45,6 +48,7 @@ pub const ResourceManagerSingleton = struct {
         fonts: []rl.Font,
         textures: []rl.Texture2D,
         images: []rl.Image,
+        shaders: []rl.Shader,
 
         pub fn getFont(self: ResourceManager, font: FONT) rl.Font {
             // if (self.fonts.len < 1) return ResourceError.NoFontsLoaded;
@@ -57,6 +61,35 @@ pub const ResourceManagerSingleton = struct {
 
         pub fn getImage(self: ResourceManager, image: IMAGE) rl.Image {
             return self.images[@intFromEnum(image)];
+        }
+
+        pub fn getShader(self: ResourceManager, shader: ShaderResource) rl.Shader {
+            return self.shaders[@intFromEnum(shader)];
+        }
+
+        fn registerAsset(self: ResourceManager, asset: Asset, fileName: []const u8) !void {
+            const file = try getResourcePath(self.allocator, fileName);
+            defer self.allocator.free(file);
+
+            switch (asset) {
+                .Font => |f| {
+                    const font = try rl.loadFontEx(file, 64, null);
+                    switch (f) {
+                        .ROBOTO_REGULAR => rl.setTextureFilter(font.texture, .trilinear),
+                        .JERSEY10_REGULAR => rl.setTextureFilter(font.texture, .point),
+                    }
+                    self.fonts[@intFromEnum(f)] = font;
+                    if (f == .ROBOTO_REGULAR) ResourceManagerSingleton.defaultFont = font;
+                },
+                .Image => |i| self.images[@intFromEnum(i)] = try rl.loadImage(file),
+                .Shader => |s| self.shaders[@intFromEnum(s)] = try rl.loadShader(null, file),
+                .Texture => |t| {
+                    const texture = try rl.loadTexture(file);
+                    rl.setTextureFilter(texture, .point);
+                    self.textures[@intFromEnum(t)] = texture;
+                    if (t == .STAR_V2) ResourceManagerSingleton.defaultTexture = texture;
+                },
+            }
         }
     };
 
@@ -73,64 +106,7 @@ pub const ResourceManagerSingleton = struct {
         //--------------------------------------//
 
         Debug.log(.DEBUG, "ResourceManager: preparing to load fonts...", .{});
-
-        const robotoFontFile = try getResourcePath(allocator, "Roboto-Regular.ttf");
-        defer allocator.free(robotoFontFile);
-
-        const jerseyFontFile = try getResourcePath(allocator, "Jersey10-Regular.ttf");
-        defer allocator.free(jerseyFontFile);
-
-        const robotoRegular = try rl.loadFontEx(robotoFontFile, 64, null);
-        rl.setTextureFilter(robotoRegular.texture, .trilinear);
-
-        const jersey10Regular = try rl.loadFontEx(jerseyFontFile, 64, null);
-        rl.setTextureFilter(jersey10Regular.texture, .point);
-
-        Debug.log(.DEBUG, "ResourceManager: fonts successfully loaded!", .{});
-
-        defaultFont = robotoRegular;
-
-        //----------------------------------------//
-        //-------- *** LOAD TEXTURES *** ---------//
-        //----------------------------------------//
-
         Debug.log(.DEBUG, "ResourceManager: preparing to load textures...", .{});
-
-        const diskTextureFile = try getResourcePath(allocator, "disk_image.png");
-        defer allocator.free(diskTextureFile);
-        const diskTexture = try rl.loadTexture(diskTextureFile);
-
-        const docImageFile = try getResourcePath(allocator, "doc_image.png");
-        defer allocator.free(docImageFile);
-        const docImageTexture = try rl.loadTexture(docImageFile);
-
-        const step1IFile = try getResourcePath(allocator, "step-1-inactive.png");
-        defer allocator.free(step1IFile);
-        const step1ITexture = try rl.loadTexture(step1IFile);
-
-        const usbTextureFile = try getResourcePath(allocator, "usb_image.png");
-        defer allocator.free(usbTextureFile);
-        const usbTexture = try rl.loadTexture(usbTextureFile);
-
-        const reloadIconTextureFile = try getResourcePath(allocator, "reload_icon.png");
-        defer allocator.free(reloadIconTextureFile);
-        const reloadIconTexture = try rl.loadTexture(reloadIconTextureFile);
-
-        const buttonUiTextureFile = try getResourcePath(allocator, "button_ui.png");
-        defer allocator.free(buttonUiTextureFile);
-        const buttonUiTexture = try rl.loadTexture(buttonUiTextureFile);
-
-        const starV1File = try getResourcePath(allocator, "star_v1.png");
-        defer allocator.free(starV1File);
-        const starV1Texture = try rl.loadTexture(starV1File);
-
-        const starV2File = try getResourcePath(allocator, "star_v2.png");
-        defer allocator.free(starV2File);
-        const starV2Texture = try rl.loadTexture(starV2File);
-
-        defaultTexture = starV2Texture;
-
-        Debug.log(.DEBUG, "ResourceManager: textures successfully loaded!", .{});
 
         //----------------------------------------//
         //-------- *** INITIALIZE INSTANCE *** ---//
@@ -141,23 +117,31 @@ pub const ResourceManagerSingleton = struct {
             .fonts = try allocator.alloc(rl.Font, FONTS_COUNT),
             .textures = try allocator.alloc(rl.Texture2D, TEXTURES_COUNT),
             .images = try allocator.alloc(rl.Image, IMAGE_COUNT),
+            .shaders = try allocator.alloc(rl.Shader, SHADERS_COUNT),
         };
 
         if (instance) |*inst| {
-            inst.fonts[0] = robotoRegular;
-            inst.fonts[1] = jersey10Regular;
+            try inst.registerAsset(.{ .Font = .ROBOTO_REGULAR }, "fonts/Roboto-Regular.ttf");
+            try inst.registerAsset(.{ .Font = .JERSEY10_REGULAR }, "fonts/Jersey10-Regular.ttf");
+            Debug.log(.DEBUG, "ResourceManager: fonts successfully loaded!", .{});
 
-            inst.textures[0] = diskTexture;
-            inst.textures[1] = usbTexture;
-            inst.textures[2] = reloadIconTexture;
-            inst.textures[3] = buttonUiTexture;
-            inst.textures[4] = docImageTexture;
-            inst.textures[5] = step1ITexture;
-            inst.textures[6] = starV1Texture;
-            inst.textures[7] = starV2Texture;
-            inst.textures[@intFromEnum(TEXTURE.BUTTON_FRAME)] = try registerTexture(allocator, "button_frame.png");
+            try inst.registerAsset(.{ .Texture = .DISK_IMAGE }, "images/disk_image.png");
+            try inst.registerAsset(.{ .Texture = .USB_IMAGE }, "images/usb_image.png");
+            try inst.registerAsset(.{ .Texture = .RELOAD_ICON }, "images/reload_icon.png");
+            try inst.registerAsset(.{ .Texture = .BUTTON_UI }, "images/button_ui.png");
+            try inst.registerAsset(.{ .Texture = .DOC_IMAGE }, "images/doc_image.png");
+            try inst.registerAsset(.{ .Texture = .STEP_1_INACTIVE }, "images/step-1-inactive.png");
+            try inst.registerAsset(.{ .Texture = .STAR_V1 }, "images/star_v1.png");
+            try inst.registerAsset(.{ .Texture = .STAR_V2 }, "images/star_v2.png");
+            try inst.registerAsset(.{ .Texture = .BUTTON_FRAME }, "images/button_frame.png");
+            Debug.log(.DEBUG, "ResourceManager: textures successfully loaded!", .{});
 
-            inst.images[@intFromEnum(IMAGE.APP_WINDOW_IMAGE)] = try registerImage(allocator, "icon.png");
+            try inst.registerAsset(.{ .Image = .APP_WINDOW_IMAGE }, "images/icon.png");
+            Debug.log(.DEBUG, "ResourceManager: images successfully loaded!", .{});
+
+            try inst.registerAsset(.{ .Shader = .PIXELATE }, "shaders/pixelate.fs");
+            try inst.registerAsset(.{ .Shader = .SHADOW }, "shaders/shadow.fs");
+            Debug.log(.DEBUG, "ResourceManager: shaders successfully loaded!", .{});
         }
 
         Debug.log(.INFO, "ResourceManager: finished initialization!", .{});
@@ -178,6 +162,10 @@ pub const ResourceManagerSingleton = struct {
         return if (instance) |inst| inst.getImage(image) else error.UnableToGetImage;
     }
 
+    pub fn getShader(shader: ShaderResource) !rl.Shader {
+        return if (instance) |inst| inst.getShader(shader) else error.UnableToGetShader;
+    }
+
     pub fn deinit() void {
         if (instance == null) {
             Debug.log(.ERROR, "ResourceManager deinit() called on an NULL instance.", .{});
@@ -196,12 +184,14 @@ pub const ResourceManagerSingleton = struct {
             image.unload();
         }
 
+        for (instance.?.shaders) |shader| {
+            shader.unload();
+        }
+
         allocator.free(instance.?.fonts);
         allocator.free(instance.?.textures);
         allocator.free(instance.?.images);
-
-        // defaultFont.unload();
-        // defaultTexture.unload();
+        allocator.free(instance.?.shaders);
 
         instance = null;
     }
@@ -238,18 +228,4 @@ fn getResourcePath(allocator: std.mem.Allocator, resourceName: []const u8) ![:0]
             cwd, "src/resources", resourceName,
         });
     }
-}
-
-fn registerImage(allocator: std.mem.Allocator, fileName: []const u8) !rl.Image {
-    const imageFile = try getResourcePath(allocator, fileName);
-    defer allocator.free(imageFile);
-    return try rl.loadImage(imageFile);
-}
-
-fn registerTexture(allocator: std.mem.Allocator, fileName: []const u8) !rl.Texture2D {
-    const textureFile = try getResourcePath(allocator, fileName);
-    defer allocator.free(textureFile);
-    const texture = try rl.loadTexture(textureFile);
-    rl.setTextureFilter(texture, .point);
-    return texture;
 }

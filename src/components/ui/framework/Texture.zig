@@ -9,6 +9,8 @@ const ResourceImport = @import("../../../managers/ResourceManager.zig");
 const ResourceManager = ResourceImport.ResourceManagerSingleton;
 const TextureResource = ResourceImport.TextureResource;
 
+const WindowManager = @import("../../../managers/WindowManager.zig").WindowManagerSingleton;
+
 const Transform = @import("./Transform.zig");
 const Rectangle = @import("./Rectangle.zig");
 
@@ -29,6 +31,10 @@ texture: rl.Texture2D,
 tint: rl.Color = Color.white,
 background: ?Rectangle = null,
 
+shader: rl.Shader,
+res: rl.Vector2 = .{ .x = 0, .y = 0 },
+px: rl.Vector2 = .{ .x = 0, .y = 0 },
+
 pub fn init(identifier: ?UIElementIdentifier, resource: TextureResource, transform: Transform, tint: ?rl.Color) Texture {
     const texture: rl.Texture2D = ResourceManager.getTexture(resource);
 
@@ -38,6 +44,7 @@ pub fn init(identifier: ?UIElementIdentifier, resource: TextureResource, transfo
         .resource = resource,
         .texture = texture,
         .tint = if (tint) |t| t else Color.white,
+        .shader = ResourceManager.getShader(.PIXELATE) catch unreachable,
     };
 }
 
@@ -46,6 +53,15 @@ pub fn start(self: *Texture) !void {
     const tHeight: f32 = @floatFromInt(self.texture.height);
     self.transform.size = .pixels(tWidth, tHeight);
     self.transform.resolve();
+
+    const res = rl.getShaderLocation(self.shader, "resolution");
+    const px = rl.getShaderLocation(self.shader, "pixelSize");
+
+    self.res = .{ .x = WindowManager.getWindowWidth(), .y = WindowManager.getWindowHeight() };
+    rl.setShaderValue(self.shader, res, &self.res, .vec2);
+
+    self.px = .{ .x = 30, .y = 30 };
+    rl.setShaderValue(self.shader, px, &self.px, .vec2);
 }
 
 pub fn update(self: *Texture) !void {
@@ -53,6 +69,7 @@ pub fn update(self: *Texture) !void {
 }
 
 pub fn draw(self: *Texture) !void {
+    rl.beginShaderMode(self.shader);
     rl.drawTextureEx(
         self.texture,
         .{ .x = self.transform.x, .y = self.transform.y },
@@ -60,6 +77,7 @@ pub fn draw(self: *Texture) !void {
         self.transform.scale,
         self.tint,
     );
+    rl.endShaderMode();
 }
 
 pub fn onEvent(self: *Texture, event: UIEvent) void {
