@@ -30,6 +30,7 @@ resource: TextureResource,
 texture: rl.Texture2D,
 tint: rl.Color = Color.white,
 background: ?Rectangle = null,
+setActive: ?*const fn (*anyopaque, bool) void = null,
 
 shader: rl.Shader,
 res: rl.Vector2 = .{ .x = 0, .y = 0 },

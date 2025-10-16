@@ -3,24 +3,27 @@ const rl = @import("raylib");
 const UIFramework = @import("./import.zig");
 const Transform = UIFramework.Transform;
 const UIEvent = UIFramework.UIEvent;
+const UIElementIdentifier = UIFramework.UIElementIdentifier;
 
 const Styles = @import("../Styles.zig");
 const TextStyle = Styles.TextStyle;
 const RectangleStyle = Styles.RectangleStyle;
 
+const Rectangle = @This();
+
 pub const Config = struct {
-    identifier: ?UIFramework.UIElementIdentifier = null,
+    identifier: ?UIElementIdentifier = null,
     style: RectangleStyle = .{},
     rounded: bool = false,
     bordered: bool = false,
 };
 
-const Rectangle = @This();
-
+identifier: ?UIElementIdentifier = null,
 transform: Transform,
 rounded: bool = false,
 bordered: bool = false,
 style: RectangleStyle = .{},
+setActive: ?*const fn (*anyopaque, bool) void = null,
 
 pub fn init(transform: Transform, config: Config) Rectangle {
     return .{

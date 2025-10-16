@@ -125,6 +125,8 @@ cursorActive: bool = false,
 layoutDirty: bool = true,
 lastRect: rl.Rectangle = .{ .x = 0, .y = 0, .width = 0, .height = 0 },
 
+setActive: ?*const fn (*anyopaque, bool) void = null,
+
 pub fn init(config: Config) FileDropzone {
     var dropzone = FileDropzone{
         .identifier = config.identifier,
@@ -197,8 +199,11 @@ pub fn update(self: *FileDropzone) !void {
 }
 
 pub fn draw(self: *FileDropzone) !void {
-    const rect = self.transform.asRaylibRectangle();
+    var rect = self.transform.asRaylibRectangle();
     const highlight = self.hover or self.drag;
+
+    rect.width -= self.style.borderThickness * 2;
+    rect.height -= self.style.borderThickness * 2;
 
     const bgColor = if (highlight) filedDropzoneActiveStyle.hoverBackgroundColor else filedDropzoneActiveStyle.backgroundColor;
     rl.drawRectangleRec(rect, bgColor);

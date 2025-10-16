@@ -130,7 +130,7 @@ pub fn handleEvent(self: *FilePickerUI, event: ComponentEvent) !EventResult {
 }
 
 pub fn update(self: *FilePickerUI) !void {
-    if (!self.readIsActive()) return;
+    // if (!self.readIsActive()) return;
 
     try self.layout.update();
 }
@@ -270,24 +270,6 @@ fn initializeBackground(self: *FilePickerUI) !void {
         .bordered = true,
     };
 
-    const headerStyle: UIFramework.Textbox.TextboxStyle = .{
-        .background = .{ .color = Color.transparent, .borderStyle = .{ .color = Color.transparent, .thickness = 0 }, .roundness = 0 },
-        .text = .{ .font = .JERSEY10_REGULAR, .fontSize = 34, .textColor = Color.white },
-        .lineSpacing = -5,
-    };
-    const imageInfoTextboxStyle: UIFramework.Textbox.TextboxStyle = .{
-        .background = .{
-            .color = Color.transparent,
-            .borderStyle = .{
-                .color = Color.transparent,
-                .thickness = 0,
-            },
-            .roundness = 0,
-        },
-        .text = .{ .font = .ROBOTO_REGULAR, .fontSize = 20, .textColor = Color.offWhite },
-        .lineSpacing = -5,
-    };
-
     // const fileDropzoneStyle = "";
 
     var ui = UIChain.init(self.allocator);
@@ -318,12 +300,12 @@ fn initializeBackground(self: *FilePickerUI) !void {
             .positionRef(.Parent)
             .scale(0.5),
 
-        ui.textbox(DEFAULT_SECTION_HEADER, headerStyle, UIFramework.Textbox.Params{ .wordWrap = true })
+        ui.textbox(DEFAULT_SECTION_HEADER, UIConfig.Styles.HeaderTextbox, UIFramework.Textbox.Params{ .wordWrap = true })
             .id("header_textbox")
             .position(.percent(1, 0))
             .offset(10, -2)
             .positionRef(.{ .NodeId = "header_icon" })
-            .size(.percent(0.8, 0.1))
+            .size(.percent(0.7, 0.3))
             .sizeRef(.Parent),
 
         ui.fileDropzone(.{
@@ -349,16 +331,20 @@ fn initializeBackground(self: *FilePickerUI) !void {
             .positionRef(.{ .NodeId = "header_icon" })
             .size(.percent(0.9, 0.35)),
 
-        ui.rectangle(.{ .style = .{
-            .color = Color.themeDark,
-        } }).id("image_info_bg")
+        ui.rectangle(.{
+            .style = .{
+                .roundness = 0.09,
+                .color = Color.themeDark,
+            },
+            .rounded = true,
+        }).id("image_info_bg")
             .position(.percent(0, 1))
             .offset(0, 15)
             .positionRef(.{ .NodeId = "file_picker_dropzone" })
             .size(.percent(0.9, 0.25))
             .sizeRef(.Parent),
 
-        ui.textbox("Ubuntu 24.04 LTS.iso", imageInfoTextboxStyle, Textbox.Params{
+        ui.textbox("Ubuntu 24.04 LTS.iso", UIConfig.Styles.ImageInfoTextbox, Textbox.Params{
             .identifier = .ImageInfoTextbox,
             .wordWrap = true,
         })
@@ -366,6 +352,13 @@ fn initializeBackground(self: *FilePickerUI) !void {
             .position(.percent(0.2, 0.25))
             .positionRef(.{ .NodeId = "image_info_bg" })
             .size(.percent(0.8, 0.5))
+            .sizeRef(.{ .NodeId = "image_info_bg" }),
+
+        ui.textbox("Select an image file as as .iso or .img", Textbox.TextboxStyle{}, Textbox.Params{})
+            .id("file_picker_hint_text")
+            .position(.percent(0, 1.3))
+            .positionRef(.{ .NodeId = "image_info_bg" })
+            .size(.percent(0.7, 0.5))
             .sizeRef(.{ .NodeId = "image_info_bg" }),
 
         ui.spriteButton(.{
@@ -385,11 +378,13 @@ fn initializeBackground(self: *FilePickerUI) !void {
                 .hoverTint = Color.themeTertiary,
                 .hoverTextColor = Color.themeTertiary,
             },
-        }).position(.percent(0.7, 0.85))
-            .positionRef(.Parent)
-            .size(.percent(0.25, 0.1))
-            .sizeRef(.Parent),
+        }).position(.percent(1, 0))
+            .positionRef(.{ .NodeId = "file_picker_hint_text" })
+            .size(.percent(0.3, 0.4))
+            .sizeRef(.{ .NodeId = "image_info_bg" }),
     });
+
+    self.layout.setActive = UIConfig.Callbacks.MainView.setActive;
 
     try self.layout.start();
 
@@ -406,8 +401,10 @@ fn setIsActive(self: *FilePickerUI, isActive: bool) void {
     self.storeIsActive(isActive);
 
     if (isActive) {
+        self.layout.emitEvent(.{ .StateChanged = .{ .isActive = isActive } }, .{});
         self.bgRect.transform.w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE);
     } else {
+        self.layout.emitEvent(.{ .StateChanged = .{ .isActive = isActive } }, .{});
         self.bgRect.transform.w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE);
     }
 
@@ -531,6 +528,7 @@ fn handleActiveStateChanged(self: *FilePickerUI, event: ComponentEvent) !EventRe
     var eventResult = EventResult.init();
     const data = FilePicker.Events.onActiveStateChanged.getData(event) orelse return eventResult.fail();
     self.setIsActive(data.isActive);
+    self.layout.emitEvent(.{ .StateChanged = .{ .isActive = data.isActive } }, .{});
     if (!data.isActive) rl.setMouseCursor(.default);
     return eventResult.succeed();
 }
@@ -542,7 +540,10 @@ fn handleIsoFilePathChanged(self: *FilePickerUI, event: ComponentEvent) !EventRe
     if (data.newPath.len > 0) {
         self.updateIsoPathState(data.newPath);
         const displayName = extractDisplayName(data.newPath);
-        self.layout.emitEvent(.{ .TextChanged = .{ .target = .ImageInfoTextbox, .text = displayName } });
+        self.layout.emitEvent(
+            .{ .TextChanged = .{ .target = .ImageInfoTextbox, .text = displayName } },
+            .{ .excludeSelf = true },
+        );
         // self.updateIsoTitle(displayName);
     } else {
         // self.resetIsoTitle();
@@ -567,3 +568,51 @@ pub fn handleAppResetRequest(self: *FilePickerUI) EventResult {
 
     return eventResult.succeed();
 }
+
+const UIConfig = struct {
+    //
+    pub const Callbacks = struct {
+        //
+        pub const MainView = struct {
+            //
+            pub fn setActive(ctx: *anyopaque, flag: bool) void {
+                const self: *View = @ptrCast(@alignCast(ctx));
+
+                switch (flag) {
+                    false => {
+                        Debug.log(.DEBUG, "Main FilePickerUI View received a SetActive(false) command.", .{});
+                        self.transform.size = .percent(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE, AppConfig.APP_UI_MODULE_PANEL_HEIGHT);
+                    },
+                    true => {
+                        Debug.log(.DEBUG, "Main FilePickerUI View received a SetActive(true) command.", .{});
+                        self.transform.size = .percent(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE, AppConfig.APP_UI_MODULE_PANEL_HEIGHT);
+                    },
+                }
+
+                self.transform.resolve();
+            }
+        };
+    };
+
+    pub const Styles = struct {
+        //
+        const HeaderTextbox: UIFramework.Textbox.TextboxStyle = .{
+            .background = .{ .color = Color.transparent, .borderStyle = .{ .color = Color.transparent, .thickness = 0 }, .roundness = 0 },
+            .text = .{ .font = .JERSEY10_REGULAR, .fontSize = 34, .textColor = Color.white },
+            .lineSpacing = -5,
+        };
+
+        const ImageInfoTextbox: UIFramework.Textbox.TextboxStyle = .{
+            .background = .{
+                .color = Color.transparent,
+                .borderStyle = .{
+                    .color = Color.transparent,
+                    .thickness = 0,
+                },
+                .roundness = 0,
+            },
+            .text = .{ .font = .ROBOTO_REGULAR, .fontSize = 20, .textColor = Color.offWhite },
+            .lineSpacing = -5,
+        };
+    };
+};

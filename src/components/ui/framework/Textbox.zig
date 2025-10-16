@@ -54,6 +54,8 @@ background: ?Rectangle = null,
 textBuffer: [MAX_TEXT_LENGTH]u8 = undefined,
 text: [:0]const u8,
 
+setActive: ?*const fn (*anyopaque, bool) void = null,
+
 pub fn init(allocator: std.mem.Allocator, text: [:0]const u8, transform: Transform, style: TextboxStyle, params: Params) Textbox {
     return .{
         .identifier = params.identifier,
@@ -133,6 +135,7 @@ pub fn onEvent(self: *Textbox, event: UIEvent) void {
         .TextChanged => |e| {
             self.setText(e.text);
         },
+        inline else => {},
     }
 }
 

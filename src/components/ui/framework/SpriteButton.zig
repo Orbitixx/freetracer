@@ -84,6 +84,8 @@ cursorActive: bool = false,
 layoutDirty: bool = true,
 lastRect: rl.Rectangle = .{ .x = 0, .y = 0, .width = 0, .height = 0 },
 
+setActive: ?*const fn (*anyopaque, bool) void = null,
+
 pub fn init(config: Config) SpriteButton {
     var buffer = std.mem.zeroes([MAX_TEXT_LENGTH:0]u8);
     const capped = if (config.text.len >= MAX_TEXT_LENGTH) MAX_TEXT_LENGTH - 1 else config.text.len;

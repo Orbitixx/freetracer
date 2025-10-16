@@ -1,3 +1,5 @@
+const std = @import("std");
+
 const UIFramework = @import("./import.zig");
 const Transform = UIFramework.Transform;
 const Rectangle = UIFramework.Rectangle;
@@ -44,8 +46,36 @@ pub const UIElement = union(enum) {
     }
 
     pub fn onEvent(self: *UIElement, event: UIEvent) void {
+        // Not a pretty block, nesting is unfortunately required for captures
+        // Basically, this says:
+        //  - if the received event is UIEvent.StateChanged; AND
+        //      A. the target is specified; AND
+        //          - the target is not this element -> THEN
+        //              - ignore the event; STOP
+        //      B. the target is NOT specified; AND
+        //          - the element's setActive optional function is set -> THEN
+        //              - call the setActiveFn with its signature arguments; STOP
+        //  - for all other types of events, process the event locally in the element; STOP
         switch (self.*) {
-            inline else => |*element| @constCast(element).onEvent(event),
+            inline else => |*element| {
+                switch (event) {
+                    .StateChanged => |ev| {
+                        if (ev.target) |target| {
+                            std.debug.print("\nUIElement.onEvent.StateChanged: target does not match element.target; aborting.", .{});
+                            if (target != element.identifier) return;
+                        } else {
+                            if (element.setActive) |setActiveFn| {
+                                std.debug.print("\nUIElement.onEvent.StateChanged: target not set, executing setActive function. Responding element: {any}", .{element});
+                                setActiveFn(element, ev.isActive);
+                            }
+                        }
+                    },
+                    inline else => {
+                        std.debug.print("\nUIElement.onEvent (other) invoked.", .{});
+                        @constCast(element).onEvent(event);
+                    },
+                }
+            },
         }
     }
 

@@ -27,6 +27,8 @@ style: TextStyle,
 font: rl.Font,
 background: ?Rectangle = null,
 
+setActive: ?*const fn (*anyopaque, bool) void = null,
+
 pub fn init(identifier: ?UIElementIdentifier, value: [:0]const u8, transform: Transform, style: TextStyle) Text {
     if (value.len > MAX_TEXT_LENGTH) Debug.log(
         .WARNING,
@@ -81,6 +83,7 @@ pub fn onEvent(self: *Text, event: UIEvent) void {
         .TextChanged => |e| {
             self.setValue(e.text);
         },
+        inline else => {},
     }
 }
 
