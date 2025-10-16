@@ -4,11 +4,13 @@
 const std = @import("std");
 const rl = @import("raylib");
 
-const Event = @import("./UIEvent.zig");
-const UIEvent = Event.UIEvent;
+const Debug = @import("freetracer-lib").Debug;
 
-const Transform = @import("./Transform.zig");
-const Rectangle = @import("./Rectangle.zig");
+const UIFramework = @import("./import.zig");
+const UIEvent = UIFramework.UIEvent;
+const Transform = UIFramework.Transform;
+const Rectangle = UIFramework.Rectangle;
+const UIElementIdentifier = UIFramework.UIElementIdentifier;
 
 const Styles = @import("../Styles.zig");
 const RectangleStyle = Styles.RectangleStyle;
@@ -27,6 +29,8 @@ pub const TextboxStyle = struct {
 };
 
 pub const Params = struct {
+    identifier: ?UIElementIdentifier = null,
+    background: ?Rectangle = null,
     wordWrap: bool = true,
 };
 
@@ -35,24 +39,30 @@ pub const Selection = struct {
     length: i32,
 };
 
+const MAX_TEXT_LENGTH = 256;
+
 const Textbox = @This();
 
 allocator: std.mem.Allocator,
+identifier: ?UIElementIdentifier = null,
 transform: Transform,
 style: TextboxStyle,
-text: [:0]const u8,
 font: rl.Font,
 params: Params = .{},
 selection: ?Selection = null,
 background: ?Rectangle = null,
+textBuffer: [MAX_TEXT_LENGTH]u8 = undefined,
+text: [:0]const u8,
 
-pub fn init(allocator: std.mem.Allocator, text: [:0]const u8, transform: Transform, style: TextboxStyle, background: ?Rectangle, params: Params) Textbox {
+pub fn init(allocator: std.mem.Allocator, text: [:0]const u8, transform: Transform, style: TextboxStyle, params: Params) Textbox {
     return .{
+        .identifier = params.identifier,
         .allocator = allocator,
         .transform = transform,
-        .background = background,
+        .background = params.background,
         .style = style,
         .text = text,
+        .textBuffer = std.mem.zeroes([MAX_TEXT_LENGTH]u8),
         .font = ResourceManager.getFont(style.text.font),
         .params = params,
     };
@@ -61,6 +71,8 @@ pub fn init(allocator: std.mem.Allocator, text: [:0]const u8, transform: Transfo
 pub fn start(self: *Textbox) !void {
     self.transform.resolve();
     if (self.background) |*bg| bg.transform.resolve();
+
+    self.setText(self.text);
 
     std.debug.print("\nTextbox resolved() Transform in start().", .{});
 }
@@ -86,7 +98,20 @@ pub fn draw(self: *Textbox) !void {
 }
 
 pub fn setText(self: *Textbox, text: [:0]const u8) void {
-    self.text = text;
+    if (text.len > MAX_TEXT_LENGTH) Debug.log(
+        .WARNING,
+        "Textbox UIElement's value length exceeded allowed max: {s}",
+        .{text},
+    );
+
+    var textValue: [MAX_TEXT_LENGTH]u8 = std.mem.zeroes([MAX_TEXT_LENGTH]u8);
+    @memcpy(
+        textValue[0..if (text.len > MAX_TEXT_LENGTH) MAX_TEXT_LENGTH else text.len],
+        if (text.len > MAX_TEXT_LENGTH) text[0..MAX_TEXT_LENGTH] else text,
+    );
+
+    self.textBuffer = textValue;
+    self.text = @ptrCast(std.mem.sliceTo(&self.textBuffer, 0x00));
 }
 
 pub fn setSelection(self: *Textbox, selection: ?Selection) void {
@@ -98,8 +123,17 @@ pub fn setWordWrap(self: *Textbox, flag: bool) void {
 }
 
 pub fn onEvent(self: *Textbox, event: UIEvent) void {
-    _ = self;
-    _ = event;
+    switch (event) {
+        inline else => |e| if (e.target != self.identifier) return,
+    }
+
+    Debug.log(.DEBUG, "Textbox ({any}) recevied a UIEvent: {any}", .{ self.identifier, event });
+
+    switch (event) {
+        .TextChanged => |e| {
+            self.setText(e.text);
+        },
+    }
 }
 
 pub fn deinit(self: *Textbox) void {

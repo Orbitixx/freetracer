@@ -17,17 +17,24 @@ const UIElementIdentifier = UIFramework.UIElementIdentifier;
 
 pub const ElementChain = struct {
     allocator: std.mem.Allocator,
-    el: UIElement, // value we’re building
-    _id: ?[]const u8 = null, // optional string id for parent’s map
+    el: UIElement, // UIElement being built by the chain
+    identifier: ?UIElementIdentifier = null,
+    _id: ?[]const u8 = null,
     _positionRef: ?RelativeRef = null,
     _sizeRef: ?RelativeRef = null,
     _relativeRef: ?*const Transform = null,
-    relative: ?RelativeRef = null, // where to resolve against (Parent or NodeId)
+    relative: ?RelativeRef = null, // what to resolve against (Parent or NodeId)
 
     // ---- generic chainers (common Transform knobs) ----
     pub fn id(self: ElementChain, s: []const u8) ElementChain {
         var c = self;
         c._id = s;
+        return c;
+    }
+
+    pub fn elId(self: ElementChain, elementIdentifier: UIElementIdentifier) ElementChain {
+        var c = self;
+        c.identifier = elementIdentifier;
         return c;
     }
 
@@ -54,12 +61,6 @@ pub const ElementChain = struct {
         c._sizeRef = r;
         return c;
     }
-
-    // pub fn relativeRef(self: ElementChain, t: ?*const Transform) ElementChain {
-    //     var c = self;
-    //     c._positionRef = r;
-    //     return c;
-    // }
 
     pub fn offset(self: ElementChain, dx: f32, dy: f32) ElementChain {
         var c = self;
@@ -199,7 +200,7 @@ pub const UIChain = struct {
     }
 
     pub fn textbox(self: UIChain, value: [:0]const u8, style: anytype, options: anytype) ElementChain {
-        const tb = Textbox.init(self.allocator, value, .{}, style, null, options);
+        const tb = Textbox.init(self.allocator, value, .{}, style, options);
         return .{ .allocator = self.allocator, .el = UIElement{ .Textbox = tb } };
     }
 

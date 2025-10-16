@@ -18,7 +18,6 @@ pub const UIElement = union(enum) {
     FileDropzone: FileDropzone,
     SpriteButton: SpriteButton,
     // Button: Button,
-    // SpriteButton: SpriteButton,
 
     pub fn start(self: *UIElement) anyerror!void {
         switch (self.*) {

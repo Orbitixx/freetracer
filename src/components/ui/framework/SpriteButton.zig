@@ -223,8 +223,8 @@ pub fn setStyle(self: *SpriteButton, style: Style) void {
 }
 
 fn updateLayout(self: *SpriteButton) void {
-    self.transform.w = @as(f32, @floatFromInt(self.texture.width));
-    self.transform.h = @as(f32, @floatFromInt(self.texture.height));
+    // self.transform.w = @as(f32, @floatFromInt(self.texture.width));
+    // self.transform.h = @as(f32, @floatFromInt(self.texture.height));
 
     const rect = self.transform.asRaylibRectangle();
     self.lastRect = rect;
