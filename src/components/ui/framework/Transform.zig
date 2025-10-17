@@ -28,8 +28,6 @@ relative: ?RelativeRef = .Parent,
 _resolver_ctx: ?*const anyopaque = null,
 _resolver_fn: ?TransformResolverFn = null,
 
-isRootElement: bool = false,
-
 offset_x: f32 = 0,
 offset_y: f32 = 0,
 

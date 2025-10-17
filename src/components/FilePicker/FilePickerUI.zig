@@ -77,15 +77,23 @@ pub const Events = struct {
         struct {},
     );
 
+    // TODO: Check: Deprecated ?
     pub const onGetUIDimensions = ComponentFramework.defineEvent(
         EventManager.createEventName(ComponentName, "get_ui_width"),
         struct { transform: Transform },
         struct {},
     );
 
+    // TODO: Deprecated
     pub const onUIDimensionsQueried = ComponentFramework.defineEvent(
         EventManager.createEventName(ComponentName, "get_ui"),
         struct { result: **Transform },
+        struct {},
+    );
+
+    pub const onRootViewTransformQueried = ComponentFramework.defineEvent(
+        EventManager.createEventName(ComponentName, "on_root_view_transform_queried"),
+        struct { result: **UIFramework.Transform },
         struct {},
     );
 };
@@ -122,7 +130,9 @@ pub fn handleEvent(self: *FilePickerUI, event: ComponentEvent) !EventResult {
 
     return switch (event.hash) {
         Events.onISOFilePathChanged.Hash => try self.handleIsoFilePathChanged(event),
+        // TODO: Deprecated
         Events.onUIDimensionsQueried.Hash => try self.handleUIDimensionsQueried(event),
+        Events.onRootViewTransformQueried.Hash => try self.handleOnRootViewTransformQueried(event),
         FilePicker.Events.onActiveStateChanged.Hash => try self.handleActiveStateChanged(event),
         AppManager.Events.AppResetEvent.Hash => self.handleAppResetRequest(),
         else => eventResult.fail(),
@@ -138,7 +148,7 @@ pub fn update(self: *FilePickerUI) !void {
 pub fn draw(self: *FilePickerUI) !void {
     const isActive = self.readIsActive();
 
-    self.bgRect.draw();
+    // self.bgRect.draw();
     try self.layout.draw();
 
     if (isActive) try self.drawActive() else try self.drawInactive();
@@ -270,13 +280,7 @@ fn initializeBackground(self: *FilePickerUI) !void {
         .bordered = true,
     };
 
-    // const fileDropzoneStyle = "";
-
     var ui = UIChain.init(self.allocator);
-
-    Debug.log(.DEBUG, "GlobalTransform: {any}", .{try AppManager.getGlobalTransform()});
-
-    // const dropzone_node_id = std.mem.span("file_picker_dropzone");
 
     self.layout = try ui.view(.{
         .id = null,
@@ -395,7 +399,7 @@ fn initializeBackground(self: *FilePickerUI) !void {
 
     try self.layout.start();
 
-    Debug.log(.DEBUG, "View transform: {any}", .{self.layout.transform});
+    // Debug.log(.DEBUG, "View transform: {any}", .{self.layout.transform});
 }
 
 fn broadcastUIDimensions(self: *FilePickerUI) void {
@@ -407,13 +411,16 @@ fn broadcastUIDimensions(self: *FilePickerUI) void {
 fn setIsActive(self: *FilePickerUI, isActive: bool) void {
     self.storeIsActive(isActive);
 
+    // TODO: Deprecated
     if (isActive) {
-        self.layout.emitEvent(.{ .StateChanged = .{ .isActive = isActive } }, .{});
         self.bgRect.transform.w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE);
+        self.bgRect.transform.h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_ACTIVE);
     } else {
-        self.layout.emitEvent(.{ .StateChanged = .{ .isActive = isActive } }, .{});
         self.bgRect.transform.w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE);
+        self.bgRect.transform.h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_INACTIVE);
     }
+
+    self.layout.emitEvent(.{ .StateChanged = .{ .isActive = isActive } }, .{});
 
     self.broadcastUIDimensions();
 }
@@ -524,6 +531,13 @@ const ConfirmButtonClickHandler = struct {
 //     self.isoTitle.transform.y = dropBounds.y + dropBounds.h + winRelY(0.02);
 // }
 
+fn handleOnRootViewTransformQueried(self: *FilePickerUI, event: ComponentEvent) !EventResult {
+    var eventResult = EventResult.init();
+    const data = Events.onRootViewTransformQueried.getData(event) orelse return eventResult.fail();
+    data.result.* = &self.layout.transform;
+    return eventResult.succeed();
+}
+
 fn handleUIDimensionsQueried(self: *FilePickerUI, event: ComponentEvent) !EventResult {
     var eventResult = EventResult.init();
     const data = Events.onUIDimensionsQueried.getData(event) orelse return eventResult.fail();
@@ -588,11 +602,13 @@ const UIConfig = struct {
                 switch (flag) {
                     false => {
                         Debug.log(.DEBUG, "Main FilePickerUI View received a SetActive(false) command.", .{});
-                        self.transform.size = .percent(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE, AppConfig.APP_UI_MODULE_PANEL_HEIGHT);
+                        self.transform.position = .percent(AppConfig.APP_UI_MODULE_PANEL_FILE_PICKER_X, 0.45);
+                        self.transform.size = .percent(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE, AppConfig.APP_UI_MODULE_PANEL_HEIGHT_INACTIVE);
                     },
                     true => {
                         Debug.log(.DEBUG, "Main FilePickerUI View received a SetActive(true) command.", .{});
-                        self.transform.size = .percent(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE, AppConfig.APP_UI_MODULE_PANEL_HEIGHT);
+                        self.transform.position = .percent(AppConfig.APP_UI_MODULE_PANEL_FILE_PICKER_X, AppConfig.APP_UI_MODULE_PANEL_Y);
+                        self.transform.size = .percent(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE, AppConfig.APP_UI_MODULE_PANEL_HEIGHT_ACTIVE);
                     },
                 }
 

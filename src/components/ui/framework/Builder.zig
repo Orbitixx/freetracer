@@ -162,6 +162,8 @@ pub const UIChain = struct {
     pub const ViewConfig = struct {
         id: ?UIElementIdentifier = null,
         position: PositionSpec = .{},
+        offset_x: f32 = 0,
+        offset_y: f32 = 0,
         position_ref: ?RelativeRef = null,
         size: SizeSpec = .{},
         size_ref: ?RelativeRef = null,
@@ -178,6 +180,8 @@ pub const UIChain = struct {
         t.size_ref = cfg.size_ref;
         t.relativeRef = cfg.relativeRef;
         t.relative = cfg.relative;
+        t.offset_x = cfg.offset_x;
+        t.offset_y = cfg.offset_y;
         return .{
             .allocator = self.allocator,
             .el = UIElement{ .View = View.init(

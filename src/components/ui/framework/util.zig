@@ -1,11 +1,16 @@
 const rl = @import("raylib");
 const Debug = @import("freetracer-lib").Debug;
 
+const EventManager = @import("../../../managers/EventManager.zig").EventManagerSingleton;
+
 const UIFramework = @import("./import.zig");
 const RelativeRef = UIFramework.RelativeRef;
 const View = UIFramework.View;
 const UIElement = UIFramework.UIElement;
 const Transform = UIFramework.Transform;
+
+const FilePickerUI = @import("../../FilePicker/FilePickerUI.zig");
+const DeviceListUI = @import("../../DeviceList/DeviceListUI.zig");
 
 pub fn resolveRelative(ctx: *const anyopaque, ref: RelativeRef) rl.Rectangle {
     const self: *const View = @ptrCast(@alignCast(ctx));
@@ -36,4 +41,23 @@ pub fn getTransformOf(el: *const UIElement) *const Transform {
         // inline else => unreachable,
         inline else => |*concrete| &concrete.transform,
     };
+}
+
+pub fn queryViewTransform(component: type) !*Transform {
+    var viewTransform: *Transform = undefined;
+
+    const eventType: type = switch (component) {
+        FilePickerUI => FilePickerUI.Events.onRootViewTransformQueried,
+        DeviceListUI => DeviceListUI.Events.onRootViewTransformQueried,
+        else => {
+            Debug.log(.ERROR, "queryViewTransform(): Unknown component provided as argument: {any}", .{component});
+            return error.UnknownComponentType;
+        },
+    };
+
+    const event = eventType.create(null, &.{ .result = &viewTransform });
+    const dataResult = try EventManager.signal(component.ComponentName, event);
+    if (!dataResult.success) Debug.log(.WARNING, "queryComponentTransform(): unable to query {s}'s layout transform.", .{component.ComponentName});
+
+    return viewTransform;
 }

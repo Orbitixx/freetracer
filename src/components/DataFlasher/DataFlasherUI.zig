@@ -339,7 +339,7 @@ fn initBgRect(self: *DataFlasherUI) !void {
         },
         .{
             .width = Layout.UnitValue.pixels(winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE)),
-            .height = Layout.UnitValue.pixels(winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT)),
+            .height = Layout.UnitValue.pixels(winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_INACTIVE)),
         },
     );
 
@@ -404,11 +404,11 @@ fn initStatusIndicators(self: *DataFlasherUI) void {
 
 fn initTextures(self: *DataFlasherUI) void {
     self.uiSheetTexture = Texture.init(.BUTTON_UI, .{ .x = winRelX(1.5), .y = winRelY(1.5) });
-    self.moduleImg = Texture.init(.DISK_IMAGE, .{ .x = 0, .y = 0 });
-    self.moduleImg.transform.scale = 0.5;
+    self.moduleImg = Texture.init(.FLASH_PLACEHOLDER, .{ .x = 0, .y = 0 });
+    self.moduleImg.transform.scale = 3;
     self.moduleImg.transform.x = self.bgRect.transform.relX(0.5) - self.moduleImg.transform.getWidth() / 2;
     self.moduleImg.transform.y = self.bgRect.transform.relY(0.5) - self.moduleImg.transform.getHeight() / 2;
-    self.moduleImg.tint = .{ .r = 255, .g = 255, .b = 255, .a = 150 };
+    self.moduleImg.tint = .{ .r = 255, .g = 255, .b = 255, .a = 255 };
 }
 
 fn initProgressbox(self: *DataFlasherUI) void {
@@ -654,6 +654,14 @@ pub fn handleOnActiveStateChanged(self: *DataFlasherUI, event: ComponentEvent) !
         self.onDeactivated();
     }
 
+    if (data.isActive) {
+        self.bgRect.transform.w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE);
+        self.bgRect.transform.h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_ACTIVE);
+    } else {
+        self.bgRect.transform.w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE);
+        self.bgRect.transform.h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_INACTIVE);
+    }
+
     return eventResult.succeed();
 }
 
@@ -661,7 +669,7 @@ fn onActivated(self: *DataFlasherUI) void {
     const selection = self.readParentSelection();
     const isoPath = selection.isoPath orelse NULL_TEXT;
 
-    self.applyPanelMode(panelAppearanceActive());
+    // self.applyPanelMode(panelAppearanceActive());
 
     self.updateIsoDisplay(isoPath);
     self.updateDeviceDisplay(selection.device);
@@ -674,7 +682,7 @@ fn onActivated(self: *DataFlasherUI) void {
 
 fn onDeactivated(self: *DataFlasherUI) void {
     self.button.setEnabled(false);
-    self.applyPanelMode(panelAppearanceInactive());
+    // self.applyPanelMode(panelAppearanceInactive());
 }
 
 pub fn handleOnISOWriteProgressChanged(self: *DataFlasherUI, event: ComponentEvent) !EventResult {

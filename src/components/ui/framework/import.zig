@@ -26,3 +26,4 @@ pub const TransformResolverFn = types.TransformResolverFn;
 pub const util = @import("./util.zig");
 pub const resolveRelative = util.resolveRelative;
 pub const getTransformOf = util.getTransformOf;
+pub const queryViewTransform = util.queryViewTransform;

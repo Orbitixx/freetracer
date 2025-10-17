@@ -33,19 +33,23 @@ const Component = ComponentFramework.Component;
 const ComponentEvent = ComponentFramework.Event;
 const EventResult = ComponentFramework.EventResult;
 
-const UIFramework = @import("../ui/import/index.zig");
-const Panel = UIFramework.Panel;
-const Button = UIFramework.Button;
-const Checkbox = UIFramework.Checkbox;
-const Rectangle = UIFramework.Primitives.Rectangle;
-const Text = UIFramework.Primitives.Text;
-const Transform = UIFramework.Primitives.Transform;
-const Texture = UIFramework.Primitives.Texture;
-const Layout = UIFramework.Layout;
-const UI = UIFramework.utils;
+const DeprecatedUI = @import("../ui/import/index.zig");
+const Panel = DeprecatedUI.Panel;
+const Button = DeprecatedUI.Button;
+const Checkbox = DeprecatedUI.Checkbox;
+const Rectangle = DeprecatedUI.Primitives.Rectangle;
+const Text = DeprecatedUI.Primitives.Text;
+const Transform = DeprecatedUI.Primitives.Transform;
+const Texture = DeprecatedUI.Primitives.Texture;
+const Layout = DeprecatedUI.Layout;
+const UI = DeprecatedUI.utils;
 
-const Styles = UIFramework.Styles;
-const Color = UIFramework.Styles.Color;
+const Styles = DeprecatedUI.Styles;
+const Color = DeprecatedUI.Styles.Color;
+
+const UIFramework = @import("../ui/framework/import.zig");
+const UIChain = UIFramework.UIChain;
+const View = UIFramework.View;
 
 // This state is mutable and can be accessed from the main UI thread (draw/update)
 // and a worker/event thread (handleEvent). Access must be guarded by state.lock().
@@ -72,6 +76,7 @@ component: ?Component = null,
 allocator: std.mem.Allocator,
 parent: *DeviceList,
 deviceCheckboxes: std.ArrayList(Checkbox),
+// TODO: Deprecated
 bgRect: Rectangle = undefined,
 headerLabel: Text = undefined,
 moduleImg: Texture = undefined,
@@ -80,13 +85,15 @@ deviceNameLabel: Text = undefined,
 noDevicesLabel: Text = undefined,
 refreshDevicesButton: Button = undefined,
 selectedDeviceNameBuf: [MAX_DISPLAY_STRING_LENGTH:0]u8 = undefined,
-frame: UIFramework.Layout.Bounds = undefined,
+// TODO: Deprecated
+frame: DeprecatedUI.Layout.Bounds = undefined,
+layout: View = undefined,
 
 fn panelAppearanceActive() Panel.Appearance {
     return .{
         .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
-        .backgroundColor = Styles.Color.themeSectionBg,
-        .borderColor = Styles.Color.themeSectionBorder,
+        .backgroundColor = Styles.Color.white,
+        .borderColor = Styles.Color.white,
         .headerColor = Color.white,
     };
 }
@@ -94,8 +101,8 @@ fn panelAppearanceActive() Panel.Appearance {
 fn panelAppearanceInactive() Panel.Appearance {
     return .{
         .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
-        .backgroundColor = Styles.Color.themeSectionBg,
-        .borderColor = Styles.Color.themeSectionBorder,
+        .backgroundColor = Styles.Color.white,
+        .borderColor = Styles.Color.white,
         .headerColor = Color.lightGray,
     };
 }
@@ -127,9 +134,16 @@ pub const Events = struct {
         struct {},
     );
 
+    pub const onRootViewTransformQueried = ComponentFramework.defineEvent(
+        EventManager.createEventName(ComponentName, "on_root_view_transform_queried"),
+        struct { result: **UIFramework.Transform },
+        struct {},
+    );
+
+    // TODO: Deprecated
     pub const onUITransformQueried = ComponentFramework.defineEvent(
         EventManager.createEventName(ComponentName, "on_ui_transform_queried"),
-        struct { result: **UIFramework.Primitives.Transform },
+        struct { result: **DeprecatedUI.Primitives.Transform },
         struct {},
     );
 };
@@ -176,7 +190,7 @@ pub fn start(self: *DeviceListUI) !void {
 
     self.noDevicesLabel = Text.init("No external devices found...", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
 
-    self.applyPanelMode(panelAppearanceInactive());
+    // self.applyPanelMode(panelAppearanceInactive());
 
     Debug.log(.DEBUG, "DeviceListUI: component start() finished.", .{});
 }
@@ -189,6 +203,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
     return switch (event.hash) {
         DeviceList.Events.onDeviceListActiveStateChanged.Hash => try self.handleOnDeviceListActiveStateChanged(event),
         DeviceList.Events.onDevicesCleanup.Hash => try self.handleOnDevicesCleanup(),
+        Events.onRootViewTransformQueried.Hash => try self.handleOnRootViewTransformQueried(event),
         Events.onUITransformQueried.Hash => try self.handleOnUITransformQueried(event),
         Events.onDevicesReadyToRender.Hash => try self.handleOnDevicesReadyToRender(),
         Events.onSelectedDeviceNameChanged.Hash => try self.handleOnSelectedDeviceNameChanged(event),
@@ -199,6 +214,8 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
 
 pub fn update(self: *DeviceListUI) !void {
     if (!self.readIsActive()) return;
+
+    try self.layout.update();
 
     for (self.deviceCheckboxes.items) |*checkbox| {
         try checkbox.update();
@@ -213,8 +230,9 @@ pub fn draw(self: *DeviceListUI) !void {
     const devicesFound = self.hasDevices();
 
     self.refreshLayout(devicesFound);
+    try self.layout.draw();
 
-    self.bgRect.draw();
+    // self.bgRect.draw();
     self.headerLabel.draw();
 
     if (isActive) try self.drawActive(devicesFound) else try self.drawInactive(devicesFound);
@@ -243,27 +261,51 @@ fn subscribeToEvents(self: *DeviceListUI) !void {
 fn initBgRect(self: *DeviceListUI) !void {
     const filePickerFrame = try UI.queryComponentTransform(FilePickerUI);
 
-    self.frame = UIFramework.Layout.Bounds.relative(
+    self.frame = DeprecatedUI.Layout.Bounds.relative(
         filePickerFrame,
         .{
             .x = Layout.UnitValue.mix(1.0, AppConfig.APP_UI_MODULE_GAP_X),
             .y = Layout.UnitValue.pixels(0),
         },
         .{
-            .width = UIFramework.Layout.UnitValue.pixels(winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE)),
-            .height = UIFramework.Layout.UnitValue.pixels(winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT)),
+            .width = DeprecatedUI.Layout.UnitValue.pixels(winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE)),
+            .height = DeprecatedUI.Layout.UnitValue.pixels(winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT)),
         },
     );
 
     self.bgRect = Rectangle{
         .transform = self.frame.resolve(),
         .style = .{
-            .color = Styles.Color.themeSectionBg,
-            .borderStyle = .{ .color = Styles.Color.themeSectionBorder },
+            .color = Styles.Color.white,
+            .borderStyle = .{ .color = Styles.Color.white },
         },
         .rounded = true,
         .bordered = true,
     };
+
+    var ui = UIChain.init(self.allocator);
+
+    self.layout = try ui.view(.{
+        .id = null,
+        .position = .percent(1, 0),
+        .offset_x = AppConfig.APP_UI_MODULE_GAP_X,
+        .size = .pixels(WindowManager.relW(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE), WindowManager.relH(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_INACTIVE)),
+        .relativeRef = try UIFramework.queryViewTransform(FilePickerUI),
+        .background = .{
+            .transform = .{},
+            .style = .{
+                .color = Color.themeSectionBg,
+                .borderStyle = .{ .color = Color.themeSectionBorder },
+            },
+            .rounded = true,
+            .bordered = true,
+        },
+    }).children(.{});
+
+    self.layout.setActive = UIConfig.Callbacks.MainView.setActive;
+    self.layout.transform.position.y = .pixels(winRelY(AppConfig.APP_UI_MODULE_PANEL_Y_INACTIVE - AppConfig.APP_UI_MODULE_PANEL_Y));
+
+    try self.layout.start();
 }
 
 fn initNextBtn(self: *DeviceListUI) !void {
@@ -523,13 +565,18 @@ fn handleOnDeviceListActiveStateChanged(self: *DeviceListUI, event: ComponentEve
 
     self.storeIsActive(data.isActive);
 
+    // TODO: Deprecated
     if (data.isActive) {
-        Debug.log(.DEBUG, "DeviceListUI: setting UI to ACTIVE.", .{});
+        self.bgRect.transform.w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE);
+        self.bgRect.transform.h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_ACTIVE);
     } else {
-        Debug.log(.DEBUG, "DeviceListUI: setting UI to INACTIVE.", .{});
+        self.bgRect.transform.w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE);
+        self.bgRect.transform.h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_INACTIVE);
     }
 
-    self.applyPanelMode(panelAppearanceFor(data.isActive));
+    self.layout.emitEvent(.{ .StateChanged = .{ .isActive = data.isActive } }, .{});
+
+    // self.applyPanelMode(panelAppearanceFor(data.isActive));
 
     if (!data.isActive) {
         self.nextButton.setEnabled(false);
@@ -565,6 +612,13 @@ fn updateDeviceNameLabel(self: *DeviceListUI, value: [:0]const u8, truncate_len:
     self.deviceNameLabel.transform.y = self.moduleImg.transform.y + self.moduleImg.transform.getHeight() + winRelY(0.02);
     self.deviceNameLabel.transform.w = dims.width;
     self.deviceNameLabel.transform.h = dims.height;
+}
+
+fn handleOnRootViewTransformQueried(self: *DeviceListUI, event: ComponentEvent) !EventResult {
+    var eventResult = EventResult.init();
+    const data = Events.onRootViewTransformQueried.getData(event) orelse return eventResult.fail();
+    data.result.* = &self.layout.transform;
+    return eventResult.succeed();
 }
 
 fn handleOnUITransformQueried(self: *DeviceListUI, event: ComponentEvent) !EventResult {
@@ -654,7 +708,43 @@ pub fn handleAppResetRequest(self: *DeviceListUI) EventResult {
     self.nextButton.setEnabled(false);
 
     self.updateDeviceNameLabel(kStringDeviceListNoDeviceSelected, null);
-    self.applyPanelMode(panelAppearanceInactive());
+    // self.applyPanelMode(panelAppearanceInactive());
 
     return eventResult.succeed();
 }
+
+pub const UIConfig = struct {
+    //
+    pub const Callbacks = struct {
+        //
+        pub const MainView = struct {
+            //
+            pub fn setActive(ctx: *anyopaque, flag: bool) void {
+                const self: *View = @ptrCast(@alignCast(ctx));
+
+                switch (flag) {
+                    true => {
+                        Debug.log(.DEBUG, "Main DeviceListUI View received a SetActive(true) command.", .{});
+                        self.transform.size = .pixels(
+                            WindowManager.relW(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
+                            WindowManager.relH(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_ACTIVE),
+                        );
+
+                        self.transform.position.y = .pixels(winRelY(AppConfig.APP_UI_MODULE_PANEL_Y));
+                    },
+                    false => {
+                        Debug.log(.DEBUG, "Main DeviceListUI View received a SetActive(false) command.", .{});
+                        self.transform.size = .pixels(
+                            WindowManager.relW(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
+                            WindowManager.relH(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_INACTIVE),
+                        );
+
+                        self.transform.position.y = .pixels(winRelY(AppConfig.APP_UI_MODULE_PANEL_Y_INACTIVE));
+                    },
+                }
+
+                self.transform.resolve();
+            }
+        };
+    };
+};
