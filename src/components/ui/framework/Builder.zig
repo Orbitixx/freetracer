@@ -194,6 +194,16 @@ pub const UIChain = struct {
         return .{ .allocator = self.allocator, .el = UIElement{ .Rectangle = rect } };
     }
 
+    pub fn text(self: UIChain, value: [:0]const u8, config: Text.Config) ElementChain {
+        const txt = Text.init(config.identifier, value, .{}, .{
+            .font = config.font,
+            .fontSize = config.fontSize,
+            .spacing = config.spacing,
+            .textColor = config.textColor,
+        });
+        return .{ .allocator = self.allocator, .el = UIElement{ .Text = txt } };
+    }
+
     pub fn texture(self: UIChain, resource: anytype) ElementChain {
         const tex = Texture.init(null, resource, .{}, null);
         return .{ .allocator = self.allocator, .el = UIElement{ .Texture = tex } };

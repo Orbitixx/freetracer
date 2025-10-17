@@ -16,9 +16,18 @@ const Color = Styles.Color;
 
 const ResourceManagerImport = @import("../../../managers/ResourceManager.zig");
 const ResourceManager = ResourceManagerImport.ResourceManagerSingleton;
+const FontResource = ResourceManagerImport.FONT;
 
 const Text = @This();
 const MAX_TEXT_LENGTH = 256;
+
+pub const Config = struct {
+    identifier: ?UIElementIdentifier = null,
+    textColor: rl.Color = Color.white,
+    font: FontResource = .ROBOTO_REGULAR,
+    fontSize: f32 = 16,
+    spacing: f32 = 0,
+};
 
 identifier: ?UIElementIdentifier = null,
 transform: Transform = .{},

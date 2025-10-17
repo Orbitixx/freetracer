@@ -344,21 +344,35 @@ fn initializeBackground(self: *FilePickerUI) !void {
             .size(.percent(0.9, 0.25))
             .sizeRef(.Parent),
 
+        ui.texture(.IMAGE_TAG)
+            .id("image_info_icon")
+            .position(.percent(0.05, 0.15))
+            .positionRef(.{ .NodeId = "image_info_bg" })
+            .sizeRef(.{ .NodeId = "image_info_bg" }),
+
         ui.textbox("Ubuntu 24.04 LTS.iso", UIConfig.Styles.ImageInfoTextbox, Textbox.Params{
             .identifier = .ImageInfoTextbox,
             .wordWrap = true,
         })
             .id("image_info_textbox")
-            .position(.percent(0.2, 0.25))
-            .positionRef(.{ .NodeId = "image_info_bg" })
+            .position(.percent(1.7, 0))
+            .offset(0, -4)
+            .positionRef(.{ .NodeId = "image_info_icon" })
             .size(.percent(0.8, 0.5))
             .sizeRef(.{ .NodeId = "image_info_bg" }),
 
-        ui.textbox("Select an image file as as .iso or .img", Textbox.TextboxStyle{}, Textbox.Params{})
+        ui.text("5.06 Gb", .{ .textColor = rl.Color.init(156, 156, 156, 255) })
+            .id("image_info_size_text")
+            .position(.percent(0, 1))
+            .offset(0, -24)
+            .positionRef(.{ .NodeId = "image_info_textbox" })
+            .sizeRef(.{ .NodeId = "image_info_bg" }),
+
+        ui.textbox("Pick an image file such as .iso or .img to be flashed to device.", UIConfig.Styles.FilePickerHintTextbox, Textbox.Params{})
             .id("file_picker_hint_text")
             .position(.percent(0, 1.3))
             .positionRef(.{ .NodeId = "image_info_bg" })
-            .size(.percent(0.7, 0.5))
+            .size(.percent(0.65, 0.5))
             .sizeRef(.{ .NodeId = "image_info_bg" }),
 
         ui.spriteButton(.{
@@ -370,15 +384,8 @@ fn initializeBackground(self: *FilePickerUI) !void {
                     .context = self,
                 },
             },
-            .style = .{
-                .font = .JERSEY10_REGULAR,
-                .fontSize = 24,
-                .textColor = Color.themePrimary,
-                .tint = Color.themePrimary,
-                .hoverTint = Color.themeTertiary,
-                .hoverTextColor = Color.themeTertiary,
-            },
-        }).position(.percent(1, 0))
+            .style = UIConfig.Styles.ConfirmButton,
+        }).position(.percent(1.1, 0))
             .positionRef(.{ .NodeId = "file_picker_hint_text" })
             .size(.percent(0.3, 0.4))
             .sizeRef(.{ .NodeId = "image_info_bg" }),
@@ -596,13 +603,13 @@ const UIConfig = struct {
 
     pub const Styles = struct {
         //
-        const HeaderTextbox: UIFramework.Textbox.TextboxStyle = .{
+        const HeaderTextbox: Textbox.TextboxStyle = .{
             .background = .{ .color = Color.transparent, .borderStyle = .{ .color = Color.transparent, .thickness = 0 }, .roundness = 0 },
             .text = .{ .font = .JERSEY10_REGULAR, .fontSize = 34, .textColor = Color.white },
             .lineSpacing = -5,
         };
 
-        const ImageInfoTextbox: UIFramework.Textbox.TextboxStyle = .{
+        const ImageInfoTextbox: Textbox.TextboxStyle = .{
             .background = .{
                 .color = Color.transparent,
                 .borderStyle = .{
@@ -611,8 +618,22 @@ const UIConfig = struct {
                 },
                 .roundness = 0,
             },
-            .text = .{ .font = .ROBOTO_REGULAR, .fontSize = 20, .textColor = Color.offWhite },
+            .text = .{ .font = .ROBOTO_REGULAR, .fontSize = 24, .textColor = Color.offWhite },
             .lineSpacing = -5,
+        };
+
+        const FilePickerHintTextbox: Textbox.TextboxStyle = .{ .text = .{
+            .fontSize = 16,
+            .textColor = rl.Color.init(156, 156, 156, 255),
+        } };
+
+        const ConfirmButton: UIFramework.SpriteButton.Style = .{
+            .font = .JERSEY10_REGULAR,
+            .fontSize = 24,
+            .textColor = Color.themePrimary,
+            .tint = Color.themePrimary,
+            .hoverTint = Color.themeTertiary,
+            .hoverTextColor = Color.themeTertiary,
         };
     };
 };
