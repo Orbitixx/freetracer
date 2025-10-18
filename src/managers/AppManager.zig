@@ -185,7 +185,7 @@ const AppManager = struct {
             .position_ref = null,
             .size_ref = null,
             .relative = null,
-            .relativeRef = null,
+            .relativeTransform = null,
         };
         self.globalTransform.resolve();
 
@@ -243,13 +243,13 @@ const AppManager = struct {
 
         const logoText = UI.Text.init(
             "freetracer",
-            .{ .x = relX(0.08), .y = relY(0.035) },
+            .{ .x = relX(0.06), .y = relY(0.035) },
             .{ .font = .JERSEY10_REGULAR, .fontSize = 40, .textColor = Color.white },
         );
 
         const subLogoText = UI.Text.init(
             "free and open-source by orbitixx",
-            .{ .x = relX(0.08), .y = relY(0.035) + 32 },
+            .{ .x = relX(0.06), .y = relY(0.035) + 32 },
             .{ .font = .JERSEY10_REGULAR, .fontSize = 18, .textColor = Color.secondary },
         );
 

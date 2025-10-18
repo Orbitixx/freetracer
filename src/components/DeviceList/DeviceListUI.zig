@@ -77,39 +77,38 @@ allocator: std.mem.Allocator,
 parent: *DeviceList,
 deviceCheckboxes: std.ArrayList(Checkbox),
 // TODO: Deprecated
-bgRect: Rectangle = undefined,
-headerLabel: Text = undefined,
-moduleImg: Texture = undefined,
-nextButton: Button = undefined,
-deviceNameLabel: Text = undefined,
-noDevicesLabel: Text = undefined,
-refreshDevicesButton: Button = undefined,
+// bgRect: Rectangle = undefined,
+// headerLabel: Text = undefined,
+// nextButton: Button = undefined,
+// deviceNameLabel: Text = undefined,
+// noDevicesLabel: Text = undefined,
+// refreshDevicesButton: Button = undefined,
 selectedDeviceNameBuf: [MAX_DISPLAY_STRING_LENGTH:0]u8 = undefined,
 // TODO: Deprecated
-frame: DeprecatedUI.Layout.Bounds = undefined,
+// frame: DeprecatedUI.Layout.Bounds = undefined,
 layout: View = undefined,
 
-fn panelAppearanceActive() Panel.Appearance {
-    return .{
-        .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
-        .backgroundColor = Styles.Color.white,
-        .borderColor = Styles.Color.white,
-        .headerColor = Color.white,
-    };
-}
-
-fn panelAppearanceInactive() Panel.Appearance {
-    return .{
-        .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
-        .backgroundColor = Styles.Color.white,
-        .borderColor = Styles.Color.white,
-        .headerColor = Color.lightGray,
-    };
-}
-
-fn panelAppearanceFor(isActive: bool) Panel.Appearance {
-    return if (isActive) panelAppearanceActive() else panelAppearanceInactive();
-}
+// fn panelAppearanceActive() Panel.Appearance {
+//     return .{
+//         .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
+//         .backgroundColor = Styles.Color.white,
+//         .borderColor = Styles.Color.white,
+//         .headerColor = Color.white,
+//     };
+// }
+//
+// fn panelAppearanceInactive() Panel.Appearance {
+//     return .{
+//         .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
+//         .backgroundColor = Styles.Color.white,
+//         .borderColor = Styles.Color.white,
+//         .headerColor = Color.lightGray,
+//     };
+// }
+//
+// fn panelAppearanceFor(isActive: bool) Panel.Appearance {
+//     return if (isActive) panelAppearanceActive() else panelAppearanceInactive();
+// }
 
 pub const Events = struct {
     //
@@ -181,14 +180,13 @@ pub fn start(self: *DeviceListUI) !void {
     try self.subscribeToEvents();
 
     try self.initBgRect();
-    try self.initNextBtn();
-    self.initRefreshDevicesBtn();
-    self.initHeaderLabel();
-    self.initModuleCoverTexture();
+    // try self.initNextBtn();
+    // self.initRefreshDevicesBtn();
+    // self.initHeaderLabel();
     // Must come after initModuleCoverTexture() as deviceNameLabel references its position
-    self.initDeviceNameLabel();
+    // self.initDeviceNameLabel();
 
-    self.noDevicesLabel = Text.init("No external devices found...", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
+    // self.noDevicesLabel = Text.init("No external devices found...", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
 
     // self.applyPanelMode(panelAppearanceInactive());
 
@@ -204,7 +202,7 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
         DeviceList.Events.onDeviceListActiveStateChanged.Hash => try self.handleOnDeviceListActiveStateChanged(event),
         DeviceList.Events.onDevicesCleanup.Hash => try self.handleOnDevicesCleanup(),
         Events.onRootViewTransformQueried.Hash => try self.handleOnRootViewTransformQueried(event),
-        Events.onUITransformQueried.Hash => try self.handleOnUITransformQueried(event),
+        // Events.onUITransformQueried.Hash => try self.handleOnUITransformQueried(event),
         Events.onDevicesReadyToRender.Hash => try self.handleOnDevicesReadyToRender(),
         Events.onSelectedDeviceNameChanged.Hash => try self.handleOnSelectedDeviceNameChanged(event),
         AppManager.Events.AppResetEvent.Hash => self.handleAppResetRequest(),
@@ -221,19 +219,19 @@ pub fn update(self: *DeviceListUI) !void {
         try checkbox.update();
     }
 
-    try self.refreshDevicesButton.update();
-    try self.nextButton.update();
+    // try self.refreshDevicesButton.update();
+    // try self.nextButton.update();
 }
 
 pub fn draw(self: *DeviceListUI) !void {
     const isActive = self.readIsActive();
     const devicesFound = self.hasDevices();
 
-    self.refreshLayout(devicesFound);
+    // self.refreshLayout(devicesFound);
     try self.layout.draw();
 
     // self.bgRect.draw();
-    self.headerLabel.draw();
+    // self.headerLabel.draw();
 
     if (isActive) try self.drawActive(devicesFound) else try self.drawInactive(devicesFound);
 }
@@ -241,6 +239,7 @@ pub fn draw(self: *DeviceListUI) !void {
 pub fn deinit(self: *DeviceListUI) void {
     self.destroyDeviceCheckboxContexts();
     self.deviceCheckboxes.deinit(self.allocator);
+    self.layout.deinit();
 }
 
 pub fn dispatchComponentAction(self: *DeviceListUI) void {
@@ -259,38 +258,41 @@ fn subscribeToEvents(self: *DeviceListUI) !void {
 }
 
 fn initBgRect(self: *DeviceListUI) !void {
-    const filePickerFrame = try UI.queryComponentTransform(FilePickerUI);
+    // const filePickerFrame = try UI.queryComponentTransform(FilePickerUI);
+    //
+    // self.frame = DeprecatedUI.Layout.Bounds.relative(
+    //     filePickerFrame,
+    //     .{
+    //         .x = Layout.UnitValue.mix(1.0, AppConfig.APP_UI_MODULE_GAP_X),
+    //         .y = Layout.UnitValue.pixels(0),
+    //     },
+    //     .{
+    //         .width = DeprecatedUI.Layout.UnitValue.pixels(winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE)),
+    //         .height = DeprecatedUI.Layout.UnitValue.pixels(winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT)),
+    //     },
+    // );
 
-    self.frame = DeprecatedUI.Layout.Bounds.relative(
-        filePickerFrame,
-        .{
-            .x = Layout.UnitValue.mix(1.0, AppConfig.APP_UI_MODULE_GAP_X),
-            .y = Layout.UnitValue.pixels(0),
-        },
-        .{
-            .width = DeprecatedUI.Layout.UnitValue.pixels(winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE)),
-            .height = DeprecatedUI.Layout.UnitValue.pixels(winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT)),
-        },
-    );
-
-    self.bgRect = Rectangle{
-        .transform = self.frame.resolve(),
-        .style = .{
-            .color = Styles.Color.white,
-            .borderStyle = .{ .color = Styles.Color.white },
-        },
-        .rounded = true,
-        .bordered = true,
-    };
+    // self.bgRect = Rectangle{
+    //     .transform = self.frame.resolve(),
+    //     .style = .{
+    //         .color = Styles.Color.white,
+    //         .borderStyle = .{ .color = Styles.Color.white },
+    //     },
+    //     .rounded = true,
+    //     .bordered = true,
+    // };
 
     var ui = UIChain.init(self.allocator);
 
     self.layout = try ui.view(.{
         .id = null,
-        .position = .percent(1, 0),
+        .position = .percent(1, AppConfig.APP_UI_MODULE_PANEL_Y_INACTIVE),
         .offset_x = AppConfig.APP_UI_MODULE_GAP_X,
-        .size = .pixels(WindowManager.relW(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE), WindowManager.relH(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_INACTIVE)),
-        .relativeRef = try UIFramework.queryViewTransform(FilePickerUI),
+        .size = .percent(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE, AppConfig.APP_UI_MODULE_PANEL_HEIGHT_INACTIVE),
+        .size_transform_height = try AppManager.getGlobalTransform(),
+        .size_transform_width = try AppManager.getGlobalTransform(),
+        .position_transform_x = try UIFramework.queryViewTransform(FilePickerUI),
+        .position_transform_y = try AppManager.getGlobalTransform(),
         .background = .{
             .transform = .{},
             .style = .{
@@ -302,107 +304,88 @@ fn initBgRect(self: *DeviceListUI) !void {
         },
     }).children(.{});
 
-    self.layout.setActive = UIConfig.Callbacks.MainView.setActive;
-    self.layout.transform.position.y = .pixels(winRelY(AppConfig.APP_UI_MODULE_PANEL_Y_INACTIVE - AppConfig.APP_UI_MODULE_PANEL_Y));
+    self.layout.callbacks.onStateChange = .{ .function = UIConfig.Callbacks.MainView.StateHandler.handler, .context = &self.layout };
 
     try self.layout.start();
 }
 
-fn initNextBtn(self: *DeviceListUI) !void {
-    self.nextButton = Button.init("Next", null, self.bgRect.transform.getPosition(), .Primary, .{
-        .context = self.parent,
-        .function = DeviceList.dispatchComponentFinishedAction.call,
-    }, self.allocator);
+// fn initNextBtn(self: *DeviceListUI) !void {
+//     self.nextButton = Button.init("Next", null, self.bgRect.transform.getPosition(), .Primary, .{
+//         .context = self.parent,
+//         .function = DeviceList.dispatchComponentFinishedAction.call,
+//     }, self.allocator);
+//
+//     self.nextButton.setEnabled(false);
+//
+//     try self.nextButton.start();
+//
+//     self.nextButton.setPosition(.{
+//         .x = self.bgRect.transform.relX(0.5) - @divTrunc(self.nextButton.rect.transform.getWidth(), 2),
+//         .y = self.bgRect.transform.relY(0.9) - @divTrunc(self.nextButton.rect.transform.getHeight(), 2),
+//     });
+//
+//     self.nextButton.rect.rounded = true;
+// }
 
-    self.nextButton.setEnabled(false);
+// fn initRefreshDevicesBtn(self: *DeviceListUI) void {
+//     self.refreshDevicesButton = Button.init("", .RELOAD_ICON, self.bgRect.transform.getPosition(), .Primary, .{
+//         .context = self.parent,
+//         .function = refreshDevices.call,
+//     }, self.allocator);
+//
+//     self.refreshDevicesButton.rect.rounded = true;
+// }
 
-    try self.nextButton.start();
-
-    self.nextButton.setPosition(.{
-        .x = self.bgRect.transform.relX(0.5) - @divTrunc(self.nextButton.rect.transform.getWidth(), 2),
-        .y = self.bgRect.transform.relY(0.9) - @divTrunc(self.nextButton.rect.transform.getHeight(), 2),
-    });
-
-    self.nextButton.rect.rounded = true;
-}
-
-fn initRefreshDevicesBtn(self: *DeviceListUI) void {
-    self.refreshDevicesButton = Button.init("", .RELOAD_ICON, self.bgRect.transform.getPosition(), .Primary, .{
-        .context = self.parent,
-        .function = refreshDevices.call,
-    }, self.allocator);
-
-    self.refreshDevicesButton.rect.rounded = true;
-}
-
-fn initHeaderLabel(self: *DeviceListUI) void {
-    self.headerLabel = Text.init("device", .{
-        .x = self.bgRect.transform.x + 12,
-        .y = self.bgRect.transform.relY(0.01),
-    }, .{
-        .font = .JERSEY10_REGULAR,
-        .fontSize = 34,
-        .textColor = Styles.Color.white,
-    });
-}
-
-fn initModuleCoverTexture(self: *DeviceListUI) void {
-    self.moduleImg = Texture.init(.USB_IMAGE, .{ .x = 0, .y = 0 });
-    self.moduleImg.transform.scale = 0.5;
-    self.moduleImg.transform.x = self.bgRect.transform.relX(0.5) - self.moduleImg.transform.getWidth() / 2;
-    self.moduleImg.transform.y = self.bgRect.transform.relY(0.5) - self.moduleImg.transform.getHeight() / 2;
-    self.moduleImg.tint = .{ .r = 255, .g = 255, .b = 255, .a = 150 };
-}
-
-fn initDeviceNameLabel(self: *DeviceListUI) void {
-    self.deviceNameLabel = Text.init("", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
-    self.deviceNameLabel.transform.x = self.bgRect.transform.relX(0.5) - self.deviceNameLabel.getDimensions().width / 2;
-    self.deviceNameLabel.transform.y = self.moduleImg.transform.y + self.moduleImg.transform.getHeight() + winRelY(0.02);
-    self.updateDeviceNameLabel(kStringDeviceListNoDeviceSelected, null);
-}
+// fn initDeviceNameLabel(self: *DeviceListUI) void {
+//     self.deviceNameLabel = Text.init("", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
+//     self.deviceNameLabel.transform.x = self.bgRect.transform.relX(0.5) - self.deviceNameLabel.getDimensions().width / 2;
+//     self.deviceNameLabel.transform.y = winRelY(0.02);
+//     self.updateDeviceNameLabel(kStringDeviceListNoDeviceSelected, null);
+// }
 
 fn drawActive(self: *DeviceListUI, devicesFound: bool) !void {
     if (!devicesFound) {
-        self.noDevicesLabel.draw();
+        // self.noDevicesLabel.draw();
     }
 
     for (self.deviceCheckboxes.items) |*checkbox| {
         try checkbox.draw();
     }
 
-    try self.refreshDevicesButton.draw();
-    try self.nextButton.draw();
+    // try self.refreshDevicesButton.draw();
+    // try self.nextButton.draw();
 }
 
 fn drawInactive(self: *DeviceListUI, devicesFound: bool) !void {
-    if (devicesFound) self.deviceNameLabel.draw();
-    self.moduleImg.draw();
+    if (devicesFound) {}
+
+    _ = self;
 }
 
-fn panelElements(self: *DeviceListUI) Panel.Elements {
-    return .{
-        .frame = &self.frame,
-        .rect = &self.bgRect,
-        .header = &self.headerLabel,
-    };
-}
+// fn panelElements(self: *DeviceListUI) Panel.Elements {
+//     return .{
+//         .frame = &self.frame,
+//         .rect = &self.bgRect,
+//         .header = &self.headerLabel,
+//     };
+// }
+//
+// fn applyPanelMode(self: *DeviceListUI, appearance: Panel.Appearance) void {
+//     Debug.log(.DEBUG, "DeviceListUI: applying panel appearance.", .{});
+//     // Panel.applyAppearance(self.panelElements(), appearance);
+//     self.updateLayout();
+// }
 
-fn applyPanelMode(self: *DeviceListUI, appearance: Panel.Appearance) void {
-    Debug.log(.DEBUG, "DeviceListUI: applying panel appearance.", .{});
-    Panel.applyAppearance(self.panelElements(), appearance);
-    self.updateLayout();
-}
+// fn refreshLayout(self: *DeviceListUI, devicesFound: bool) void {
+//     self.bgRect.transform = self.frame.resolve();
+//     // self.headerLabel.transform.x = self.bgRect.transform.x + 12;
+//     // self.headerLabel.transform.y = self.bgRect.transform.relY(0.01);
+//     self.applyLayoutFromBounds(devicesFound);
+// }
 
-fn refreshLayout(self: *DeviceListUI, devicesFound: bool) void {
-    self.bgRect.transform = self.frame.resolve();
-    self.headerLabel.transform.x = self.bgRect.transform.x + 12;
-    self.headerLabel.transform.y = self.bgRect.transform.relY(0.01);
-    self.applyLayoutFromBounds(devicesFound);
-}
-
-fn updateLayout(self: *DeviceListUI) void {
-    self.refreshLayout(self.hasDevices());
-}
+// fn updateLayout(self: *DeviceListUI) void {
+//     self.refreshLayout(self.hasDevices());
+// }
 
 fn storeIsActive(self: *DeviceListUI, isActive: bool) void {
     self.state.lock();
@@ -428,34 +411,31 @@ fn storeSelectedDevice(self: *DeviceListUI, selected: ?StorageDevice) void {
     self.state.data.selectedDevice = selected;
 }
 
-fn applyLayoutFromBounds(self: *DeviceListUI, devicesFound: bool) void {
-    const noDevicesDims = self.noDevicesLabel.getDimensions();
-    self.noDevicesLabel.transform.x = self.bgRect.transform.relX(0.5) - noDevicesDims.width / 2;
-    self.noDevicesLabel.transform.y = self.bgRect.transform.relY(0.5) - noDevicesDims.height / 2;
-
-    self.moduleImg.transform.x = self.bgRect.transform.relX(0.5) - self.moduleImg.transform.getWidth() / 2;
-    self.moduleImg.transform.y = self.bgRect.transform.relY(0.5) - self.moduleImg.transform.getHeight() / 2;
-
-    self.nextButton.setPosition(.{
-        .x = self.bgRect.transform.relX(0.5) - self.nextButton.rect.transform.getWidth() / 2,
-        .y = self.bgRect.transform.relY(0.9) - self.nextButton.rect.transform.getHeight() / 2,
-    });
-
-    if (devicesFound) {
-        self.refreshDevicesButton.setPosition(.{
-            .x = self.bgRect.transform.relX(0.9) - self.refreshDevicesButton.rect.transform.getWidth() / 2,
-            .y = self.bgRect.transform.relY(0.1) - self.refreshDevicesButton.rect.transform.getHeight() / 2,
-        });
-
-        self.deviceNameLabel.transform.x = self.bgRect.transform.relX(0.5) - self.deviceNameLabel.getDimensions().width / 2;
-        self.deviceNameLabel.transform.y = self.moduleImg.transform.y + self.moduleImg.transform.getHeight() + winRelY(0.02);
-    } else {
-        self.refreshDevicesButton.setPosition(.{
-            .x = self.bgRect.transform.relX(0.5) - self.refreshDevicesButton.rect.transform.getWidth() / 2,
-            .y = self.noDevicesLabel.transform.y + self.noDevicesLabel.transform.h + winRelY(0.02),
-        });
-    }
-}
+// fn applyLayoutFromBounds(self: *DeviceListUI, devicesFound: bool) void {
+//     const noDevicesDims = self.noDevicesLabel.getDimensions();
+//     self.noDevicesLabel.transform.x = self.bgRect.transform.relX(0.5) - noDevicesDims.width / 2;
+//     self.noDevicesLabel.transform.y = self.bgRect.transform.relY(0.5) - noDevicesDims.height / 2;
+//
+//     self.nextButton.setPosition(.{
+//         .x = self.bgRect.transform.relX(0.5) - self.nextButton.rect.transform.getWidth() / 2,
+//         .y = self.bgRect.transform.relY(0.9) - self.nextButton.rect.transform.getHeight() / 2,
+//     });
+//
+//     if (devicesFound) {
+//         self.refreshDevicesButton.setPosition(.{
+//             .x = self.bgRect.transform.relX(0.9) - self.refreshDevicesButton.rect.transform.getWidth() / 2,
+//             .y = self.bgRect.transform.relY(0.1) - self.refreshDevicesButton.rect.transform.getHeight() / 2,
+//         });
+//
+//         self.deviceNameLabel.transform.x = self.bgRect.transform.relX(0.5) - self.deviceNameLabel.getDimensions().width / 2;
+//         self.deviceNameLabel.transform.y = winRelY(0.02);
+//     } else {
+//         self.refreshDevicesButton.setPosition(.{
+//             .x = self.bgRect.transform.relX(0.5) - self.refreshDevicesButton.rect.transform.getWidth() / 2,
+//             .y = self.noDevicesLabel.transform.y + self.noDevicesLabel.transform.h + winRelY(0.02),
+//         });
+//     }
+// }
 
 fn clearDeviceCheckboxes(self: *DeviceListUI) void {
     if (self.deviceCheckboxes.items.len == 0) return;
@@ -524,8 +504,8 @@ fn appendDeviceCheckbox(self: *DeviceListUI, device: StorageDevice, index: usize
         device.serviceId,
         textBuf,
         .{
-            .x = self.bgRect.transform.relX(0.05),
-            .y = self.bgRect.transform.relY(0.12) + @as(f32, @floatFromInt(index)) * AppConfig.DEVICE_CHECKBOXES_GAP_FACTOR_Y,
+            .x = self.layout.transform.position.x.px + 20,
+            .y = self.layout.transform.position.y.px + 20 + @as(f32, @floatFromInt(index)) * AppConfig.DEVICE_CHECKBOXES_GAP_FACTOR_Y,
         },
         20,
         .Primary,
@@ -567,11 +547,11 @@ fn handleOnDeviceListActiveStateChanged(self: *DeviceListUI, event: ComponentEve
 
     // TODO: Deprecated
     if (data.isActive) {
-        self.bgRect.transform.w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE);
-        self.bgRect.transform.h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_ACTIVE);
+        // self.bgRect.transform.w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE);
+        // self.bgRect.transform.h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_ACTIVE);
     } else {
-        self.bgRect.transform.w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE);
-        self.bgRect.transform.h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_INACTIVE);
+        // self.bgRect.transform.w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE);
+        // self.bgRect.transform.h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_INACTIVE);
     }
 
     self.layout.emitEvent(.{ .StateChanged = .{ .isActive = data.isActive } }, .{});
@@ -579,7 +559,7 @@ fn handleOnDeviceListActiveStateChanged(self: *DeviceListUI, event: ComponentEve
     // self.applyPanelMode(panelAppearanceFor(data.isActive));
 
     if (!data.isActive) {
-        self.nextButton.setEnabled(false);
+        // self.nextButton.setEnabled(false);
     }
 
     return eventResult.succeed();
@@ -605,13 +585,13 @@ fn updateDeviceNameLabel(self: *DeviceListUI, value: [:0]const u8, truncate_len:
     }
 
     self.selectedDeviceNameBuf[truncated_len] = 0;
-    self.deviceNameLabel.value = std.mem.sliceTo(self.selectedDeviceNameBuf[0..], 0);
+    // self.deviceNameLabel.value = std.mem.sliceTo(self.selectedDeviceNameBuf[0..], 0);
 
-    const dims = self.deviceNameLabel.getDimensions();
-    self.deviceNameLabel.transform.x = self.bgRect.transform.relX(0.5) - dims.width / 2;
-    self.deviceNameLabel.transform.y = self.moduleImg.transform.y + self.moduleImg.transform.getHeight() + winRelY(0.02);
-    self.deviceNameLabel.transform.w = dims.width;
-    self.deviceNameLabel.transform.h = dims.height;
+    // const dims = self.deviceNameLabel.getDimensions();
+    // self.deviceNameLabel.transform.x = winRelX(0.5); //self.bgRect.transform.relX(0.5) - dims.width / 2;
+    // self.deviceNameLabel.transform.y = winRelY(0.02);
+    // self.deviceNameLabel.transform.w = dims.width;
+    // self.deviceNameLabel.transform.h = dims.height;
 }
 
 fn handleOnRootViewTransformQueried(self: *DeviceListUI, event: ComponentEvent) !EventResult {
@@ -621,20 +601,21 @@ fn handleOnRootViewTransformQueried(self: *DeviceListUI, event: ComponentEvent) 
     return eventResult.succeed();
 }
 
-fn handleOnUITransformQueried(self: *DeviceListUI, event: ComponentEvent) !EventResult {
-    var eventResult = EventResult.init();
-    const data = Events.onUITransformQueried.getData(event) orelse return eventResult.fail();
-    data.result.* = &self.bgRect.transform;
-    return eventResult.succeed();
-}
+// TODO: Deprecated
+// fn handleOnUITransformQueried(self: *DeviceListUI, event: ComponentEvent) !EventResult {
+//     var eventResult = EventResult.init();
+//     const data = Events.onUITransformQueried.getData(event) orelse return eventResult.fail();
+//     data.result.* = &self.layout.transform;
+//     return eventResult.succeed();
+// }
 
 fn handleOnDevicesCleanup(self: *DeviceListUI) !EventResult {
     var eventResult = EventResult.init();
     self.storeSelectedDevice(null);
     self.clearDeviceCheckboxes();
-    self.nextButton.setEnabled(false);
-    self.updateDeviceNameLabel(kStringDeviceListNoDeviceSelected, null);
-    self.refreshLayout(false);
+    // self.nextButton.setEnabled(false);
+    // self.updateDeviceNameLabel(kStringDeviceListNoDeviceSelected, null);
+    // self.refreshLayout(false);
     return eventResult.succeed();
 }
 
@@ -644,20 +625,20 @@ fn handleOnDevicesReadyToRender(self: *DeviceListUI) !EventResult {
     //
     Debug.log(.DEBUG, "DeviceListUI: onDevicesReadyToRender() start.", .{});
     self.clearDeviceCheckboxes();
-    self.nextButton.setEnabled(false);
+    // self.nextButton.setEnabled(false);
 
     self.state.lock();
     defer self.state.unlock();
 
     if (self.state.data.devices.items.len < 1) {
         Debug.log(.WARNING, "DeviceListUI: onDevicesReadyToRender(): no devices discovered, breaking the event loop.", .{});
-        self.refreshLayout(false);
+        // self.refreshLayout(false);
         return eventResult.fail();
     }
 
     Debug.log(.DEBUG, "DeviceListUI: onDevicesReadyToRender(): processing checkboxes for {d} devices.", .{self.state.data.devices.items.len});
 
-    self.bgRect.transform = self.frame.resolve();
+    // self.bgRect.transform = self.frame.resolve();
 
     for (self.state.data.devices.items, 0..) |*device, i| {
         try self.appendDeviceCheckbox(device.*, i);
@@ -665,7 +646,7 @@ fn handleOnDevicesReadyToRender(self: *DeviceListUI) !EventResult {
 
     Debug.log(.DEBUG, "DeviceListUI: onDevicesReadyToRender() end.", .{});
 
-    self.refreshLayout(true);
+    // self.refreshLayout(true);
 
     return eventResult.succeed();
 }
@@ -688,8 +669,11 @@ fn handleOnSelectedDeviceNameChanged(self: *DeviceListUI, event: ComponentEvent)
     const hasSelection = data.selectedDevice != null;
     const displayName: [:0]const u8 = if (data.selectedDevice) |device| device.getNameSlice() else kStringDeviceListNoDeviceSelected;
 
-    self.nextButton.setEnabled(hasSelection);
-    self.updateDeviceNameLabel(displayName, if (hasSelection) MAX_SELECTED_DEVICE_NAME_LEN else null);
+    _ = hasSelection;
+    _ = displayName;
+
+    // self.nextButton.setEnabled(hasSelection);
+    // self.updateDeviceNameLabel(displayName, if (hasSelection) MAX_SELECTED_DEVICE_NAME_LEN else null);
 
     return eventResult.succeed();
 }
@@ -705,9 +689,9 @@ pub fn handleAppResetRequest(self: *DeviceListUI) EventResult {
     }
 
     self.clearDeviceCheckboxes();
-    self.nextButton.setEnabled(false);
+    // self.nextButton.setEnabled(false);
 
-    self.updateDeviceNameLabel(kStringDeviceListNoDeviceSelected, null);
+    // self.updateDeviceNameLabel(kStringDeviceListNoDeviceSelected, null);
     // self.applyPanelMode(panelAppearanceInactive());
 
     return eventResult.succeed();
@@ -719,32 +703,34 @@ pub const UIConfig = struct {
         //
         pub const MainView = struct {
             //
-            pub fn setActive(ctx: *anyopaque, flag: bool) void {
-                const self: *View = @ptrCast(@alignCast(ctx));
+            pub const StateHandler = struct {
+                pub fn handler(ctx: *anyopaque, flag: bool) void {
+                    const self: *View = @ptrCast(@alignCast(ctx));
 
-                switch (flag) {
-                    true => {
-                        Debug.log(.DEBUG, "Main DeviceListUI View received a SetActive(true) command.", .{});
-                        self.transform.size = .pixels(
-                            WindowManager.relW(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
-                            WindowManager.relH(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_ACTIVE),
-                        );
+                    switch (flag) {
+                        true => {
+                            Debug.log(.DEBUG, "Main DeviceListUI View received a SetActive(true) command.", .{});
+                            self.transform.size = .pixels(
+                                WindowManager.relW(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
+                                WindowManager.relH(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_ACTIVE),
+                            );
 
-                        self.transform.position.y = .pixels(winRelY(AppConfig.APP_UI_MODULE_PANEL_Y));
-                    },
-                    false => {
-                        Debug.log(.DEBUG, "Main DeviceListUI View received a SetActive(false) command.", .{});
-                        self.transform.size = .pixels(
-                            WindowManager.relW(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
-                            WindowManager.relH(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_INACTIVE),
-                        );
+                            self.transform.position.y = .pixels(winRelY(AppConfig.APP_UI_MODULE_PANEL_Y));
+                        },
+                        false => {
+                            Debug.log(.DEBUG, "Main DeviceListUI View received a SetActive(false) command.", .{});
+                            self.transform.size = .pixels(
+                                WindowManager.relW(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
+                                WindowManager.relH(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_INACTIVE),
+                            );
 
-                        self.transform.position.y = .pixels(winRelY(AppConfig.APP_UI_MODULE_PANEL_Y_INACTIVE));
-                    },
+                            self.transform.position.y = .pixels(winRelY(AppConfig.APP_UI_MODULE_PANEL_Y_INACTIVE));
+                        },
+                    }
+
+                    self.transform.resolve();
                 }
-
-                self.transform.resolve();
-            }
+            };
         };
     };
 };

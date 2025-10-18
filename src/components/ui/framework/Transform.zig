@@ -20,9 +20,17 @@ scale: f32 = 1,
 rotation: f32 = 0,
 
 // TODO: Remove? Needed by GlobalTransform and section Views
-relativeRef: ?*const Transform = null,
+relativeTransform: ?*const Transform = null,
 position_ref: ?RelativeRef = .Parent,
 size_ref: ?RelativeRef = .Parent,
+position_ref_x: ?RelativeRef = null,
+position_ref_y: ?RelativeRef = null,
+size_ref_width: ?RelativeRef = null,
+size_ref_height: ?RelativeRef = null,
+position_transform_x: ?*const Transform = null,
+position_transform_y: ?*const Transform = null,
+size_transform_width: ?*const Transform = null,
+size_transform_height: ?*const Transform = null,
 // keep .relative as a "both" default for backward compatibility
 relative: ?RelativeRef = .Parent,
 _resolver_ctx: ?*const anyopaque = null,
@@ -42,44 +50,56 @@ inline fn rectFromResolver(self: *Transform, rr: RelativeRef) rl.Rectangle {
     return rectZero();
 }
 inline fn parentRect(self: *Transform) rl.Rectangle {
-    if (self.relativeRef) |p| return rectFromPtr(p);
+    if (self.relativeTransform) |p| return rectFromPtr(p);
     return rectFromResolver(self, .Parent);
 }
 
+inline fn rectFromRelative(self: *Transform, ref: RelativeRef) rl.Rectangle {
+    return switch (ref) {
+        .Parent => parentRect(self),
+        .NodeId => |id| rectFromResolver(self, .{ .NodeId = id }),
+    };
+}
+
+inline fn fallbackRect(self: *Transform) rl.Rectangle {
+    if (self.relative) |r| return rectFromRelative(self, r);
+    if (self.relativeTransform) |p| return rectFromPtr(p);
+    return rectZero();
+}
+
+fn resolveReference(self: *Transform, override: ?RelativeRef, shared: ?RelativeRef, axis_transform: ?*const Transform) rl.Rectangle {
+    if (axis_transform) |ptr| return rectFromPtr(ptr);
+    if (override) |ref| return rectFromRelative(self, ref);
+    if (shared) |ref| return rectFromRelative(self, ref);
+    return fallbackRect(self);
+}
+
 pub fn resolve(self: *Transform) void {
-    // --- choose reference rects for position and size ---
-    const pos_ref_rect: rl.Rectangle = blk: {
-        if (self.position_ref) |pr| switch (pr) {
-            .Parent => break :blk parentRect(self),
-            .NodeId => |id| break :blk rectFromResolver(self, .{ .NodeId = id }),
-        };
-        if (self.relative) |r| switch (r) {
-            .Parent => break :blk parentRect(self),
-            .NodeId => |id| break :blk rectFromResolver(self, .{ .NodeId = id }),
-        };
-        if (self.relativeRef) |p| break :blk rectFromPtr(p);
-        break :blk rectZero();
+    // --- choose reference rects for position (per axis) and size (per axis) ---
+    const pos_ref_rect_x = resolveReference(self, self.position_ref_x, self.position_ref, self.position_transform_x);
+    const pos_ref_rect_y = resolveReference(self, self.position_ref_y, self.position_ref, self.position_transform_y);
+
+    const size_ref_rect_w = blk: {
+        const rect = resolveReference(self, self.size_ref_width, self.size_ref, self.size_transform_width);
+        if (rect.width == 0 and rect.height == 0 and self.size_ref_width == null and self.size_ref == null) {
+            break :blk pos_ref_rect_x;
+        }
+        break :blk rect;
     };
 
-    const size_ref_rect: rl.Rectangle = blk: {
-        if (self.size_ref) |sr| switch (sr) {
-            .Parent => break :blk parentRect(self),
-            .NodeId => |id| break :blk rectFromResolver(self, .{ .NodeId = id }),
-        };
-        if (self.relative) |r| switch (r) {
-            .Parent => break :blk parentRect(self),
-            .NodeId => |id| break :blk rectFromResolver(self, .{ .NodeId = id }),
-        };
-        if (self.relativeRef) |p| break :blk rectFromPtr(p);
-        // fallback: size against whatever we used for position
-        break :blk pos_ref_rect;
+    const size_ref_rect_h = blk: {
+        const rect = resolveReference(self, self.size_ref_height, self.size_ref, self.size_transform_height);
+        if (rect.width == 0 and rect.height == 0 and self.size_ref_height == null and self.size_ref == null) {
+            break :blk pos_ref_rect_y;
+        }
+        break :blk rect;
     };
 
     // --- compute absolute frame ---
-    self.w = self.size.width.resolve(size_ref_rect.width);
-    self.h = self.size.height.resolve(size_ref_rect.height);
-    self.x = pos_ref_rect.x + self.position.x.resolve(pos_ref_rect.width) + self.offset_x;
-    self.y = pos_ref_rect.y + self.position.y.resolve(pos_ref_rect.height) + self.offset_y;
+    self.w = self.size.width.resolve(size_ref_rect_w.width);
+    self.h = self.size.height.resolve(size_ref_rect_h.height);
+    self.x = pos_ref_rect_x.x + self.position.x.resolve(pos_ref_rect_x.width) + self.offset_x;
+    self.y = pos_ref_rect_y.y + self.position.y.resolve(pos_ref_rect_y.height) + self.offset_y;
 }
 
 pub fn positionAsVector2(self: Transform) rl.Vector2 {

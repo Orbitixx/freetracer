@@ -22,7 +22,15 @@ pub const ElementChain = struct {
     _id: ?[]const u8 = null,
     _positionRef: ?RelativeRef = null,
     _sizeRef: ?RelativeRef = null,
-    _relativeRef: ?*const Transform = null,
+    _positionRefX: ?RelativeRef = null,
+    _positionRefY: ?RelativeRef = null,
+    _sizeRefWidth: ?RelativeRef = null,
+    _sizeRefHeight: ?RelativeRef = null,
+    _relativeTransform: ?*const Transform = null,
+    _positionTransformX: ?*const Transform = null,
+    _positionTransformY: ?*const Transform = null,
+    _sizeTransformWidth: ?*const Transform = null,
+    _sizeTransformHeight: ?*const Transform = null,
     relative: ?RelativeRef = null, // what to resolve against (Parent or NodeId)
 
     // ---- generic chainers (common Transform knobs) ----
@@ -56,9 +64,33 @@ pub const ElementChain = struct {
         return c;
     }
 
+    pub fn positionRefX(self: ElementChain, r: RelativeRef) ElementChain {
+        var c = self;
+        c._positionRefX = r;
+        return c;
+    }
+
+    pub fn positionRefY(self: ElementChain, r: RelativeRef) ElementChain {
+        var c = self;
+        c._positionRefY = r;
+        return c;
+    }
+
     pub fn sizeRef(self: ElementChain, r: RelativeRef) ElementChain {
         var c = self;
         c._sizeRef = r;
+        return c;
+    }
+
+    pub fn sizeRefWidth(self: ElementChain, r: RelativeRef) ElementChain {
+        var c = self;
+        c._sizeRefWidth = r;
+        return c;
+    }
+
+    pub fn sizeRefHeight(self: ElementChain, r: RelativeRef) ElementChain {
+        var c = self;
+        c._sizeRefHeight = r;
         return c;
     }
 
@@ -82,6 +114,36 @@ pub const ElementChain = struct {
         return c;
     }
 
+    pub fn relativeTransform(self: ElementChain, rt: *const Transform) ElementChain {
+        var c = self;
+        c._relativeTransform = rt;
+        return c;
+    }
+
+    pub fn positionTransformX(self: ElementChain, rt: *const Transform) ElementChain {
+        var c = self;
+        c._positionTransformX = rt;
+        return c;
+    }
+
+    pub fn positionTransformY(self: ElementChain, rt: *const Transform) ElementChain {
+        var c = self;
+        c._positionTransformY = rt;
+        return c;
+    }
+
+    pub fn sizeTransformWidth(self: ElementChain, rt: *const Transform) ElementChain {
+        var c = self;
+        c._sizeTransformWidth = rt;
+        return c;
+    }
+
+    pub fn sizeTransformHeight(self: ElementChain, rt: *const Transform) ElementChain {
+        var c = self;
+        c._sizeTransformHeight = rt;
+        return c;
+    }
+
     /// Place to the right edge of target id + gap px (top aligned).
     pub fn toRightOf(self: ElementChain, target_id: []const u8, gap_px: f32) ElementChain {
         return self.positionRef(.{ .NodeId = target_id }).position(.percent(1.0, 0.0)).offset(gap_px, 0);
@@ -99,15 +161,33 @@ pub const ElementChain = struct {
         // Apply the explicit per-axis refs if provided.
         if (self._positionRef) |r| tr.position_ref = r;
         if (self._sizeRef) |r| tr.size_ref = r;
+        if (self._positionRefX) |r| tr.position_ref_x = r;
+        if (self._positionRefY) |r| tr.position_ref_y = r;
+        if (self._sizeRefWidth) |r| tr.size_ref_width = r;
+        if (self._sizeRefHeight) |r| tr.size_ref_height = r;
+        if (self._relativeTransform) |rt| tr.relativeTransform = rt;
+        if (self._positionTransformX) |rt| tr.position_transform_x = rt;
+        if (self._positionTransformY) |rt| tr.position_transform_y = rt;
+        if (self._sizeTransformWidth) |rt| tr.size_transform_width = rt;
+        if (self._sizeTransformHeight) |rt| tr.size_transform_height = rt;
 
         // Leep 'relative' as a general fallback for 'both'
         if (self.relative) |r| tr.relative = r;
 
         // Add into parent with a sane default fallback
-        const fallback_rel: RelativeRef = self._positionRef orelse self.relative orelse .Parent;
+        const fallback_rel: RelativeRef =
+            self._positionRef orelse
+            self._positionRefX orelse
+            self._positionRefY orelse
+            self.relative orelse
+            .Parent;
         if (self._id) |sid| {
             try parent.addChildNamed(sid, me, fallback_rel);
         } else if (self._positionRef) |r| {
+            try parent.addChildWithRelative(me, r);
+        } else if (self._positionRefX) |r| {
+            try parent.addChildWithRelative(me, r);
+        } else if (self._positionRefY) |r| {
             try parent.addChildWithRelative(me, r);
         } else if (self.relative) |r| {
             try parent.addChildWithRelative(me, r);
@@ -124,18 +204,29 @@ pub const ElementChain = struct {
         };
 
         // Don’t override pointer parent for .Parent
-        if (self.relative) |r| switch (r) {
+        if (self._relativeTransform) |rt| {
+            view_value.transform.relativeTransform = rt;
+        } else if (self.relative) |r| switch (r) {
             .NodeId => {
-                view_value.transform.relativeRef = null;
+                view_value.transform.relativeTransform = null;
                 view_value.transform.relative = r;
             },
             .Parent => {
-                if (view_value.transform.relativeRef == null) view_value.transform.relative = .Parent;
+                if (view_value.transform.relativeTransform == null) view_value.transform.relative = .Parent;
             },
         };
 
         if (self._positionRef) |r| view_value.transform.position_ref = r;
         if (self._sizeRef) |r| view_value.transform.size_ref = r;
+        if (self._positionRefX) |r| view_value.transform.position_ref_x = r;
+        if (self._positionRefY) |r| view_value.transform.position_ref_y = r;
+        if (self._sizeRefWidth) |r| view_value.transform.size_ref_width = r;
+        if (self._sizeRefHeight) |r| view_value.transform.size_ref_height = r;
+        if (self._relativeTransform) |rt| view_value.transform.relativeTransform = rt;
+        if (self._positionTransformX) |rt| view_value.transform.position_transform_x = rt;
+        if (self._positionTransformY) |rt| view_value.transform.position_transform_y = rt;
+        if (self._sizeTransformWidth) |rt| view_value.transform.size_transform_width = rt;
+        if (self._sizeTransformHeight) |rt| view_value.transform.size_transform_height = rt;
 
         inline for (kids) |kid| try kid.buildInto(&view_value);
         return view_value;
@@ -165,9 +256,17 @@ pub const UIChain = struct {
         offset_x: f32 = 0,
         offset_y: f32 = 0,
         position_ref: ?RelativeRef = null,
+        position_ref_x: ?RelativeRef = null,
+        position_ref_y: ?RelativeRef = null,
         size: SizeSpec = .{},
         size_ref: ?RelativeRef = null,
-        relativeRef: ?*const Transform = null,
+        size_ref_width: ?RelativeRef = null,
+        size_ref_height: ?RelativeRef = null,
+        relativeTransform: ?*const Transform = null,
+        position_transform_x: ?*const Transform = null,
+        position_transform_y: ?*const Transform = null,
+        size_transform_width: ?*const Transform = null,
+        size_transform_height: ?*const Transform = null,
         relative: ?RelativeRef = null,
         background: ?Rectangle = null,
     };
@@ -176,9 +275,17 @@ pub const UIChain = struct {
         var t: Transform = .{};
         t.position = cfg.position;
         t.position_ref = cfg.position_ref;
+        t.position_ref_x = cfg.position_ref_x;
+        t.position_ref_y = cfg.position_ref_y;
         t.size = cfg.size;
         t.size_ref = cfg.size_ref;
-        t.relativeRef = cfg.relativeRef;
+        t.size_ref_width = cfg.size_ref_width;
+        t.size_ref_height = cfg.size_ref_height;
+        t.relativeTransform = cfg.relativeTransform;
+        t.position_transform_x = cfg.position_transform_x;
+        t.position_transform_y = cfg.position_transform_y;
+        t.size_transform_width = cfg.size_transform_width;
+        t.size_transform_height = cfg.size_transform_height;
         t.relative = cfg.relative;
         t.offset_x = cfg.offset_x;
         t.offset_y = cfg.offset_y;
@@ -208,8 +315,8 @@ pub const UIChain = struct {
         return .{ .allocator = self.allocator, .el = UIElement{ .Text = txt } };
     }
 
-    pub fn texture(self: UIChain, resource: anytype) ElementChain {
-        const tex = Texture.init(null, resource, .{}, null);
+    pub fn texture(self: UIChain, resource: anytype, config: Texture.Config) ElementChain {
+        const tex = Texture.init(resource, .{}, null, config);
         return .{ .allocator = self.allocator, .el = UIElement{ .Texture = tex } };
     }
 

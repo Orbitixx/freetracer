@@ -15,6 +15,7 @@ pub const SpriteButton = @import("./SpriteButton.zig");
 pub const UIElement = @import("./UIElement.zig").UIElement;
 pub const UIEvent = @import("./UIEvent.zig").UIEvent;
 pub const UIElementIdentifier = @import("./UIEvent.zig").UIElementIdentifier;
+pub const UIElementCallbacks = @import("./UIElement.zig").UIElementCallbacks;
 
 pub const types = @import("./types.zig");
 pub const RelativeRef = types.RelativeRef;

@@ -10,6 +10,7 @@ const Rectangle = UIFramework.Rectangle;
 const UIEvent = UIFramework.UIEvent;
 const UIElementIdentifier = UIFramework.UIElementIdentifier;
 const UIElement = UIFramework.UIElement;
+const UIElementCallbacks = UIFramework.UIElementCallbacks;
 const RelativeRef = UIFramework.RelativeRef;
 const resolveRelative = UIFramework.resolveRelative;
 
@@ -25,7 +26,7 @@ transform: Transform = .{},
 background: ?Rectangle = null,
 children: ArrayList(UIElement),
 idMap: std.StringHashMap(usize),
-setActive: ?*const fn (*anyopaque, bool) void = null,
+callbacks: UIElementCallbacks = .{},
 
 pub fn init(allocator: Allocator, identifier: ?UIElementIdentifier, transform: Transform, background: ?Rectangle) View {
     return .{
@@ -92,7 +93,7 @@ pub fn onEvent(self: *View, event: UIEvent) void {
     switch (event) {
         .StateChanged => |e| {
             if (e.target) |target| if (target != self.identifier) return;
-            if (self.setActive) |setActiveFn| setActiveFn(self, e.isActive);
+            if (self.callbacks.onStateChange) |onStateChange| onStateChange.function(self, e.isActive);
         },
         else => {},
     }
@@ -119,7 +120,7 @@ pub fn addChild(self: *View, child: UIElement, relativeTransform: ?*Transform) !
 
     switch (mutableChild) {
         inline else => |*el| {
-            if (relativeTransform) |rt| el.transform.relativeRef = rt else el.transform.relativeRef = &self.transform;
+            if (relativeTransform) |rt| el.transform.relativeTransform = rt else el.transform.relativeTransform = &self.transform;
             el.transform._resolver_ctx = self;
             el.transform._resolver_fn = resolveRelative;
         },
@@ -138,7 +139,7 @@ pub fn addChildNamed(self: *View, id: []const u8, child: UIElement, relative: Re
     // Set resolver context and relative ref
     switch (mutableChild) {
         inline else => |*el| {
-            el.transform.relativeRef = null; // ignore legacy path for this child
+            el.transform.relativeTransform = null; // ignore legacy path for this child
             el.transform.relative = relative;
             el.transform._resolver_ctx = self;
             el.transform._resolver_fn = resolveRelative;
@@ -158,7 +159,7 @@ pub fn addChildWithRelative(self: *View, child: UIElement, relative: RelativeRef
 
     switch (mutableChild) {
         inline else => |*el| {
-            el.transform.relativeRef = null; // ignore legacy pointer
+            el.transform.relativeTransform = null; // ignore legacy pointer
             el.transform.relative = relative;
             // Resolver context will be rebound in start(); set a provisional one now:
             el.transform._resolver_ctx = self;

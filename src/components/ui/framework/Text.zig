@@ -8,6 +8,7 @@ const Transform = UIFramework.Transform;
 const Rectangle = UIFramework.Rectangle;
 const UIEvent = UIFramework.UIEvent;
 const UIElementIdentifier = UIFramework.UIElementIdentifier;
+const UIElementCallbacks = UIFramework.UIElementCallbacks;
 
 const Styles = @import("../Styles.zig");
 const RectangleStyle = Styles.RectangleStyle;
@@ -27,6 +28,7 @@ pub const Config = struct {
     font: FontResource = .ROBOTO_REGULAR,
     fontSize: f32 = 16,
     spacing: f32 = 0,
+    callbacks: UIElementCallbacks = .{},
 };
 
 identifier: ?UIElementIdentifier = null,
@@ -35,8 +37,9 @@ textBuffer: [MAX_TEXT_LENGTH]u8,
 style: TextStyle,
 font: rl.Font,
 background: ?Rectangle = null,
+active: bool = true,
 
-setActive: ?*const fn (*anyopaque, bool) void = null,
+callbacks: UIElementCallbacks = .{},
 
 pub fn init(identifier: ?UIElementIdentifier, value: [:0]const u8, transform: Transform, style: TextStyle) Text {
     if (value.len > MAX_TEXT_LENGTH) Debug.log(
@@ -67,10 +70,12 @@ pub fn start(self: *Text) !void {
 }
 
 pub fn update(self: *Text) !void {
+    if (!self.active) return;
     self.transform.resolve();
 }
 
 pub fn draw(self: *Text) !void {
+    if (!self.active) return;
     rl.drawTextEx(
         self.font,
         @ptrCast(std.mem.sliceTo(&self.textBuffer, 0x00)),

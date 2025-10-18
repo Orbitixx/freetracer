@@ -4,6 +4,7 @@ const UIFramework = @import("./import.zig");
 const Transform = UIFramework.Transform;
 const UIEvent = UIFramework.UIEvent;
 const UIElementIdentifier = UIFramework.UIElementIdentifier;
+const UIElementCallbacks = UIFramework.UIElementCallbacks;
 
 const Styles = @import("../Styles.zig");
 const TextStyle = Styles.TextStyle;
@@ -16,6 +17,7 @@ pub const Config = struct {
     style: RectangleStyle = .{},
     rounded: bool = false,
     bordered: bool = false,
+    callbacks: UIElementCallbacks = .{},
 };
 
 identifier: ?UIElementIdentifier = null,
@@ -23,7 +25,8 @@ transform: Transform,
 rounded: bool = false,
 bordered: bool = false,
 style: RectangleStyle = .{},
-setActive: ?*const fn (*anyopaque, bool) void = null,
+callbacks: UIElementCallbacks = .{},
+active: bool = true,
 
 pub fn init(transform: Transform, config: Config) Rectangle {
     return .{
@@ -39,10 +42,12 @@ pub fn start(self: *Rectangle) !void {
 }
 
 pub fn update(self: *Rectangle) !void {
+    if (!self.active) return;
     self.transform.resolve();
 }
 
 pub fn draw(self: *Rectangle) !void {
+    if (!self.active) return;
     //
     if (self.rounded) {
         self.drawRounded();

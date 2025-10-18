@@ -14,9 +14,10 @@ const WindowManager = @import("../../../managers/WindowManager.zig").WindowManag
 const Transform = @import("./Transform.zig");
 const Rectangle = @import("./Rectangle.zig");
 
-const Event = @import("./UIEvent.zig");
-const UIEvent = Event.UIEvent;
-const UIElementIdentifier = Event.UIElementIdentifier;
+const UIFramework = @import("./import.zig");
+const UIEvent = UIFramework.UIEvent;
+const UIElementIdentifier = UIFramework.UIElementIdentifier;
+const UIElementCallbacks = UIFramework.UIElementCallbacks;
 
 const Styles = @import("../Styles.zig");
 const TextStyle = Styles.TextStyle;
@@ -30,17 +31,24 @@ resource: TextureResource,
 texture: rl.Texture2D,
 tint: rl.Color = Color.white,
 background: ?Rectangle = null,
-setActive: ?*const fn (*anyopaque, bool) void = null,
+callbacks: UIElementCallbacks = .{},
+active: bool = true,
+
+pub const Config = struct {
+    identifier: ?UIElementIdentifier = null,
+    callbacks: UIElementCallbacks = .{},
+};
 
 // shader: rl.Shader,
 // res: rl.Vector2 = .{ .x = 0, .y = 0 },
 // px: rl.Vector2 = .{ .x = 0, .y = 0 },
 
-pub fn init(identifier: ?UIElementIdentifier, resource: TextureResource, transform: Transform, tint: ?rl.Color) Texture {
+pub fn init(resource: TextureResource, transform: Transform, tint: ?rl.Color, config: Config) Texture {
     const texture: rl.Texture2D = ResourceManager.getTexture(resource);
 
     return .{
-        .identifier = identifier,
+        .identifier = config.identifier,
+        .callbacks = config.callbacks,
         .transform = transform,
         .resource = resource,
         .texture = texture,
@@ -66,10 +74,12 @@ pub fn start(self: *Texture) !void {
 }
 
 pub fn update(self: *Texture) !void {
+    if (!self.active) return;
     self.transform.resolve();
 }
 
 pub fn draw(self: *Texture) !void {
+    if (!self.active) return;
     // rl.beginShaderMode(self.shader);
     rl.drawTextureEx(
         self.texture,

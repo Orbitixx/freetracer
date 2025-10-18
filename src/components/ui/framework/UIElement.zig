@@ -1,4 +1,5 @@
 const std = @import("std");
+const Debug = @import("freetracer-lib").Debug;
 
 const UIFramework = @import("./import.zig");
 const Transform = UIFramework.Transform;
@@ -10,6 +11,41 @@ const Texture = UIFramework.Texture;
 const FileDropzone = UIFramework.FileDropzone;
 const SpriteButton = UIFramework.SpriteButton;
 const UIEvent = UIFramework.UIEvent;
+
+pub const StateChangeHandler = struct {
+    function: *const fn (ctx: *anyopaque, flag: bool) void,
+    context: ?*anyopaque = null,
+
+    pub fn call(self: StateChangeHandler, flag: bool) void {
+        if (self.context) |ctx| self.function(ctx, flag) else {
+            Debug.log(.WARNING, "StateChangeHandler called on instance [handler.call()] with null context. Call aborted.", .{});
+        }
+    }
+};
+
+pub const ClickHandler = struct {
+    function: *const fn (ctx: *anyopaque) void,
+    context: *anyopaque,
+
+    pub fn call(self: ClickHandler) void {
+        self.function(self.context);
+    }
+};
+
+pub const DropHandler = struct {
+    function: *const fn (ctx: *anyopaque, path: []const u8) void,
+    context: *anyopaque,
+
+    pub fn call(self: DropHandler, path: []const u8) void {
+        self.function(self.context, path);
+    }
+};
+
+pub const UIElementCallbacks = struct {
+    onStateChange: ?StateChangeHandler = null,
+    onClick: ?ClickHandler = null,
+    onDrop: ?DropHandler = null,
+};
 
 pub const UIElement = union(enum) {
     Rectangle: Rectangle,
@@ -64,9 +100,9 @@ pub const UIElement = union(enum) {
                             std.debug.print("\nUIElement.onEvent.StateChanged: target does not match element.target; aborting.", .{});
                             if (target != element.identifier) return;
                         } else {
-                            if (element.setActive) |setActiveFn| {
+                            if (element.callbacks.onStateChange) |onStateChange| {
                                 std.debug.print("\nUIElement.onEvent.StateChanged: target not set, executing setActive function. Responding element: {any}", .{element});
-                                setActiveFn(element, ev.isActive);
+                                onStateChange.function(element, ev.isActive);
                             }
                         }
                     },

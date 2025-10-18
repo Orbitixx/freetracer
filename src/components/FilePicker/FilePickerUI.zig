@@ -33,6 +33,7 @@ const Transform = DeprecatedUI.Primitives.Transform;
 const UIFramework = @import("../ui/framework/import.zig");
 const View = UIFramework.View;
 const Textbox = UIFramework.Textbox;
+const FileDropzone = UIFramework.FileDropzone;
 const UIChain = UIFramework.UIChain;
 
 const Styles = DeprecatedUI.Styles;
@@ -286,7 +287,7 @@ fn initializeBackground(self: *FilePickerUI) !void {
         .id = null,
         .position = .percent(AppConfig.APP_UI_MODULE_PANEL_FILE_PICKER_X, AppConfig.APP_UI_MODULE_PANEL_Y),
         .size = .percent(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE, AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
-        .relativeRef = try AppManager.getGlobalTransform(), // legacy root ref
+        .relativeTransform = try AppManager.getGlobalTransform(),
         .background = .{
             .transform = .{},
             .style = .{
@@ -298,7 +299,7 @@ fn initializeBackground(self: *FilePickerUI) !void {
         },
     }).children(.{
         //
-        ui.texture(.STEP_1_INACTIVE)
+        ui.texture(.STEP_1_INACTIVE, .{})
             .id("header_icon")
             .position(.percent(0.05, 0.03))
             .positionRef(.Parent)
@@ -324,6 +325,9 @@ fn initializeBackground(self: *FilePickerUI) !void {
                     .function = FilePicker.HandleFileDropWrapper.call,
                     .context = self.parent,
                 },
+                .onStateChange = .{
+                    .function = FilePickerUI.UIConfig.Callbacks.ImageDropzone.StateChangeHandler.handler,
+                },
             },
             .style = .{
                 .dashLength = 6,
@@ -348,7 +352,7 @@ fn initializeBackground(self: *FilePickerUI) !void {
             .size(.percent(0.9, 0.25))
             .sizeRef(.Parent),
 
-        ui.texture(.IMAGE_TAG)
+        ui.texture(.IMAGE_TAG, .{})
             .id("image_info_icon")
             .position(.percent(0.05, 0.15))
             .positionRef(.{ .NodeId = "image_info_bg" })
@@ -372,7 +376,7 @@ fn initializeBackground(self: *FilePickerUI) !void {
             .positionRef(.{ .NodeId = "image_info_textbox" })
             .sizeRef(.{ .NodeId = "image_info_bg" }),
 
-        ui.textbox("Pick an image file such as .iso or .img to be flashed to device.", UIConfig.Styles.FilePickerHintTextbox, Textbox.Params{})
+        ui.textbox("Pick an image file such as .iso or .img to flash to device.", UIConfig.Styles.FilePickerHintTextbox, Textbox.Params{})
             .id("file_picker_hint_text")
             .position(.percent(0, 1.3))
             .positionRef(.{ .NodeId = "image_info_bg" })
@@ -395,7 +399,10 @@ fn initializeBackground(self: *FilePickerUI) !void {
             .sizeRef(.{ .NodeId = "image_info_bg" }),
     });
 
-    self.layout.setActive = UIConfig.Callbacks.MainView.setActive;
+    self.layout.callbacks.onStateChange = .{
+        .function = UIConfig.Callbacks.MainView.StateChangeHandler.handler,
+        .context = &self.layout,
+    };
 
     try self.layout.start();
 
@@ -596,24 +603,44 @@ const UIConfig = struct {
         //
         pub const MainView = struct {
             //
-            pub fn setActive(ctx: *anyopaque, flag: bool) void {
-                const self: *View = @ptrCast(@alignCast(ctx));
+            pub const StateChangeHandler = struct {
+                //
+                pub fn handler(ctx: *anyopaque, flag: bool) void {
+                    const self: *View = @ptrCast(@alignCast(ctx));
 
-                switch (flag) {
-                    false => {
-                        Debug.log(.DEBUG, "Main FilePickerUI View received a SetActive(false) command.", .{});
-                        self.transform.position = .percent(AppConfig.APP_UI_MODULE_PANEL_FILE_PICKER_X, 0.45);
-                        self.transform.size = .percent(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE, AppConfig.APP_UI_MODULE_PANEL_HEIGHT_INACTIVE);
-                    },
-                    true => {
-                        Debug.log(.DEBUG, "Main FilePickerUI View received a SetActive(true) command.", .{});
-                        self.transform.position = .percent(AppConfig.APP_UI_MODULE_PANEL_FILE_PICKER_X, AppConfig.APP_UI_MODULE_PANEL_Y);
-                        self.transform.size = .percent(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE, AppConfig.APP_UI_MODULE_PANEL_HEIGHT_ACTIVE);
-                    },
+                    switch (flag) {
+                        true => {
+                            Debug.log(.DEBUG, "Main FilePickerUI View received a SetActive(true) command.", .{});
+                            self.transform.position = .percent(AppConfig.APP_UI_MODULE_PANEL_FILE_PICKER_X, AppConfig.APP_UI_MODULE_PANEL_Y);
+                            self.transform.size = .percent(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE, AppConfig.APP_UI_MODULE_PANEL_HEIGHT_ACTIVE);
+                        },
+                        false => {
+                            Debug.log(.DEBUG, "Main FilePickerUI View received a SetActive(false) command.", .{});
+                            self.transform.position = .percent(AppConfig.APP_UI_MODULE_PANEL_FILE_PICKER_X, AppConfig.APP_UI_MODULE_PANEL_Y_INACTIVE);
+                            self.transform.size = .percent(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE, AppConfig.APP_UI_MODULE_PANEL_HEIGHT_INACTIVE);
+                        },
+                    }
+
+                    self.transform.resolve();
                 }
+            };
+        };
 
-                self.transform.resolve();
-            }
+        pub const ImageDropzone = struct {
+            //
+            pub const StateChangeHandler = struct {
+                //
+                pub fn handler(ctx: *anyopaque, flag: bool) void {
+                    //
+                    const self: *FileDropzone = @ptrCast(@alignCast(ctx));
+                    self.active = flag;
+
+                    // switch (flag) {
+                    //     true => {},
+                    //     false => {},
+                    // }
+                }
+            };
         };
     };
 

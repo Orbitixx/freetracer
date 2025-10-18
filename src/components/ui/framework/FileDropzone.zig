@@ -9,6 +9,7 @@ const UIFramework = @import("./import.zig");
 const Transform = UIFramework.Transform;
 const UIEvent = UIFramework.UIEvent;
 const UIElementIdentifier = UIFramework.UIElementIdentifier;
+const UIElementCallbacks = UIFramework.UIElementCallbacks;
 
 const Styles = @import("../Styles.zig");
 const Color = Styles.Color;
@@ -32,40 +33,6 @@ const filedDropzoneActiveStyle = Style{
     .gapLength = 6,
     .borderThickness = 2,
     .iconScale = 0.3,
-};
-
-// const fileDropzoneInactiveStyle = Style{
-//     .backgroundColor = rl.Color{ .r = 32, .g = 36, .b = 48, .a = 130 },
-//     .hoverBackgroundColor = rl.Color{ .r = 45, .g = 50, .b = 64, .a = 170 },
-//     .borderColor = Styles.Color.themeOutline,
-//     .hoverBorderColor = Styles.Color.lightGray,
-//     .dashLength = 12,
-//     .gapLength = 6,
-//     .borderThickness = 2,
-//     .iconScale = 0.3,
-// };
-
-pub const ClickHandler = struct {
-    function: *const fn (ctx: *anyopaque) void,
-    context: *anyopaque,
-
-    pub fn call(self: ClickHandler) void {
-        self.function(self.context);
-    }
-};
-
-pub const DropHandler = struct {
-    function: *const fn (ctx: *anyopaque, path: []const u8) void,
-    context: *anyopaque,
-
-    pub fn call(self: DropHandler, path: []const u8) void {
-        self.function(self.context, path);
-    }
-};
-
-pub const Callbacks = struct {
-    onClick: ?ClickHandler = null,
-    onDrop: ?DropHandler = null,
 };
 
 pub const Style = struct {
@@ -95,7 +62,7 @@ pub const Config = struct {
     text: []const u8 = DEFAULT_TEXT,
     style: Style = .{},
     icon: ?TextureResource = null,
-    callbacks: Callbacks = .{},
+    callbacks: UIElementCallbacks = .{},
 };
 
 const Icon = struct {
@@ -109,8 +76,9 @@ const Icon = struct {
 
 identifier: ?UIElementIdentifier = null,
 transform: Transform = .{},
+active: bool = true,
 style: Style = .{},
-callbacks: Callbacks = .{},
+callbacks: UIElementCallbacks = .{},
 
 font: rl.Font,
 textBuffer: [MAX_TEXT_LENGTH:0]u8 = std.mem.zeroes([MAX_TEXT_LENGTH:0]u8),
@@ -124,8 +92,6 @@ drag: bool = false,
 cursorActive: bool = false,
 layoutDirty: bool = true,
 lastRect: rl.Rectangle = .{ .x = 0, .y = 0, .width = 0, .height = 0 },
-
-setActive: ?*const fn (*anyopaque, bool) void = null,
 
 pub fn init(config: Config) FileDropzone {
     var dropzone = FileDropzone{
@@ -157,6 +123,8 @@ pub fn start(self: *FileDropzone) !void {
 }
 
 pub fn update(self: *FileDropzone) !void {
+    if (!self.active) return;
+
     self.transform.resolve();
     const rect = self.transform.asRaylibRectangle();
 
@@ -199,6 +167,8 @@ pub fn update(self: *FileDropzone) !void {
 }
 
 pub fn draw(self: *FileDropzone) !void {
+    if (!self.active) return;
+
     var rect = self.transform.asRaylibRectangle();
     const highlight = self.hover or self.drag;
 

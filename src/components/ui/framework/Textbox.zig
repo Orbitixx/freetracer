@@ -11,6 +11,7 @@ const UIEvent = UIFramework.UIEvent;
 const Transform = UIFramework.Transform;
 const Rectangle = UIFramework.Rectangle;
 const UIElementIdentifier = UIFramework.UIElementIdentifier;
+const UIElementCallbacks = UIFramework.UIElementCallbacks;
 
 const Styles = @import("../Styles.zig");
 const RectangleStyle = Styles.RectangleStyle;
@@ -31,6 +32,7 @@ pub const TextboxStyle = struct {
 pub const Params = struct {
     identifier: ?UIElementIdentifier = null,
     background: ?Rectangle = null,
+    callbacks: UIElementCallbacks = .{},
     wordWrap: bool = true,
 };
 
@@ -53,8 +55,8 @@ selection: ?Selection = null,
 background: ?Rectangle = null,
 textBuffer: [MAX_TEXT_LENGTH]u8 = undefined,
 text: [:0]const u8,
-
-setActive: ?*const fn (*anyopaque, bool) void = null,
+callbacks: UIElementCallbacks = .{},
+active: bool = true,
 
 pub fn init(allocator: std.mem.Allocator, text: [:0]const u8, transform: Transform, style: TextboxStyle, params: Params) Textbox {
     return .{
@@ -80,11 +82,15 @@ pub fn start(self: *Textbox) !void {
 }
 
 pub fn update(self: *Textbox) !void {
+    if (!self.active) return;
+
     self.transform.resolve();
     if (self.background) |*bg| bg.transform.resolve();
 }
 
 pub fn draw(self: *Textbox) !void {
+    if (!self.active) return;
+
     if (self.background) |*bg| try bg.draw();
 
     drawTextBoxed(

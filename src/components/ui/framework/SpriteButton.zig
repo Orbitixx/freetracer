@@ -5,6 +5,7 @@ const UIFramework = @import("./import.zig");
 const Transform = UIFramework.Transform;
 const UIEvent = UIFramework.UIEvent;
 const UIElementIdentifier = UIFramework.UIElementIdentifier;
+const UIElementCallbacks = UIFramework.UIElementCallbacks;
 
 const Styles = @import("../Styles.zig");
 const Color = Styles.Color;
@@ -25,18 +26,18 @@ pub const ButtonState = enum {
     Disabled,
 };
 
-pub const ClickHandler = struct {
-    function: *const fn (ctx: *anyopaque) void,
-    context: *anyopaque,
-
-    pub fn call(self: ClickHandler) void {
-        self.function(self.context);
-    }
-};
-
-pub const Callbacks = struct {
-    onClick: ?ClickHandler = null,
-};
+// pub const ClickHandler = struct {
+//     function: *const fn (ctx: *anyopaque) void,
+//     context: *anyopaque,
+//
+//     pub fn call(self: ClickHandler) void {
+//         self.function(self.context);
+//     }
+// };
+//
+// pub const Callbacks = struct {
+//     onClick: ?ClickHandler = null,
+// };
 
 pub const Style = struct {
     font: FontResource = .ROBOTO_REGULAR,
@@ -61,14 +62,13 @@ pub const Config = struct {
     text: []const u8,
     texture: TextureResource,
     style: Style = .{},
-    callbacks: Callbacks = .{},
+    callbacks: UIElementCallbacks = .{},
     enabled: bool = true,
 };
 
 identifier: ?UIElementIdentifier = null,
 transform: Transform = .{},
 style: Style = .{},
-callbacks: Callbacks = .{},
 texture: rl.Texture2D,
 font: rl.Font,
 sourceRect: rl.Rectangle = .{ .x = 0, .y = 0, .width = 0, .height = 0 },
@@ -78,13 +78,18 @@ textSize: rl.Vector2 = .{ .x = 0, .y = 0 },
 textPosition: rl.Vector2 = .{ .x = 0, .y = 0 },
 
 state: ButtonState = .Normal,
+/// True: the element is visible and interactible
+/// False: the element is visible but not interactible
 enabled: bool = true,
+/// True: the element is visible and processing updates
+/// False: the element is not visible and is not processing updates
+active: bool = true,
 
 cursorActive: bool = false,
 layoutDirty: bool = true,
 lastRect: rl.Rectangle = .{ .x = 0, .y = 0, .width = 0, .height = 0 },
 
-setActive: ?*const fn (*anyopaque, bool) void = null,
+callbacks: UIElementCallbacks = .{},
 
 pub fn init(config: Config) SpriteButton {
     var buffer = std.mem.zeroes([MAX_TEXT_LENGTH:0]u8);
@@ -114,6 +119,7 @@ pub fn start(self: *SpriteButton) !void {
 }
 
 pub fn update(self: *SpriteButton) !void {
+    if (!self.active) return;
     self.transform.resolve();
 
     const rect = self.transform.asRaylibRectangle();
@@ -150,6 +156,7 @@ pub fn update(self: *SpriteButton) !void {
 }
 
 pub fn draw(self: *SpriteButton) !void {
+    if (!self.active) return;
     const tint = switch (self.state) {
         .Normal => self.style.tint,
         .Hover => self.style.hoverTint,

@@ -78,23 +78,27 @@ const ComponentEvent = ComponentFramework.Event;
 
 const EventResult = ComponentFramework.EventResult;
 
-const UIFramework = @import("../ui/import/index.zig");
-const Panel = UIFramework.Panel;
-const Button = UIFramework.Button;
-const Checkbox = UIFramework.Checkbox;
-const Transform = UIFramework.Primitives.Transform;
-const Rectangle = UIFramework.Primitives.Rectangle;
-const Text = UIFramework.Primitives.Text;
-const Texture = UIFramework.Primitives.Texture;
-const Statusbox = UIFramework.Statusbox;
-const Progressbox = UIFramework.Progressbox;
-const StatusIndicator = UIFramework.StatusIndicator;
-const Layout = UIFramework.Layout;
+const DeprecatedUI = @import("../ui/import/index.zig");
+const Panel = DeprecatedUI.Panel;
+const Button = DeprecatedUI.Button;
+const Checkbox = DeprecatedUI.Checkbox;
+const Transform = DeprecatedUI.Primitives.Transform;
+const Rectangle = DeprecatedUI.Primitives.Rectangle;
+const Text = DeprecatedUI.Primitives.Text;
+const Texture = DeprecatedUI.Primitives.Texture;
+const Statusbox = DeprecatedUI.Statusbox;
+const Progressbox = DeprecatedUI.Progressbox;
+const StatusIndicator = DeprecatedUI.StatusIndicator;
+const Layout = DeprecatedUI.Layout;
+
+const UIFramework = @import("../ui/framework/import.zig");
+const View = UIFramework.View;
+const UIChain = UIFramework.UIChain;
 
 const PrivilegedHelper = @import("../macos/PrivilegedHelper.zig");
 
-const Styles = UIFramework.Styles;
-const Color = UIFramework.Styles.Color;
+const Styles = DeprecatedUI.Styles;
+const Color = DeprecatedUI.Styles.Color;
 
 const WindowManager = @import("../../managers/WindowManager.zig").WindowManagerSingleton;
 const winRelX = WindowManager.relW;
@@ -112,26 +116,28 @@ worker: ?ComponentWorker = null,
 // Component-specific, unique props
 allocator: std.mem.Allocator,
 parent: *DataFlasher,
-bgRect: Rectangle = undefined,
-headerLabel: Text = undefined,
-moduleImg: Texture = undefined,
-uiSheetTexture: Texture = undefined,
-button: Button = undefined,
-isoText: Text = undefined,
-deviceText: Text = undefined,
-progressBox: Progressbox = undefined,
+// bgRect: Rectangle = undefined,
+// headerLabel: Text = undefined,
+// moduleImg: Texture = undefined,
+// uiSheetTexture: Texture = undefined,
+// button: Button = undefined,
+// isoText: Text = undefined,
+// deviceText: Text = undefined,
+// progressBox: Progressbox = undefined,
 displayISOTextBuffer: [std.fs.max_path_bytes]u8 = undefined,
 displayDeviceTextBuffer: [std.fs.max_path_bytes]u8 = undefined,
-frame: Layout.Bounds = undefined,
+// frame: Layout.Bounds = undefined,
+
+layout: View = undefined,
 
 flashRequested: bool = false,
 
-statusSectionHeader: Text = undefined,
-isoStatus: StatusIndicator = undefined,
-deviceStatus: StatusIndicator = undefined,
-permissionsStatus: StatusIndicator = undefined,
-writeStatus: StatusIndicator = undefined,
-verificationStatus: StatusIndicator = undefined,
+// statusSectionHeader: Text = undefined,
+// isoStatus: StatusIndicator = undefined,
+// deviceStatus: StatusIndicator = undefined,
+// permissionsStatus: StatusIndicator = undefined,
+// writeStatus: StatusIndicator = undefined,
+// verificationStatus: StatusIndicator = undefined,
 
 pub const Events = struct {
     pub const onActiveStateChanged = ComponentFramework.defineEvent(
@@ -162,73 +168,77 @@ pub fn start(self: *DataFlasherUI) !void {
 
     try self.subscribeToEvents();
     try self.initBgRect();
-    try self.initFlashButton();
-
-    self.initModuleLabels();
-    self.initTextures();
-    self.initStatusIndicators();
-    self.initProgressbox();
-
-    self.applyPanelMode(panelAppearanceInactive());
+    // try self.initFlashButton();
+    //
+    // self.initModuleLabels();
+    // self.initTextures();
+    // self.initStatusIndicators();
+    // self.initProgressbox();
+    //
+    // self.applyPanelMode(panelAppearanceInactive());
 }
 
 pub fn update(self: *DataFlasherUI) !void {
     if (!self.readIsActive()) return;
-    try self.button.update();
+
+    try self.layout.update();
+    // try self.button.update();
 }
 
 /// Draws the module frame and then the appropriate active/inactive presentation.
 pub fn draw(self: *DataFlasherUI) !void {
-    const isActive = self.readIsActive();
+    // const isActive = self.readIsActive();
 
-    self.updateLayout();
+    try self.layout.draw();
 
-    self.bgRect.draw();
-    self.headerLabel.draw();
+    // self.updateLayout();
+    //
+    // self.bgRect.draw();
+    // self.headerLabel.draw();
 
-    if (isActive) try self.drawActive() else try self.drawInactive();
+    // if (isActive) try self.drawActive() else try self.drawInactive();
 }
 
 /// Render routine when the module is active; expects state lock not held by caller.
-fn drawActive(self: *DataFlasherUI) !void {
-    self.isoText.draw();
-    self.deviceText.draw();
-    // TODO: Create separate label Component with optional icon
-    rl.drawTexturePro(
-        self.uiSheetTexture.texture,
-        ICON_SRC_ISO,
-        .{ .x = self.bgRect.transform.relX(ISO_ICON_POS_REL_X), .y = self.bgRect.transform.relY(ISO_ICON_POS_REL_Y), .width = ICON_SIZE, .height = ICON_SIZE },
-        .{ .x = 0, .y = 0 },
-        0,
-        .white,
-    );
-
-    rl.drawTexturePro(
-        self.uiSheetTexture.texture,
-        ICON_SRC_DEVICE,
-        .{ .x = self.bgRect.transform.relX(DEV_ICON_POS_REL_X), .y = self.bgRect.transform.relY(DEV_ICON_POS_REL_Y), .width = ICON_SIZE, .height = ICON_SIZE },
-        .{ .x = 0, .y = 0 },
-        0,
-        .white,
-    );
-
-    if (self.flashRequested) {
-        self.statusSectionHeader.draw();
-        try self.isoStatus.draw();
-        try self.deviceStatus.draw();
-        try self.permissionsStatus.draw();
-        try self.writeStatus.draw();
-        try self.verificationStatus.draw();
-    }
-
-    self.progressBox.draw();
-
-    try self.button.draw();
-}
-
-fn drawInactive(self: *DataFlasherUI) !void {
-    self.moduleImg.draw();
-}
+// fn drawActive(self: *DataFlasherUI) !void {
+//     self.isoText.draw();
+//     self.deviceText.draw();
+//     // TODO: Create separate label Component with optional icon
+//     rl.drawTexturePro(
+//         self.uiSheetTexture.texture,
+//         ICON_SRC_ISO,
+//         .{ .x = self.bgRect.transform.relX(ISO_ICON_POS_REL_X), .y = self.bgRect.transform.relY(ISO_ICON_POS_REL_Y), .width = ICON_SIZE, .height = ICON_SIZE },
+//         .{ .x = 0, .y = 0 },
+//         0,
+//         .white,
+//     );
+//
+//     rl.drawTexturePro(
+//         self.uiSheetTexture.texture,
+//         ICON_SRC_DEVICE,
+//         .{ .x = self.bgRect.transform.relX(DEV_ICON_POS_REL_X), .y = self.bgRect.transform.relY(DEV_ICON_POS_REL_Y), .width = ICON_SIZE, .height = ICON_SIZE },
+//         .{ .x = 0, .y = 0 },
+//         0,
+//         .white,
+//     );
+//
+//     if (self.flashRequested) {
+//         self.statusSectionHeader.draw();
+//         try self.isoStatus.draw();
+//         try self.deviceStatus.draw();
+//         try self.permissionsStatus.draw();
+//         try self.writeStatus.draw();
+//         try self.verificationStatus.draw();
+//     }
+//
+//     self.progressBox.draw();
+//
+//     try self.button.draw();
+// }
+//
+// fn drawInactive(self: *DataFlasherUI) !void {
+//     self.moduleImg.draw();
+// }
 
 /// Consumes DataFlasher/PrivilegedHelper events; returns failure for unknown events.
 pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
@@ -240,46 +250,46 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
         DataFlasher.Events.onActiveStateChanged.Hash => try self.handleOnActiveStateChanged(event),
 
         PrivilegedHelper.Events.onHelperISOFileOpenSuccess.Hash => {
-            self.isoStatus.switchState(.SUCCESS);
+            // self.isoStatus.switchState(.SUCCESS);
             return eventResult.succeed();
         },
 
         PrivilegedHelper.Events.onHelperISOFileOpenFailed.Hash => {
-            self.isoStatus.switchState(.FAILURE);
+            // self.isoStatus.switchState(.FAILURE);
             return eventResult.succeed();
         },
 
         PrivilegedHelper.Events.onHelperDeviceOpenSuccess.Hash => {
-            self.deviceStatus.switchState(.SUCCESS);
-            self.permissionsStatus.switchState(.SUCCESS);
+            // self.deviceStatus.switchState(.SUCCESS);
+            // self.permissionsStatus.switchState(.SUCCESS);
             return eventResult.succeed();
         },
 
         PrivilegedHelper.Events.onHelperDeviceOpenFailed.Hash => {
-            self.deviceStatus.switchState(.FAILURE);
-            self.permissionsStatus.switchState(.FAILURE);
+            // self.deviceStatus.switchState(.FAILURE);
+            // self.permissionsStatus.switchState(.FAILURE);
             return eventResult.succeed();
         },
 
         PrivilegedHelper.Events.onHelperWriteSuccess.Hash => {
-            self.writeStatus.switchState(.SUCCESS);
+            // self.writeStatus.switchState(.SUCCESS);
             return eventResult.succeed();
         },
 
         PrivilegedHelper.Events.onHelperWriteFailed.Hash => {
-            self.writeStatus.switchState(.FAILURE);
+            // self.writeStatus.switchState(.FAILURE);
             return eventResult.succeed();
         },
 
         PrivilegedHelper.Events.onHelperVerificationSuccess.Hash => {
-            self.verificationStatus.switchState(.SUCCESS);
-            self.progressBox.text.value = "Finished writing ISO. You may now eject the device.";
+            // self.verificationStatus.switchState(.SUCCESS);
+            // self.progressBox.text.value = "Finished writing ISO. You may now eject the device.";
             try AppManager.reportAction(.DataFlashed);
             return eventResult.succeed();
         },
 
         PrivilegedHelper.Events.onHelperVerificationFailed.Hash => {
-            self.verificationStatus.switchState(.FAILURE);
+            // self.verificationStatus.switchState(.FAILURE);
             return eventResult.succeed();
         },
 
@@ -297,30 +307,31 @@ pub fn dispatchComponentAction(self: *DataFlasherUI) void {
 
 /// Deinitializes all UI widgets owned by this component, releasing their memory back to the allocator provided in init.
 pub fn deinit(self: *DataFlasherUI) void {
-    self.button.deinit();
+    self.layout.deinit();
+    // self.button.deinit();
 }
 
-fn panelAppearanceActive() Panel.Appearance {
-    return .{
-        .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
-        .backgroundColor = Styles.Color.themeSectionBg,
-        .borderColor = Styles.Color.themeSectionBorder,
-        .headerColor = Color.white,
-    };
-}
+// fn panelAppearanceActive() Panel.Appearance {
+//     return .{
+//         .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
+//         .backgroundColor = Styles.Color.themeSectionBg,
+//         .borderColor = Styles.Color.themeSectionBorder,
+//         .headerColor = Color.white,
+//     };
+// }
+//
+// fn panelAppearanceInactive() Panel.Appearance {
+//     return .{
+//         .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
+//         .backgroundColor = Styles.Color.themeSectionBg,
+//         .borderColor = Styles.Color.themeSectionBorder,
+//         .headerColor = Color.lightGray,
+//     };
+// }
 
-fn panelAppearanceInactive() Panel.Appearance {
-    return .{
-        .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
-        .backgroundColor = Styles.Color.themeSectionBg,
-        .borderColor = Styles.Color.themeSectionBorder,
-        .headerColor = Color.lightGray,
-    };
-}
-
-fn panelAppearanceFor(isActive: bool) Panel.Appearance {
-    return if (isActive) panelAppearanceActive() else panelAppearanceInactive();
-}
+// fn panelAppearanceFor(isActive: bool) Panel.Appearance {
+//     return if (isActive) panelAppearanceActive() else panelAppearanceInactive();
+// }
 
 fn subscribeToEvents(self: *DataFlasherUI) !void {
     if (self.component) |*component| {
@@ -329,138 +340,164 @@ fn subscribeToEvents(self: *DataFlasherUI) !void {
 }
 
 fn initBgRect(self: *DataFlasherUI) !void {
-    const deviceListTransform: *Transform = try UIFramework.utils.queryComponentTransform(DeviceListUI);
+    // const deviceListTransform: *Transform = try DeprecatedUI.utils.queryComponentTransform(DeviceListUI);
+    //
+    // self.frame = Layout.Bounds.relative(
+    //     deviceListTransform,
+    //     .{
+    //         .x = Layout.UnitValue.mix(1.0, AppConfig.APP_UI_MODULE_GAP_X),
+    //         .y = Layout.UnitValue.pixels(0),
+    //     },
+    //     .{
+    //         .width = Layout.UnitValue.pixels(winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE)),
+    //         .height = Layout.UnitValue.pixels(winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_INACTIVE)),
+    //     },
+    // );
+    //
+    // self.bgRect = Rectangle{
+    //     .transform = self.frame.resolve(),
+    //     .style = .{
+    //         .color = Styles.Color.themeSectionBg,
+    //         .borderStyle = .{
+    //             .color = Styles.Color.themeSectionBorder,
+    //         },
+    //     },
+    //     .rounded = true,
+    //     .bordered = true,
+    // };
 
-    self.frame = Layout.Bounds.relative(
-        deviceListTransform,
-        .{
-            .x = Layout.UnitValue.mix(1.0, AppConfig.APP_UI_MODULE_GAP_X),
-            .y = Layout.UnitValue.pixels(0),
-        },
-        .{
-            .width = Layout.UnitValue.pixels(winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE)),
-            .height = Layout.UnitValue.pixels(winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_INACTIVE)),
-        },
-    );
+    var ui = UIChain.init(self.allocator);
 
-    self.bgRect = Rectangle{
-        .transform = self.frame.resolve(),
-        .style = .{
-            .color = Styles.Color.themeSectionBg,
-            .borderStyle = .{
-                .color = Styles.Color.themeSectionBorder,
+    self.layout = try ui.view(.{
+        .id = null,
+        .position = .percent(1, AppConfig.APP_UI_MODULE_PANEL_Y_INACTIVE),
+        .offset_x = AppConfig.APP_UI_MODULE_GAP_X,
+        .size = .percent(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE, AppConfig.APP_UI_MODULE_PANEL_HEIGHT_INACTIVE),
+        .size_transform_height = try AppManager.getGlobalTransform(),
+        .size_transform_width = try AppManager.getGlobalTransform(),
+        .position_transform_x = try UIFramework.queryViewTransform(DeviceListUI),
+        .position_transform_y = try AppManager.getGlobalTransform(),
+        .background = .{
+            .transform = .{},
+            .style = .{
+                .color = Color.themeSectionBg,
+                .borderStyle = .{ .color = Color.themeSectionBorder },
             },
-        },
-        .rounded = true,
-        .bordered = true,
-    };
-}
-
-fn initFlashButton(self: *DataFlasherUI) !void {
-    self.button = Button.init(
-        "Flash",
-        null,
-        self.bgRect.transform.getPosition(),
-        .Primary,
-        .{ .context = self.parent, .function = DataFlasher.flashISOtoDeviceWrapper.call },
-        self.allocator,
-    );
-    self.button.params.disableOnClick = true;
-    self.button.setEnabled(false);
-    try self.button.start();
-    self.button.setPosition(.{
-        .x = self.bgRect.transform.relX(0.5) - @divTrunc(self.button.rect.transform.getWidth(), 2),
-        .y = self.bgRect.transform.relY(0.9) - @divTrunc(self.button.rect.transform.getHeight(), 2),
-    });
-    self.button.rect.rounded = true;
-}
-
-fn initModuleLabels(self: *DataFlasherUI) void {
-    self.displayISOTextBuffer = std.mem.zeroes([std.fs.max_path_bytes]u8);
-    self.displayDeviceTextBuffer = std.mem.zeroes([std.fs.max_path_bytes]u8);
-    self.isoText = Text.init("NULL", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
-    self.deviceText = Text.init("NULL", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
-
-    self.headerLabel = Text.init("flash", .{ .x = self.bgRect.transform.x + 12, .y = self.bgRect.transform.relY(0.01) }, .{
-        .font = .JERSEY10_REGULAR,
-        .fontSize = 34,
-        .textColor = Styles.Color.white,
-    });
-
-    self.statusSectionHeader = Text.init(
-        "status",
-        .{ .x = self.bgRect.transform.relX(PADDING_LEFT), .y = self.bgRect.transform.relY(0.26) },
-        .{ .fontSize = 24, .font = .JERSEY10_REGULAR },
-    );
-}
-
-fn initStatusIndicators(self: *DataFlasherUI) void {
-    self.isoStatus = StatusIndicator.init("ISO validated & stream open", STATUS_INDICATOR_SIZE);
-    self.deviceStatus = StatusIndicator.init("Device validated & stream open", STATUS_INDICATOR_SIZE);
-    self.permissionsStatus = StatusIndicator.init("Freetracer has necessary permissions", STATUS_INDICATOR_SIZE);
-    self.writeStatus = StatusIndicator.init("Write successfully completed", STATUS_INDICATOR_SIZE);
-    self.verificationStatus = StatusIndicator.init("Written bytes successfuly verified", STATUS_INDICATOR_SIZE);
-}
-
-fn initTextures(self: *DataFlasherUI) void {
-    self.uiSheetTexture = Texture.init(.BUTTON_UI, .{ .x = winRelX(1.5), .y = winRelY(1.5) });
-    self.moduleImg = Texture.init(.FLASH_PLACEHOLDER, .{ .x = 0, .y = 0 });
-    self.moduleImg.transform.scale = 3;
-    self.moduleImg.transform.x = self.bgRect.transform.relX(0.5) - self.moduleImg.transform.getWidth() / 2;
-    self.moduleImg.transform.y = self.bgRect.transform.relY(0.5) - self.moduleImg.transform.getHeight() / 2;
-    self.moduleImg.tint = .{ .r = 255, .g = 255, .b = 255, .a = 255 };
-}
-
-fn initProgressbox(self: *DataFlasherUI) void {
-    self.progressBox = Progressbox{
-        .text = Text.init("", .{
-            .x = self.bgRect.transform.relX(PADDING_LEFT),
-            .y = self.bgRect.transform.relY(0.75),
-        }, .{
-            .font = .ROBOTO_REGULAR,
-            .fontSize = 14,
-            .textColor = .white,
-        }),
-        .percentText = Text.init(
-            "",
-            .{ .x = self.bgRect.transform.relX(PADDING_LEFT), .y = self.bgRect.transform.relY(0.75) },
-            .{ .fontSize = 14 },
-        ),
-        .value = 0,
-        .percentTextBuf = std.mem.zeroes([5]u8),
-        .rect = .{
-            .bordered = true,
             .rounded = true,
-            .style = .{ .color = Color.white, .borderStyle = .{ .color = Color.white, .thickness = 2.00 } },
-            .transform = .{
-                .x = self.bgRect.transform.relX(0.2),
-                .y = self.bgRect.transform.relY(0.7),
-                .h = 18.0,
-                .w = 0.0,
-            },
+            .bordered = true,
         },
-    };
+    }).children(.{});
+
+    self.layout.callbacks.onStateChange = .{ .function = UIConfig.Callbacks.MainView.StateHandler.handler, .context = &self.layout };
+
+    try self.layout.start();
 }
 
-/// Repositions child elements after background sizing/color changes.
-fn panelElements(self: *DataFlasherUI) Panel.Elements {
-    return .{
-        .frame = &self.frame,
-        .rect = &self.bgRect,
-        .header = &self.headerLabel,
-    };
-}
-
-fn applyPanelMode(self: *DataFlasherUI, appearance: Panel.Appearance) void {
-    Debug.log(.DEBUG, "DataFlasherUI: applying panel appearance", .{});
-    Panel.applyAppearance(self.panelElements(), appearance);
-    self.updateLayout();
-}
-
-fn updateLayout(self: *DataFlasherUI) void {
-    self.bgRect.transform = self.frame.resolve();
-    self.applyLayoutFromBounds();
-}
+// fn initFlashButton(self: *DataFlasherUI) !void {
+//     self.button = Button.init(
+//         "Flash",
+//         null,
+//         self.bgRect.transform.getPosition(),
+//         .Primary,
+//         .{ .context = self.parent, .function = DataFlasher.flashISOtoDeviceWrapper.call },
+//         self.allocator,
+//     );
+//     self.button.params.disableOnClick = true;
+//     self.button.setEnabled(false);
+//     try self.button.start();
+//     self.button.setPosition(.{
+//         .x = self.bgRect.transform.relX(0.5) - @divTrunc(self.button.rect.transform.getWidth(), 2),
+//         .y = self.bgRect.transform.relY(0.9) - @divTrunc(self.button.rect.transform.getHeight(), 2),
+//     });
+//     self.button.rect.rounded = true;
+// }
+//
+// fn initModuleLabels(self: *DataFlasherUI) void {
+//     self.displayISOTextBuffer = std.mem.zeroes([std.fs.max_path_bytes]u8);
+//     self.displayDeviceTextBuffer = std.mem.zeroes([std.fs.max_path_bytes]u8);
+//     self.isoText = Text.init("NULL", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
+//     self.deviceText = Text.init("NULL", .{ .x = 0, .y = 0 }, .{ .fontSize = 14 });
+//
+//     self.headerLabel = Text.init("flash", .{ .x = self.bgRect.transform.x + 12, .y = self.bgRect.transform.relY(0.01) }, .{
+//         .font = .JERSEY10_REGULAR,
+//         .fontSize = 34,
+//         .textColor = Styles.Color.white,
+//     });
+//
+//     self.statusSectionHeader = Text.init(
+//         "status",
+//         .{ .x = self.bgRect.transform.relX(PADDING_LEFT), .y = self.bgRect.transform.relY(0.26) },
+//         .{ .fontSize = 24, .font = .JERSEY10_REGULAR },
+//     );
+// }
+//
+// fn initStatusIndicators(self: *DataFlasherUI) void {
+//     self.isoStatus = StatusIndicator.init("ISO validated & stream open", STATUS_INDICATOR_SIZE);
+//     self.deviceStatus = StatusIndicator.init("Device validated & stream open", STATUS_INDICATOR_SIZE);
+//     self.permissionsStatus = StatusIndicator.init("Freetracer has necessary permissions", STATUS_INDICATOR_SIZE);
+//     self.writeStatus = StatusIndicator.init("Write successfully completed", STATUS_INDICATOR_SIZE);
+//     self.verificationStatus = StatusIndicator.init("Written bytes successfuly verified", STATUS_INDICATOR_SIZE);
+// }
+//
+// fn initTextures(self: *DataFlasherUI) void {
+//     self.uiSheetTexture = Texture.init(.BUTTON_UI, .{ .x = winRelX(1.5), .y = winRelY(1.5) });
+//     self.moduleImg = Texture.init(.FLASH_PLACEHOLDER, .{ .x = 0, .y = 0 });
+//     self.moduleImg.transform.scale = 3;
+//     self.moduleImg.transform.x = self.bgRect.transform.relX(0.5) - self.moduleImg.transform.getWidth() / 2;
+//     self.moduleImg.transform.y = self.bgRect.transform.relY(0.5) - self.moduleImg.transform.getHeight() / 2;
+//     self.moduleImg.tint = .{ .r = 255, .g = 255, .b = 255, .a = 255 };
+// }
+//
+// fn initProgressbox(self: *DataFlasherUI) void {
+//     self.progressBox = Progressbox{
+//         .text = Text.init("", .{
+//             .x = self.bgRect.transform.relX(PADDING_LEFT),
+//             .y = self.bgRect.transform.relY(0.75),
+//         }, .{
+//             .font = .ROBOTO_REGULAR,
+//             .fontSize = 14,
+//             .textColor = .white,
+//         }),
+//         .percentText = Text.init(
+//             "",
+//             .{ .x = self.bgRect.transform.relX(PADDING_LEFT), .y = self.bgRect.transform.relY(0.75) },
+//             .{ .fontSize = 14 },
+//         ),
+//         .value = 0,
+//         .percentTextBuf = std.mem.zeroes([5]u8),
+//         .rect = .{
+//             .bordered = true,
+//             .rounded = true,
+//             .style = .{ .color = Color.white, .borderStyle = .{ .color = Color.white, .thickness = 2.00 } },
+//             .transform = .{
+//                 .x = self.bgRect.transform.relX(0.2),
+//                 .y = self.bgRect.transform.relY(0.7),
+//                 .h = 18.0,
+//                 .w = 0.0,
+//             },
+//         },
+//     };
+// }
+//
+// /// Repositions child elements after background sizing/color changes.
+// fn panelElements(self: *DataFlasherUI) Panel.Elements {
+//     return .{
+//         .frame = &self.frame,
+//         .rect = &self.bgRect,
+//         .header = &self.headerLabel,
+//     };
+// }
+//
+// fn applyPanelMode(self: *DataFlasherUI, appearance: Panel.Appearance) void {
+//     Debug.log(.DEBUG, "DataFlasherUI: applying panel appearance", .{});
+//     Panel.applyAppearance(self.panelElements(), appearance);
+//     self.updateLayout();
+// }
+//
+// fn updateLayout(self: *DataFlasherUI) void {
+//     self.bgRect.transform = self.frame.resolve();
+//     self.applyLayoutFromBounds();
+// }
 
 fn storeIsActive(self: *DataFlasherUI, isActive: bool) void {
     self.state.lock();
@@ -491,12 +528,12 @@ fn readParentSelection(self: *DataFlasherUI) ParentSelection {
     return selection;
 }
 
-fn setTextValue(text: *Text, value: [:0]const u8) void {
-    text.value = value;
-    const dims = text.getDimensions();
-    text.transform.w = dims.width;
-    text.transform.h = dims.height;
-}
+// fn setTextValue(text: *Text, value: [:0]const u8) void {
+//     text.value = value;
+//     const dims = text.getDimensions();
+//     text.transform.w = dims.width;
+//     text.transform.h = dims.height;
+// }
 
 fn updateIsoDisplay(self: *DataFlasherUI, isoPath: [:0]const u8) void {
     @memset(&self.displayISOTextBuffer, 0);
@@ -519,7 +556,7 @@ fn updateIsoDisplay(self: *DataFlasherUI, isoPath: [:0]const u8) void {
         finalValue = copied;
     }
 
-    setTextValue(&self.isoText, finalValue);
+    // setTextValue(&self.isoText, finalValue);
 }
 
 fn updateDeviceDisplay(self: *DataFlasherUI, device: ?StorageDevice) void {
@@ -527,77 +564,78 @@ fn updateDeviceDisplay(self: *DataFlasherUI, device: ?StorageDevice) void {
 
     if (device) |dev| {
         const label = formatDeviceLabel(self.displayDeviceTextBuffer[0..], dev.getNameSlice(), dev.getBsdNameSlice());
-        setTextValue(&self.deviceText, label);
+        _ = label;
+        // setTextValue(&self.deviceText, label);
     } else {
-        setTextValue(&self.deviceText, NULL_TEXT);
+        // setTextValue(&self.deviceText, NULL_TEXT);
     }
 }
 
-fn applyLayoutFromBounds(self: *DataFlasherUI) void {
-    const leftPadding = self.bgRect.transform.relX(PADDING_LEFT);
-    const centerX = self.bgRect.transform.relX(0.5);
-
-    self.headerLabel.transform.x = self.bgRect.transform.x + HEADER_LABEL_OFFSET_X;
-    self.headerLabel.transform.y = self.bgRect.transform.relY(HEADER_LABEL_REL_Y);
-
-    self.moduleImg.transform.x = centerX - self.moduleImg.transform.getWidth() / 2;
-    self.moduleImg.transform.y = self.bgRect.transform.relY(0.5) - self.moduleImg.transform.getHeight() / 2;
-
-    self.isoText.transform.x = self.bgRect.transform.relX(ISO_ICON_POS_REL_X) + ICON_TEXT_GAP_X;
-    self.isoText.transform.y = self.bgRect.transform.relY(ISO_ICON_POS_REL_Y) + self.isoText.getDimensions().height / 8;
-
-    self.deviceText.transform.x = self.bgRect.transform.relX(DEV_ICON_POS_REL_X) + ICON_TEXT_GAP_X;
-    self.deviceText.transform.y = self.bgRect.transform.relY(DEV_ICON_POS_REL_Y) + self.deviceText.getDimensions().height / 8;
-
-    self.statusSectionHeader.transform.x = self.bgRect.transform.relX(PADDING_LEFT);
-
-    self.isoStatus.calculateUI(.{
-        .x = self.bgRect.transform.relX(PADDING_LEFT),
-        .y = self.statusSectionHeader.transform.y + self.statusSectionHeader.getDimensions().height + ITEM_GAP_Y,
-        .w = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth(),
-        .h = STATUS_INDICATOR_SIZE,
-    });
-
-    self.deviceStatus.calculateUI(.{
-        .x = self.bgRect.transform.relX(PADDING_LEFT),
-        .y = self.isoStatus.box.transform.y + STATUS_INDICATOR_SIZE + ITEM_GAP_Y,
-        .w = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth(),
-        .h = STATUS_INDICATOR_SIZE,
-    });
-
-    self.permissionsStatus.calculateUI(.{
-        .x = self.bgRect.transform.relX(PADDING_LEFT),
-        .y = self.deviceStatus.box.transform.y + STATUS_INDICATOR_SIZE + ITEM_GAP_Y,
-        .w = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth(),
-        .h = STATUS_INDICATOR_SIZE,
-    });
-
-    self.writeStatus.calculateUI(.{
-        .x = self.bgRect.transform.relX(PADDING_LEFT),
-        .y = self.permissionsStatus.box.transform.y + STATUS_INDICATOR_SIZE + ITEM_GAP_Y,
-        .w = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth(),
-        .h = STATUS_INDICATOR_SIZE,
-    });
-
-    self.verificationStatus.calculateUI(.{
-        .x = self.bgRect.transform.relX(PADDING_LEFT),
-        .y = self.writeStatus.box.transform.y + STATUS_INDICATOR_SIZE + ITEM_GAP_Y,
-        .w = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth(),
-        .h = STATUS_INDICATOR_SIZE,
-    });
-
-    self.progressBox.text.transform.x = leftPadding;
-    self.progressBox.text.transform.y = self.verificationStatus.box.transform.y + self.verificationStatus.box.transform.h + 2 * ITEM_GAP_Y;
-    self.progressBox.percentText.transform.x = leftPadding + (1 - SECTION_PADDING) * self.bgRect.transform.getWidth() - self.progressBox.percentText.getDimensions().width;
-    self.progressBox.percentText.transform.y = self.progressBox.text.transform.y;
-    self.progressBox.rect.transform.x = leftPadding;
-    self.progressBox.rect.transform.y = self.progressBox.text.transform.y + self.progressBox.text.getDimensions().height + 2.5 * ITEM_GAP_Y;
-
-    self.button.setPosition(.{
-        .x = centerX - self.button.rect.transform.getWidth() / 2,
-        .y = self.button.rect.transform.y,
-    });
-}
+// fn applyLayoutFromBounds(self: *DataFlasherUI) void {
+//     const leftPadding = self.bgRect.transform.relX(PADDING_LEFT);
+//     const centerX = self.bgRect.transform.relX(0.5);
+//
+//     self.headerLabel.transform.x = self.bgRect.transform.x + HEADER_LABEL_OFFSET_X;
+//     self.headerLabel.transform.y = self.bgRect.transform.relY(HEADER_LABEL_REL_Y);
+//
+//     self.moduleImg.transform.x = centerX - self.moduleImg.transform.getWidth() / 2;
+//     self.moduleImg.transform.y = self.bgRect.transform.relY(0.5) - self.moduleImg.transform.getHeight() / 2;
+//
+//     self.isoText.transform.x = self.bgRect.transform.relX(ISO_ICON_POS_REL_X) + ICON_TEXT_GAP_X;
+//     self.isoText.transform.y = self.bgRect.transform.relY(ISO_ICON_POS_REL_Y) + self.isoText.getDimensions().height / 8;
+//
+//     self.deviceText.transform.x = self.bgRect.transform.relX(DEV_ICON_POS_REL_X) + ICON_TEXT_GAP_X;
+//     self.deviceText.transform.y = self.bgRect.transform.relY(DEV_ICON_POS_REL_Y) + self.deviceText.getDimensions().height / 8;
+//
+//     self.statusSectionHeader.transform.x = self.bgRect.transform.relX(PADDING_LEFT);
+//
+//     self.isoStatus.calculateUI(.{
+//         .x = self.bgRect.transform.relX(PADDING_LEFT),
+//         .y = self.statusSectionHeader.transform.y + self.statusSectionHeader.getDimensions().height + ITEM_GAP_Y,
+//         .w = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth(),
+//         .h = STATUS_INDICATOR_SIZE,
+//     });
+//
+//     self.deviceStatus.calculateUI(.{
+//         .x = self.bgRect.transform.relX(PADDING_LEFT),
+//         .y = self.isoStatus.box.transform.y + STATUS_INDICATOR_SIZE + ITEM_GAP_Y,
+//         .w = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth(),
+//         .h = STATUS_INDICATOR_SIZE,
+//     });
+//
+//     self.permissionsStatus.calculateUI(.{
+//         .x = self.bgRect.transform.relX(PADDING_LEFT),
+//         .y = self.deviceStatus.box.transform.y + STATUS_INDICATOR_SIZE + ITEM_GAP_Y,
+//         .w = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth(),
+//         .h = STATUS_INDICATOR_SIZE,
+//     });
+//
+//     self.writeStatus.calculateUI(.{
+//         .x = self.bgRect.transform.relX(PADDING_LEFT),
+//         .y = self.permissionsStatus.box.transform.y + STATUS_INDICATOR_SIZE + ITEM_GAP_Y,
+//         .w = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth(),
+//         .h = STATUS_INDICATOR_SIZE,
+//     });
+//
+//     self.verificationStatus.calculateUI(.{
+//         .x = self.bgRect.transform.relX(PADDING_LEFT),
+//         .y = self.writeStatus.box.transform.y + STATUS_INDICATOR_SIZE + ITEM_GAP_Y,
+//         .w = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth(),
+//         .h = STATUS_INDICATOR_SIZE,
+//     });
+//
+//     self.progressBox.text.transform.x = leftPadding;
+//     self.progressBox.text.transform.y = self.verificationStatus.box.transform.y + self.verificationStatus.box.transform.h + 2 * ITEM_GAP_Y;
+//     self.progressBox.percentText.transform.x = leftPadding + (1 - SECTION_PADDING) * self.bgRect.transform.getWidth() - self.progressBox.percentText.getDimensions().width;
+//     self.progressBox.percentText.transform.y = self.progressBox.text.transform.y;
+//     self.progressBox.rect.transform.x = leftPadding;
+//     self.progressBox.rect.transform.y = self.progressBox.text.transform.y + self.progressBox.text.getDimensions().height + 2.5 * ITEM_GAP_Y;
+//
+//     self.button.setPosition(.{
+//         .x = centerX - self.button.rect.transform.getWidth() / 2,
+//         .y = self.button.rect.transform.y,
+//     });
+// }
 
 pub const ComponentImplementation = ComponentFramework.ImplementComponent(DataFlasherUI);
 pub const asComponent = ComponentImplementation.asComponent;
@@ -648,53 +686,55 @@ pub fn handleOnActiveStateChanged(self: *DataFlasherUI, event: ComponentEvent) !
 
     if (data.isActive) {
         Debug.log(.DEBUG, "DataFlasherUI: setting UI to ACTIVE.", .{});
-        self.onActivated();
+        // self.onActivated();
     } else {
         Debug.log(.DEBUG, "DataFlasherUI: setting UI to INACTIVE.", .{});
-        self.onDeactivated();
+        // self.onDeactivated();
     }
 
-    if (data.isActive) {
-        self.bgRect.transform.w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE);
-        self.bgRect.transform.h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_ACTIVE);
-    } else {
-        self.bgRect.transform.w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE);
-        self.bgRect.transform.h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_INACTIVE);
-    }
+    // if (data.isActive) {
+    //     self.bgRect.transform.w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE);
+    //     self.bgRect.transform.h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_ACTIVE);
+    // } else {
+    //     self.bgRect.transform.w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE);
+    //     self.bgRect.transform.h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_INACTIVE);
+    // }
 
     return eventResult.succeed();
 }
 
-fn onActivated(self: *DataFlasherUI) void {
-    const selection = self.readParentSelection();
-    const isoPath = selection.isoPath orelse NULL_TEXT;
+// fn onActivated(self: *DataFlasherUI) void {
+//     const selection = self.readParentSelection();
+//     const isoPath = selection.isoPath orelse NULL_TEXT;
+//     _ = isoPath;
+//
+//     // self.applyPanelMode(panelAppearanceActive());
+//
+//     // self.updateIsoDisplay(isoPath);
+//     // self.updateDeviceDisplay(selection.device);
+//
+//     // const ready = selection.isoPath != null and selection.device != null;
+//     // self.button.setEnabled(ready);
+//
+//     // self.applyLayoutFromBounds();
+// }
 
-    // self.applyPanelMode(panelAppearanceActive());
-
-    self.updateIsoDisplay(isoPath);
-    self.updateDeviceDisplay(selection.device);
-
-    const ready = selection.isoPath != null and selection.device != null;
-    self.button.setEnabled(ready);
-
-    self.applyLayoutFromBounds();
-}
-
-fn onDeactivated(self: *DataFlasherUI) void {
-    self.button.setEnabled(false);
-    // self.applyPanelMode(panelAppearanceInactive());
-}
+// fn onDeactivated(self: *DataFlasherUI) void {
+//     // self.button.setEnabled(false);
+//     // self.applyPanelMode(panelAppearanceInactive());
+// }
 
 pub fn handleOnISOWriteProgressChanged(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
     var eventResult = EventResult.init();
     const data = PrivilegedHelper.Events.onISOWriteProgressChanged.getData(event) orelse return eventResult.fail();
 
     Debug.log(.INFO, "Write progress is: {d}", .{data.newProgress});
+    _ = self;
 
-    self.progressBox.text.value = "Writing ISO... Do not eject the device.";
-    self.progressBox.setProgressTo(self.bgRect, data.newProgress);
-    self.progressBox.percentText.transform.x = self.bgRect.transform.relX(PADDING_LEFT) +
-        (1 - SECTION_PADDING) * self.bgRect.transform.getWidth() - self.progressBox.percentText.getDimensions().width;
+    // self.progressBox.text.value = "Writing ISO... Do not eject the device.";
+    // self.progressBox.setProgressTo(self.bgRect, data.newProgress);
+    // self.progressBox.percentText.transform.x = self.bgRect.transform.relX(PADDING_LEFT) +
+    //     (1 - SECTION_PADDING) * self.bgRect.transform.getWidth() - self.progressBox.percentText.getDimensions().width;
 
     return eventResult.succeed();
 }
@@ -704,9 +744,10 @@ pub fn handleOnWriteVerificationProgressChanged(self: *DataFlasherUI, event: Com
     const data = PrivilegedHelper.Events.onWriteVerificationProgressChanged.getData(event) orelse return eventResult.fail();
 
     Debug.log(.INFO, "Verification progress is: {d}", .{data.newProgress});
+    _ = self;
 
-    self.progressBox.text.value = "Verifying device blocks...";
-    self.progressBox.setProgressTo(self.bgRect, data.newProgress);
+    // self.progressBox.text.value = "Verifying device blocks...";
+    // self.progressBox.setProgressTo(self.bgRect, data.newProgress);
 
     return eventResult.succeed();
 }
@@ -725,20 +766,58 @@ pub fn handleAppResetRequest(self: *DataFlasherUI) EventResult {
         self.displayISOTextBuffer = std.mem.zeroes([std.fs.max_path_bytes]u8);
         self.displayDeviceTextBuffer = std.mem.zeroes([std.fs.max_path_bytes]u8);
 
-        setTextValue(&self.isoText, NULL_TEXT);
-        setTextValue(&self.deviceText, NULL_TEXT);
+        // setTextValue(&self.isoText, NULL_TEXT);
+        // setTextValue(&self.deviceText, NULL_TEXT);
 
-        self.progressBox.text.value = "";
-        self.progressBox.value = 0;
-        self.progressBox.percentTextBuf = std.mem.zeroes([5]u8);
-        self.progressBox.percentText.value = "";
-        self.progressBox.rect.transform.w = 0;
+        // self.progressBox.text.value = "";
+        // self.progressBox.value = 0;
+        // self.progressBox.percentTextBuf = std.mem.zeroes([5]u8);
+        // self.progressBox.percentText.value = "";
+        // self.progressBox.rect.transform.w = 0;
         self.flashRequested = false;
     }
 
-    self.button.setEnabled(false);
+    // self.button.setEnabled(false);
 
-    self.applyPanelMode(panelAppearanceInactive());
+    // self.applyPanelMode(panelAppearanceInactive());
 
     return eventResult.succeed();
 }
+
+pub const UIConfig = struct {
+    //
+    pub const Callbacks = struct {
+        //
+        pub const MainView = struct {
+            //
+            pub const StateHandler = struct {
+                pub fn handler(ctx: *anyopaque, flag: bool) void {
+                    const self: *View = @ptrCast(@alignCast(ctx));
+
+                    switch (flag) {
+                        true => {
+                            Debug.log(.DEBUG, "Main DataFlasherUI View received a SetActive(true) command.", .{});
+                            self.transform.size = .pixels(
+                                WindowManager.relW(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
+                                WindowManager.relH(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_ACTIVE),
+                            );
+
+                            self.transform.position.y = .pixels(winRelY(AppConfig.APP_UI_MODULE_PANEL_Y));
+                        },
+                        false => {
+                            Debug.log(.DEBUG, "Main DataFlasherUI View received a SetActive(false) command.", .{});
+                            self.transform.size = .pixels(
+                                WindowManager.relW(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
+                                WindowManager.relH(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_INACTIVE),
+                            );
+
+                            self.transform.position.y = .pixels(winRelY(AppConfig.APP_UI_MODULE_PANEL_Y_INACTIVE));
+                        },
+                    }
+
+                    self.transform.resolve();
+                }
+            };
+        };
+    };
+};
