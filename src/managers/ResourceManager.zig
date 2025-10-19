@@ -33,6 +33,8 @@ pub const TEXTURE = enum(u8) {
     USB_ICON_ACTIVE,
     SD_ICON_INACTIVE,
     SD_ICON_ACTIVE,
+
+    WARNING_ICON,
 };
 
 pub const Asset = union(enum) {
@@ -145,6 +147,7 @@ pub const ResourceManagerSingleton = struct {
             try inst.registerAsset(.{ .Texture = .BUTTON_FRAME }, "images/button_frame.png");
             try inst.registerAsset(.{ .Texture = .IMAGE_TAG }, "images/tag.png");
             try inst.registerAsset(.{ .Texture = .FLASH_PLACEHOLDER }, "images/flash-placeholder.png");
+            try inst.registerAsset(.{ .Texture = .WARNING_ICON }, "images/warning-icon.png");
             try inst.registerAsset(.{ .Texture = .USB_ICON_INACTIVE }, "images/usb-icon-inactive.png");
             try inst.registerAsset(.{ .Texture = .USB_ICON_ACTIVE }, "images/usb-icon-active.png");
             try inst.registerAsset(.{ .Texture = .SD_ICON_INACTIVE }, "images/sd-icon-inactive.png");

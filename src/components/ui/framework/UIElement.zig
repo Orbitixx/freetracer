@@ -9,6 +9,7 @@ const Text = UIFramework.Text;
 const Textbox = UIFramework.Textbox;
 const Texture = UIFramework.Texture;
 const DeviceSelectBox = UIFramework.DeviceSelectBox;
+const DeviceSelectBoxList = UIFramework.DeviceSelectBoxList;
 const FileDropzone = UIFramework.FileDropzone;
 const SpriteButton = UIFramework.SpriteButton;
 const UIEvent = UIFramework.UIEvent;
@@ -58,6 +59,7 @@ pub const UIElement = union(enum) {
     Textbox: Textbox,
     Texture: Texture,
     DeviceSelectBox: DeviceSelectBox,
+    DeviceSelectBoxList: DeviceSelectBoxList,
     FileDropzone: FileDropzone,
     SpriteButton: SpriteButton,
     // Button: Button,
