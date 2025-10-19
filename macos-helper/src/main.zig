@@ -226,7 +226,7 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) !void {
 
     const userHomePath: []const u8 = try XPCService.getUserHomePath(connection);
 
-    const isoFile = fsops.openFileValidated(isoPath, .{ .userHomePath = userHomePath, .imageType = imageType }) catch |err| {
+    const isoFile = fs.openFileValidated(isoPath, .{ .userHomePath = userHomePath, .imageType = imageType }) catch |err| {
         respondWithErrorAndTerminate(
             .{ .err = err, .message = "Unable to open ISO file or its directory." },
             .{ .xpcConnection = connection, .xpcResponseCode = .ISO_FILE_INVALID },

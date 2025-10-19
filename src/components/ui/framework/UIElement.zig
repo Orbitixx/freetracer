@@ -13,13 +13,16 @@ const SpriteButton = UIFramework.SpriteButton;
 const UIEvent = UIFramework.UIEvent;
 
 pub const StateChangeHandler = struct {
-    function: *const fn (ctx: *anyopaque, flag: bool) void,
+    function: ?*const fn (ctx: *anyopaque, flag: bool) void = null,
     context: ?*anyopaque = null,
 
     pub fn call(self: StateChangeHandler, flag: bool) void {
-        if (self.context) |ctx| self.function(ctx, flag) else {
+        if (self.context == null or self.function == null) {
             Debug.log(.WARNING, "StateChangeHandler called on instance [handler.call()] with null context. Call aborted.", .{});
+            return;
         }
+
+        if (self.context) |ctx| if (self.function) |handler| handler(ctx, flag);
     }
 };
 
@@ -96,14 +99,27 @@ pub const UIElement = union(enum) {
             inline else => |*element| {
                 switch (event) {
                     .StateChanged => |ev| {
+                        //
+                        // if target identifer is specified...
+                        //
                         if (ev.target) |target| {
                             std.debug.print("\nUIElement.onEvent.StateChanged: target does not match element.target; aborting.", .{});
                             if (target != element.identifier) return;
+
+                            // if target identifier is NOT specified
                         } else {
                             if (element.callbacks.onStateChange) |onStateChange| {
-                                std.debug.print("\nUIElement.onEvent.StateChanged: target not set, executing setActive function. Responding element: {any}", .{element});
-                                onStateChange.function(element, ev.isActive);
-                            }
+                                Debug.log(
+                                    .DEBUG,
+                                    "UIElement.onEvent.StateChanged: target not set, executing setActive function. Responding element: {any}",
+                                    .{@TypeOf(element)},
+                                );
+                                if (onStateChange.function) |handler| handler(element, ev.isActive) else Debug.log(
+                                    .ERROR,
+                                    "UIElement.onEvent(): onStateChanger handler (function) is NULL! Aborting.",
+                                    .{},
+                                );
+                            } else element.active = ev.isActive;
                         }
                     },
                     inline else => {

@@ -267,12 +267,28 @@ fn processSelectedPathLocked(self: *FilePicker, newPath: [:0]u8) !void {
         }
     }
 
+    const imageType = fs.getImageType(fs.getExtensionFromPath(newPath));
+
     self.state.data.image.path = newPath;
-    self.state.data.image.type = fs.getImageType(fs.getExtensionFromPath(newPath));
+    self.state.data.image.type = imageType;
+
+    const file = fs.openFileValidated(newPath, .{ .userHomePath = std.posix.getenv("HOME") orelse return error.UnableToGetUserPath, .imageType = imageType }) catch |err| {
+        var buf: [256]u8 = std.mem.zeroes([256]u8);
+        _ = try std.fmt.bufPrint(&buf, "Could not obtain a validated file handle for selected file. Error: {any}.", .{err});
+        Debug.log(.ERROR, "Could not obtain a validated file handle for selected path: {s}; error: {any}", .{ std.mem.sliceTo(&buf, 0x00), err });
+        _ = osd.message(@ptrCast(std.mem.sliceTo(&buf, 0x00)), .{ .buttons = .ok, .level = .err });
+        return err;
+    };
+
+    const stat = try file.stat();
+    defer file.close();
+
+    Debug.log(.INFO, "FilePicker selected file: {s}, size: {d:.0}", .{ newPath, stat.size });
 
     if (self.uiComponent) |*ui| {
         const pathChangedEvent = FilePickerUI.Events.onISOFilePathChanged.create(self.asComponentPtr(), &.{
             .newPath = newPath,
+            .size = stat.size,
         });
 
         _ = try ui.handleEvent(pathChangedEvent);

@@ -68,7 +68,7 @@ layout: View = undefined,
 pub const Events = struct {
     pub const onISOFilePathChanged = ComponentFramework.defineEvent(
         EventManager.createEventName(ComponentName, "iso_file_path_changed"),
-        struct { newPath: [:0]u8 },
+        struct { newPath: [:0]u8, size: ?u64 = null },
         struct {},
     );
 
@@ -303,15 +303,17 @@ fn initializeBackground(self: *FilePickerUI) !void {
             .id("header_icon")
             .position(.percent(0.05, 0.03))
             .positionRef(.Parent)
-            .scale(0.5),
-
+            .scale(0.5)
+            .callbacks(.{ .onStateChange = .{} }), // Consumes .StateChanged event without doing anything
+        //
         ui.textbox(DEFAULT_SECTION_HEADER, UIConfig.Styles.HeaderTextbox, UIFramework.Textbox.Params{ .wordWrap = true })
             .id("header_textbox")
             .position(.percent(1, 0))
             .offset(10, -2)
             .positionRef(.{ .NodeId = "header_icon" })
             .size(.percent(0.7, 0.3))
-            .sizeRef(.Parent),
+            .sizeRef(.Parent)
+            .callbacks(.{ .onStateChange = .{} }), // Consumes .StateChanged event without doing anything
 
         ui.fileDropzone(.{
             .identifier = .FilePickerFileDropzone,
@@ -324,9 +326,6 @@ fn initializeBackground(self: *FilePickerUI) !void {
                 .onDrop = .{
                     .function = FilePicker.HandleFileDropWrapper.call,
                     .context = self.parent,
-                },
-                .onStateChange = .{
-                    .function = FilePickerUI.UIConfig.Callbacks.ImageDropzone.StateChangeHandler.handler,
                 },
             },
             .style = .{
@@ -369,7 +368,10 @@ fn initializeBackground(self: *FilePickerUI) !void {
             .size(.percent(0.8, 0.5))
             .sizeRef(.{ .NodeId = "image_info_bg" }),
 
-        ui.text("5.06 Gb", .{ .textColor = rl.Color.init(156, 156, 156, 255) })
+        ui.text("5.06 Gb", .{
+            .identifier = .FilePickerImageSizeText,
+            .textColor = rl.Color.init(156, 156, 156, 255),
+        })
             .id("image_info_size_text")
             .position(.percent(0, 1))
             .offset(0, -24)
@@ -568,10 +570,26 @@ fn handleIsoFilePathChanged(self: *FilePickerUI, event: ComponentEvent) !EventRe
     if (data.newPath.len > 0) {
         self.updateIsoPathState(data.newPath);
         const displayName = extractDisplayName(data.newPath);
+
         self.layout.emitEvent(
             .{ .TextChanged = .{ .target = .ImageInfoTextbox, .text = displayName } },
             .{ .excludeSelf = true },
         );
+
+        var sizeBuf: [36]u8 = std.mem.zeroes([36]u8);
+
+        if (data.size) |size| {
+            const displaySize = if (size > 1_000_000_000) @divTrunc(size, 1_000_000_000) else @divTrunc(size, 1_000_000);
+            const displayUnits = if (size > 1_000_000_000) "GB" else "MB";
+
+            _ = try std.fmt.bufPrint(sizeBuf[0..], "{d:.0} {s}", .{ displaySize, displayUnits });
+
+            self.layout.emitEvent(.{ .TextChanged = .{
+                .target = .FilePickerImageSizeText,
+                .text = @ptrCast(@constCast(std.mem.sliceTo(&sizeBuf, 0x00))),
+            } }, .{});
+        }
+
         // self.updateIsoTitle(displayName);
     } else {
         // self.resetIsoTitle();

@@ -8,6 +8,8 @@ const std = @import("std");
 const Character = @import("../constants.zig").Character;
 const Debug = @import("../util/debug.zig");
 const ImageType = @import("../types.zig").ImageType;
+const String = @import("../util/string.zig");
+const ISOParser = @import("../ISOParser.zig");
 
 /// Error set for path operations.
 pub const PathError = error{
@@ -161,6 +163,82 @@ pub fn getImageType(path: []const u8) ImageType {
     if (std.ascii.eqlIgnoreCase(ext, ".IMG")) return .IMG;
 
     return .Other;
+}
+
+pub fn openFileValidated(unsanitizedIsoPath: []const u8, params: struct { userHomePath: []const u8, imageType: ImageType }) !std.fs.File {
+
+    // Buffer overflow protection
+    if (unsanitizedIsoPath.len > std.fs.max_path_bytes) {
+        Debug.log(.ERROR, "Provided path is too long (over std.fs.max_path_bytes).", .{});
+        return error.ISOFilePathTooLong;
+    }
+
+    if (params.userHomePath.len < 3) return error.UserHomePathTooShort;
+
+    var realPathBuffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
+    var sanitizeStringBuffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
+
+    const imagePath = std.fs.realpath(unsanitizedIsoPath, &realPathBuffer) catch |err| {
+        Debug.log(.ERROR, "Unable to resolve the real path of the povided path: {s}. Error: {any}", .{
+            String.sanitizeString(&sanitizeStringBuffer, unsanitizedIsoPath),
+            err,
+        });
+        return error.UnableToResolveRealISOPath;
+    };
+
+    const printableIsoPath = String.sanitizeString(&sanitizeStringBuffer, imagePath);
+
+    if (imagePath.len < 8) {
+        Debug.log(.ERROR, "Provided path is less than 8 characters long. Likely invalid, aborting for safety...", .{});
+        return error.ISOFilePathTooShort;
+    }
+
+    const directory = std.fs.path.dirname(imagePath) orelse ".";
+    const fileName = std.fs.path.basename(imagePath);
+
+    if (!isFilePathAllowed(params.userHomePath, directory)) {
+        Debug.log(.ERROR, "Provided path contains a disallowed part: {s}", .{printableIsoPath});
+        return error.ISOFileContainsRestrictedPaths;
+    }
+
+    const dir = std.fs.openDirAbsolute(directory, .{ .no_follow = true }) catch |err| {
+        Debug.log(.ERROR, "Unable to open the directory of specified ISO file. Aborting... Error: {any}", .{err});
+        return error.UnableToOpenDirectoryOfSpecificedISOFile;
+    };
+
+    const imageFile = dir.openFile(fileName, .{ .mode = .read_only, .lock = .exclusive }) catch |err| {
+        Debug.log(.ERROR, "Failed to open ISO file or obtain an exclusive lock. Error: {any}", .{err});
+        return error.UnableToOpenISOFileOrObtainExclusiveLock;
+    };
+
+    const fileStat = imageFile.stat() catch |err| {
+        Debug.log(.ERROR, "Failed to obtain ISO file stat. Error: {any}", .{err});
+        return error.UnableToObtainISOFileStat;
+    };
+
+    if (fileStat.kind != std.fs.File.Kind.file) {
+        Debug.log(
+            .ERROR,
+            "The provided ISO path is not a recognized file by file system. Symlinks and other kinds are not allowed. Kind used: {any}",
+            .{fileStat.kind},
+        );
+        return error.InvalidISOFileKind;
+    }
+
+    // Minimum ISO system block: 16 sectors by 2048 bytes each + 1 sector for PVD contents.
+    if (fileStat.size < 16 * 2048 + 1) return error.InvalidISOSystemStructure;
+
+    if (params.imageType == .ISO) {
+        const isoValidationResult = ISOParser.validateISOFileStructure(imageFile);
+
+        // TODO: If ISO structure does not conform to ISO9660, prompt user to proceed or not.
+        if (isoValidationResult != .ISO_VALID) {
+            Debug.log(.ERROR, "Invalid ISO file structure detected. Aborting... Error code: {any}", .{isoValidationResult});
+            return error.InvalidISOStructureDoesNotConformToISO9660;
+        }
+    }
+
+    return imageFile;
 }
 
 // --- Unit Tests ---
@@ -329,4 +407,20 @@ test "getImageType: other extension returns .Other" {
 test "getImageType: path with no extension returns .Other" {
     const path = "firmware_image";
     try std.testing.expect(getImageType(path) == .Other);
+}
+
+test "calling openFileValidated returns a valid file handle" {
+    const USER_HOME_PATH = "/Users/cerberus";
+    const TEST_ISO_FILE_PATH = "/Documents/Projects/freetracer/tinycore.iso";
+
+    const imageFile = try openFileValidated(
+        // Simulated; during runtime, provided by the XPC client.
+        USER_HOME_PATH ++ TEST_ISO_FILE_PATH,
+        // Simulated; during runtime, provided securily by XPCService.getUserHomePath()
+        .{ .userHomePath = std.posix.getenv("HOME") orelse return error.UserHomePathIsNULL },
+    );
+
+    defer imageFile.close();
+
+    try std.testing.expect(@TypeOf(imageFile) == std.fs.File);
 }

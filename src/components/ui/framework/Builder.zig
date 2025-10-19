@@ -19,6 +19,7 @@ pub const ElementChain = struct {
     allocator: std.mem.Allocator,
     el: UIElement, // UIElement being built by the chain
     identifier: ?UIElementIdentifier = null,
+    _active: bool = true,
     _id: ?[]const u8 = null,
     _positionRef: ?RelativeRef = null,
     _sizeRef: ?RelativeRef = null,
@@ -32,6 +33,7 @@ pub const ElementChain = struct {
     _sizeTransformWidth: ?*const Transform = null,
     _sizeTransformHeight: ?*const Transform = null,
     relative: ?RelativeRef = null, // what to resolve against (Parent or NodeId)
+    _callbacks: ?UIFramework.UIElementCallbacks = null,
 
     // ---- generic chainers (common Transform knobs) ----
     pub fn id(self: ElementChain, s: []const u8) ElementChain {
@@ -43,6 +45,18 @@ pub const ElementChain = struct {
     pub fn elId(self: ElementChain, elementIdentifier: UIElementIdentifier) ElementChain {
         var c = self;
         c.identifier = elementIdentifier;
+        return c;
+    }
+
+    pub fn active(self: ElementChain, flag: bool) ElementChain {
+        var c = self;
+        c._active = flag;
+        return c;
+    }
+
+    pub fn callbacks(self: ElementChain, cbs: UIFramework.UIElementCallbacks) ElementChain {
+        var c = self;
+        c._callbacks = cbs;
         return c;
     }
 
@@ -157,6 +171,13 @@ pub const ElementChain = struct {
     pub fn buildInto(self: ElementChain, parent: *View) !void {
         var me = self.el; // local copy
         const tr = UIElement.transformPtr(&me);
+
+        switch (me) {
+            inline else => |*el| {
+                el.active = self._active;
+                if (self._callbacks) |cbs| el.callbacks = cbs;
+            },
+        }
 
         // Apply the explicit per-axis refs if provided.
         if (self._positionRef) |r| tr.position_ref = r;

@@ -28,6 +28,9 @@ children: ArrayList(UIElement),
 idMap: std.StringHashMap(usize),
 callbacks: UIElementCallbacks = .{},
 
+/// Field mandated by interface, not currently used by View
+active: bool = true,
+
 pub fn init(allocator: Allocator, identifier: ?UIElementIdentifier, transform: Transform, background: ?Rectangle) View {
     return .{
         .identifier = identifier,
@@ -93,7 +96,9 @@ pub fn onEvent(self: *View, event: UIEvent) void {
     switch (event) {
         .StateChanged => |e| {
             if (e.target) |target| if (target != self.identifier) return;
-            if (self.callbacks.onStateChange) |onStateChange| onStateChange.function(self, e.isActive);
+
+            if (self.callbacks.onStateChange) |onStateChange|
+                if (onStateChange.function) |handler| handler(self, e.isActive);
         },
         else => {},
     }
