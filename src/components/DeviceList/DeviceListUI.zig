@@ -770,8 +770,8 @@ pub const UIConfig = struct {
         pub const DeviceSelectBox = struct {
             pub const horizontal_padding: f32 = 24;
             pub const vertical_padding: f32 = 24;
-            pub const spacing: f32 = 18;
-            pub const row_height: f32 = 110;
+            pub const spacing: f32 = 12;
+            pub const row_height: f32 = 82;
         };
     };
 
@@ -794,10 +794,11 @@ pub const UIConfig = struct {
             .cornerRadius = 0.12,
             .cornerSegments = 10,
             .padding = 10,
-            .iconFraction = 0.23,
+            .iconFraction = 0.15,
             .contentSpacing = 20,
             .lineSpacing = 6,
-            .primaryText = .{ .font = .ROBOTO_REGULAR, .fontSize = 22, .textColor = Color.white },
+            .textLineSpacing = 4,
+            .primaryText = .{ .font = .ROBOTO_REGULAR, .fontSize = 20, .textColor = Color.white },
             .secondaryText = .{ .font = .JERSEY10_REGULAR, .fontSize = 20, .textColor = Color.offWhite },
             .detailText = .{ .font = .ROBOTO_REGULAR, .fontSize = 14, .textColor = Color.lightGray },
             .scale = 0.7,

@@ -1,6 +1,5 @@
 const std = @import("std");
 const rl = @import("raylib");
-const meta = std.meta;
 
 const UIFramework = @import("./import.zig");
 const Transform = UIFramework.Transform;
@@ -47,6 +46,7 @@ pub const Style = struct {
     iconFraction: f32 = 0.24,
     contentSpacing: f32 = 18,
     lineSpacing: f32 = 4,
+    textLineSpacing: f32 = 0,
     primaryText: TextStyle = .{ .font = FontResource.ROBOTO_REGULAR, .fontSize = 22, .textColor = Color.white },
     secondaryText: TextStyle = .{ .font = FontResource.ROBOTO_REGULAR, .fontSize = 16, .textColor = Color.offWhite },
     detailText: TextStyle = .{ .font = FontResource.ROBOTO_REGULAR, .fontSize = 14, .textColor = Color.lightGray },
@@ -303,9 +303,22 @@ fn updateLayout(self: *DeviceSelectBox, rect: rl.Rectangle) void {
     const texHeight: f32 = @floatFromInt(tex.height);
     const aspect = if (texHeight == 0) 1 else texWidth / texHeight;
 
-    var targetWidth = iconAreaWidth;
-    var targetHeight = if (aspect == 0) iconAreaHeight else targetWidth / aspect;
+    var baseWidth = iconAreaWidth;
+    var baseHeight = if (aspect == 0) iconAreaHeight else baseWidth / aspect;
 
+    if (baseHeight > iconAreaHeight) {
+        baseHeight = iconAreaHeight;
+        baseWidth = baseHeight * aspect;
+    }
+
+    const scale = if (self.style.scale <= 0) 1 else self.style.scale;
+    var targetWidth = baseWidth * scale;
+    var targetHeight = baseHeight * scale;
+
+    if (targetWidth > iconAreaWidth) {
+        targetWidth = iconAreaWidth;
+        targetHeight = targetWidth / aspect;
+    }
     if (targetHeight > iconAreaHeight) {
         targetHeight = iconAreaHeight;
         targetWidth = targetHeight * aspect;
@@ -313,9 +326,9 @@ fn updateLayout(self: *DeviceSelectBox, rect: rl.Rectangle) void {
 
     self.iconRect = rl.Rectangle{
         .x = padded.x + (iconAreaWidth - targetWidth) / 2,
-        .y = rect.y + (rect.height - targetHeight) / 2,
-        .width = targetWidth * self.style.scale,
-        .height = targetHeight * self.style.scale,
+        .y = padded.y + (iconAreaHeight - targetHeight) / 2,
+        .width = targetWidth,
+        .height = targetHeight,
     };
 
     const contentStartX = padded.x + iconAreaWidth + self.style.contentSpacing;
@@ -324,12 +337,13 @@ fn updateLayout(self: *DeviceSelectBox, rect: rl.Rectangle) void {
     const pathDims = rl.measureTextEx(self.secondaryFont, @ptrCast(std.mem.sliceTo(&self.pathBuffer, 0x00)), self.style.secondaryText.fontSize, self.style.secondaryText.spacing);
     const mediaDims = rl.measureTextEx(self.detailFont, @ptrCast(std.mem.sliceTo(&self.mediaBuffer, 0x00)), self.style.detailText.fontSize, self.style.detailText.spacing);
 
-    const totalTextHeight = nameDims.y + pathDims.y + mediaDims.y + self.style.lineSpacing * 2;
-    const baseY = rect.y + (rect.height - totalTextHeight) / 2;
+    const line_gap = if (self.style.textLineSpacing != 0) self.style.textLineSpacing else self.style.lineSpacing;
+    const totalTextHeight = nameDims.y + pathDims.y + mediaDims.y + line_gap * 2;
+    const baseY = padded.y + (iconAreaHeight - totalTextHeight) / 2;
 
     self.primaryPos = .{ .x = contentStartX, .y = baseY };
-    self.secondaryPos = .{ .x = contentStartX, .y = baseY + nameDims.y + self.style.lineSpacing };
-    self.detailPos = .{ .x = contentStartX, .y = self.secondaryPos.y + pathDims.y + self.style.lineSpacing };
+    self.secondaryPos = .{ .x = contentStartX, .y = baseY + nameDims.y + line_gap };
+    self.detailPos = .{ .x = contentStartX, .y = self.secondaryPos.y + pathDims.y + line_gap };
 }
 
 fn resolveIconTexture(kind: DeviceKind, selected: bool) rl.Texture2D {
