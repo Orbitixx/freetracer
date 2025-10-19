@@ -50,6 +50,9 @@ const Color = DeprecatedUI.Styles.Color;
 const UIFramework = @import("../ui/framework/import.zig");
 const UIChain = UIFramework.UIChain;
 const View = UIFramework.View;
+const Textbox = UIFramework.Textbox;
+
+const DEFAULT_SECTION_HEADER = "Select Device";
 
 // This state is mutable and can be accessed from the main UI thread (draw/update)
 // and a worker/event thread (handleEvent). Access must be guarded by state.lock().
@@ -302,7 +305,24 @@ fn initBgRect(self: *DeviceListUI) !void {
             .rounded = true,
             .bordered = true,
         },
-    }).children(.{});
+    }).children(.{
+        //
+        ui.texture(.STEP_1_INACTIVE, .{})
+            .id("header_icon")
+            .position(.percent(0.05, 0.03))
+            .positionRef(.Parent)
+            .scale(0.5)
+            .callbacks(.{ .onStateChange = .{} }), // Consumes .StateChanged event without doing anything
+        //
+        ui.textbox(DEFAULT_SECTION_HEADER, UIConfig.Styles.HeaderTextbox, UIFramework.Textbox.Params{ .wordWrap = true })
+            .id("header_textbox")
+            .position(.percent(1, 0))
+            .offset(10, -2)
+            .positionRef(.{ .NodeId = "header_icon" })
+            .size(.percent(0.7, 0.3))
+            .sizeRef(.Parent)
+            .callbacks(.{ .onStateChange = .{} }), // Consumes .StateChanged event without doing anything
+    });
 
     self.layout.callbacks.onStateChange = .{ .function = UIConfig.Callbacks.MainView.StateHandler.handler, .context = &self.layout };
 
@@ -731,6 +751,15 @@ pub const UIConfig = struct {
                     self.transform.resolve();
                 }
             };
+        };
+    };
+
+    pub const Styles = struct {
+        //
+        const HeaderTextbox: Textbox.TextboxStyle = .{
+            .background = .{ .color = Color.transparent, .borderStyle = .{ .color = Color.transparent, .thickness = 0 }, .roundness = 0 },
+            .text = .{ .font = .JERSEY10_REGULAR, .fontSize = 34, .textColor = Color.white },
+            .lineSpacing = -5,
         };
     };
 };

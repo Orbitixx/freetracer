@@ -184,6 +184,7 @@ pub const ElementChain = struct {
         switch (me) {
             inline else => |*el| {
                 el.active = self._active;
+                if (self.identifier) |elementId| el.identifier = elementId;
                 if (self._callbacks) |cbs| el.callbacks = cbs;
             },
         }

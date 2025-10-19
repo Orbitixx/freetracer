@@ -103,7 +103,7 @@ pub const UIElement = union(enum) {
                         // if target identifer is specified...
                         //
                         if (ev.target) |target| {
-                            std.debug.print("\nUIElement.onEvent.StateChanged: target does not match element.target; aborting.", .{});
+                            // std.debug.print("\nUIElement.onEvent.StateChanged: target does not match element.target; aborting.", .{});
                             if (target != element.identifier) return;
 
                             if (element.callbacks.onStateChange) |onStateChange| {
@@ -133,7 +133,7 @@ pub const UIElement = union(enum) {
                         }
                     },
                     inline else => {
-                        std.debug.print("\nUIElement.onEvent (other) invoked.", .{});
+                        // std.debug.print("\nUIElement.onEvent (other) invoked.", .{});
                         @constCast(element).onEvent(event);
                     },
                 }

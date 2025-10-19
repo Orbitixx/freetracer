@@ -406,11 +406,15 @@ fn initializeBackground(self: *FilePickerUI) !void {
             .id("file_picker_image_selected_texture")
             .position(.percent(0.5, 0.5))
             .offsetToOrigin()
-            .active(false)
-            .callbacks(.{ .onStateChange = .{ .function = UIConfig.Callbacks.ImageFileSelectedTexture.StateChangeHandler.handler } }),
+            .scale(1.8)
+            .active(false),
 
-        // ui.textbox("No image selected", .{}, Textbox.Params{})
-        //     .id("file_picker_selected_file_textbox"),
+        ui.textbox("No image selected", Textbox.TextboxStyle{}, Textbox.Params{})
+            .id("file_picker_selected_file_textbox")
+            .elId(.FilePickerImageSelectedTextbox)
+            .position(.percent(0.05, 0.75))
+            .size(.percent(0.9, 0.25))
+            .active(false),
     });
 
     self.layout.callbacks.onStateChange = .{
@@ -442,10 +446,6 @@ fn setIsActive(self: *FilePickerUI, isActive: bool) void {
     }
 
     self.layout.emitEvent(.{ .StateChanged = .{ .isActive = isActive } }, .{});
-
-    if (!isActive) {
-        self.layout.emitEvent(.{ .StateChanged = .{ .isActive = true, .target = .FilePickerImageSelectedTexture } }, .{ .excludeSelf = true });
-    }
 
     self.broadcastUIDimensions();
 }
@@ -545,6 +545,16 @@ const ConfirmButtonClickHandler = struct {
             var ch = std.process.Child.init(argv, self.allocator);
             ch.spawn() catch return;
         };
+
+        self.layout.emitEvent(
+            .{ .StateChanged = .{ .target = .FilePickerImageSelectedTexture, .isActive = true } },
+            .{ .excludeSelf = true },
+        );
+
+        self.layout.emitEvent(
+            .{ .StateChanged = .{ .target = .FilePickerImageSelectedTextbox, .isActive = true } },
+            .{ .excludeSelf = true },
+        );
     }
 };
 
@@ -601,9 +611,18 @@ fn handleIsoFilePathChanged(self: *FilePickerUI, event: ComponentEvent) !EventRe
             } }, .{});
         }
 
-        self.layout.emitEvent(.{ .TextChanged = .{ .target = .FilePickerImageInfoTextbox, .text = displayName } }, .{ .excludeSelf = true });
-        self.layout.emitEvent(.{ .SpriteButtonEnabledChanged = .{ .target = .FilePickerConfirmButton, .enabled = true } }, .{ .excludeSelf = true });
-        self.layout.emitEvent(.{ .StateChanged = .{ .target = .FilePickerImageSelectedTexture, .isActive = true } }, .{ .excludeSelf = true });
+        self.layout.emitEvent(
+            .{ .TextChanged = .{ .target = .FilePickerImageInfoTextbox, .text = displayName } },
+            .{ .excludeSelf = true },
+        );
+        self.layout.emitEvent(
+            .{ .TextChanged = .{ .target = .FilePickerImageSelectedTextbox, .text = displayName } },
+            .{ .excludeSelf = true },
+        );
+        self.layout.emitEvent(
+            .{ .SpriteButtonEnabledChanged = .{ .target = .FilePickerConfirmButton, .enabled = true } },
+            .{ .excludeSelf = true },
+        );
 
         // self.updateIsoTitle(displayName);
     } else {

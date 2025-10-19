@@ -6,6 +6,7 @@ pub const UIElementIdentifier = enum(u8) {
     FilePickerImageSizeText,
     FilePickerConfirmButton,
     FilePickerImageSelectedTexture,
+    FilePickerImageSelectedTextbox,
 };
 
 // pub const UIEventType = enum(u8) {

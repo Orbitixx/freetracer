@@ -28,6 +28,11 @@ pub const TEXTURE = enum(u8) {
     BUTTON_FRAME,
     IMAGE_TAG,
     FLASH_PLACEHOLDER,
+
+    USB_ICON_INACTIVE,
+    USB_ICON_ACTIVE,
+    SD_ICON_INACTIVE,
+    SD_ICON_ACTIVE,
 };
 
 pub const Asset = union(enum) {
@@ -140,6 +145,10 @@ pub const ResourceManagerSingleton = struct {
             try inst.registerAsset(.{ .Texture = .BUTTON_FRAME }, "images/button_frame.png");
             try inst.registerAsset(.{ .Texture = .IMAGE_TAG }, "images/tag.png");
             try inst.registerAsset(.{ .Texture = .FLASH_PLACEHOLDER }, "images/flash-placeholder.png");
+            try inst.registerAsset(.{ .Texture = .USB_ICON_INACTIVE }, "images/usb-icon-inactive.png");
+            try inst.registerAsset(.{ .Texture = .USB_ICON_ACTIVE }, "images/usb-icon-active.png");
+            try inst.registerAsset(.{ .Texture = .SD_ICON_INACTIVE }, "images/sd-icon-inactive.png");
+            try inst.registerAsset(.{ .Texture = .SD_ICON_ACTIVE }, "images/sd-icon-active.png");
             Debug.log(.DEBUG, "ResourceManager: textures successfully loaded!", .{});
 
             try inst.registerAsset(.{ .Image = .APP_WINDOW_IMAGE }, "images/icon.png");
