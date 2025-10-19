@@ -201,8 +201,12 @@ pub fn draw(self: *SpriteButton) !void {
 }
 
 pub fn onEvent(self: *SpriteButton, event: UIEvent) void {
-    _ = self;
-    _ = event;
+    switch (event) {
+        .SpriteButtonEnabledChanged => |e| {
+            self.enabled = e.enabled;
+        },
+        else => {},
+    }
 }
 
 pub fn deinit(self: *SpriteButton) void {

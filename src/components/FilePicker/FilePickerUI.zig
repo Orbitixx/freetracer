@@ -358,7 +358,7 @@ fn initializeBackground(self: *FilePickerUI) !void {
             .sizeRef(.{ .NodeId = "image_info_bg" }),
 
         ui.textbox("Ubuntu 24.04 LTS.iso", UIConfig.Styles.ImageInfoTextbox, Textbox.Params{
-            .identifier = .ImageInfoTextbox,
+            .identifier = .FilePickerImageInfoTextbox,
             .wordWrap = true,
         })
             .id("image_info_textbox")
@@ -368,7 +368,7 @@ fn initializeBackground(self: *FilePickerUI) !void {
             .size(.percent(0.8, 0.5))
             .sizeRef(.{ .NodeId = "image_info_bg" }),
 
-        ui.text("5.06 Gb", .{
+        ui.text("5.06 GB", .{
             .identifier = .FilePickerImageSizeText,
             .textColor = rl.Color.init(156, 156, 156, 255),
         })
@@ -394,7 +394,9 @@ fn initializeBackground(self: *FilePickerUI) !void {
                     .context = self,
                 },
             },
+            .enabled = false,
             .style = UIConfig.Styles.ConfirmButton,
+            .identifier = .FilePickerConfirmButton,
         }).position(.percent(1.1, 0))
             .positionRef(.{ .NodeId = "file_picker_hint_text" })
             .size(.percent(0.3, 0.4))
@@ -571,11 +573,6 @@ fn handleIsoFilePathChanged(self: *FilePickerUI, event: ComponentEvent) !EventRe
         self.updateIsoPathState(data.newPath);
         const displayName = extractDisplayName(data.newPath);
 
-        self.layout.emitEvent(
-            .{ .TextChanged = .{ .target = .ImageInfoTextbox, .text = displayName } },
-            .{ .excludeSelf = true },
-        );
-
         var sizeBuf: [36]u8 = std.mem.zeroes([36]u8);
 
         if (data.size) |size| {
@@ -586,9 +583,19 @@ fn handleIsoFilePathChanged(self: *FilePickerUI, event: ComponentEvent) !EventRe
 
             self.layout.emitEvent(.{ .TextChanged = .{
                 .target = .FilePickerImageSizeText,
-                .text = @ptrCast(@constCast(std.mem.sliceTo(&sizeBuf, 0x00))),
+                .text = @ptrCast(std.mem.sliceTo(&sizeBuf, 0x00)),
             } }, .{});
         }
+
+        self.layout.emitEvent(
+            .{ .TextChanged = .{ .target = .FilePickerImageInfoTextbox, .text = displayName } },
+            .{ .excludeSelf = true },
+        );
+
+        self.layout.emitEvent(
+            .{ .SpriteButtonEnabledChanged = .{ .target = .FilePickerConfirmButton, .enabled = true } },
+            .{ .excludeSelf = true },
+        );
 
         // self.updateIsoTitle(displayName);
     } else {
