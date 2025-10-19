@@ -401,6 +401,16 @@ fn initializeBackground(self: *FilePickerUI) !void {
             .positionRef(.{ .NodeId = "file_picker_hint_text" })
             .size(.percent(0.3, 0.4))
             .sizeRef(.{ .NodeId = "image_info_bg" }),
+
+        ui.texture(.FILE_SELECTED, .{ .identifier = .FilePickerImageSelectedTexture })
+            .id("file_picker_image_selected_texture")
+            .position(.percent(0.5, 0.5))
+            .offsetToOrigin()
+            .active(false)
+            .callbacks(.{ .onStateChange = .{ .function = UIConfig.Callbacks.ImageFileSelectedTexture.StateChangeHandler.handler } }),
+
+        // ui.textbox("No image selected", .{}, Textbox.Params{})
+        //     .id("file_picker_selected_file_textbox"),
     });
 
     self.layout.callbacks.onStateChange = .{
@@ -432,6 +442,10 @@ fn setIsActive(self: *FilePickerUI, isActive: bool) void {
     }
 
     self.layout.emitEvent(.{ .StateChanged = .{ .isActive = isActive } }, .{});
+
+    if (!isActive) {
+        self.layout.emitEvent(.{ .StateChanged = .{ .isActive = true, .target = .FilePickerImageSelectedTexture } }, .{ .excludeSelf = true });
+    }
 
     self.broadcastUIDimensions();
 }
@@ -587,15 +601,9 @@ fn handleIsoFilePathChanged(self: *FilePickerUI, event: ComponentEvent) !EventRe
             } }, .{});
         }
 
-        self.layout.emitEvent(
-            .{ .TextChanged = .{ .target = .FilePickerImageInfoTextbox, .text = displayName } },
-            .{ .excludeSelf = true },
-        );
-
-        self.layout.emitEvent(
-            .{ .SpriteButtonEnabledChanged = .{ .target = .FilePickerConfirmButton, .enabled = true } },
-            .{ .excludeSelf = true },
-        );
+        self.layout.emitEvent(.{ .TextChanged = .{ .target = .FilePickerImageInfoTextbox, .text = displayName } }, .{ .excludeSelf = true });
+        self.layout.emitEvent(.{ .SpriteButtonEnabledChanged = .{ .target = .FilePickerConfirmButton, .enabled = true } }, .{ .excludeSelf = true });
+        self.layout.emitEvent(.{ .StateChanged = .{ .target = .FilePickerImageSelectedTexture, .isActive = true } }, .{ .excludeSelf = true });
 
         // self.updateIsoTitle(displayName);
     } else {
@@ -667,6 +675,15 @@ const UIConfig = struct {
                 }
             };
         };
+
+        pub const ImageFileSelectedTexture = struct {
+            pub const StateChangeHandler = struct {
+                pub fn handler(ctx: *anyopaque, flag: bool) void {
+                    const self: *UIFramework.Texture = @ptrCast(@alignCast(ctx));
+                    self.active = flag;
+                }
+            };
+        };
     };
 
     pub const Styles = struct {
@@ -702,6 +719,19 @@ const UIConfig = struct {
             .tint = Color.themePrimary,
             .hoverTint = Color.themeTertiary,
             .hoverTextColor = Color.themeTertiary,
+        };
+
+        const SelectedDeviceTextbox: Textbox.TextboxStyle = .{
+            .background = .{
+                .color = Color.transparent,
+                .borderStyle = .{
+                    .color = Color.transparent,
+                    .thickness = 0,
+                },
+                .roundness = 0,
+            },
+            .text = .{ .font = .ROBOTO_REGULAR, .fontSize = 24, .textColor = Color.offWhite },
+            .lineSpacing = -5,
         };
     };
 };

@@ -31,6 +31,8 @@ position_transform_x: ?*const Transform = null,
 position_transform_y: ?*const Transform = null,
 size_transform_width: ?*const Transform = null,
 size_transform_height: ?*const Transform = null,
+origin_center_x: bool = false,
+origin_center_y: bool = false,
 // keep .relative as a "both" default for backward compatibility
 relative: ?RelativeRef = .Parent,
 _resolver_ctx: ?*const anyopaque = null,
@@ -100,6 +102,13 @@ pub fn resolve(self: *Transform) void {
     self.h = self.size.height.resolve(size_ref_rect_h.height);
     self.x = pos_ref_rect_x.x + self.position.x.resolve(pos_ref_rect_x.width) + self.offset_x;
     self.y = pos_ref_rect_y.y + self.position.y.resolve(pos_ref_rect_y.height) + self.offset_y;
+
+    if (self.origin_center_x) {
+        self.x -= (self.w * self.scale) / 2;
+    }
+    if (self.origin_center_y) {
+        self.y -= (self.h * self.scale) / 2;
+    }
 }
 
 pub fn positionAsVector2(self: Transform) rl.Vector2 {

@@ -106,6 +106,16 @@ pub const UIElement = union(enum) {
                             std.debug.print("\nUIElement.onEvent.StateChanged: target does not match element.target; aborting.", .{});
                             if (target != element.identifier) return;
 
+                            if (element.callbacks.onStateChange) |onStateChange| {
+                                if (onStateChange.function) |handler| handler(element, ev.isActive) else Debug.log(
+                                    .ERROR,
+                                    "UIElement.onEvent(): onStateChanger handler (function) is NULL! Aborting.",
+                                    .{},
+                                );
+                            } else {
+                                element.active = ev.isActive;
+                            }
+
                             // if target identifier is NOT specified
                         } else {
                             if (element.callbacks.onStateChange) |onStateChange| {

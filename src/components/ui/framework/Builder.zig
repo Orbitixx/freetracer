@@ -32,6 +32,8 @@ pub const ElementChain = struct {
     _positionTransformY: ?*const Transform = null,
     _sizeTransformWidth: ?*const Transform = null,
     _sizeTransformHeight: ?*const Transform = null,
+    _origin_center_x: bool = false,
+    _origin_center_y: bool = false,
     relative: ?RelativeRef = null, // what to resolve against (Parent or NodeId)
     _callbacks: ?UIFramework.UIElementCallbacks = null,
 
@@ -158,6 +160,13 @@ pub const ElementChain = struct {
         return c;
     }
 
+    pub fn offsetToOrigin(self: ElementChain) ElementChain {
+        var c = self;
+        c._origin_center_x = true;
+        c._origin_center_y = true;
+        return c;
+    }
+
     /// Place to the right edge of target id + gap px (top aligned).
     pub fn toRightOf(self: ElementChain, target_id: []const u8, gap_px: f32) ElementChain {
         return self.positionRef(.{ .NodeId = target_id }).position(.percent(1.0, 0.0)).offset(gap_px, 0);
@@ -191,6 +200,8 @@ pub const ElementChain = struct {
         if (self._positionTransformY) |rt| tr.position_transform_y = rt;
         if (self._sizeTransformWidth) |rt| tr.size_transform_width = rt;
         if (self._sizeTransformHeight) |rt| tr.size_transform_height = rt;
+        if (self._origin_center_x) tr.origin_center_x = true;
+        if (self._origin_center_y) tr.origin_center_y = true;
 
         // Leep 'relative' as a general fallback for 'both'
         if (self.relative) |r| tr.relative = r;
@@ -248,6 +259,8 @@ pub const ElementChain = struct {
         if (self._positionTransformY) |rt| view_value.transform.position_transform_y = rt;
         if (self._sizeTransformWidth) |rt| view_value.transform.size_transform_width = rt;
         if (self._sizeTransformHeight) |rt| view_value.transform.size_transform_height = rt;
+        if (self._origin_center_x) view_value.transform.origin_center_x = true;
+        if (self._origin_center_y) view_value.transform.origin_center_y = true;
 
         inline for (kids) |kid| try kid.buildInto(&view_value);
         return view_value;

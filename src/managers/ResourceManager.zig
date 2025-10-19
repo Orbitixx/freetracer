@@ -21,6 +21,7 @@ pub const TEXTURE = enum(u8) {
     RELOAD_ICON,
     BUTTON_UI,
     DOC_IMAGE,
+    FILE_SELECTED,
     STEP_1_INACTIVE,
     STAR_V1,
     STAR_V2,
@@ -132,6 +133,7 @@ pub const ResourceManagerSingleton = struct {
             try inst.registerAsset(.{ .Texture = .RELOAD_ICON }, "images/reload_icon.png");
             try inst.registerAsset(.{ .Texture = .BUTTON_UI }, "images/button_ui.png");
             try inst.registerAsset(.{ .Texture = .DOC_IMAGE }, "images/doc_image.png");
+            try inst.registerAsset(.{ .Texture = .FILE_SELECTED }, "images/doc_image_check.png");
             try inst.registerAsset(.{ .Texture = .STEP_1_INACTIVE }, "images/step-1-inactive.png");
             try inst.registerAsset(.{ .Texture = .STAR_V1 }, "images/star_v1.png");
             try inst.registerAsset(.{ .Texture = .STAR_V2 }, "images/star_v2.png");
