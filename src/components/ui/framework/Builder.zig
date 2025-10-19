@@ -12,6 +12,7 @@ const Textbox = UIFramework.Textbox;
 const Texture = UIFramework.Texture;
 const FileDropzone = UIFramework.FileDropzone;
 const SpriteButton = UIFramework.SpriteButton;
+const DeviceSelectBox = UIFramework.DeviceSelectBox;
 
 const UIElementIdentifier = UIFramework.UIElementIdentifier;
 
@@ -368,5 +369,10 @@ pub const UIChain = struct {
     pub fn spriteButton(self: UIChain, cfg: SpriteButton.Config) ElementChain {
         const btn = SpriteButton.init(cfg);
         return .{ .allocator = self.allocator, .el = UIElement{ .SpriteButton = btn } };
+    }
+
+    pub fn deviceSelectBox(self: UIChain, cfg: DeviceSelectBox.Config) ElementChain {
+        const box = DeviceSelectBox.init(cfg);
+        return .{ .allocator = self.allocator, .el = UIElement{ .DeviceSelectBox = box } };
     }
 };

@@ -36,7 +36,6 @@ const EventResult = ComponentFramework.EventResult;
 const DeprecatedUI = @import("../ui/import/index.zig");
 const Panel = DeprecatedUI.Panel;
 const Button = DeprecatedUI.Button;
-const Checkbox = DeprecatedUI.Checkbox;
 const Rectangle = DeprecatedUI.Primitives.Rectangle;
 const Text = DeprecatedUI.Primitives.Text;
 const Transform = DeprecatedUI.Primitives.Transform;
@@ -51,6 +50,10 @@ const UIFramework = @import("../ui/framework/import.zig");
 const UIChain = UIFramework.UIChain;
 const View = UIFramework.View;
 const Textbox = UIFramework.Textbox;
+const DeviceSelectBox = UIFramework.DeviceSelectBox;
+const UnitValue = UIFramework.UnitValue;
+const PositionSpec = UIFramework.PositionSpec;
+const SizeSpec = UIFramework.SizeSpec;
 
 const DEFAULT_SECTION_HEADER = "Select Device";
 
@@ -78,7 +81,7 @@ component: ?Component = null,
 // Component-specific, unique props
 allocator: std.mem.Allocator,
 parent: *DeviceList,
-deviceCheckboxes: std.ArrayList(Checkbox),
+deviceSelectBoxes: std.ArrayList(DeviceSelectBox),
 // TODO: Deprecated
 // bgRect: Rectangle = undefined,
 // headerLabel: Text = undefined,
@@ -163,7 +166,7 @@ pub fn init(allocator: std.mem.Allocator, parent: *DeviceList) !DeviceListUI {
             .devices = &parent.state.data.devices,
         }),
         .parent = parent,
-        .deviceCheckboxes = std.ArrayList(Checkbox).empty,
+        .deviceSelectBoxes = std.ArrayList(DeviceSelectBox).empty,
         .selectedDeviceNameBuf = std.mem.zeroes([MAX_DISPLAY_STRING_LENGTH:0]u8),
     };
 }
@@ -218,8 +221,8 @@ pub fn update(self: *DeviceListUI) !void {
 
     try self.layout.update();
 
-    for (self.deviceCheckboxes.items) |*checkbox| {
-        try checkbox.update();
+    for (self.deviceSelectBoxes.items) |*entry| {
+        try entry.update();
     }
 
     // try self.refreshDevicesButton.update();
@@ -240,8 +243,8 @@ pub fn draw(self: *DeviceListUI) !void {
 }
 
 pub fn deinit(self: *DeviceListUI) void {
-    self.destroyDeviceCheckboxContexts();
-    self.deviceCheckboxes.deinit(self.allocator);
+    self.destroyDeviceSelectBoxContexts();
+    self.deviceSelectBoxes.deinit(self.allocator);
     self.layout.deinit();
 }
 
@@ -368,8 +371,8 @@ fn drawActive(self: *DeviceListUI, devicesFound: bool) !void {
         // self.noDevicesLabel.draw();
     }
 
-    for (self.deviceCheckboxes.items) |*checkbox| {
-        try checkbox.draw();
+    for (self.deviceSelectBoxes.items) |*entry| {
+        try entry.draw();
     }
 
     // try self.refreshDevicesButton.draw();
@@ -457,22 +460,24 @@ fn storeSelectedDevice(self: *DeviceListUI, selected: ?StorageDevice) void {
 //     }
 // }
 
-fn clearDeviceCheckboxes(self: *DeviceListUI) void {
-    if (self.deviceCheckboxes.items.len == 0) return;
-    self.destroyDeviceCheckboxContexts();
-    self.deviceCheckboxes.clearAndFree(self.allocator);
+fn clearDeviceSelectBoxes(self: *DeviceListUI) void {
+    if (self.deviceSelectBoxes.items.len == 0) return;
+    self.destroyDeviceSelectBoxContexts();
+    self.deviceSelectBoxes.clearAndFree(self.allocator);
 }
 
-fn updateCheckboxSelection(self: *DeviceListUI, selection: ?StorageDevice) void {
-    for (self.deviceCheckboxes.items) |*checkbox| {
-        if (selection) |device| {
-            if (device.serviceId == checkbox.deviceId) {
-                checkbox.setState(.CHECKED);
-            } else {
-                checkbox.setState(.NORMAL);
-            }
+fn updateDeviceSelectBoxSelection(self: *DeviceListUI, selection: ?StorageDevice) void {
+    const selected_id: ?usize = if (selection) |device| blk: {
+        break :blk @as(usize, @intCast(device.serviceId));
+    } else null;
+
+    for (self.deviceSelectBoxes.items) |*entry| {
+        if (selected_id) |id| {
+            if (entry.serviceIdentifier()) |candidate| {
+                entry.setSelected(candidate == id);
+            } else entry.setSelected(false);
         } else {
-            checkbox.setState(.NORMAL);
+            entry.setSelected(false);
         }
     }
 }
@@ -485,65 +490,68 @@ fn makeSelectDeviceContext(self: *DeviceListUI, device: StorageDevice) !*DeviceL
     return ctx;
 }
 
-fn deviceTypeLabel(device: StorageDevice) []const u8 {
+const MAX_DEVICE_SELECTBOX_TEXT_LEN: usize = 128;
+const USB_LABEL = [_:0]u8{ 'U', 'S', 'B', 0 };
+const SD_LABEL = [_:0]u8{ 'S', 'D', 0 };
+const OTHER_LABEL = [_:0]u8{ 'O', 't', 'h', 'e', 'r', 0 };
+
+fn deviceSelectBoxKind(device: StorageDevice) DeviceSelectBox.DeviceKind {
     return switch (device.type) {
-        .USB => "USB",
-        .SD => "SD",
-        else => "Other",
+        .USB => .usb,
+        .SD => .sd,
+        else => .other,
     };
 }
 
-fn writeCheckboxLabel(buffer: []u8, device: StorageDevice) ![:0]const u8 {
-    const deviceName = std.mem.sliceTo(device.deviceName[0..], Character.NULL);
-    const bsdName = device.getBsdNameSlice();
-
-    return std.fmt.bufPrintZ(
-        buffer,
-        "{s} - {s} ({d:.0}GB) [{s}]",
-        .{
-            if (deviceName.len > 20) deviceName[0..20] else deviceName,
-            if (bsdName.len > 10) bsdName[0..10] else bsdName,
-            @divTrunc(device.size, 1_000_000_000),
-            deviceTypeLabel(device),
-        },
-    );
+fn deviceTypeLabelZ(device: StorageDevice) [:0]const u8 {
+    return switch (device.type) {
+        .USB => USB_LABEL[0.. :0],
+        .SD => SD_LABEL[0.. :0],
+        else => OTHER_LABEL[0.. :0],
+    };
 }
 
-fn appendDeviceCheckbox(self: *DeviceListUI, device: StorageDevice, index: usize) !void {
+fn appendDeviceSelectBox(self: *DeviceListUI, device: StorageDevice, index: usize) !void {
     const context = try self.makeSelectDeviceContext(device);
     errdefer self.allocator.destroy(context);
 
-    var textBuf: [AppConfig.CHECKBOX_TEXT_BUFFER_SIZE]u8 = std.mem.zeroes([AppConfig.CHECKBOX_TEXT_BUFFER_SIZE]u8);
-    const label = writeCheckboxLabel(textBuf[0..], device) catch |err| {
-        Debug.log(.ERROR, "DeviceListUI: failed to format checkbox label: {any}", .{err});
-        return err;
-    };
+    var pathBuf: [MAX_DEVICE_SELECTBOX_TEXT_LEN:0]u8 = std.mem.zeroes([MAX_DEVICE_SELECTBOX_TEXT_LEN:0]u8);
+    _ = try std.fmt.bufPrintZ(pathBuf[0..], "/dev/{s}", .{device.getBsdNameSlice()});
 
-    try self.deviceCheckboxes.append(self.allocator, Checkbox.init(
-        self.allocator,
-        device.serviceId,
-        textBuf,
-        .{
-            .x = self.layout.transform.position.x.px + 20,
-            .y = self.layout.transform.position.y.px + 20 + @as(f32, @floatFromInt(index)) * AppConfig.DEVICE_CHECKBOXES_GAP_FACTOR_Y,
+    var selectBox = DeviceSelectBox.init(.{
+        .deviceKind = deviceSelectBoxKind(device),
+        .content = .{
+            .name = device.getNameSlice(),
+            .path = @ptrCast(std.mem.sliceTo(&pathBuf, 0x00)),
+            .media = deviceTypeLabelZ(device),
         },
-        20,
-        .Primary,
-        .{
-            .context = context,
-            .function = DeviceList.selectDeviceActionWrapper.call,
+        .style = UIConfig.Styles.DeviceSelectBoxElement,
+        .callbacks = .{
+            .onClick = .{ .function = DeviceList.selectDeviceActionWrapper.call, .context = context },
         },
-    ));
+        .serviceId = @as(usize, @intCast(device.serviceId)),
+    });
 
-    Debug.log(.DEBUG, "DeviceListUI: formatted string is: {s}", .{label});
+    const layout = UIConfig.Layout.DeviceSelectBox;
+    const y_offset = layout.vertical_padding + @as(f32, @floatFromInt(index)) * (layout.row_height + layout.spacing);
 
-    const checkboxPtr = &self.deviceCheckboxes.items[self.deviceCheckboxes.items.len - 1];
+    selectBox.transform.relativeTransform = &self.layout.transform;
+    selectBox.transform.position = PositionSpec.mix(
+        UnitValue.mix(0, layout.horizontal_padding),
+        UnitValue.mix(0, y_offset),
+    );
+    selectBox.transform.size = SizeSpec.mix(
+        UnitValue.mix(1, -2 * layout.horizontal_padding),
+        UnitValue.pixels(layout.row_height),
+    );
 
-    checkboxPtr.outerRect.bordered = true;
-    checkboxPtr.outerRect.rounded = true;
-    checkboxPtr.innerRect.rounded = true;
+    try selectBox.start();
+    try self.deviceSelectBoxes.append(self.allocator, selectBox);
 
-    try checkboxPtr.*.start();
+    if (self.state.data.selectedDevice) |selected_device| {
+        const appended = &self.deviceSelectBoxes.items[self.deviceSelectBoxes.items.len - 1];
+        appended.setSelected(selected_device.serviceId == device.serviceId);
+    }
 }
 
 const refreshDevices = struct {
@@ -551,7 +559,7 @@ const refreshDevices = struct {
         const component = DeviceList.asInstance(ctx);
 
         if (component.uiComponent) |*ui| {
-            ui.clearDeviceCheckboxes();
+            ui.clearDeviceSelectBoxes();
         }
 
         component.dispatchComponentAction();
@@ -586,10 +594,14 @@ fn handleOnDeviceListActiveStateChanged(self: *DeviceListUI, event: ComponentEve
 }
 
 /// Releases checkbox callback contexts without mutating the backing ArrayList buffer.
-fn destroyDeviceCheckboxContexts(self: *DeviceListUI) void {
-    for (self.deviceCheckboxes.items) |checkbox| {
-        const ctx: *DeviceList.SelectDeviceCallbackContext = @ptrCast(@alignCast(checkbox.clickHandler.context));
-        self.allocator.destroy(ctx);
+fn destroyDeviceSelectBoxContexts(self: *DeviceListUI) void {
+    for (self.deviceSelectBoxes.items) |*box| {
+        if (box.callbacks.onClick) |*handler| {
+            const ctx = handler.context;
+            const typed: *DeviceList.SelectDeviceCallbackContext = @ptrCast(@alignCast(ctx));
+            self.allocator.destroy(typed);
+            box.callbacks.onClick = null;
+        }
     }
 }
 
@@ -632,7 +644,7 @@ fn handleOnRootViewTransformQueried(self: *DeviceListUI, event: ComponentEvent) 
 fn handleOnDevicesCleanup(self: *DeviceListUI) !EventResult {
     var eventResult = EventResult.init();
     self.storeSelectedDevice(null);
-    self.clearDeviceCheckboxes();
+    self.clearDeviceSelectBoxes();
     // self.nextButton.setEnabled(false);
     // self.updateDeviceNameLabel(kStringDeviceListNoDeviceSelected, null);
     // self.refreshLayout(false);
@@ -644,7 +656,7 @@ fn handleOnDevicesReadyToRender(self: *DeviceListUI) !EventResult {
     var eventResult = EventResult.init();
     //
     Debug.log(.DEBUG, "DeviceListUI: onDevicesReadyToRender() start.", .{});
-    self.clearDeviceCheckboxes();
+    self.clearDeviceSelectBoxes();
     // self.nextButton.setEnabled(false);
 
     self.state.lock();
@@ -661,7 +673,7 @@ fn handleOnDevicesReadyToRender(self: *DeviceListUI) !EventResult {
     // self.bgRect.transform = self.frame.resolve();
 
     for (self.state.data.devices.items, 0..) |*device, i| {
-        try self.appendDeviceCheckbox(device.*, i);
+        try self.appendDeviceSelectBox(device.*, i);
     }
 
     Debug.log(.DEBUG, "DeviceListUI: onDevicesReadyToRender() end.", .{});
@@ -678,7 +690,7 @@ fn handleOnSelectedDeviceNameChanged(self: *DeviceListUI, event: ComponentEvent)
     const data = Events.onSelectedDeviceNameChanged.getData(event) orelse return eventResult.fail();
 
     self.storeSelectedDevice(data.selectedDevice);
-    self.updateCheckboxSelection(data.selectedDevice);
+    self.updateDeviceSelectBoxSelection(data.selectedDevice);
 
     Debug.log(
         .DEBUG,
@@ -708,7 +720,7 @@ pub fn handleAppResetRequest(self: *DeviceListUI) EventResult {
         self.state.data.isActive = false;
     }
 
-    self.clearDeviceCheckboxes();
+    self.clearDeviceSelectBoxes();
     // self.nextButton.setEnabled(false);
 
     // self.updateDeviceNameLabel(kStringDeviceListNoDeviceSelected, null);
@@ -754,12 +766,41 @@ pub const UIConfig = struct {
         };
     };
 
+    pub const Layout = struct {
+        pub const DeviceSelectBox = struct {
+            pub const horizontal_padding: f32 = 24;
+            pub const vertical_padding: f32 = 24;
+            pub const spacing: f32 = 18;
+            pub const row_height: f32 = 110;
+        };
+    };
+
     pub const Styles = struct {
         //
         const HeaderTextbox: Textbox.TextboxStyle = .{
             .background = .{ .color = Color.transparent, .borderStyle = .{ .color = Color.transparent, .thickness = 0 }, .roundness = 0 },
             .text = .{ .font = .JERSEY10_REGULAR, .fontSize = 34, .textColor = Color.white },
             .lineSpacing = -5,
+        };
+
+        pub const DeviceSelectBoxElement: DeviceSelectBox.Style = .{
+            .backgroundColor = Color.themeDark,
+            .hoverBackgroundColor = rl.Color.init(40, 43, 57, 255),
+            .selectedBackgroundColor = Color.themeSectionBg,
+            .disabledBackgroundColor = Color.transparentDark,
+            .iconTint = Color.white,
+            .borderColor = Color.themePrimary,
+            .borderThickness = 2,
+            .cornerRadius = 0.12,
+            .cornerSegments = 10,
+            .padding = 10,
+            .iconFraction = 0.23,
+            .contentSpacing = 20,
+            .lineSpacing = 6,
+            .primaryText = .{ .font = .ROBOTO_REGULAR, .fontSize = 22, .textColor = Color.white },
+            .secondaryText = .{ .font = .JERSEY10_REGULAR, .fontSize = 20, .textColor = Color.offWhite },
+            .detailText = .{ .font = .ROBOTO_REGULAR, .fontSize = 14, .textColor = Color.lightGray },
+            .scale = 0.7,
         };
     };
 };
