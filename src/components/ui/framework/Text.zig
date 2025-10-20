@@ -96,6 +96,7 @@ pub fn onEvent(self: *Text, event: UIEvent) void {
     switch (event) {
         .TextChanged => |e| {
             self.setValue(e.text);
+            if (e.color) |color| self.style.textColor = color;
         },
         inline else => {},
     }

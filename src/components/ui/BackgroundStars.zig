@@ -65,7 +65,7 @@ fn pseudoNoise(seed: usize) f32 {
 }
 
 fn makeStar(anchor: rl.Vector2, base_scale: f32, spread: rl.Vector2, seed: usize) StarDefinition {
-    const tex = if (((seed * 13) + 7) % 17 == 0) TextureResource.STAR_V2 else TextureResource.STAR_V1;
+    const tex = if (((seed * 13) + 7) % 9 == 0) TextureResource.STAR_V2 else TextureResource.STAR_V1;
     const offset = rl.Vector2{
         .x = pseudoNoise(seed + 5) * spread.x,
         .y = pseudoNoise(seed + 11) * spread.y,
@@ -99,7 +99,50 @@ const inner_positions = [_]rl.Vector2{
     .{ .x = 0.58, .y = 0.68 },
 };
 
-const STAR_COUNT = top_positions.len + bottom_positions.len + left_positions.len + right_positions.len + inner_positions.len;
+const extra_positions = [_]struct {
+    anchor: rl.Vector2,
+    base_scale: f32,
+    spread: rl.Vector2,
+}{
+    .{ .anchor = .{ .x = 0.04, .y = 0.08 }, .base_scale = 0.41, .spread = .{ .x = 14, .y = 10 } },
+    .{ .anchor = .{ .x = 0.92, .y = 0.07 }, .base_scale = 0.41, .spread = .{ .x = 14, .y = 10 } },
+    .{ .anchor = .{ .x = 0.05, .y = 0.26 }, .base_scale = 0.41, .spread = .{ .x = 16, .y = 14 } },
+    .{ .anchor = .{ .x = 0.95, .y = 0.27 }, .base_scale = 0.42, .spread = .{ .x = 16, .y = 14 } },
+    .{ .anchor = .{ .x = 0.03, .y = 0.50 }, .base_scale = 0.40, .spread = .{ .x = 18, .y = 16 } },
+    .{ .anchor = .{ .x = 0.97, .y = 0.52 }, .base_scale = 0.41, .spread = .{ .x = 18, .y = 16 } },
+    .{ .anchor = .{ .x = 0.07, .y = 0.70 }, .base_scale = 0.41, .spread = .{ .x = 18, .y = 18 } },
+    .{ .anchor = .{ .x = 0.93, .y = 0.72 }, .base_scale = 0.42, .spread = .{ .x = 18, .y = 18 } },
+    .{ .anchor = .{ .x = 0.06, .y = 0.93 }, .base_scale = 0.43, .spread = .{ .x = 20, .y = 20 } },
+    .{ .anchor = .{ .x = 0.94, .y = 0.92 }, .base_scale = 0.44, .spread = .{ .x = 20, .y = 20 } },
+    .{ .anchor = .{ .x = 0.12, .y = 0.18 }, .base_scale = 0.46, .spread = .{ .x = 18, .y = 14 } },
+    .{ .anchor = .{ .x = 0.30, .y = 0.19 }, .base_scale = 0.44, .spread = .{ .x = 18, .y = 16 } },
+    .{ .anchor = .{ .x = 0.48, .y = 0.18 }, .base_scale = 0.45, .spread = .{ .x = 20, .y = 14 } },
+    .{ .anchor = .{ .x = 0.66, .y = 0.17 }, .base_scale = 0.43, .spread = .{ .x = 18, .y = 14 } },
+    .{ .anchor = .{ .x = 0.84, .y = 0.19 }, .base_scale = 0.44, .spread = .{ .x = 18, .y = 14 } },
+    .{ .anchor = .{ .x = 0.18, .y = 0.40 }, .base_scale = 0.43, .spread = .{ .x = 22, .y = 18 } },
+    .{ .anchor = .{ .x = 0.38, .y = 0.42 }, .base_scale = 0.45, .spread = .{ .x = 22, .y = 18 } },
+    .{ .anchor = .{ .x = 0.58, .y = 0.41 }, .base_scale = 0.44, .spread = .{ .x = 22, .y = 18 } },
+    .{ .anchor = .{ .x = 0.78, .y = 0.43 }, .base_scale = 0.43, .spread = .{ .x = 22, .y = 18 } },
+    .{ .anchor = .{ .x = 0.14, .y = 0.56 }, .base_scale = 0.42, .spread = .{ .x = 24, .y = 20 } },
+    .{ .anchor = .{ .x = 0.34, .y = 0.58 }, .base_scale = 0.44, .spread = .{ .x = 24, .y = 20 } },
+    .{ .anchor = .{ .x = 0.54, .y = 0.57 }, .base_scale = 0.43, .spread = .{ .x = 24, .y = 20 } },
+    .{ .anchor = .{ .x = 0.74, .y = 0.59 }, .base_scale = 0.42, .spread = .{ .x = 24, .y = 20 } },
+    .{ .anchor = .{ .x = 0.24, .y = 0.72 }, .base_scale = 0.43, .spread = .{ .x = 26, .y = 22 } },
+    .{ .anchor = .{ .x = 0.44, .y = 0.71 }, .base_scale = 0.45, .spread = .{ .x = 26, .y = 22 } },
+    .{ .anchor = .{ .x = 0.64, .y = 0.73 }, .base_scale = 0.43, .spread = .{ .x = 26, .y = 22 } },
+    .{ .anchor = .{ .x = 0.84, .y = 0.74 }, .base_scale = 0.42, .spread = .{ .x = 26, .y = 22 } },
+    .{ .anchor = .{ .x = 0.18, .y = 0.86 }, .base_scale = 0.44, .spread = .{ .x = 28, .y = 24 } },
+    .{ .anchor = .{ .x = 0.38, .y = 0.87 }, .base_scale = 0.46, .spread = .{ .x = 28, .y = 24 } },
+    .{ .anchor = .{ .x = 0.58, .y = 0.85 }, .base_scale = 0.44, .spread = .{ .x = 28, .y = 24 } },
+    .{ .anchor = .{ .x = 0.78, .y = 0.88 }, .base_scale = 0.43, .spread = .{ .x = 28, .y = 24 } },
+};
+
+const STAR_COUNT = top_positions.len
+    + bottom_positions.len
+    + left_positions.len
+    + right_positions.len
+    + inner_positions.len
+    + extra_positions.len;
 
 fn generateStars() [STAR_COUNT]StarDefinition {
     var stars: [STAR_COUNT]StarDefinition = undefined;
@@ -134,6 +177,12 @@ fn generateStars() [STAR_COUNT]StarDefinition {
         idx += 1;
     }
 
+    inline for (extra_positions, 0..) |extra, extra_idx| {
+        const seed = extra_start + extra_idx + 61;
+        stars[idx] = makeStar(extra.anchor, extra.base_scale, extra.spread, seed);
+        idx += 1;
+    }
+
     return stars;
 }
 
@@ -144,6 +193,7 @@ const bottom_start = top_start + top_positions.len;
 const left_start = bottom_start + bottom_positions.len;
 const right_start = left_start + left_positions.len;
 const inner_start = right_start + right_positions.len;
+const extra_start = inner_start + inner_positions.len;
 
 const constellation_top = [_]usize{ top_start + 1, top_start + 2, top_start + 3 };
 const constellation_upper = [_]usize{ top_start + 4, top_start + 5 };

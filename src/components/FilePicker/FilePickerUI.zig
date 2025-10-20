@@ -357,7 +357,7 @@ fn initializeBackground(self: *FilePickerUI) !void {
             .positionRef(.{ .NodeId = "image_info_bg" })
             .sizeRef(.{ .NodeId = "image_info_bg" }),
 
-        ui.textbox("Ubuntu 24.04 LTS.iso", UIConfig.Styles.ImageInfoTextbox, Textbox.Params{
+        ui.textbox("e.g. Ubuntu 24.04 LTS.iso", UIConfig.Styles.ImageInfoTextbox, Textbox.Params{
             .identifier = .FilePickerImageInfoTextbox,
             .wordWrap = true,
         })
@@ -370,7 +370,7 @@ fn initializeBackground(self: *FilePickerUI) !void {
 
         ui.text("5.06 GB", .{
             .identifier = .FilePickerImageSizeText,
-            .textColor = rl.Color.init(156, 156, 156, 255),
+            .textColor = rl.Color.gray,
         })
             .id("image_info_size_text")
             .position(.percent(0, 1))
@@ -614,15 +614,23 @@ fn handleIsoFilePathChanged(self: *FilePickerUI, event: ComponentEvent) !EventRe
             self.layout.emitEvent(.{ .TextChanged = .{
                 .target = .FilePickerImageSizeText,
                 .text = @ptrCast(std.mem.sliceTo(&sizeBuf, 0x00)),
+                .color = Color.offWhite,
             } }, .{});
         }
 
         self.layout.emitEvent(
-            .{ .TextChanged = .{ .target = .FilePickerImageInfoTextbox, .text = displayName } },
+            .{ .TextChanged = .{
+                .target = .FilePickerImageInfoTextbox,
+                .text = displayName,
+                .color = Color.themeSecondary,
+            } },
             .{ .excludeSelf = true },
         );
         self.layout.emitEvent(
-            .{ .TextChanged = .{ .target = .FilePickerImageSelectedTextbox, .text = displayName } },
+            .{ .TextChanged = .{
+                .target = .FilePickerImageSelectedTextbox,
+                .text = displayName,
+            } },
             .{ .excludeSelf = true },
         );
         self.layout.emitEvent(
@@ -728,7 +736,7 @@ const UIConfig = struct {
                 },
                 .roundness = 0,
             },
-            .text = .{ .font = .ROBOTO_REGULAR, .fontSize = 24, .textColor = Color.offWhite },
+            .text = .{ .font = .ROBOTO_REGULAR, .fontSize = 24, .textColor = rl.Color.gray },
             .lineSpacing = -5,
         };
 

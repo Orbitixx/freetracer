@@ -140,6 +140,7 @@ pub fn onEvent(self: *Textbox, event: UIEvent) void {
     switch (event) {
         .TextChanged => |e| {
             self.setText(e.text);
+            if (e.color) |color| self.style.text.textColor = color;
         },
         inline else => {},
     }

@@ -1,3 +1,4 @@
+const rl = @import("raylib");
 const UIFramework = @import("./import.zig");
 
 pub const UIElementIdentifier = enum(u8) {
@@ -21,7 +22,7 @@ pub const UIElementIdentifier = enum(u8) {
 // };
 
 pub const UIEvent = union(enum) {
-    TextChanged: struct { target: UIElementIdentifier, text: [:0]const u8 },
+    TextChanged: struct { target: UIElementIdentifier, text: [:0]const u8, color: ?rl.Color = null },
     StateChanged: struct { target: ?UIElementIdentifier = null, isActive: bool },
     SpriteButtonEnabledChanged: struct {
         target: UIElementIdentifier,

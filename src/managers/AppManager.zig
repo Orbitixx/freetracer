@@ -259,6 +259,21 @@ const AppManager = struct {
             .{ .font = .JERSEY10_REGULAR, .fontSize = 16, .textColor = Color.secondary },
         );
 
+        const centerX: i32 = @intFromFloat(WindowManager.getWindowWidth() / 2);
+        const centerY: i32 = @intFromFloat(WindowManager.getWindowHeight() / 2);
+        const radius: f32 = WindowManager.getWindowWidth() / 2 + WindowManager.getWindowWidth() * 0.2;
+
+        // Charcoal gradient
+        // const innerColor: rl.Color = rl.Color.init(32, 32, 44, 255);
+        // const outerColor: rl.Color = rl.Color.init(19, 20, 32, 255);
+
+        // Desaturated teal
+        // const innerColor: rl.Color = rl.Color.init(33, 44, 55, 255);
+        // const outerColor: rl.Color = rl.Color.init(23, 25, 39, 255);
+        //
+        const innerColor: rl.Color = rl.Color.init(32, 32, 44, 255);
+        const outerColor: rl.Color = Color.themeBg;
+
         // var logText = UI.Text.init(
         //     "",
         //     .{ .x = relX(0.02), .y = relY(0.935) },
@@ -298,6 +313,7 @@ const AppManager = struct {
             rl.beginDrawing();
 
             rl.clearBackground(backgroundColor);
+            rl.drawCircleGradient(centerX, centerY, radius, innerColor, outerColor);
 
             UI.BackgroundStars.draw();
 
