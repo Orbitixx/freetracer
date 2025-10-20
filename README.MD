@@ -7,7 +7,7 @@
 **Freetracer** is a fast, zero-tracking, open-source utility for securely writing bootable images (ISO/IMG/BIN, etc.) to removable media such as USB drives and SD cards. It’s built for people who value **privacy by default**: no ads, no telemetry, no surprise network calls — just a clean, friendly experience that stays out of your way.
 
 <p align="center">
-  <img src="docs/freetracer-cover.png" alt="Freetracer Select Image screen screenshot" width="560">
+  <img src="docs/freetracer-cover.png" alt="Freetracer Select Image screen screenshot" width="860">
 </p>
 
 - 🧭 **Focused**: does one job — flashing images — and does it well  
