@@ -176,8 +176,6 @@ pub fn handleEvent(self: *DeviceListUI, event: ComponentEvent) !EventResult {
 }
 
 pub fn update(self: *DeviceListUI) !void {
-    if (!self.readIsActive()) return;
-
     try self.layout.update();
 }
 
@@ -458,6 +456,22 @@ const refreshDevices = struct {
     }
 };
 
+/// Copies `value` into an owned buffer, optionally truncating for UI display, and updates label layout.
+fn updateDeviceNameLabel(self: *DeviceListUI, value: [:0]const u8, truncate_len: ?usize) void {
+    self.selectedDeviceNameBuf = std.mem.zeroes([MAX_DISPLAY_STRING_LENGTH:0]u8);
+
+    const max_allowed = if (truncate_len) |limit| @min(limit, MAX_DISPLAY_STRING_LENGTH - 1) else MAX_DISPLAY_STRING_LENGTH - 1;
+    const truncated_len = @min(value.len, max_allowed);
+
+    if (truncated_len > 0) {
+        @memcpy(self.selectedDeviceNameBuf[0..truncated_len], value[0..truncated_len]);
+    }
+
+    self.selectedDeviceNameBuf[truncated_len] = 0;
+    // self.deviceNameLabel.value = std.mem.sliceTo(self.selectedDeviceNameBuf[0..], 0);
+
+}
+
 fn handleOnDeviceListActiveStateChanged(self: *DeviceListUI, event: ComponentEvent) !EventResult {
     var eventResult = EventResult.init();
 
@@ -485,36 +499,12 @@ fn handleOnDeviceListActiveStateChanged(self: *DeviceListUI, event: ComponentEve
     return eventResult.succeed();
 }
 
-/// Copies `value` into an owned buffer, optionally truncating for UI display, and updates label layout.
-fn updateDeviceNameLabel(self: *DeviceListUI, value: [:0]const u8, truncate_len: ?usize) void {
-    self.selectedDeviceNameBuf = std.mem.zeroes([MAX_DISPLAY_STRING_LENGTH:0]u8);
-
-    const max_allowed = if (truncate_len) |limit| @min(limit, MAX_DISPLAY_STRING_LENGTH - 1) else MAX_DISPLAY_STRING_LENGTH - 1;
-    const truncated_len = @min(value.len, max_allowed);
-
-    if (truncated_len > 0) {
-        @memcpy(self.selectedDeviceNameBuf[0..truncated_len], value[0..truncated_len]);
-    }
-
-    self.selectedDeviceNameBuf[truncated_len] = 0;
-    // self.deviceNameLabel.value = std.mem.sliceTo(self.selectedDeviceNameBuf[0..], 0);
-
-}
-
 fn handleOnRootViewTransformQueried(self: *DeviceListUI, event: ComponentEvent) !EventResult {
     var eventResult = EventResult.init();
     const data = Events.onRootViewTransformQueried.getData(event) orelse return eventResult.fail();
     data.result.* = &self.layout.transform;
     return eventResult.succeed();
 }
-
-// TODO: Deprecated
-// fn handleOnUITransformQueried(self: *DeviceListUI, event: ComponentEvent) !EventResult {
-//     var eventResult = EventResult.init();
-//     const data = Events.onUITransformQueried.getData(event) orelse return eventResult.fail();
-//     data.result.* = &self.layout.transform;
-//     return eventResult.succeed();
-// }
 
 fn handleOnDevicesCleanup(self: *DeviceListUI) !EventResult {
     var eventResult = EventResult.init();

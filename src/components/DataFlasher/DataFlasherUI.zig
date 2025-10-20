@@ -168,7 +168,7 @@ pub fn start(self: *DataFlasherUI) !void {
     if (self.component == null) try self.initComponent(self.parent.asComponentPtr());
 
     try self.subscribeToEvents();
-    try self.initBgRect();
+    try self.initLayout();
     // try self.initFlashButton();
     //
     // self.initModuleLabels();
@@ -176,12 +176,9 @@ pub fn start(self: *DataFlasherUI) !void {
     // self.initStatusIndicators();
     // self.initProgressbox();
     //
-    // self.applyPanelMode(panelAppearanceInactive());
 }
 
 pub fn update(self: *DataFlasherUI) !void {
-    if (!self.readIsActive()) return;
-
     try self.layout.update();
     // try self.button.update();
 }
@@ -312,61 +309,13 @@ pub fn deinit(self: *DataFlasherUI) void {
     // self.button.deinit();
 }
 
-// fn panelAppearanceActive() Panel.Appearance {
-//     return .{
-//         .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
-//         .backgroundColor = Styles.Color.themeSectionBg,
-//         .borderColor = Styles.Color.themeSectionBorder,
-//         .headerColor = Color.white,
-//     };
-// }
-//
-// fn panelAppearanceInactive() Panel.Appearance {
-//     return .{
-//         .width = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE),
-//         .backgroundColor = Styles.Color.themeSectionBg,
-//         .borderColor = Styles.Color.themeSectionBorder,
-//         .headerColor = Color.lightGray,
-//     };
-// }
-
-// fn panelAppearanceFor(isActive: bool) Panel.Appearance {
-//     return if (isActive) panelAppearanceActive() else panelAppearanceInactive();
-// }
-
 fn subscribeToEvents(self: *DataFlasherUI) !void {
     if (self.component) |*component| {
         if (!EventManager.subscribe(ComponentName, component)) return error.UnableToSubscribeToEventManager;
     } else return error.UnableToSubscribeToEventManager;
 }
 
-fn initBgRect(self: *DataFlasherUI) !void {
-    // const deviceListTransform: *Transform = try DeprecatedUI.utils.queryComponentTransform(DeviceListUI);
-    //
-    // self.frame = Layout.Bounds.relative(
-    //     deviceListTransform,
-    //     .{
-    //         .x = Layout.UnitValue.mix(1.0, AppConfig.APP_UI_MODULE_GAP_X),
-    //         .y = Layout.UnitValue.pixels(0),
-    //     },
-    //     .{
-    //         .width = Layout.UnitValue.pixels(winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE)),
-    //         .height = Layout.UnitValue.pixels(winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_INACTIVE)),
-    //     },
-    // );
-    //
-    // self.bgRect = Rectangle{
-    //     .transform = self.frame.resolve(),
-    //     .style = .{
-    //         .color = Styles.Color.themeSectionBg,
-    //         .borderStyle = .{
-    //             .color = Styles.Color.themeSectionBorder,
-    //         },
-    //     },
-    //     .rounded = true,
-    //     .bordered = true,
-    // };
-
+fn initLayout(self: *DataFlasherUI) !void {
     var ui = UIChain.init(self.allocator);
 
     self.layout = try ui.view(.{
@@ -465,14 +414,6 @@ fn initBgRect(self: *DataFlasherUI) !void {
 //     self.verificationStatus = StatusIndicator.init("Written bytes successfuly verified", STATUS_INDICATOR_SIZE);
 // }
 //
-// fn initTextures(self: *DataFlasherUI) void {
-//     self.uiSheetTexture = Texture.init(.BUTTON_UI, .{ .x = winRelX(1.5), .y = winRelY(1.5) });
-//     self.moduleImg = Texture.init(.FLASH_PLACEHOLDER, .{ .x = 0, .y = 0 });
-//     self.moduleImg.transform.scale = 3;
-//     self.moduleImg.transform.x = self.bgRect.transform.relX(0.5) - self.moduleImg.transform.getWidth() / 2;
-//     self.moduleImg.transform.y = self.bgRect.transform.relY(0.5) - self.moduleImg.transform.getHeight() / 2;
-//     self.moduleImg.tint = .{ .r = 255, .g = 255, .b = 255, .a = 255 };
-// }
 //
 // fn initProgressbox(self: *DataFlasherUI) void {
 //     self.progressBox = Progressbox{
@@ -505,25 +446,6 @@ fn initBgRect(self: *DataFlasherUI) !void {
 //     };
 // }
 //
-// /// Repositions child elements after background sizing/color changes.
-// fn panelElements(self: *DataFlasherUI) Panel.Elements {
-//     return .{
-//         .frame = &self.frame,
-//         .rect = &self.bgRect,
-//         .header = &self.headerLabel,
-//     };
-// }
-//
-// fn applyPanelMode(self: *DataFlasherUI, appearance: Panel.Appearance) void {
-//     Debug.log(.DEBUG, "DataFlasherUI: applying panel appearance", .{});
-//     Panel.applyAppearance(self.panelElements(), appearance);
-//     self.updateLayout();
-// }
-//
-// fn updateLayout(self: *DataFlasherUI) void {
-//     self.bgRect.transform = self.frame.resolve();
-//     self.applyLayoutFromBounds();
-// }
 
 fn storeIsActive(self: *DataFlasherUI, isActive: bool) void {
     self.state.lock();
@@ -554,13 +476,6 @@ fn readParentSelection(self: *DataFlasherUI) ParentSelection {
     return selection;
 }
 
-// fn setTextValue(text: *Text, value: [:0]const u8) void {
-//     text.value = value;
-//     const dims = text.getDimensions();
-//     text.transform.w = dims.width;
-//     text.transform.h = dims.height;
-// }
-
 fn updateIsoDisplay(self: *DataFlasherUI, isoPath: [:0]const u8) void {
     @memset(&self.displayISOTextBuffer, 0);
 
@@ -581,8 +496,6 @@ fn updateIsoDisplay(self: *DataFlasherUI, isoPath: [:0]const u8) void {
         };
         finalValue = copied;
     }
-
-    // setTextValue(&self.isoText, finalValue);
 }
 
 fn updateDeviceDisplay(self: *DataFlasherUI, device: ?StorageDevice) void {
@@ -596,72 +509,6 @@ fn updateDeviceDisplay(self: *DataFlasherUI, device: ?StorageDevice) void {
         // setTextValue(&self.deviceText, NULL_TEXT);
     }
 }
-
-// fn applyLayoutFromBounds(self: *DataFlasherUI) void {
-//     const leftPadding = self.bgRect.transform.relX(PADDING_LEFT);
-//     const centerX = self.bgRect.transform.relX(0.5);
-//
-//     self.headerLabel.transform.x = self.bgRect.transform.x + HEADER_LABEL_OFFSET_X;
-//     self.headerLabel.transform.y = self.bgRect.transform.relY(HEADER_LABEL_REL_Y);
-//
-//     self.moduleImg.transform.x = centerX - self.moduleImg.transform.getWidth() / 2;
-//     self.moduleImg.transform.y = self.bgRect.transform.relY(0.5) - self.moduleImg.transform.getHeight() / 2;
-//
-//     self.isoText.transform.x = self.bgRect.transform.relX(ISO_ICON_POS_REL_X) + ICON_TEXT_GAP_X;
-//     self.isoText.transform.y = self.bgRect.transform.relY(ISO_ICON_POS_REL_Y) + self.isoText.getDimensions().height / 8;
-//
-//     self.deviceText.transform.x = self.bgRect.transform.relX(DEV_ICON_POS_REL_X) + ICON_TEXT_GAP_X;
-//     self.deviceText.transform.y = self.bgRect.transform.relY(DEV_ICON_POS_REL_Y) + self.deviceText.getDimensions().height / 8;
-//
-//     self.statusSectionHeader.transform.x = self.bgRect.transform.relX(PADDING_LEFT);
-//
-//     self.isoStatus.calculateUI(.{
-//         .x = self.bgRect.transform.relX(PADDING_LEFT),
-//         .y = self.statusSectionHeader.transform.y + self.statusSectionHeader.getDimensions().height + ITEM_GAP_Y,
-//         .w = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth(),
-//         .h = STATUS_INDICATOR_SIZE,
-//     });
-//
-//     self.deviceStatus.calculateUI(.{
-//         .x = self.bgRect.transform.relX(PADDING_LEFT),
-//         .y = self.isoStatus.box.transform.y + STATUS_INDICATOR_SIZE + ITEM_GAP_Y,
-//         .w = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth(),
-//         .h = STATUS_INDICATOR_SIZE,
-//     });
-//
-//     self.permissionsStatus.calculateUI(.{
-//         .x = self.bgRect.transform.relX(PADDING_LEFT),
-//         .y = self.deviceStatus.box.transform.y + STATUS_INDICATOR_SIZE + ITEM_GAP_Y,
-//         .w = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth(),
-//         .h = STATUS_INDICATOR_SIZE,
-//     });
-//
-//     self.writeStatus.calculateUI(.{
-//         .x = self.bgRect.transform.relX(PADDING_LEFT),
-//         .y = self.permissionsStatus.box.transform.y + STATUS_INDICATOR_SIZE + ITEM_GAP_Y,
-//         .w = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth(),
-//         .h = STATUS_INDICATOR_SIZE,
-//     });
-//
-//     self.verificationStatus.calculateUI(.{
-//         .x = self.bgRect.transform.relX(PADDING_LEFT),
-//         .y = self.writeStatus.box.transform.y + STATUS_INDICATOR_SIZE + ITEM_GAP_Y,
-//         .w = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth(),
-//         .h = STATUS_INDICATOR_SIZE,
-//     });
-//
-//     self.progressBox.text.transform.x = leftPadding;
-//     self.progressBox.text.transform.y = self.verificationStatus.box.transform.y + self.verificationStatus.box.transform.h + 2 * ITEM_GAP_Y;
-//     self.progressBox.percentText.transform.x = leftPadding + (1 - SECTION_PADDING) * self.bgRect.transform.getWidth() - self.progressBox.percentText.getDimensions().width;
-//     self.progressBox.percentText.transform.y = self.progressBox.text.transform.y;
-//     self.progressBox.rect.transform.x = leftPadding;
-//     self.progressBox.rect.transform.y = self.progressBox.text.transform.y + self.progressBox.text.getDimensions().height + 2.5 * ITEM_GAP_Y;
-//
-//     self.button.setPosition(.{
-//         .x = centerX - self.button.rect.transform.getWidth() / 2,
-//         .y = self.button.rect.transform.y,
-//     });
-// }
 
 pub const ComponentImplementation = ComponentFramework.ImplementComponent(DataFlasherUI);
 pub const asComponent = ComponentImplementation.asComponent;
@@ -717,6 +564,10 @@ pub fn handleOnActiveStateChanged(self: *DataFlasherUI, event: ComponentEvent) !
         Debug.log(.DEBUG, "DataFlasherUI: setting UI to INACTIVE.", .{});
         // self.onDeactivated();
     }
+
+    self.layout.emitEvent(.{ .StateChanged = .{ .isActive = data.isActive } }, .{});
+
+    self.layout.emitEvent(.{ .StateChanged = .{ .target = .DataFlasherPlaceholderTexture, .isActive = !data.isActive } }, .{ .excludeSelf = true });
 
     // if (data.isActive) {
     //     self.bgRect.transform.w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE);
