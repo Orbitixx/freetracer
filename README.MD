@@ -35,6 +35,12 @@
 
 ---
 
+## 🧠 Why Freetracer?
+
+If you’ve ever wondered why a calculator wants your microphone, you’re not alone. In a world of habitual data collection and ad-tech, Freetracer is intentionally boring: it flashes images, **stays offline**, and **doesn’t track you**. That’s it.
+
+---
+
 ## 🔒 Privacy, by design
 
 It’s surprisingly common for simple utilities to request broad access or phone home. Freetracer doesn’t.
@@ -54,11 +60,11 @@ It’s surprisingly common for simple utilities to request broad access or phone
 
 ```plist
 <key>NSDownloadsFolderUsageDescription</key>
-<string>Allow Freetracer to access files you select in your Downloads folder.</string>
+<string>Freetracer needs access to Downloads folder scope to access a specific ISO file within it.</string>
 <key>NSDocumentsFolderUsageDescription</key>
-<string>Allow Freetracer to access files you select in your Documents folder.</string>
+<string>Freetracer needs access to Documents folder scope to access a specific ISO file within it.</string>
 <key>NSDesktopFolderUsageDescription</key>
-<string>Allow Freetracer to access files you select on your Desktop.</string>
+<string>Freetracer needs access to Desktop folder scope to access a specific ISO file within it.</string>	
 
 <key>MachServices</key>
 <dict>
@@ -71,11 +77,6 @@ It’s surprisingly common for simple utilities to request broad access or phone
 
 ---
 
-## 🧠 Why Freetracer?
-
-If you’ve ever wondered why a calculator wants your microphone, you’re not alone. In a world of habitual data collection and ad-tech, Freetracer is intentionally boring: it flashes images, **stays offline**, and **doesn’t track you**. That’s it.
-
----
 
 ## 🖥️ Supported platforms
 
@@ -134,9 +135,6 @@ codesign --force --sign "{Your Apple Developer Certificate ID}" \
   -i "com.{your-id}.freetracer-helper" \
   ./Freetracer.app/Contents/Library/LaunchServices/com.{your-id}.freetracer-helper
 
-# Optional: strip the main binary to reduce size
-# strip ./Freetracer.app/Contents/MacOS/Freetracer
-
 codesign --force --sign "{Your Apple Developer Certificate ID}" \
   -i "com.{your-id}.freetracer" \
   --options=runtime \
@@ -144,22 +142,6 @@ codesign --force --sign "{Your Apple Developer Certificate ID}" \
 ```
 
 > **Tip:** For Intel builds, adjust the `-Dtarget` accordingly (e.g., `x86_64-macos`). For universal binaries, build each arch and lipo the outputs.
-
----
-
-## 🧯 Safety features
-
-- **Drive guardrails** to reduce the risk of writing to internal or system disks  
-- **Explicit confirmations** before destructive operations  
-- **Clear progress and error reporting** so you know exactly what’s happening
-
----
-
-## 🛣️ Roadmap
-
-- Linux support (native, with the same privacy guarantees)  
-- Enhanced image verification flows (checksum helpers)  
-- More guardrails for device selection
 
 ---
 
@@ -184,8 +166,7 @@ We welcome contributions of all kinds — bug reports, docs, code, design, and t
 
 ## 📄 License
 
-Freetracer is currently licensed under the **Apache License, Version 2.0**.  
-See `LICENSE`, `NOTICE`, `data/copyright.html`, and `.reuse/dep5`.
+Freetracer is currently licensed under the **Apache License, Version 2.0**. 
 
 > **Note:** Dual-licensing (Apache-2.0/GPLv3) has been discussed; if adopted, this section will be updated accordingly. Until then, **Apache-2.0 applies**.
 
@@ -199,7 +180,7 @@ If you reuse Freetracer’s source code or user interface, please include a visi
 
 ## © Copyright
 
-Licensed under the **Apache License, Version 2.0**. See `LICENSE`, `NOTICE`, `data/copyright.html`, and `.reuse/dep5`.
+Licensed under the **Apache License, Version 2.0** (TBD).
 
 ---
 
