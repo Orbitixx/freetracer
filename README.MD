@@ -2,7 +2,9 @@
   <img src="docs/icon.png" alt="Freetracer app icon" width="128">
 </p>
 
-# Freetracer — a beautiful, simple, **private**, offline-first image flasher
+*A simple, **private**, offline-first image flasher*
+
+# Freetracer 
 
 **Freetracer** is a fast, zero-tracking, open-source utility for securely writing bootable images (ISO/IMG/BIN, etc.) to removable media such as USB drives and SD cards. It’s built for people who value **privacy by default**: no ads, no telemetry, no surprise network calls — just a clean, friendly experience that stays out of your way.
 
@@ -20,28 +22,28 @@
 
 ## ✨ Highlights
 
-- 💾 Create bootable USB and SD cards with a few clicks  
-- 💿 Supports ISO 9660, hybrid ISOs, and common image formats  
-- ⛰️ Handles **large images (5GB+)** without fuss  
-- 🎛️ Minimal, intuitive UI with tasteful pixel-art accents  
-- 🛜 **Offline-first** design  
+- Create bootable USB and SD cards with a few clicks  
+- Supports ISO 9660, hybrid ISOs, and common image formats  
+- Handles **large images (5GB+)** without fuss  
+- Minimal, intuitive UI with tasteful pixel-art accents  
+- **Offline-first** design  
   - The only optional network call is a version check to `github.com`  
   - You can disable update checks entirely  
-- 🔐 Safety rails to help you avoid writing to internal/system disks  
-- ⚡ Small, fast, and fully native (Zig + C/Obj-C)  
-- ❌ **No ads, no trackers, no notifications, no spyware**, no opaque network requests  
-- 📝 **Limited permissions, only when you ask for them**  
-- 🤑 Free and open source
+- Safety rails to help you avoid writing to internal/system disks  
+- Small, fast, and fully native (Zig + C/Obj-C) with minimal dependencies  
+- **No ads, no trackers, no notifications, no spyware**, no opaque network requests  
+- **Limited permissions, only when you ask for them**  
+- Free and open source
 
 ---
 
-## 🧠 Why Freetracer?
+## 🤔 Why Freetracer?
 
 If you’ve ever wondered why a calculator wants your microphone, you’re not alone. In a world of habitual data collection and ad-tech, Freetracer is intentionally boring: it flashes images, **stays offline**, and **doesn’t track you**. That’s it.
 
 ---
 
-## 🔒 Privacy, by design
+## 🔐 Privacy, by design
 
 It’s surprisingly common for simple utilities to request broad access or phone home. Freetracer doesn’t.
 
@@ -58,7 +60,7 @@ It’s surprisingly common for simple utilities to request broad access or phone
 
 **macOS usage descriptions / entitlements** used by the app (for clarity and transparency):
 
-```plist
+```bash
 <key>NSDownloadsFolderUsageDescription</key>
 <string>Freetracer needs access to Downloads folder scope to access a specific ISO file within it.</string>
 <key>NSDocumentsFolderUsageDescription</key>
@@ -80,9 +82,9 @@ It’s surprisingly common for simple utilities to request broad access or phone
 
 ## 🖥️ Supported platforms
 
-- 🍎 **macOS** 10.13 High Sierra and later
-- 🐧 **Linux** — **work in progress** (coming soon)
-- 🪟 **Windows** — not planned; we recommend [Rufus](https://rufus.ie)
+- **macOS** 10.13 High Sierra and later
+- **Linux** — **work in progress** (coming soon)
+- **Windows** — not planned; we recommend [Rufus](https://rufus.ie)
 
 ---
 
@@ -157,14 +159,14 @@ We welcome contributions of all kinds — bug reports, docs, code, design, and t
 
 ## 💬 Feedback & community
 
-- ⭐ **Star us on GitHub** to show support  
-- 🐞 **Report bugs** in the issue tracker  
-- ✉️ **Email** us with ideas or questions  
-- 🌐 Follow Orbitixx on BlueSky, X (Twitter), and Instagram
+- **Star us on GitHub** to show support  
+- **Report bugs** in the issue tracker  
+- **Email** us with ideas or questions  
+- Follow Orbitixx on BlueSky, X (Twitter), and Instagram
 
 ---
 
-## 📄 License
+## License
 
 Freetracer is currently licensed under the **Apache License, Version 2.0**. 
 
@@ -172,7 +174,7 @@ Freetracer is currently licensed under the **Apache License, Version 2.0**.
 
 ---
 
-## 📣 Attribution for forks & derivatives
+## Attribution for forks & derivatives
 
 If you reuse Freetracer’s source code or user interface, please include a visible, human-readable mention of **“Freetracer by Orbitixx”** and a clickable link to **https://orbitixx.com** in user-facing areas (e.g., **About** and **Main Menu** screens). This honors contributor work and satisfies license attribution requirements.
 

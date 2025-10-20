@@ -140,7 +140,7 @@ pub const ResourceManagerSingleton = struct {
 
             try inst.registerAsset(.{ .Texture = .DISK_IMAGE }, "images/disk_image.png");
             try inst.registerAsset(.{ .Texture = .USB_IMAGE }, "images/usb_image.png");
-            try inst.registerAsset(.{ .Texture = .RELOAD_ICON }, "images/reload_icon.png");
+            try inst.registerAsset(.{ .Texture = .RELOAD_ICON }, "images/icon-reload.png");
             try inst.registerAsset(.{ .Texture = .BUTTON_UI }, "images/button_ui.png");
             try inst.registerAsset(.{ .Texture = .DOC_IMAGE }, "images/doc_image.png");
             try inst.registerAsset(.{ .Texture = .FILE_SELECTED }, "images/doc_image_check.png");

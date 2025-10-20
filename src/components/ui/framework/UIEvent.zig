@@ -11,8 +11,10 @@ pub const UIElementIdentifier = enum(u8) {
 
     DeviceListConfirmButton,
     DeviceListDeviceListBox,
-
+    DeviceListNoDevicesText,
+    DeviceListRefreshDevicesButton,
     DeviceListPlaceholderTexture,
+
     DataFlasherPlaceholderTexture,
 };
 
