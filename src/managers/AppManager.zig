@@ -306,8 +306,8 @@ const AppManager = struct {
 
             versionText.draw();
 
-            try resetAppButton.update();
-            try resetAppButton.draw();
+            // try resetAppButton.update();
+            // try resetAppButton.draw();
 
             // TODO: unnecessary call on every frame -- extract the whole component out, save as flag
             if (self.appState == .DataFlashing) resetAppButton.setEnabled(false) else resetAppButton.setEnabled(true);

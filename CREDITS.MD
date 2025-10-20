@@ -18,3 +18,7 @@ https://kicked-in-teeth.itch.io/button-ui
 
 Font:
 https://www.fontspace.com/home-video-font-f116641
+
+
+Reload icon:
+https://icon-sets.iconify.design/pixelarticons/reload/

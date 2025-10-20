@@ -318,7 +318,7 @@ fn initBgRect(self: *DeviceListUI) !void {
             .callbacks(.{ .onStateChange = .{} }), // Consumes .StateChanged event without doing anything
 
         ui.deviceSelectBoxList(.{
-            .identifier = null,
+            .identifier = .DeviceListDeviceListBox,
             .allocator = self.allocator,
             .layout = UIConfig.Layout.DeviceSelectBox,
             .style = UIConfig.Styles.DeviceSelectBoxElement,
@@ -328,7 +328,8 @@ fn initBgRect(self: *DeviceListUI) !void {
             .positionRef(.{ .NodeId = "header_icon" })
             .size(.percent(0.9, 0.7))
             .sizeRef(.Parent)
-            .callbacks(.{ .onStateChange = .{} }),
+            .active(false),
+        // .callbacks(.{ .onStateChange = .{} }),
 
         ui.texture(.WARNING_ICON, .{})
             .id("device_list_warning_icon")
@@ -365,6 +366,13 @@ fn initBgRect(self: *DeviceListUI) !void {
             .size(.percent(0.3, 0.1))
             .sizeRef(.Parent)
             .active(false),
+
+        ui.texture(.DEVICE_LIST_PLACEHOLDER, .{})
+            .elId(.DeviceListPlaceholderTexture)
+            .position(.percent(0.5, 0.6))
+            .positionRef(.Parent)
+            .scale(2.5)
+            .offsetToOrigin(),
     });
 
     self.layout.callbacks.onStateChange = .{ .function = UIConfig.Callbacks.MainView.StateHandler.handler, .context = &self.layout };
@@ -613,6 +621,8 @@ fn handleOnDeviceListActiveStateChanged(self: *DeviceListUI, event: ComponentEve
     }
 
     self.layout.emitEvent(.{ .StateChanged = .{ .isActive = data.isActive } }, .{});
+    self.layout.emitEvent(.{ .StateChanged = .{ .target = .DeviceListPlaceholderTexture, .isActive = !data.isActive } }, .{ .excludeSelf = true });
+    self.layout.emitEvent(.{ .StateChanged = .{ .target = .DeviceListDeviceListBox, .isActive = data.isActive } }, .{ .excludeSelf = true });
 
     // self.applyPanelMode(panelAppearanceFor(data.isActive));
 

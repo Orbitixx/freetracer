@@ -40,7 +40,7 @@ const Styles = DeprecatedUI.Styles;
 const Color = Styles.Color;
 
 const DEFAULT_ISO_TITLE = "No ISO selected...";
-const DEFAULT_SECTION_HEADER = "Select image";
+const DEFAULT_SECTION_HEADER = "Select Image";
 const DISPLAY_NAME_SUFFIX_LEN: usize = 14;
 
 // This state is mutable and can be accessed from the main UI thread (draw/update)
@@ -415,6 +415,12 @@ fn initializeBackground(self: *FilePickerUI) !void {
             .position(.percent(0.05, 0.75))
             .size(.percent(0.9, 0.25))
             .active(false),
+
+        ui.texture(.SATTELITE_GRAPHIC, .{})
+            .position(.pixels(winRelX(0.7), winRelY(0.3)))
+            .relativeTransform(try AppManager.getGlobalTransform())
+            .scale(3)
+            .offsetToOrigin(),
     });
 
     self.layout.callbacks.onStateChange = .{

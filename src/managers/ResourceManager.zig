@@ -27,7 +27,10 @@ pub const TEXTURE = enum(u8) {
     STAR_V2,
     BUTTON_FRAME,
     IMAGE_TAG,
+
+    DEVICE_LIST_PLACEHOLDER,
     FLASH_PLACEHOLDER,
+    SATTELITE_GRAPHIC,
 
     USB_ICON_INACTIVE,
     USB_ICON_ACTIVE,
@@ -146,12 +149,17 @@ pub const ResourceManagerSingleton = struct {
             try inst.registerAsset(.{ .Texture = .STAR_V2 }, "images/star_v2.png");
             try inst.registerAsset(.{ .Texture = .BUTTON_FRAME }, "images/button_frame.png");
             try inst.registerAsset(.{ .Texture = .IMAGE_TAG }, "images/tag.png");
-            try inst.registerAsset(.{ .Texture = .FLASH_PLACEHOLDER }, "images/flash-placeholder.png");
             try inst.registerAsset(.{ .Texture = .WARNING_ICON }, "images/warning-icon.png");
+
+            try inst.registerAsset(.{ .Texture = .FLASH_PLACEHOLDER }, "images/flash-placeholder.png");
+            try inst.registerAsset(.{ .Texture = .DEVICE_LIST_PLACEHOLDER }, "images/device-list-placeholder.png");
+
             try inst.registerAsset(.{ .Texture = .USB_ICON_INACTIVE }, "images/usb-icon-inactive.png");
             try inst.registerAsset(.{ .Texture = .USB_ICON_ACTIVE }, "images/usb-icon-active.png");
             try inst.registerAsset(.{ .Texture = .SD_ICON_INACTIVE }, "images/sd-icon-inactive.png");
             try inst.registerAsset(.{ .Texture = .SD_ICON_ACTIVE }, "images/sd-icon-active.png");
+
+            try inst.registerAsset(.{ .Texture = .SATTELITE_GRAPHIC }, "images/sattelite-graphic.png");
             Debug.log(.DEBUG, "ResourceManager: textures successfully loaded!", .{});
 
             try inst.registerAsset(.{ .Image = .APP_WINDOW_IMAGE }, "images/icon.png");

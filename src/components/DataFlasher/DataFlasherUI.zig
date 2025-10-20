@@ -107,6 +107,7 @@ const winRelY = WindowManager.relH;
 const NULL_TEXT: [:0]const u8 = "NULL";
 
 const MAX_PATH_DISPLAY_LENGTH = 40;
+const DEFAULT_SECTION_HEADER = "Confirm & Flash";
 
 // Component-agnostic props
 state: ComponentState,
@@ -386,7 +387,32 @@ fn initBgRect(self: *DataFlasherUI) !void {
             .rounded = true,
             .bordered = true,
         },
-    }).children(.{});
+    }).children(.{
+
+        //
+        ui.texture(.STEP_1_INACTIVE, .{})
+            .id("header_icon")
+            .position(.percent(0.05, 0.03))
+            .positionRef(.Parent)
+            .scale(0.5)
+            .callbacks(.{ .onStateChange = .{} }), // Consumes .StateChanged event without doing anything
+        //
+        ui.textbox(DEFAULT_SECTION_HEADER, UIConfig.Styles.HeaderTextbox, UIFramework.Textbox.Params{ .wordWrap = true })
+            .id("header_textbox")
+            .position(.percent(1, 0))
+            .offset(10, -2)
+            .positionRef(.{ .NodeId = "header_icon" })
+            .size(.percent(0.7, 0.3))
+            .sizeRef(.Parent)
+            .callbacks(.{ .onStateChange = .{} }), // Consumes .StateChanged event without doing anything
+
+        ui.texture(.FLASH_PLACEHOLDER, .{})
+            .elId(.DataFlasherPlaceholderTexture)
+            .position(.percent(0.5, 0.6))
+            .positionRef(.Parent)
+            .scale(3)
+            .offsetToOrigin(),
+    });
 
     self.layout.callbacks.onStateChange = .{ .function = UIConfig.Callbacks.MainView.StateHandler.handler, .context = &self.layout };
 
@@ -818,6 +844,15 @@ pub const UIConfig = struct {
                     self.transform.resolve();
                 }
             };
+        };
+    };
+
+    pub const Styles = struct {
+        //
+        const HeaderTextbox: UIFramework.Textbox.TextboxStyle = .{
+            .background = .{ .color = Color.transparent, .borderStyle = .{ .color = Color.transparent, .thickness = 0 }, .roundness = 0 },
+            .text = .{ .font = .JERSEY10_REGULAR, .fontSize = 34, .textColor = Color.white },
+            .lineSpacing = -5,
         };
     };
 };
