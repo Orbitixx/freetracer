@@ -1,4 +1,5 @@
 const std = @import("std");
+const math = std.math;
 const rl = @import("raylib");
 
 const Debug = @import("freetracer-lib").Debug;
@@ -29,6 +30,21 @@ pub const Config = struct {
     fontSize: f32 = 16,
     spacing: f32 = 0,
     callbacks: UIElementCallbacks = .{},
+    pulsate: ?PulsateSettings = null,
+};
+
+pub const PulsateSettings = struct {
+    enabled: bool = false,
+    duration: f32 = 0.8,
+    /// Minimum alpha the pulsation should reach. Defaults to 0 (fully transparent).
+    minAlpha: u8 = 0,
+};
+
+const PulsateState = struct {
+    enabled: bool = false,
+    duration: f32 = 1.5,
+    minAlpha: u8 = 0,
+    elapsed: f32 = 0,
 };
 
 identifier: ?UIElementIdentifier = null,
@@ -40,6 +56,7 @@ background: ?Rectangle = null,
 active: bool = true,
 
 callbacks: UIElementCallbacks = .{},
+pulsate: PulsateState = .{},
 
 pub fn init(identifier: ?UIElementIdentifier, value: [:0]const u8, transform: Transform, style: TextStyle) Text {
     if (value.len > MAX_TEXT_LENGTH) Debug.log(
@@ -72,17 +89,46 @@ pub fn start(self: *Text) !void {
 pub fn update(self: *Text) !void {
     if (!self.active) return;
     self.transform.resolve();
+
+    if (self.pulsate.enabled) {
+        const dt = rl.getFrameTime();
+        if (self.pulsate.duration > 0) {
+            self.pulsate.elapsed += dt;
+            while (self.pulsate.elapsed >= self.pulsate.duration) {
+                self.pulsate.elapsed -= self.pulsate.duration;
+            }
+        } else {
+            self.pulsate.elapsed = 0;
+        }
+    }
 }
 
 pub fn draw(self: *Text) !void {
     if (!self.active) return;
+
+    var drawColor = self.style.textColor;
+    if (self.pulsate.enabled and self.pulsate.duration > 0) {
+        self.clampPulsateAlpha();
+        const baseAlpha: f32 = @floatFromInt(drawColor.a);
+        const minAlpha: f32 = @floatFromInt(self.pulsate.minAlpha);
+        const amplitude = baseAlpha - minAlpha;
+        if (amplitude > 0) {
+            const phase = if (self.pulsate.duration > 0) self.pulsate.elapsed / self.pulsate.duration else 0;
+            const factor = (1 - math.cos(phase * math.tau)) * 0.5;
+            const alpha = minAlpha + amplitude * factor;
+            drawColor.a = @intFromFloat(math.clamp(alpha, 0.0, 255.0));
+        } else {
+            drawColor.a = @intFromFloat(math.clamp(minAlpha, 0.0, 255.0));
+        }
+    }
+
     rl.drawTextEx(
         self.font,
         @ptrCast(std.mem.sliceTo(&self.textBuffer, 0x00)),
         self.transform.positionAsVector2(),
         self.style.fontSize,
         self.style.spacing,
-        self.style.textColor,
+        drawColor,
     );
 }
 
@@ -97,6 +143,7 @@ pub fn onEvent(self: *Text, event: UIEvent) void {
         .TextChanged => |e| {
             self.setValue(e.text);
             if (e.color) |color| self.style.textColor = color;
+            self.clampPulsateAlpha();
         },
         inline else => {},
     }
@@ -109,6 +156,29 @@ pub fn deinit(self: *Text) void {
 pub fn setValue(self: *Text, newValue: [:0]const u8) void {
     self.textBuffer = std.mem.zeroes([MAX_TEXT_LENGTH]u8);
     @memcpy(self.textBuffer[0..if (newValue.len > MAX_TEXT_LENGTH) MAX_TEXT_LENGTH else newValue.len], if (newValue.len > MAX_TEXT_LENGTH) newValue[0..MAX_TEXT_LENGTH] else newValue);
+}
+
+pub fn setPulsate(self: *Text, settings: PulsateSettings) void {
+    if (!settings.enabled) {
+        self.pulsate = .{};
+        return;
+    }
+
+    const duration = if (settings.duration <= 0) 1 else settings.duration;
+    self.pulsate = .{
+        .enabled = true,
+        .duration = duration,
+        .minAlpha = settings.minAlpha,
+        .elapsed = 0,
+    };
+    self.clampPulsateAlpha();
+}
+
+fn clampPulsateAlpha(self: *Text) void {
+    if (!self.pulsate.enabled) return;
+    if (self.pulsate.minAlpha > self.style.textColor.a) {
+        self.pulsate.minAlpha = self.style.textColor.a;
+    }
 }
 
 // pub fn getDimensions(self: Text) TextDimensions {

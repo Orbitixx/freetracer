@@ -487,21 +487,24 @@ fn initLayout(self: *DataFlasherUI) !void {
             .sizeRef(.{ .NodeId = "status_box_cover_rect" })
             .active(false),
 
-        ui.text("WAITING FOR LAUNCH...", .{ .font = .JERSEY10_REGULAR, .fontSize = 30, .textColor = Color.themeDanger })
+        ui.text("WAITING FOR LAUNCH...", .{ .font = .JERSEY10_REGULAR, .fontSize = 30, .textColor = Color.themeDanger, .pulsate = .{
+            .enabled = true,
+            .duration = 1.5,
+        } })
             .position(.percent(0.5, 0.5))
             .positionRef(.{ .NodeId = "status_box_cover_rect" })
             .offsetToOrigin()
             .sizeRef(.{ .NodeId = "status_box_cover_rect" })
             .active(false),
 
-        ui.texturedCheckbox(.{ .text = "Verify bytes after write" })
+        ui.texturedCheckbox(.{ .text = "Verify bytes after write", .checked = true })
             .id("checkbox_verify")
             .position(.percent(0, 1.1))
             .positionRef(.{ .NodeId = "status_background_rect" })
             .size(.pixels(14, 14))
             .active(false),
 
-        ui.texturedCheckbox(.{ .text = "Eject device on completion" })
+        ui.texturedCheckbox(.{ .text = "Eject device on completion", .checked = true })
             .id("checkbox_eject")
             .position(.percent(0, 1.3))
             .positionRef(.{ .NodeId = "checkbox_verify" })

@@ -349,12 +349,16 @@ pub const UIChain = struct {
     }
 
     pub fn text(self: UIChain, value: [:0]const u8, config: Text.Config) ElementChain {
-        const txt = Text.init(config.identifier, value, .{}, .{
+        var txt = Text.init(config.identifier, value, .{}, .{
             .font = config.font,
             .fontSize = config.fontSize,
             .spacing = config.spacing,
             .textColor = config.textColor,
         });
+        txt.callbacks = config.callbacks;
+        if (config.pulsate) |settings| {
+            txt.setPulsate(settings);
+        }
         return .{ .allocator = self.allocator, .el = UIElement{ .Text = txt } };
     }
 
