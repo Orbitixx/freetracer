@@ -16,6 +16,8 @@ pub const UIElementIdentifier = enum(u8) {
     DeviceListPlaceholderTexture,
 
     DataFlasherPlaceholderTexture,
+    DataFlahserStatusHeaderText,
+    GenericProgressBox,
 };
 
 // pub const UIEventType = enum(u8) {
@@ -29,5 +31,9 @@ pub const UIEvent = union(enum) {
     SpriteButtonEnabledChanged: struct {
         target: UIElementIdentifier,
         enabled: bool,
+    },
+    ProgressValueChanged: struct {
+        target: ?UIElementIdentifier = null,
+        percent: u64,
     },
 };

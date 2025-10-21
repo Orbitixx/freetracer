@@ -12,6 +12,7 @@ const DeviceSelectBox = UIFramework.DeviceSelectBox;
 const DeviceSelectBoxList = UIFramework.DeviceSelectBoxList;
 const FileDropzone = UIFramework.FileDropzone;
 const SpriteButton = UIFramework.SpriteButton;
+const ProgressBox = UIFramework.ProgressBox;
 const UIEvent = UIFramework.UIEvent;
 
 pub const StateChangeHandler = struct {
@@ -62,6 +63,7 @@ pub const UIElement = union(enum) {
     DeviceSelectBoxList: DeviceSelectBoxList,
     FileDropzone: FileDropzone,
     SpriteButton: SpriteButton,
+    ProgressBox: ProgressBox,
     // Button: Button,
 
     pub fn start(self: *UIElement) anyerror!void {

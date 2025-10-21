@@ -20,7 +20,6 @@ const UIElementIdentifier = UIFramework.UIElementIdentifier;
 const UIElementCallbacks = UIFramework.UIElementCallbacks;
 
 const Styles = @import("../Styles.zig");
-const TextStyle = Styles.TextStyle;
 const Color = Styles.Color;
 
 const Texture = @This();
@@ -37,6 +36,7 @@ active: bool = true,
 pub const Config = struct {
     identifier: ?UIElementIdentifier = null,
     callbacks: UIElementCallbacks = .{},
+    tint: rl.Color = Color.white,
 };
 
 // shader: rl.Shader,

@@ -38,6 +38,7 @@ pub const TEXTURE = enum(u8) {
     SD_ICON_ACTIVE,
 
     WARNING_ICON,
+    DANGER_LINES,
 };
 
 pub const Asset = union(enum) {
@@ -86,7 +87,7 @@ pub const ResourceManagerSingleton = struct {
 
             switch (asset) {
                 .Font => |f| {
-                    const font = try rl.loadFontEx(file, 64, null);
+                    const font = try rl.loadFontEx(file, 96, null);
                     switch (f) {
                         .ROBOTO_REGULAR => rl.setTextureFilter(font.texture, .trilinear),
                         .JERSEY10_REGULAR => rl.setTextureFilter(font.texture, .point),
@@ -150,6 +151,7 @@ pub const ResourceManagerSingleton = struct {
             try inst.registerAsset(.{ .Texture = .BUTTON_FRAME }, "images/button_frame.png");
             try inst.registerAsset(.{ .Texture = .IMAGE_TAG }, "images/tag.png");
             try inst.registerAsset(.{ .Texture = .WARNING_ICON }, "images/warning-icon.png");
+            try inst.registerAsset(.{ .Texture = .DANGER_LINES }, "images/danger-lines.png");
 
             try inst.registerAsset(.{ .Texture = .FLASH_PLACEHOLDER }, "images/flash-placeholder.png");
             try inst.registerAsset(.{ .Texture = .DEVICE_LIST_PLACEHOLDER }, "images/device-list-placeholder.png");

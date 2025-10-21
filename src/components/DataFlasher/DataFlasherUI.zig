@@ -84,7 +84,7 @@ const Button = DeprecatedUI.Button;
 const Checkbox = DeprecatedUI.Checkbox;
 const Transform = DeprecatedUI.Primitives.Transform;
 const Rectangle = DeprecatedUI.Primitives.Rectangle;
-const Text = DeprecatedUI.Primitives.Text;
+// const Text = DeprecatedUI.Primitives.Text;
 const Texture = DeprecatedUI.Primitives.Texture;
 const Statusbox = DeprecatedUI.Statusbox;
 const Progressbox = DeprecatedUI.Progressbox;
@@ -94,6 +94,7 @@ const Layout = DeprecatedUI.Layout;
 const UIFramework = @import("../ui/framework/import.zig");
 const View = UIFramework.View;
 const UIChain = UIFramework.UIChain;
+const Text = UIFramework.Text;
 
 const PrivilegedHelper = @import("../macos/PrivilegedHelper.zig");
 
@@ -361,6 +362,137 @@ fn initLayout(self: *DataFlasherUI) !void {
             .positionRef(.Parent)
             .scale(3)
             .offsetToOrigin(),
+
+        ui.rectangle(.{
+            .style = .{
+                .color = Color.themeDark,
+                .borderStyle = .{
+                    .color = Color.themeDanger,
+                },
+            },
+            .rounded = true,
+            .bordered = true,
+        })
+            .id("status_background_rect")
+            .position(.percent(0, 1.7))
+            .positionRef(.{ .NodeId = "header_icon" })
+            .size(.percent(0.9, 0.4))
+            .sizeRef(.Parent)
+            .active(false),
+
+        ui.text("WAITING...", UIConfig.Styles.StatusPanel.StepText.Inactive)
+            .id("status_header_text")
+            .elId(.DataFlahserStatusHeaderText)
+            .position(.pixels(10, 6))
+            .positionRef(.{ .NodeId = "status_background_rect" })
+            .sizeRef(.{ .NodeId = "status_header_text" })
+            .active(false),
+
+        ui.text("0%", UIConfig.Styles.StatusPanel.ProgressPercentBack.Inactive)
+            .id("status_percent_back")
+            .position(.percent(0, 0))
+            .offset(-3, 2)
+            .positionRef(.{ .NodeId = "status_percent_front" })
+            .sizeRef(.{ .NodeId = "status_background_rect" })
+            .active(false),
+
+        ui.text("0%", UIConfig.Styles.StatusPanel.ProgressPercentFront.Inactive)
+            .id("status_percent_front")
+            .position(.percent(0.5, 0.27))
+            .positionRef(.{ .NodeId = "status_background_rect" })
+            .offsetToOrigin()
+            .sizeRef(.{ .NodeId = "status_background_rect" })
+            .active(false),
+
+        ui.progressBox(.{
+            .backgroundStyle = .{
+                .color = Color.themeOutline,
+                .roundness = 1,
+            },
+            .progressStyle = .{
+                .color = Color.themeDanger,
+                .roundness = 1,
+            },
+        })
+            .id("status_progress_box")
+            .position(.percent(0.5, 0.5))
+            .positionRef(.{ .NodeId = "status_background_rect" })
+            .offsetToOrigin()
+            .size(.percent(0.9, 0.07))
+            .sizeRef(.{ .NodeId = "status_background_rect" })
+            .active(false),
+
+        ui.text("Progress:", UIConfig.Styles.StatusPanel.StatusText.Inactive)
+            .id("status_progress_text")
+            .position(.percent(0, 1.6))
+            .positionRef(.{ .NodeId = "status_progress_box" })
+            .sizeRef(.{ .NodeId = "status_background_rect" })
+            .active(false),
+
+        ui.text("0.00 GB of 0.00 GB", UIConfig.Styles.StatusPanel.StatusText.Inactive)
+            .id("status_progress_text_value")
+            .position(.percent(1.3, 0))
+            .positionRef(.{ .NodeId = "status_progress_text" })
+            .sizeRef(.{ .NodeId = "status_background_rect" })
+            .active(false),
+
+        ui.text("Speed:", UIConfig.Styles.StatusPanel.StatusText.Inactive)
+            .id("status_speed_text")
+            .position(.percent(0, 1))
+            .positionRef(.{ .NodeId = "status_progress_text" })
+            .sizeRef(.{ .NodeId = "status_background_rect" })
+            .active(false),
+
+        ui.text("0 MB/s", UIConfig.Styles.StatusPanel.StatusText.Inactive)
+            .id("status_speed_text_value")
+            .position(.percent(0, 0))
+            .positionRefX(.{ .NodeId = "status_progress_text_value" })
+            .positionRefY(.{ .NodeId = "status_speed_text" })
+            .sizeRef(.{ .NodeId = "status_background_rect" })
+            .active(false),
+
+        ui.text("ETA:", UIConfig.Styles.StatusPanel.StatusText.Inactive)
+            .id("status_eta_text")
+            .position(.percent(0, 1))
+            .positionRef(.{ .NodeId = "status_speed_text" })
+            .sizeRef(.{ .NodeId = "status_background_rect" })
+            .active(false),
+
+        ui.text("00:00", UIConfig.Styles.StatusPanel.StatusText.Inactive)
+            .id("status_eta_text_value")
+            .position(.percent(0, 0))
+            .positionRefX(.{ .NodeId = "status_speed_text_value" })
+            .positionRefY(.{ .NodeId = "status_eta_text" })
+            .sizeRef(.{ .NodeId = "status_background_rect" })
+            .active(false),
+
+        ui.rectangle(.{
+            .style = .{
+                .color = rl.Color.init(20, 20, 20, 200),
+            },
+            .bordered = false,
+            .rounded = true,
+        })
+            .id("status_box_cover_rect")
+            .position(.percent(0, 0))
+            .positionRef(.{ .NodeId = "status_background_rect" })
+            .size(.percent(1, 1))
+            .sizeRef(.{ .NodeId = "status_background_rect" })
+            .active(false),
+
+        ui.texture(.DANGER_LINES, .{})
+            .position(.percent(0.5, 0.5))
+            .positionRef(.{ .NodeId = "status_box_cover_rect" })
+            .offsetToOrigin()
+            .sizeRef(.{ .NodeId = "status_box_cover_rect" })
+            .active(false),
+
+        ui.text("WAITING FOR LAUNCH...", .{ .font = .JERSEY10_REGULAR, .fontSize = 30, .textColor = Color.themeDanger })
+            .position(.percent(0.5, 0.5))
+            .positionRef(.{ .NodeId = "status_box_cover_rect" })
+            .offsetToOrigin()
+            .sizeRef(.{ .NodeId = "status_box_cover_rect" })
+            .active(false),
     });
 
     self.layout.callbacks.onStateChange = .{ .function = UIConfig.Callbacks.MainView.StateHandler.handler, .context = &self.layout };
@@ -704,6 +836,64 @@ pub const UIConfig = struct {
             .background = .{ .color = Color.transparent, .borderStyle = .{ .color = Color.transparent, .thickness = 0 }, .roundness = 0 },
             .text = .{ .font = .JERSEY10_REGULAR, .fontSize = 34, .textColor = Color.white },
             .lineSpacing = -5,
+        };
+
+        pub const StatusPanel = struct {
+            pub const StepText = struct {
+                pub const Active = Text.Config{
+                    .textColor = Color.themeDanger,
+                    .font = .JERSEY10_REGULAR,
+                    .fontSize = 25,
+                };
+
+                pub const Inactive = Text.Config{
+                    .textColor = rl.Color.gray,
+                    .font = .JERSEY10_REGULAR,
+                    .fontSize = 25,
+                };
+            };
+
+            pub const ProgressPercentFront = struct {
+                pub const Active = Text.Config{
+                    .font = .JERSEY10_REGULAR,
+                    .fontSize = 70,
+                    .textColor = Color.themeDanger,
+                };
+
+                pub const Inactive = Text.Config{
+                    .font = .JERSEY10_REGULAR,
+                    .fontSize = 70,
+                    .textColor = rl.Color.gray,
+                };
+            };
+
+            pub const ProgressPercentBack = struct {
+                pub const Active = Text.Config{
+                    .font = .JERSEY10_REGULAR,
+                    .fontSize = 70,
+                    .textColor = rl.Color.init(72, 47, 0, 255),
+                };
+
+                pub const Inactive = Text.Config{
+                    .font = .JERSEY10_REGULAR,
+                    .fontSize = 70,
+                    .textColor = rl.Color.dark_gray,
+                };
+            };
+
+            pub const StatusText = struct {
+                pub const Active = Text.Config{
+                    .textColor = Color.white,
+                    .font = .JERSEY10_REGULAR,
+                    .fontSize = 20,
+                };
+
+                pub const Inactive = Text.Config{
+                    .textColor = rl.Color.gray,
+                    .font = .JERSEY10_REGULAR,
+                    .fontSize = 20,
+                };
+            };
         };
     };
 };

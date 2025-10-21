@@ -14,6 +14,7 @@ const FileDropzone = UIFramework.FileDropzone;
 const SpriteButton = UIFramework.SpriteButton;
 const DeviceSelectBox = UIFramework.DeviceSelectBox;
 const DeviceSelectBoxList = UIFramework.DeviceSelectBoxList;
+const ProgressBox = UIFramework.ProgressBox;
 
 const UIElementIdentifier = UIFramework.UIElementIdentifier;
 
@@ -380,5 +381,10 @@ pub const UIChain = struct {
     pub fn deviceSelectBoxList(self: UIChain, cfg: DeviceSelectBoxList.Config) ElementChain {
         const list = DeviceSelectBoxList.init(cfg);
         return .{ .allocator = self.allocator, .el = UIElement{ .DeviceSelectBoxList = list } };
+    }
+
+    pub fn progressBox(self: UIChain, cfg: ProgressBox.Config) ElementChain {
+        const box = ProgressBox.init(cfg);
+        return .{ .allocator = self.allocator, .el = UIElement{ .ProgressBox = box } };
     }
 };

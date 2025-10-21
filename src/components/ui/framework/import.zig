@@ -13,6 +13,7 @@ pub const FileDropzone = @import("./FileDropzone.zig");
 pub const SpriteButton = @import("./SpriteButton.zig");
 pub const DeviceSelectBox = @import("./DeviceSelectBox.zig");
 pub const DeviceSelectBoxList = @import("./DeviceSelectBoxList.zig");
+pub const ProgressBox = @import("./ProgressBox.zig");
 
 pub const UIElement = @import("./UIElement.zig").UIElement;
 pub const UIEvent = @import("./UIEvent.zig").UIEvent;
