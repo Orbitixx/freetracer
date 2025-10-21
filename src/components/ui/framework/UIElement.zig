@@ -8,6 +8,7 @@ const View = UIFramework.View;
 const Text = UIFramework.Text;
 const Textbox = UIFramework.Textbox;
 const Texture = UIFramework.Texture;
+const TexturedCheckbox = UIFramework.TexturedCheckbox;
 const DeviceSelectBox = UIFramework.DeviceSelectBox;
 const DeviceSelectBoxList = UIFramework.DeviceSelectBoxList;
 const FileDropzone = UIFramework.FileDropzone;
@@ -59,6 +60,7 @@ pub const UIElement = union(enum) {
     Text: Text,
     Textbox: Textbox,
     Texture: Texture,
+    TexturedCheckbox: TexturedCheckbox,
     DeviceSelectBox: DeviceSelectBox,
     DeviceSelectBoxList: DeviceSelectBoxList,
     FileDropzone: FileDropzone,

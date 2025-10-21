@@ -10,6 +10,7 @@ const View = UIFramework.View;
 const Text = UIFramework.Text;
 const Textbox = UIFramework.Textbox;
 const Texture = UIFramework.Texture;
+const TexturedCheckbox = UIFramework.TexturedCheckbox;
 const FileDropzone = UIFramework.FileDropzone;
 const SpriteButton = UIFramework.SpriteButton;
 const DeviceSelectBox = UIFramework.DeviceSelectBox;
@@ -74,6 +75,10 @@ pub const ElementChain = struct {
     pub fn size(self: ElementChain, s: SizeSpec) ElementChain {
         var c = self;
         UIElement.transformPtr(&c.el).size = s;
+        switch (c.el) {
+            .TexturedCheckbox => |*checkbox| checkbox.autoSize = false,
+            else => {},
+        }
         return c;
     }
 
@@ -371,6 +376,11 @@ pub const UIChain = struct {
     pub fn spriteButton(self: UIChain, cfg: SpriteButton.Config) ElementChain {
         const btn = SpriteButton.init(cfg);
         return .{ .allocator = self.allocator, .el = UIElement{ .SpriteButton = btn } };
+    }
+
+    pub fn texturedCheckbox(self: UIChain, cfg: TexturedCheckbox.Config) ElementChain {
+        const checkbox = TexturedCheckbox.init(cfg);
+        return .{ .allocator = self.allocator, .el = UIElement{ .TexturedCheckbox = checkbox } };
     }
 
     pub fn deviceSelectBox(self: UIChain, cfg: DeviceSelectBox.Config) ElementChain {

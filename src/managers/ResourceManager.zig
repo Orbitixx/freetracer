@@ -28,6 +28,9 @@ pub const TEXTURE = enum(u8) {
     BUTTON_FRAME,
     IMAGE_TAG,
 
+    CHECKBOX_NORMAL,
+    CHECKBOX_CHECKED,
+
     DEVICE_LIST_PLACEHOLDER,
     FLASH_PLACEHOLDER,
     SATTELITE_GRAPHIC,
@@ -150,6 +153,8 @@ pub const ResourceManagerSingleton = struct {
             try inst.registerAsset(.{ .Texture = .STAR_V2 }, "images/star_v2.png");
             try inst.registerAsset(.{ .Texture = .BUTTON_FRAME }, "images/button_frame.png");
             try inst.registerAsset(.{ .Texture = .IMAGE_TAG }, "images/tag.png");
+            try inst.registerAsset(.{ .Texture = .CHECKBOX_NORMAL }, "images/checkbox-normal.png");
+            try inst.registerAsset(.{ .Texture = .CHECKBOX_CHECKED }, "images/checkbox-checked.png");
             try inst.registerAsset(.{ .Texture = .WARNING_ICON }, "images/warning-icon.png");
             try inst.registerAsset(.{ .Texture = .DANGER_LINES }, "images/danger-lines.png");
 

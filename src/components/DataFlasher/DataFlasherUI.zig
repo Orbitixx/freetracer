@@ -493,6 +493,20 @@ fn initLayout(self: *DataFlasherUI) !void {
             .offsetToOrigin()
             .sizeRef(.{ .NodeId = "status_box_cover_rect" })
             .active(false),
+
+        ui.texturedCheckbox(.{ .text = "Verify bytes after write" })
+            .id("checkbox_verify")
+            .position(.percent(0, 1.1))
+            .positionRef(.{ .NodeId = "status_background_rect" })
+            .size(.pixels(14, 14))
+            .active(false),
+
+        ui.texturedCheckbox(.{ .text = "Eject device on completion" })
+            .id("checkbox_eject")
+            .position(.percent(0, 1.3))
+            .positionRef(.{ .NodeId = "checkbox_verify" })
+            .size(.pixels(14, 14))
+            .active(false),
     });
 
     self.layout.callbacks.onStateChange = .{ .function = UIConfig.Callbacks.MainView.StateHandler.handler, .context = &self.layout };
