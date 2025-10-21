@@ -40,6 +40,7 @@ pub const UpdateManagerSingleton = struct {
         newVersionDescription: [:0]const u8 = UNKNOWN_STRING,
         newVersionUrl: [:0]const u8 = UNKNOWN_STRING,
         response: ?std.json.Parsed(ReleaseInfo) = null,
+        enabled: bool = false,
 
         fn deinit(self: *UpdateManager) void {
             if (self.response) |*parsed| {
@@ -57,7 +58,7 @@ pub const UpdateManagerSingleton = struct {
     var state: State = undefined;
     var worker: ?Worker = null;
 
-    pub fn init(allocator: std.mem.Allocator) !void {
+    pub fn init(allocator: std.mem.Allocator, enabled: bool) !void {
         mutex.lock();
         defer mutex.unlock();
 
@@ -70,16 +71,19 @@ pub const UpdateManagerSingleton = struct {
 
         instance = UpdateManager{
             .allocator = allocator,
+            .enabled = enabled,
         };
 
-        worker = Worker.init(allocator, &state, .{
-            .callback_fn = onUpdateCheckFinished,
-            .callback_context = &instance,
-            .run_fn = onCheckUpdatesRequested,
-            .run_context = &instance,
-        }, .{});
+        if (enabled) {
+            worker = Worker.init(allocator, &state, .{
+                .callback_fn = onUpdateCheckFinished,
+                .callback_context = &instance,
+                .run_fn = onCheckUpdatesRequested,
+                .run_context = &instance,
+            }, .{});
 
-        if (worker) |*w| try w.start();
+            if (worker) |*w| try w.start();
+        } else Debug.log(.INFO, "App update check is disabled in ./config/freetraces/preferences.json. Skipping app version check.", .{});
 
         // updateTextBuffer = std.mem.zeroes([80]u8);
         //
@@ -103,6 +107,8 @@ pub const UpdateManagerSingleton = struct {
     }
 
     pub fn update() void {
+        if (instance) |inst| if (!inst.enabled) return;
+
         if (worker) |*w| {
             if (w.status != .NEEDS_JOINING) return;
 

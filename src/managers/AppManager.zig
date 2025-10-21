@@ -9,6 +9,7 @@ const Debug = freetracer_lib.Debug;
 const fs = freetracer_lib.fs;
 
 const ResourceManager = @import("./ResourceManager.zig").ResourceManagerSingleton;
+const PreferencesManager = @import("./PreferencesManager.zig");
 const WindowManager = @import("./WindowManager.zig").WindowManagerSingleton;
 const EventManager = @import("./EventManager.zig").EventManagerSingleton;
 const UpdateManager = @import("./UpdateManager.zig").UpdateManagerSingleton;
@@ -156,11 +157,17 @@ const AppManager = struct {
         var logsPathBuffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
         const logsPath = try fs.unwrapUserHomePath(&logsPathBuffer, AppConfig.MAIN_APP_LOGS_PATH);
 
+        var prefsPathBuffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
+        const prefsPath = try fs.unwrapUserHomePath(&prefsPathBuffer, AppConfig.PREFERENCES_PATH);
+
         //----------------------------------------------------------------------------------
         //--- @MANAGERS --------------------------------------------------------------------
         //----------------------------------------------------------------------------------
         try Debug.init(self.allocator, .{ .standaloneLogFilePath = logsPath });
         defer Debug.deinit();
+
+        try PreferencesManager.init(self.allocator, prefsPath);
+        defer PreferencesManager.deinit();
 
         try WindowManager.init();
         defer WindowManager.deinit();
@@ -171,9 +178,12 @@ const AppManager = struct {
         try EventManager.init(self.allocator);
         defer EventManager.deinit();
 
-        // TODO: Remember to undo
-        // try UpdateManager.init(self.allocator);
-        // defer UpdateManager.deinit();
+        // TODO: catch with OSD
+        const shouldUpdate = try PreferencesManager.getCheckUpdates();
+
+        // TODO: add user consent for enabling check
+        try UpdateManager.init(self.allocator, shouldUpdate);
+        defer UpdateManager.deinit();
 
         // Belongs in WindowManager maybe?
         self.globalTransform = Transform{
@@ -298,8 +308,7 @@ const AppManager = struct {
             //--- @UPDATE COMPONENTS -----------------------------------------------------------
             //----------------------------------------------------------------------------------
 
-            // TODO: Remember to re-enable and update Releases URI
-            // UpdateManager.update();
+            UpdateManager.update();
             try componentRegistry.updateAll();
 
             //----------------------------------------------------------------------------------
@@ -333,7 +342,7 @@ const AppManager = struct {
             // logText.value = Debug.getLatestLog();
             // logText.draw();
 
-            // UpdateManager.draw();
+            UpdateManager.draw();
             try componentRegistry.drawAll();
 
             rl.endDrawing();
