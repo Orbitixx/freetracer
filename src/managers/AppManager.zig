@@ -32,6 +32,9 @@ const Rectangle = UI.RectanglePro;
 
 const UIFramework = @import("../components/ui/framework/import.zig");
 const Transform = UIFramework.Transform;
+const View = UIFramework.View;
+const UIChain = UIFramework.UIChain;
+const Texture = UIFramework.Texture;
 
 const relY = WindowManager.relH;
 const relX = WindowManager.relW;
@@ -80,6 +83,7 @@ pub fn init(allocator: std.mem.Allocator) !void {
         .appState = .ImageSelection,
         .lastAction = null,
         .globalTransform = .{},
+        .layout = undefined,
     };
 }
 
@@ -116,6 +120,7 @@ const AppManager = struct {
     appState: AppState,
     lastAction: ?ActionReport,
     globalTransform: Transform,
+    layout: View,
 
     pub fn advanceState(self: *AppManager) !void {
         self.appState = switch (self.appState) {
@@ -198,6 +203,41 @@ const AppManager = struct {
             .relativeTransform = null,
         };
         self.globalTransform.resolve();
+
+        var ui = UIChain.init(self.allocator);
+
+        self.layout = try ui.view(.{
+            .id = null,
+            .position = .percent(0, 0),
+            .size = .percent(1, 1),
+            .relativeTransform = &self.globalTransform,
+            .background = .{
+                .transform = .{},
+                .style = .{
+                    .color = Color.transparent,
+                    .borderStyle = .{ .color = Color.transparent },
+                },
+                .rounded = true,
+                .bordered = true,
+            },
+        }).children(.{
+            ui.texture(.ROCKET_GRAPHIC, .{})
+                .position(.percent(0.4, 0.32))
+                .positionRef(.Parent)
+                .scale(2)
+                .sizeRef(.Parent)
+                .rotation(-22),
+
+            ui.texture(.SATTELITE_GRAPHIC, .{})
+                .position(.percent(0.7, 0.3))
+                .positionRef(.Parent)
+                .scale(3)
+                .sizeRef(.Parent)
+                .offsetToOrigin(),
+        });
+        defer self.layout.deinit();
+
+        try self.layout.start();
 
         Debug.log(.DEBUG, "Global Transform set: {any}", .{self.globalTransform});
 
@@ -308,6 +348,8 @@ const AppManager = struct {
             //--- @UPDATE COMPONENTS -----------------------------------------------------------
             //----------------------------------------------------------------------------------
 
+            try self.layout.update();
+
             UpdateManager.update();
             try componentRegistry.updateAll();
 
@@ -326,19 +368,19 @@ const AppManager = struct {
 
             UI.BackgroundStars.draw();
 
+            try self.layout.draw();
+
             logoText.draw();
             subLogoText.draw();
-
             versionText.draw();
 
             // try resetAppButton.update();
             // try resetAppButton.draw();
 
             // TODO: unnecessary call on every frame -- extract the whole component out, save as flag
-            if (self.appState == .DataFlashing) resetAppButton.setEnabled(false) else resetAppButton.setEnabled(true);
+            // if (self.appState == .DataFlashing) resetAppButton.setEnabled(false) else resetAppButton.setEnabled(true);
 
             // logLineBgRect.draw();
-            //
             // logText.value = Debug.getLatestLog();
             // logText.draw();
 

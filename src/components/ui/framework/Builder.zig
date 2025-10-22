@@ -332,6 +332,7 @@ pub const UIChain = struct {
         t.relative = cfg.relative;
         t.offset_x = cfg.offset_x;
         t.offset_y = cfg.offset_y;
+
         return .{
             .allocator = self.allocator,
             .el = UIElement{ .View = View.init(

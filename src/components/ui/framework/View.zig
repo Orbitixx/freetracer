@@ -1,4 +1,5 @@
 const std = @import("std");
+const rl = @import("raylib");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 

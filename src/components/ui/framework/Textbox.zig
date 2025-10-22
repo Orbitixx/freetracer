@@ -34,6 +34,7 @@ pub const Params = struct {
     background: ?Rectangle = null,
     callbacks: UIElementCallbacks = .{},
     wordWrap: bool = true,
+    useExtendedTextBuffer: bool = false,
 };
 
 pub const Selection = struct {
@@ -57,6 +58,8 @@ textBuffer: [MAX_TEXT_LENGTH]u8 = undefined,
 text: [:0]const u8,
 callbacks: UIElementCallbacks = .{},
 active: bool = true,
+isUsingExtendedBuffer: bool = false,
+extendedTextBuffer: [8192]u8 = undefined,
 
 pub fn init(allocator: std.mem.Allocator, text: [:0]const u8, transform: Transform, style: TextboxStyle, params: Params) Textbox {
     return .{
@@ -69,12 +72,17 @@ pub fn init(allocator: std.mem.Allocator, text: [:0]const u8, transform: Transfo
         .textBuffer = std.mem.zeroes([MAX_TEXT_LENGTH]u8),
         .font = ResourceManager.getFont(style.text.font),
         .params = params,
+        .isUsingExtendedBuffer = params.useExtendedTextBuffer,
     };
 }
 
 pub fn start(self: *Textbox) !void {
     self.transform.resolve();
     if (self.background) |*bg| bg.transform.resolve();
+
+    if (self.isUsingExtendedBuffer) {
+        self.extendedTextBuffer = std.mem.zeroes([8192]u8);
+    }
 
     self.setText(self.text);
 
@@ -120,6 +128,18 @@ pub fn setText(self: *Textbox, text: [:0]const u8) void {
 
     self.textBuffer = textValue;
     self.text = @ptrCast(std.mem.sliceTo(&self.textBuffer, 0x00));
+}
+
+pub fn appendText(self: *Textbox, text: [:0]const u8) void {
+    if (!self.isUsingExtendedBuffer) return;
+
+    const currentLen: usize = (std.mem.sliceTo(&self.extendedTextBuffer, 0x00)).len;
+
+    if (currentLen + text.len > 8192) {
+        return Debug.log(.WARNING, "Textbox's extended text buffer is full, dropping additional append requests!", .{});
+    }
+
+    @memcpy(self.extendedTextBuffer[currentLen .. currentLen + text.len], text);
 }
 
 pub fn setSelection(self: *Textbox, selection: ?Selection) void {

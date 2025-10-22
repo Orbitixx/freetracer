@@ -30,12 +30,18 @@ pub const TEXTURE = enum(u8) {
     IMAGE_TAG,
     COPY_ICON,
 
+    SHADOW_SM,
+    SHADOW_MD,
+    SHADOW_LG,
+
     CHECKBOX_NORMAL,
     CHECKBOX_CHECKED,
 
     DEVICE_LIST_PLACEHOLDER,
     FLASH_PLACEHOLDER,
+
     SATTELITE_GRAPHIC,
+    ROCKET_GRAPHIC,
 
     USB_ICON_INACTIVE,
     USB_ICON_ACTIVE,
@@ -162,6 +168,10 @@ pub const ResourceManagerSingleton = struct {
             try inst.registerAsset(.{ .Texture = .WARNING_ICON }, "images/warning-icon.png");
             try inst.registerAsset(.{ .Texture = .DANGER_LINES }, "images/danger-lines.png");
 
+            try inst.registerAsset(.{ .Texture = .SHADOW_SM }, "images/shadow-sm.png");
+            try inst.registerAsset(.{ .Texture = .SHADOW_MD }, "images/shadow-md.png");
+            try inst.registerAsset(.{ .Texture = .SHADOW_LG }, "images/shadow-lg.png");
+
             try inst.registerAsset(.{ .Texture = .FLASH_PLACEHOLDER }, "images/flash-placeholder.png");
             try inst.registerAsset(.{ .Texture = .DEVICE_LIST_PLACEHOLDER }, "images/device-list-placeholder.png");
 
@@ -171,6 +181,7 @@ pub const ResourceManagerSingleton = struct {
             try inst.registerAsset(.{ .Texture = .SD_ICON_ACTIVE }, "images/sd-icon-active.png");
 
             try inst.registerAsset(.{ .Texture = .SATTELITE_GRAPHIC }, "images/sattelite-graphic.png");
+            try inst.registerAsset(.{ .Texture = .ROCKET_GRAPHIC }, "images/rocket.png");
             Debug.log(.DEBUG, "ResourceManager: textures successfully loaded!", .{});
 
             try inst.registerAsset(.{ .Image = .APP_WINDOW_IMAGE }, "images/icon.png");
