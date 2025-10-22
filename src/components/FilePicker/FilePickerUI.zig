@@ -557,12 +557,8 @@ const UIConfig = struct {
                 pub fn handler(ctx: *anyopaque, flag: bool) void {
                     //
                     const self: *FileDropzone = @ptrCast(@alignCast(ctx));
+                    self.transform.resolve();
                     self.active = flag;
-
-                    // switch (flag) {
-                    //     true => {},
-                    //     false => {},
-                    // }
                 }
             };
         };
@@ -571,6 +567,7 @@ const UIConfig = struct {
             pub const StateChangeHandler = struct {
                 pub fn handler(ctx: *anyopaque, flag: bool) void {
                     const self: *UIFramework.Texture = @ptrCast(@alignCast(ctx));
+                    self.transform.resolve();
                     self.active = flag;
                 }
             };

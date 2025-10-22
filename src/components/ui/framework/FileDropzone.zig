@@ -61,7 +61,7 @@ pub const Config = struct {
     identifier: ?UIElementIdentifier = null,
     text: []const u8 = DEFAULT_TEXT,
     style: Style = .{},
-    icon: ?TextureResource = null,
+    icon: TextureResource = .DOC_IMAGE,
     callbacks: UIElementCallbacks = .{},
 };
 
@@ -85,7 +85,7 @@ textBuffer: [MAX_TEXT_LENGTH:0]u8 = std.mem.zeroes([MAX_TEXT_LENGTH:0]u8),
 textSize: rl.Vector2 = .{ .x = 0, .y = 0 },
 textPosition: rl.Vector2 = .{ .x = 0, .y = 0 },
 
-icon: ?Icon = null,
+icon: Icon,
 
 hover: bool = false,
 drag: bool = false,
@@ -99,17 +99,14 @@ pub fn init(config: Config) FileDropzone {
         .style = filedDropzoneActiveStyle,
         .callbacks = config.callbacks,
         .font = ResourceManager.getFont(config.style.textStyle.font),
-    };
-
-    if (config.icon) |resource| {
-        dropzone.icon = .{
-            .texture = ResourceManager.getTexture(resource),
+        .icon = .{
+            .texture = ResourceManager.getTexture(config.icon),
             .scale = config.style.iconScale,
             .tint = config.style.iconTint,
             .hoverTint = config.style.iconHoverTint,
-        };
-        dropzone.updateIconSize();
-    }
+        },
+    };
+    dropzone.updateIconSize();
 
     dropzone.setText(config.text);
     return dropzone;
@@ -187,16 +184,14 @@ pub fn draw(self: *FileDropzone) !void {
         self.style.gapLength,
     );
 
-    if (self.icon) |icon| {
-        const tint = if (highlight) icon.hoverTint else icon.tint;
-        rl.drawTextureEx(
-            icon.texture,
-            icon.position,
-            0,
-            icon.scale,
-            tint,
-        );
-    }
+    const tint = if (highlight) self.icon.hoverTint else self.icon.tint;
+    rl.drawTextureEx(
+        self.icon.texture,
+        self.icon.position,
+        0,
+        self.icon.scale,
+        tint,
+    );
 
     if (highlight) {
         const textColor = if (self.style.textHoverColor) |hoverColor| hoverColor else self.style.textStyle.textColor;
@@ -222,9 +217,6 @@ pub fn deinit(self: *FileDropzone) void {
     if (self.cursorActive) {
         rl.setMouseCursor(.default);
     }
-    if (self.icon) |icon| {
-        _ = icon;
-    }
 }
 
 pub fn setText(self: *FileDropzone, newText: []const u8) void {
@@ -240,12 +232,10 @@ pub fn setStyle(self: *FileDropzone, style: Style) void {
     self.style = style;
     self.font = ResourceManager.getFont(style.textStyle.font);
 
-    if (self.icon) |*icon| {
-        icon.scale = style.iconScale;
-        icon.tint = style.iconTint;
-        icon.hoverTint = style.iconHoverTint;
-        self.updateIconSize();
-    }
+    self.icon.scale = style.iconScale;
+    self.icon.tint = style.iconTint;
+    self.icon.hoverTint = style.iconHoverTint;
+    self.updateIconSize();
 
     self.layoutDirty = true;
 }
@@ -289,13 +279,11 @@ fn updateLayout(self: *FileDropzone) void {
     const centerX = paddedRect.x + (paddedRect.width / 2);
     const centerY = paddedRect.y + (paddedRect.height / 2);
 
-    if (self.icon) |*icon| {
-        self.updateIconSize();
-        icon.position = .{
-            .x = centerX - (icon.size.x / 2),
-            .y = centerY - (icon.size.y / 2),
-        };
-    }
+    self.updateIconSize();
+    self.icon.position = .{
+        .x = centerX - (self.icon.size.x / 2),
+        .y = centerY - (self.icon.size.y / 2),
+    };
 
     self.textPosition = .{
         .x = centerX - (self.textSize.x / 2) + self.style.textOffset.x,
@@ -306,13 +294,11 @@ fn updateLayout(self: *FileDropzone) void {
 }
 
 fn updateIconSize(self: *FileDropzone) void {
-    if (self.icon) |*icon| {
-        icon.scale = self.style.iconScale;
-        icon.size = .{
-            .x = @as(f32, @floatFromInt(icon.texture.width)) * icon.scale,
-            .y = @as(f32, @floatFromInt(icon.texture.height)) * icon.scale,
-        };
-    }
+    self.icon.scale = self.style.iconScale;
+    self.icon.size = .{
+        .x = @as(f32, @floatFromInt(self.icon.texture.width)) * self.icon.scale,
+        .y = @as(f32, @floatFromInt(self.icon.texture.height)) * self.icon.scale,
+    };
 }
 
 fn drawDashedBorder(

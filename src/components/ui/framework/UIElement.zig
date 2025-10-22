@@ -127,6 +127,8 @@ pub const UIElement = union(enum) {
                             if (element.callbacks.onStateChange) |onStateChange| {
                                 if (onStateChange.function) |handler| handler(element, ev.isActive);
                             } else {
+                                // To avoid flickering when element is activated
+                                element.transform.resolve();
                                 element.active = ev.isActive;
                             }
 
@@ -138,8 +140,14 @@ pub const UIElement = union(enum) {
                                 //     "UIElement.onEvent.StateChanged: target not set, executing setActive function. Responding element: {any}",
                                 //     .{@TypeOf(element)},
                                 // );
+                                // To avoid flickering when element is activated
+                                element.transform.resolve();
                                 if (onStateChange.function) |handler| handler(element, ev.isActive);
-                            } else element.active = ev.isActive;
+                            } else {
+                                // To avoid flickering when element is activated
+                                element.transform.resolve();
+                                element.active = ev.isActive;
+                            }
                         }
                     },
                     .SizeChanged => |ev| {
