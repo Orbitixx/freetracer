@@ -13,34 +13,37 @@ const UIElementCallbacks = UIFramework.UIElementCallbacks;
 
 const Styles = @import("../Styles.zig");
 const RectangleStyle = Styles.RectangleStyle;
-const TextStyle = Styles.TextStyle;
 const Color = Styles.Color;
 
 const ResourceManagerImport = @import("../../../managers/ResourceManager.zig");
 const ResourceManager = ResourceManagerImport.ResourceManagerSingleton;
 const FontResource = ResourceManagerImport.FONT;
 
+pub const TextStyle = struct {
+    textColor: rl.Color = Color.white,
+    font: FontResource = .ROBOTO_REGULAR,
+    fontSize: f32 = 16,
+    spacing: f32 = 0,
+};
+
 const Text = @This();
 const MAX_TEXT_LENGTH = 256;
 
 pub const Config = struct {
     identifier: ?UIElementIdentifier = null,
-    textColor: rl.Color = Color.white,
-    font: FontResource = .ROBOTO_REGULAR,
-    fontSize: f32 = 16,
-    spacing: f32 = 0,
     callbacks: UIElementCallbacks = .{},
     pulsate: ?PulsateSettings = null,
+    style: TextStyle = .{},
 };
 
 pub const PulsateSettings = struct {
     enabled: bool = false,
-    duration: f32 = 0.8,
+    duration: f32 = 1.5,
     /// Minimum alpha the pulsation should reach. Defaults to 0 (fully transparent).
     minAlpha: u8 = 0,
 };
 
-const PulsateState = struct {
+pub const PulsateState = struct {
     enabled: bool = false,
     duration: f32 = 1.5,
     minAlpha: u8 = 0,
@@ -133,7 +136,7 @@ pub fn draw(self: *Text) !void {
 }
 
 pub fn onEvent(self: *Text, event: UIEvent) void {
-    Debug.log(.DEBUG, "Text recevied a UIEvent: {any}", .{event});
+    // Debug.log(.DEBUG, "Text recevied a UIEvent: {any}", .{event});
 
     switch (event) {
         inline else => |e| if (e.target != self.identifier) return,
@@ -141,8 +144,9 @@ pub fn onEvent(self: *Text, event: UIEvent) void {
 
     switch (event) {
         .TextChanged => |e| {
-            self.setValue(e.text);
-            if (e.color) |color| self.style.textColor = color;
+            if (e.text) |newText| self.setValue(newText);
+            if (e.style) |style| self.style = style;
+            if (e.pulsate) |pulsateState| self.pulsate = pulsateState;
             self.clampPulsateAlpha();
         },
         inline else => {},

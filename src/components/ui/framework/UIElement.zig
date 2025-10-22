@@ -48,10 +48,20 @@ pub const DropHandler = struct {
     }
 };
 
+pub const SizeChangeHandler = struct {
+    function: *const fn (ctx: *anyopaque, size: UIFramework.SizeSpec) void,
+    context: *anyopaque,
+
+    pub fn call(self: SizeChangeHandler, size: UIFramework.SizeSpec) void {
+        self.function(self.context, size);
+    }
+};
+
 pub const UIElementCallbacks = struct {
     onStateChange: ?StateChangeHandler = null,
     onClick: ?ClickHandler = null,
     onDrop: ?DropHandler = null,
+    onSizeChange: ?SizeChangeHandler = null,
 };
 
 pub const UIElement = union(enum) {
@@ -93,7 +103,7 @@ pub const UIElement = union(enum) {
     }
 
     pub fn onEvent(self: *UIElement, event: UIEvent) void {
-        // Not a pretty block, nesting is unfortunately required for captures
+        // Not a pretty block, nesting is unfortunately necessary for captures
         // Basically, this says:
         //  - if the received event is UIEvent.StateChanged; AND
         //      A. the target is specified; AND
@@ -115,11 +125,7 @@ pub const UIElement = union(enum) {
                             if (target != element.identifier) return;
 
                             if (element.callbacks.onStateChange) |onStateChange| {
-                                if (onStateChange.function) |handler| handler(element, ev.isActive) else Debug.log(
-                                    .ERROR,
-                                    "UIElement.onEvent(): onStateChanger handler (function) is NULL! Aborting.",
-                                    .{},
-                                );
+                                if (onStateChange.function) |handler| handler(element, ev.isActive);
                             } else {
                                 element.active = ev.isActive;
                             }
@@ -127,17 +133,20 @@ pub const UIElement = union(enum) {
                             // if target identifier is NOT specified
                         } else {
                             if (element.callbacks.onStateChange) |onStateChange| {
-                                Debug.log(
-                                    .DEBUG,
-                                    "UIElement.onEvent.StateChanged: target not set, executing setActive function. Responding element: {any}",
-                                    .{@TypeOf(element)},
-                                );
-                                if (onStateChange.function) |handler| handler(element, ev.isActive) else Debug.log(
-                                    .ERROR,
-                                    "UIElement.onEvent(): onStateChanger handler (function) is NULL! Aborting.",
-                                    .{},
-                                );
+                                // Debug.log(
+                                //     .DEBUG,
+                                //     "UIElement.onEvent.StateChanged: target not set, executing setActive function. Responding element: {any}",
+                                //     .{@TypeOf(element)},
+                                // );
+                                if (onStateChange.function) |handler| handler(element, ev.isActive);
                             } else element.active = ev.isActive;
+                        }
+                    },
+                    .SizeChanged => |ev| {
+                        if (ev.target != element.identifier) return;
+
+                        if (element.callbacks.onSizeChange) |handler| handler.function(element, ev.size) else {
+                            element.transform.size = ev.size;
                         }
                     },
                     inline else => {

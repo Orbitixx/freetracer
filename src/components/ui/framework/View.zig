@@ -17,7 +17,7 @@ const resolveRelative = UIFramework.resolveRelative;
 
 const View = @This();
 
-const ViewEventParams = struct {
+pub const ViewEventParams = struct {
     excludeSelf: bool = false,
 };
 
@@ -92,7 +92,7 @@ pub fn deinit(self: *View) void {
 }
 
 pub fn onEvent(self: *View, event: UIEvent) void {
-    Debug.log(.DEBUG, "View recevied a UIEvent: {any}", .{event});
+    // Debug.log(.DEBUG, "View recevied a UIEvent: {any}", .{event});
 
     switch (event) {
         .StateChanged => |e| {

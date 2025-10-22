@@ -15,7 +15,7 @@ const UIElementCallbacks = UIFramework.UIElementCallbacks;
 
 const Styles = @import("../Styles.zig");
 const RectangleStyle = Styles.RectangleStyle;
-const TextStyle = Styles.TextStyle;
+const TextStyle = UIFramework.Text.TextStyle;
 const Color = Styles.Color;
 
 const ResourceManagerImport = @import("../../../managers/ResourceManager.zig");
@@ -155,12 +155,12 @@ pub fn onEvent(self: *Textbox, event: UIEvent) void {
         inline else => |e| if (e.target != self.identifier) return,
     }
 
-    Debug.log(.DEBUG, "Textbox ({any}) recevied a UIEvent: {any}", .{ self.identifier, event });
+    // Debug.log(.DEBUG, "Textbox ({any}) recevied a UIEvent: {any}", .{ self.identifier, event });
 
     switch (event) {
         .TextChanged => |e| {
-            self.setText(e.text);
-            if (e.color) |color| self.style.text.textColor = color;
+            if (e.text) |newText| self.setText(newText);
+            if (e.style) |textStyle| self.style.text = textStyle;
         },
         inline else => {},
     }

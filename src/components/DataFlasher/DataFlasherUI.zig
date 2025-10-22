@@ -391,7 +391,16 @@ pub fn handleOnISOWriteProgressChanged(self: *DataFlasherUI, event: ComponentEve
     const data = PrivilegedHelper.Events.onISOWriteProgressChanged.getData(event) orelse return eventResult.fail();
 
     Debug.log(.INFO, "Write progress is: {d}", .{data.newProgress});
-    _ = self;
+
+    var buf: [5]u8 = std.mem.zeroes([5]u8);
+    const newText: [:0]const u8 = @ptrCast(try std.fmt.bufPrint(buf[0..], "{d}%", .{data.newProgress}));
+
+    const params = View.ViewEventParams{ .excludeSelf = true };
+
+    self.layout.emitEvent(.{ .TextChanged = .{ .target = .DataFlasherStatusHeaderText, .text = "WRITING..." } }, params);
+    self.layout.emitEvent(.{ .TextChanged = .{ .target = .DataFlasherStatusBoxProgressPercentTextBack, .text = newText } }, params);
+    self.layout.emitEvent(.{ .TextChanged = .{ .target = .DataFlasherStatusBoxProgressPercentTextFront, .text = newText } }, params);
+    self.layout.emitEvent(.{ .ProgressValueChanged = .{ .target = .DataFlasherStatusBoxProgressBox, .percent = data.newProgress } }, params);
 
     // self.progressBox.text.value = "Writing ISO... Do not eject the device.";
     // self.progressBox.setProgressTo(self.bgRect, data.newProgress);
@@ -406,7 +415,16 @@ pub fn handleOnWriteVerificationProgressChanged(self: *DataFlasherUI, event: Com
     const data = PrivilegedHelper.Events.onWriteVerificationProgressChanged.getData(event) orelse return eventResult.fail();
 
     Debug.log(.INFO, "Verification progress is: {d}", .{data.newProgress});
-    _ = self;
+
+    var buf: [5]u8 = std.mem.zeroes([5]u8);
+    const newText: [:0]const u8 = @ptrCast(try std.fmt.bufPrint(buf[0..], "{d}%", .{data.newProgress}));
+
+    const params = View.ViewEventParams{ .excludeSelf = true };
+
+    self.layout.emitEvent(.{ .TextChanged = .{ .target = .DataFlasherStatusHeaderText, .text = "VERIFYING..." } }, params);
+    self.layout.emitEvent(.{ .TextChanged = .{ .target = .DataFlasherStatusBoxProgressPercentTextBack, .text = newText } }, params);
+    self.layout.emitEvent(.{ .TextChanged = .{ .target = .DataFlasherStatusBoxProgressPercentTextFront, .text = newText } }, params);
+    self.layout.emitEvent(.{ .ProgressValueChanged = .{ .target = .DataFlasherStatusBoxProgressBox, .percent = data.newProgress } }, params);
 
     // self.progressBox.text.value = "Verifying device blocks...";
     // self.progressBox.setProgressTo(self.bgRect, data.newProgress);
@@ -511,7 +529,7 @@ fn initLayout(self: *DataFlasherUI) !void {
 
         ui.text("WAITING...", UIConfig.Styles.StatusPanel.StepText.Inactive)
             .id("status_header_text")
-            .elId(.DataFlahserStatusHeaderText)
+            .elId(.DataFlasherStatusHeaderText)
             .position(.pixels(10, 6))
             .positionRef(.{ .NodeId = "status_background_rect" })
             .sizeRef(.{ .NodeId = "status_header_text" })
@@ -519,6 +537,7 @@ fn initLayout(self: *DataFlasherUI) !void {
 
         ui.text("0%", UIConfig.Styles.StatusPanel.ProgressPercentBack.Inactive)
             .id("status_percent_back")
+            .elId(.DataFlasherStatusBoxProgressPercentTextBack)
             .position(.percent(0, 0))
             .offset(-3, 2)
             .positionRef(.{ .NodeId = "status_percent_front" })
@@ -527,6 +546,7 @@ fn initLayout(self: *DataFlasherUI) !void {
 
         ui.text("0%", UIConfig.Styles.StatusPanel.ProgressPercentFront.Inactive)
             .id("status_percent_front")
+            .elId(.DataFlasherStatusBoxProgressPercentTextFront)
             .position(.percent(0.5, 0.27))
             .positionRef(.{ .NodeId = "status_background_rect" })
             .offsetToOrigin()
@@ -544,6 +564,7 @@ fn initLayout(self: *DataFlasherUI) !void {
             },
         })
             .id("status_progress_box")
+            .elId(.DataFlasherStatusBoxProgressBox)
             .position(.percent(0.5, 0.5))
             .positionRef(.{ .NodeId = "status_background_rect" })
             .offsetToOrigin()
@@ -560,6 +581,7 @@ fn initLayout(self: *DataFlasherUI) !void {
 
         ui.text("0.00 GB of 0.00 GB", UIConfig.Styles.StatusPanel.StatusText.Inactive)
             .id("status_progress_text_value")
+            .elId(.DataFlasherStatusBoxProgressText)
             .position(.percent(1.3, 0))
             .positionRef(.{ .NodeId = "status_progress_text" })
             .sizeRef(.{ .NodeId = "status_background_rect" })
@@ -574,6 +596,7 @@ fn initLayout(self: *DataFlasherUI) !void {
 
         ui.text("0 MB/s", UIConfig.Styles.StatusPanel.StatusText.Inactive)
             .id("status_speed_text_value")
+            .elId(.DataFlasherStatusBoxSpeedText)
             .position(.percent(0, 0))
             .positionRefX(.{ .NodeId = "status_progress_text_value" })
             .positionRefY(.{ .NodeId = "status_speed_text" })
@@ -589,6 +612,7 @@ fn initLayout(self: *DataFlasherUI) !void {
 
         ui.text("00:00", UIConfig.Styles.StatusPanel.StatusText.Inactive)
             .id("status_eta_text_value")
+            .elId(.DataFlasherStatusBoxETAText)
             .position(.percent(0, 0))
             .positionRefX(.{ .NodeId = "status_speed_text_value" })
             .positionRefY(.{ .NodeId = "status_eta_text" })
@@ -603,6 +627,7 @@ fn initLayout(self: *DataFlasherUI) !void {
             .rounded = true,
         })
             .id("status_box_cover_rect")
+            .elId(.DataFlasherStatusBoxCoverRect)
             .position(.percent(0, 0))
             .positionRef(.{ .NodeId = "status_background_rect" })
             .size(.percent(1, 1))
@@ -610,16 +635,25 @@ fn initLayout(self: *DataFlasherUI) !void {
             .active(false),
 
         ui.texture(.DANGER_LINES, .{})
+            .elId(.DataFlasherStatusBoxCoverTexture)
             .position(.percent(0.5, 0.5))
             .positionRef(.{ .NodeId = "status_box_cover_rect" })
             .offsetToOrigin()
             .sizeRef(.{ .NodeId = "status_box_cover_rect" })
             .active(false),
 
-        ui.text("WAITING FOR LAUNCH...", .{ .font = .JERSEY10_REGULAR, .fontSize = 30, .textColor = Color.themeDanger, .pulsate = .{
-            .enabled = true,
-            .duration = 1.5,
-        } })
+        ui.text("WAITING FOR LAUNCH...", .{
+            .style = .{
+                .font = .JERSEY10_REGULAR,
+                .fontSize = 30,
+                .textColor = Color.themeDanger,
+            },
+            .pulsate = .{
+                .enabled = true,
+                .duration = 1.5,
+            },
+        })
+            .elId(.DataFlasherStatusBoxCoverText)
             .position(.percent(0.5, 0.5))
             .positionRef(.{ .NodeId = "status_box_cover_rect" })
             .offsetToOrigin()
@@ -659,9 +693,11 @@ fn initLayout(self: *DataFlasherUI) !void {
             .active(false),
 
         ui.text("MISSION LOGS", .{
-            .font = .JERSEY10_REGULAR,
-            .fontSize = 20,
-            .textColor = Color.lightGray,
+            .style = .{
+                .font = .JERSEY10_REGULAR,
+                .fontSize = 20,
+                .textColor = Color.lightGray,
+            },
         })
             .id("logs_header_text")
             .position(.pixels(8, 5))
@@ -712,13 +748,17 @@ fn initLayout(self: *DataFlasherUI) !void {
             .callbacks = .{
                 .onClick = .{
                     .function = UIConfig.Callbacks.LaunchButton.OnClick,
-                    .context = self.parent,
+                    .context = self,
+                },
+                .onStateChange = .{
+                    .function = UIConfig.Callbacks.LaunchButton.OnStateChanged,
+                    .context = self,
                 },
             },
             .enabled = true,
             .style = UIConfig.Styles.LaunchButton,
         }).position(.percent(1, 1.15))
-            // .elId(.DeviceListConfirmButton)
+            .elId(.DataFlasherLaunchButton)
             .offset(-97, 0)
             .positionRef(.{ .NodeId = "logs_background_rect" })
             .size(.pixels(100, 40))
@@ -776,7 +816,42 @@ pub const UIConfig = struct {
 
         pub const LaunchButton = struct {
             pub fn OnClick(ctx: *anyopaque) void {
-                _ = ctx;
+                const component: *DataFlasherUI = @ptrCast(@alignCast(ctx));
+
+                const params = View.ViewEventParams{ .excludeSelf = true };
+
+                component.layout.emitEvent(.{ .StateChanged = .{ .target = .DataFlasherStatusBoxCoverRect, .isActive = false } }, params);
+                component.layout.emitEvent(.{ .StateChanged = .{ .target = .DataFlasherStatusBoxCoverText, .isActive = false } }, params);
+                component.layout.emitEvent(.{ .StateChanged = .{ .target = .DataFlasherStatusBoxCoverTexture, .isActive = false } }, params);
+                component.layout.emitEvent(.{ .StateChanged = .{ .target = .DataFlasherLaunchButton, .isActive = false } }, params);
+
+                component.layout.emitEvent(.{ .SizeChanged = .{ .target = .DataFlasherLogsBgRect, .size = .percent(0.9, 0.25) } }, params);
+
+                component.layout.emitEvent(.{ .TextChanged = .{
+                    .target = .DataFlasherStatusHeaderText,
+                    .style = UIConfig.Styles.StatusPanel.StepText.Active.style,
+                    .pulsate = .{ .enabled = true },
+                } }, params);
+
+                component.layout.emitEvent(.{ .TextChanged = .{
+                    .target = .DataFlasherStatusBoxProgressPercentTextBack,
+                    .style = UIConfig.Styles.StatusPanel.ProgressPercentBack.Active.style,
+                } }, params);
+
+                component.layout.emitEvent(.{ .TextChanged = .{
+                    .target = .DataFlasherStatusBoxProgressPercentTextFront,
+                    .style = UIConfig.Styles.StatusPanel.ProgressPercentFront.Active.style,
+                } }, params);
+
+                DataFlasher.flashISOtoDeviceWrapper.call(component.parent);
+            }
+
+            pub fn OnStateChanged(ctx: *anyopaque, flag: bool) void {
+                const self: *UIFramework.SpriteButton = @ptrCast(@alignCast(ctx));
+                self.enabled = flag;
+                self.active = flag;
+
+                if (!flag) rl.setMouseCursor(.default);
             }
         };
     };
@@ -792,57 +867,73 @@ pub const UIConfig = struct {
         pub const StatusPanel = struct {
             pub const StepText = struct {
                 pub const Active = Text.Config{
-                    .textColor = Color.themeDanger,
-                    .font = .JERSEY10_REGULAR,
-                    .fontSize = 25,
+                    .style = .{
+                        .textColor = Color.themeDanger,
+                        .font = .JERSEY10_REGULAR,
+                        .fontSize = 25,
+                    },
                 };
 
                 pub const Inactive = Text.Config{
-                    .textColor = rl.Color.gray,
-                    .font = .JERSEY10_REGULAR,
-                    .fontSize = 25,
+                    .style = .{
+                        .textColor = rl.Color.gray,
+                        .font = .JERSEY10_REGULAR,
+                        .fontSize = 25,
+                    },
                 };
             };
 
             pub const ProgressPercentFront = struct {
                 pub const Active = Text.Config{
-                    .font = .JERSEY10_REGULAR,
-                    .fontSize = 70,
-                    .textColor = Color.themeDanger,
+                    .style = .{
+                        .font = .JERSEY10_REGULAR,
+                        .fontSize = 70,
+                        .textColor = Color.themeDanger,
+                    },
                 };
 
                 pub const Inactive = Text.Config{
-                    .font = .JERSEY10_REGULAR,
-                    .fontSize = 70,
-                    .textColor = rl.Color.gray,
+                    .style = .{
+                        .font = .JERSEY10_REGULAR,
+                        .fontSize = 70,
+                        .textColor = rl.Color.gray,
+                    },
                 };
             };
 
             pub const ProgressPercentBack = struct {
                 pub const Active = Text.Config{
-                    .font = .JERSEY10_REGULAR,
-                    .fontSize = 70,
-                    .textColor = rl.Color.init(72, 47, 0, 255),
+                    .style = .{
+                        .font = .JERSEY10_REGULAR,
+                        .fontSize = 70,
+                        .textColor = rl.Color.init(72, 47, 0, 255),
+                    },
                 };
 
                 pub const Inactive = Text.Config{
-                    .font = .JERSEY10_REGULAR,
-                    .fontSize = 70,
-                    .textColor = rl.Color.dark_gray,
+                    .style = .{
+                        .font = .JERSEY10_REGULAR,
+                        .fontSize = 70,
+                        .textColor = rl.Color.dark_gray,
+                    },
                 };
             };
 
             pub const StatusText = struct {
                 pub const Active = Text.Config{
-                    .textColor = Color.white,
-                    .font = .JERSEY10_REGULAR,
-                    .fontSize = 20,
+                    .style = .{
+                        .textColor = Color.white,
+                        .font = .JERSEY10_REGULAR,
+                        .fontSize = 20,
+                    },
                 };
 
                 pub const Inactive = Text.Config{
-                    .textColor = rl.Color.gray,
-                    .font = .JERSEY10_REGULAR,
-                    .fontSize = 20,
+                    .style = .{
+                        .textColor = rl.Color.white,
+                        .font = .JERSEY10_REGULAR,
+                        .fontSize = 20,
+                    },
                 };
             };
         };

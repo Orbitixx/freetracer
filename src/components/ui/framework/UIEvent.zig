@@ -1,5 +1,6 @@
 const rl = @import("raylib");
 const UIFramework = @import("./import.zig");
+const Text = UIFramework.Text;
 
 pub const UIElementIdentifier = enum(u8) {
     FilePickerFileDropzone,
@@ -16,8 +17,20 @@ pub const UIElementIdentifier = enum(u8) {
     DeviceListPlaceholderTexture,
 
     DataFlasherPlaceholderTexture,
-    DataFlahserStatusHeaderText,
+    DataFlasherStatusBoxCoverRect,
+    DataFlasherStatusBoxCoverText,
+    DataFlasherStatusBoxCoverTexture,
+    DataFlasherStatusHeaderText,
+    DataFlasherStatusBoxProgressPercentTextFront,
+    DataFlasherStatusBoxProgressPercentTextBack,
+    DataFlasherStatusBoxProgressBox,
+    DataFlasherStatusBoxProgressText,
+    DataFlasherStatusBoxSpeedText,
+    DataFlasherStatusBoxETAText,
     DataFlasherLogsBgRect,
+
+    DataFlasherLaunchButton,
+
     GenericProgressBox,
 };
 
@@ -27,14 +40,9 @@ pub const UIElementIdentifier = enum(u8) {
 // };
 
 pub const UIEvent = union(enum) {
-    TextChanged: struct { target: UIElementIdentifier, text: [:0]const u8, color: ?rl.Color = null },
+    TextChanged: struct { target: UIElementIdentifier, text: ?[:0]const u8 = null, style: ?Text.TextStyle = null, pulsate: ?Text.PulsateState = null },
     StateChanged: struct { target: ?UIElementIdentifier = null, isActive: bool },
-    SpriteButtonEnabledChanged: struct {
-        target: UIElementIdentifier,
-        enabled: bool,
-    },
-    ProgressValueChanged: struct {
-        target: ?UIElementIdentifier = null,
-        percent: u64,
-    },
+    SpriteButtonEnabledChanged: struct { target: UIElementIdentifier, enabled: bool },
+    ProgressValueChanged: struct { target: ?UIElementIdentifier = null, percent: u64 },
+    SizeChanged: struct { target: UIElementIdentifier, size: UIFramework.SizeSpec },
 };

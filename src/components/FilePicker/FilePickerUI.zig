@@ -60,9 +60,7 @@ component: ?Component = null,
 
 // Component-specific, unique props
 allocator: std.mem.Allocator,
-bgRect: Rectangle = undefined,
 displayNameBuffer: [AppConfig.IMAGE_DISPLAY_NAME_BUFFER_LEN:0]u8 = undefined,
-
 layout: View = undefined,
 
 pub const Events = struct {
@@ -132,7 +130,7 @@ pub fn handleEvent(self: *FilePickerUI, event: ComponentEvent) !EventResult {
     return switch (event.hash) {
         Events.onISOFilePathChanged.Hash => try self.handleIsoFilePathChanged(event),
         // TODO: Deprecated
-        Events.onUIDimensionsQueried.Hash => try self.handleUIDimensionsQueried(event),
+        // Events.onUIDimensionsQueried.Hash => try self.handleUIDimensionsQueried(event),
         Events.onRootViewTransformQueried.Hash => try self.handleOnRootViewTransformQueried(event),
         FilePicker.Events.onActiveStateChanged.Hash => try self.handleActiveStateChanged(event),
         AppManager.Events.AppResetEvent.Hash => self.handleAppResetRequest(),
@@ -191,21 +189,6 @@ fn initializeUIElements(self: *FilePickerUI) !void {
 }
 
 fn initializeBackground(self: *FilePickerUI) !void {
-    self.bgRect = Rectangle{
-        .transform = .{
-            .x = winRelX(AppConfig.APP_UI_MODULE_PANEL_FILE_PICKER_X),
-            .y = winRelY(AppConfig.APP_UI_MODULE_PANEL_Y),
-            .w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE),
-            .h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT),
-        },
-        .style = .{
-            .color = Color.white,
-            .borderStyle = .{ .color = Color.white },
-        },
-        .rounded = true,
-        .bordered = true,
-    };
-
     var ui = UIChain.init(self.allocator);
 
     self.layout = try ui.view(.{
@@ -283,7 +266,7 @@ fn initializeBackground(self: *FilePickerUI) !void {
             .positionRef(.{ .NodeId = "image_info_bg" })
             .sizeRef(.{ .NodeId = "image_info_bg" }),
 
-        ui.textbox("e.g. Ubuntu 24.04 LTS.iso", UIConfig.Styles.ImageInfoTextbox, Textbox.Params{
+        ui.textbox("e.g. Ubuntu 24.04 LTS.iso", UIConfig.Styles.ImageInfoTextbox.Normal, Textbox.Params{
             .identifier = .FilePickerImageInfoTextbox,
             .wordWrap = true,
         })
@@ -296,7 +279,9 @@ fn initializeBackground(self: *FilePickerUI) !void {
 
         ui.text("5.06 GB", .{
             .identifier = .FilePickerImageSizeText,
-            .textColor = rl.Color.gray,
+            .style = .{
+                .textColor = rl.Color.gray,
+            },
         })
             .id("image_info_size_text")
             .position(.percent(0, 1))
@@ -351,27 +336,10 @@ fn initializeBackground(self: *FilePickerUI) !void {
     try self.layout.start();
 }
 
-fn broadcastUIDimensions(self: *FilePickerUI) void {
-    const responseEvent = Events.onGetUIDimensions.create(self.asComponentPtr(), &.{ .transform = self.bgRect.transform });
-    EventManager.broadcast(responseEvent);
-}
-
 /// Updates internal active state and reapplies panel styling; must be called on the main UI thread.
 fn setIsActive(self: *FilePickerUI, isActive: bool) void {
     self.storeIsActive(isActive);
-
-    // TODO: Deprecated
-    if (isActive) {
-        self.bgRect.transform.w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_ACTIVE);
-        self.bgRect.transform.h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_ACTIVE);
-    } else {
-        self.bgRect.transform.w = winRelX(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE);
-        self.bgRect.transform.h = winRelY(AppConfig.APP_UI_MODULE_PANEL_HEIGHT_INACTIVE);
-    }
-
     self.layout.emitEvent(.{ .StateChanged = .{ .isActive = isActive } }, .{});
-
-    self.broadcastUIDimensions();
 }
 
 fn storeIsActive(self: *FilePickerUI, isActive: bool) void {
@@ -506,15 +474,15 @@ fn handleIsoFilePathChanged(self: *FilePickerUI, event: ComponentEvent) !EventRe
             self.layout.emitEvent(.{ .TextChanged = .{
                 .target = .FilePickerImageSizeText,
                 .text = @ptrCast(std.mem.sliceTo(&sizeBuf, 0x00)),
-                .color = Color.offWhite,
-            } }, .{});
+                .style = .{ .textColor = Color.offWhite },
+            } }, .{ .excludeSelf = true });
         }
 
         self.layout.emitEvent(
             .{ .TextChanged = .{
                 .target = .FilePickerImageInfoTextbox,
                 .text = displayName,
-                .color = Color.themeSecondary,
+                .style = UIConfig.Styles.ImageInfoTextbox.Selected.text,
             } },
             .{ .excludeSelf = true },
         );
@@ -617,17 +585,32 @@ const UIConfig = struct {
             .lineSpacing = -5,
         };
 
-        const ImageInfoTextbox: Textbox.TextboxStyle = .{
-            .background = .{
-                .color = Color.transparent,
-                .borderStyle = .{
+        const ImageInfoTextbox = struct {
+            pub const Normal: Textbox.TextboxStyle = .{
+                .background = .{
                     .color = Color.transparent,
-                    .thickness = 0,
+                    .borderStyle = .{
+                        .color = Color.transparent,
+                        .thickness = 0,
+                    },
+                    .roundness = 0,
                 },
-                .roundness = 0,
-            },
-            .text = .{ .font = .ROBOTO_REGULAR, .fontSize = 24, .textColor = rl.Color.gray },
-            .lineSpacing = -5,
+                .text = .{ .font = .ROBOTO_REGULAR, .fontSize = 24, .textColor = rl.Color.gray },
+                .lineSpacing = -5,
+            };
+
+            pub const Selected: Textbox.TextboxStyle = .{
+                .background = .{
+                    .color = Color.transparent,
+                    .borderStyle = .{
+                        .color = Color.transparent,
+                        .thickness = 0,
+                    },
+                    .roundness = 0,
+                },
+                .text = .{ .font = .ROBOTO_REGULAR, .fontSize = 24, .textColor = Color.themeDanger },
+                .lineSpacing = -5,
+            };
         };
 
         const FilePickerHintTextbox: Textbox.TextboxStyle = .{ .text = .{

@@ -94,7 +94,7 @@ pub fn draw(self: *Texture) !void {
 pub fn onEvent(self: *Texture, event: UIEvent) void {
     _ = self;
     _ = event;
-    Debug.log(.DEBUG, "Texture recevied a UIEvent.", .{});
+    // Debug.log(.DEBUG, "Texture recevied a UIEvent.", .{});
 }
 
 /// API-Compliance function. Texture unloading occurs in ResourceManager.
