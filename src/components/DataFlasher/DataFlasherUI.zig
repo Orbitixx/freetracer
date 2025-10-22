@@ -180,7 +180,7 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
         },
 
         PrivilegedHelper.Events.onHelperISOFileOpenFailed.Hash => {
-            // self.isoStatus.switchState(.FAILURE);
+            self.setStatusBoxUIToFailedState();
             return eventResult.succeed();
         },
 
@@ -191,8 +191,7 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
         },
 
         PrivilegedHelper.Events.onHelperDeviceOpenFailed.Hash => {
-            // self.deviceStatus.switchState(.FAILURE);
-            // self.permissionsStatus.switchState(.FAILURE);
+            self.setStatusBoxUIToFailedState();
             return eventResult.succeed();
         },
 
@@ -202,13 +201,40 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
         },
 
         PrivilegedHelper.Events.onHelperWriteFailed.Hash => {
-            // self.writeStatus.switchState(.FAILURE);
+            self.setStatusBoxUIToFailedState();
             return eventResult.succeed();
         },
 
         PrivilegedHelper.Events.onHelperVerificationSuccess.Hash => {
-            // self.verificationStatus.switchState(.SUCCESS);
-            // self.progressBox.text.value = "Finished writing ISO. You may now eject the device.";
+            const params = View.ViewEventParams{ .excludeSelf = true };
+
+            self.layout.emitEvent(.{ .BorderColorChanged = .{
+                .target = .DataFlasherStatusBgRect,
+                .color = Color.themeSuccess,
+            } }, params);
+
+            self.layout.emitEvent(.{ .TextChanged = .{
+                .target = .DataFlasherStatusHeaderText,
+                .text = "DONE!",
+                .style = UIConfig.Styles.StatusPanel.StepText.Success.style,
+                .pulsate = .{ .enabled = true },
+            } }, params);
+
+            self.layout.emitEvent(.{ .TextChanged = .{
+                .target = .DataFlasherStatusBoxProgressPercentTextBack,
+                .style = UIConfig.Styles.StatusPanel.ProgressPercentBack.Success.style,
+            } }, params);
+
+            self.layout.emitEvent(.{ .TextChanged = .{
+                .target = .DataFlasherStatusBoxProgressPercentTextFront,
+                .style = UIConfig.Styles.StatusPanel.ProgressPercentFront.Success.style,
+            } }, params);
+
+            self.layout.emitEvent(.{ .ColorChanged = .{
+                .target = .DataFlasherStatusBoxProgressBox,
+                .color = Color.themeSuccess,
+            } }, params);
+
             try AppManager.reportAction(.DataFlashed);
             return eventResult.succeed();
         },
@@ -402,11 +428,6 @@ pub fn handleOnISOWriteProgressChanged(self: *DataFlasherUI, event: ComponentEve
     self.layout.emitEvent(.{ .TextChanged = .{ .target = .DataFlasherStatusBoxProgressPercentTextFront, .text = newText } }, params);
     self.layout.emitEvent(.{ .ProgressValueChanged = .{ .target = .DataFlasherStatusBoxProgressBox, .percent = data.newProgress } }, params);
 
-    // self.progressBox.text.value = "Writing ISO... Do not eject the device.";
-    // self.progressBox.setProgressTo(self.bgRect, data.newProgress);
-    // self.progressBox.percentText.transform.x = self.bgRect.transform.relX(PADDING_LEFT) +
-    //     (1 - SECTION_PADDING) * self.bgRect.transform.getWidth() - self.progressBox.percentText.getDimensions().width;
-
     return eventResult.succeed();
 }
 
@@ -461,6 +482,37 @@ pub fn handleAppResetRequest(self: *DataFlasherUI) EventResult {
     // self.applyPanelMode(panelAppearanceInactive());
 
     return eventResult.succeed();
+}
+
+fn setStatusBoxUIToFailedState(self: *DataFlasherUI) void {
+    const params = View.ViewEventParams{ .excludeSelf = true };
+
+    self.layout.emitEvent(.{ .BorderColorChanged = .{
+        .target = .DataFlasherStatusBgRect,
+        .color = Color.themeFailure,
+    } }, params);
+
+    self.layout.emitEvent(.{ .TextChanged = .{
+        .target = .DataFlasherStatusHeaderText,
+        .text = "DONE!",
+        .style = UIConfig.Styles.StatusPanel.StepText.Failure.style,
+        .pulsate = .{ .enabled = true },
+    } }, params);
+
+    self.layout.emitEvent(.{ .TextChanged = .{
+        .target = .DataFlasherStatusBoxProgressPercentTextBack,
+        .style = UIConfig.Styles.StatusPanel.ProgressPercentBack.Failure.style,
+    } }, params);
+
+    self.layout.emitEvent(.{ .TextChanged = .{
+        .target = .DataFlasherStatusBoxProgressPercentTextFront,
+        .style = UIConfig.Styles.StatusPanel.ProgressPercentFront.Failure.style,
+    } }, params);
+
+    self.layout.emitEvent(.{ .ColorChanged = .{
+        .target = .DataFlasherStatusBoxProgressBox,
+        .color = Color.themeFailure,
+    } }, params);
 }
 
 fn initLayout(self: *DataFlasherUI) !void {
@@ -521,6 +573,7 @@ fn initLayout(self: *DataFlasherUI) !void {
             .bordered = true,
         })
             .id("status_background_rect")
+            .elId(.DataFlasherStatusBgRect)
             .position(.percent(0, 1.7))
             .positionRef(.{ .NodeId = "header_icon" })
             .size(.percent(0.9, 0.4))
@@ -848,6 +901,7 @@ pub const UIConfig = struct {
 
             pub fn OnStateChanged(ctx: *anyopaque, flag: bool) void {
                 const self: *UIFramework.SpriteButton = @ptrCast(@alignCast(ctx));
+
                 self.enabled = flag;
                 self.active = flag;
 
@@ -881,6 +935,22 @@ pub const UIConfig = struct {
                         .fontSize = 25,
                     },
                 };
+
+                pub const Success = Text.Config{
+                    .style = .{
+                        .font = .JERSEY10_REGULAR,
+                        .fontSize = 25,
+                        .textColor = Color.themeSuccess,
+                    },
+                };
+
+                pub const Failure = Text.Config{
+                    .style = .{
+                        .font = .JERSEY10_REGULAR,
+                        .fontSize = 25,
+                        .textColor = Color.themeFailure,
+                    },
+                };
             };
 
             pub const ProgressPercentFront = struct {
@@ -899,6 +969,22 @@ pub const UIConfig = struct {
                         .textColor = rl.Color.gray,
                     },
                 };
+
+                pub const Success = Text.Config{
+                    .style = .{
+                        .font = .JERSEY10_REGULAR,
+                        .fontSize = 70,
+                        .textColor = Color.themeSuccess,
+                    },
+                };
+
+                pub const Failure = Text.Config{
+                    .style = .{
+                        .font = .JERSEY10_REGULAR,
+                        .fontSize = 70,
+                        .textColor = Color.themeFailure,
+                    },
+                };
             };
 
             pub const ProgressPercentBack = struct {
@@ -915,6 +1001,22 @@ pub const UIConfig = struct {
                         .font = .JERSEY10_REGULAR,
                         .fontSize = 70,
                         .textColor = rl.Color.dark_gray,
+                    },
+                };
+
+                pub const Success = Text.Config{
+                    .style = .{
+                        .font = .JERSEY10_REGULAR,
+                        .fontSize = 70,
+                        .textColor = Color.themeSuccessDark,
+                    },
+                };
+
+                pub const Failure = Text.Config{
+                    .style = .{
+                        .font = .JERSEY10_REGULAR,
+                        .fontSize = 70,
+                        .textColor = Color.themeFailureDark,
                     },
                 };
             };

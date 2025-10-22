@@ -78,8 +78,13 @@ pub fn draw(self: *Rectangle) !void {
 }
 
 pub fn onEvent(self: *Rectangle, event: UIEvent) void {
-    _ = self;
-    _ = event;
+    switch (event) {
+        .BorderColorChanged => |ev| {
+            if (ev.target != self.identifier) return;
+            self.style.borderStyle.color = ev.color;
+        },
+        else => {},
+    }
 }
 
 fn drawRounded(self: *Rectangle) void {

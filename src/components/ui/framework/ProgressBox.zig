@@ -72,13 +72,15 @@ pub fn draw(self: *ProgressBox) !void {
 
 pub fn onEvent(self: *ProgressBox, event: UIEvent) void {
     switch (event) {
-        .ProgressValueChanged => |payload| {
-            if (payload.target) |target| {
-                if (self.identifier == null or self.identifier.? != target) return;
-            }
+        .ProgressValueChanged => |ev| {
+            if (ev.target != self.identifier) return;
 
-            const percent_f = @as(f32, @floatFromInt(payload.percent));
+            const percent_f = @as(f32, @floatFromInt(ev.percent));
             self.setProgressPercent(percent_f);
+        },
+        .ColorChanged => |ev| {
+            if (ev.target != self.identifier) return;
+            self.progressStyle.color = ev.color;
         },
         else => {},
     }

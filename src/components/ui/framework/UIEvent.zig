@@ -16,6 +16,7 @@ pub const UIElementIdentifier = enum(u8) {
     DeviceListRefreshDevicesButton,
     DeviceListPlaceholderTexture,
 
+    DataFlasherStatusBgRect,
     DataFlasherPlaceholderTexture,
     DataFlasherStatusBoxCoverRect,
     DataFlasherStatusBoxCoverText,
@@ -43,6 +44,8 @@ pub const UIEvent = union(enum) {
     TextChanged: struct { target: UIElementIdentifier, text: ?[:0]const u8 = null, style: ?Text.TextStyle = null, pulsate: ?Text.PulsateState = null },
     StateChanged: struct { target: ?UIElementIdentifier = null, isActive: bool },
     SpriteButtonEnabledChanged: struct { target: UIElementIdentifier, enabled: bool },
-    ProgressValueChanged: struct { target: ?UIElementIdentifier = null, percent: u64 },
+    ProgressValueChanged: struct { target: UIElementIdentifier, percent: u64 },
     SizeChanged: struct { target: UIElementIdentifier, size: UIFramework.SizeSpec },
+    BorderColorChanged: struct { target: UIElementIdentifier, color: rl.Color },
+    ColorChanged: struct { target: UIElementIdentifier, color: rl.Color },
 };

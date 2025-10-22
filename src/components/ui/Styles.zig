@@ -35,6 +35,10 @@ pub const Color = struct {
     pub const themeSecondary = rl.Color.init(193, 124, 160, 255);
     pub const themeOutline = rl.Color.init(66, 66, 77, 255);
     pub const themeDanger = rl.Color.init(204, 150, 50, 255);
+    pub const themeSuccess = rl.Color.init(39, 112, 43, 255);
+    pub const themeSuccessDark = rl.Color.init(16, 51, 18, 255);
+    pub const themeFailure = rl.Color.init(181, 33, 33, 255);
+    pub const themeFailureDark = rl.Color.init(80, 30, 30, 255);
 };
 
 pub const TextStyle = struct {
