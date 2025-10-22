@@ -26,7 +26,9 @@ pub const TEXTURE = enum(u8) {
     STAR_V1,
     STAR_V2,
     BUTTON_FRAME,
+    BUTTON_FRAME_DANGER,
     IMAGE_TAG,
+    COPY_ICON,
 
     CHECKBOX_NORMAL,
     CHECKBOX_CHECKED,
@@ -145,6 +147,7 @@ pub const ResourceManagerSingleton = struct {
             try inst.registerAsset(.{ .Texture = .DISK_IMAGE }, "images/disk_image.png");
             try inst.registerAsset(.{ .Texture = .USB_IMAGE }, "images/usb_image.png");
             try inst.registerAsset(.{ .Texture = .RELOAD_ICON }, "images/icon-reload.png");
+            try inst.registerAsset(.{ .Texture = .COPY_ICON }, "images/copy-icon.png");
             try inst.registerAsset(.{ .Texture = .BUTTON_UI }, "images/button_ui.png");
             try inst.registerAsset(.{ .Texture = .DOC_IMAGE }, "images/doc_image.png");
             try inst.registerAsset(.{ .Texture = .FILE_SELECTED }, "images/doc_image_check.png");
@@ -152,6 +155,7 @@ pub const ResourceManagerSingleton = struct {
             try inst.registerAsset(.{ .Texture = .STAR_V1 }, "images/star_v1.png");
             try inst.registerAsset(.{ .Texture = .STAR_V2 }, "images/star_v2.png");
             try inst.registerAsset(.{ .Texture = .BUTTON_FRAME }, "images/button_frame.png");
+            try inst.registerAsset(.{ .Texture = .BUTTON_FRAME_DANGER }, "images/button_frame_danger.png");
             try inst.registerAsset(.{ .Texture = .IMAGE_TAG }, "images/tag.png");
             try inst.registerAsset(.{ .Texture = .CHECKBOX_NORMAL }, "images/checkbox-normal.png");
             try inst.registerAsset(.{ .Texture = .CHECKBOX_CHECKED }, "images/checkbox-checked.png");

@@ -17,6 +17,7 @@ pub const UIElementIdentifier = enum(u8) {
 
     DataFlasherPlaceholderTexture,
     DataFlahserStatusHeaderText,
+    DataFlasherLogsBgRect,
     GenericProgressBox,
 };
 
