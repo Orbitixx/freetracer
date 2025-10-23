@@ -3,6 +3,8 @@ const UIFramework = @import("./import.zig");
 const Text = UIFramework.Text;
 
 pub const UIElementIdentifier = enum(u8) {
+    AppManagerSatteliteGraphic,
+
     FilePickerHeaderDivider,
     FilePickerFileDropzone,
     FilePickerImageInfoTextbox,
@@ -11,6 +13,8 @@ pub const UIElementIdentifier = enum(u8) {
     FilePickerImageSelectedTexture,
     FilePickerImageSelectedTextbox,
     FilePickerImageSelectedGlowTexture,
+    FilePickerImageSelectedBarRect,
+    FilePickerImageSelectedBarText,
 
     DeviceListConfirmButton,
     DeviceListDeviceListBox,
@@ -20,6 +24,9 @@ pub const UIElementIdentifier = enum(u8) {
     DeviceListDeviceSelectedTexture,
     DeviceListDeviceSelectedGlowTexture,
     DeviceListHeaderDivider,
+    DeviceListDeviceSelectedBarRect,
+    DeviceListDeviceSelectedBarText,
+    DeviceListDeviceSelectedText,
 
     DataFlasherHeaderDivider,
     DataFlasherStatusBgRect,
@@ -52,6 +59,7 @@ pub const UIEvent = union(enum) {
     SpriteButtonEnabledChanged: struct { target: UIElementIdentifier, enabled: bool },
     ProgressValueChanged: struct { target: UIElementIdentifier, percent: u64 },
     SizeChanged: struct { target: UIElementIdentifier, size: UIFramework.SizeSpec },
+    PositionChanged: struct { target: UIElementIdentifier, position: UIFramework.PositionSpec },
     BorderColorChanged: struct { target: UIElementIdentifier, color: rl.Color },
     ColorChanged: struct { target: UIElementIdentifier, color: rl.Color },
 };

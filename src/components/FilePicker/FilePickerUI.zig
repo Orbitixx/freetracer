@@ -269,6 +269,7 @@ fn handleActiveStateChanged(self: *FilePickerUI, event: ComponentEvent) !EventRe
     self.setIsActive(data.isActive);
 
     self.layout.emitEvent(.{ .StateChanged = .{ .isActive = data.isActive } }, .{});
+
     self.layout.emitEvent(
         .{ .StateChanged = .{ .target = .FilePickerHeaderDivider, .isActive = !data.isActive } },
         .{ .excludeSelf = true },
@@ -285,7 +286,17 @@ fn handleActiveStateChanged(self: *FilePickerUI, event: ComponentEvent) !EventRe
     );
 
     self.layout.emitEvent(
-        .{ .StateChanged = .{ .target = .FilePickerImageSelectedTextbox, .isActive = true } },
+        .{ .StateChanged = .{ .target = .FilePickerImageSelectedTextbox, .isActive = !data.isActive } },
+        .{ .excludeSelf = true },
+    );
+
+    self.layout.emitEvent(
+        .{ .StateChanged = .{ .target = .FilePickerImageSelectedBarRect, .isActive = !data.isActive } },
+        .{ .excludeSelf = true },
+    );
+
+    self.layout.emitEvent(
+        .{ .StateChanged = .{ .target = .FilePickerImageSelectedBarText, .isActive = !data.isActive } },
         .{ .excludeSelf = true },
     );
 
@@ -506,16 +517,48 @@ fn initLayout(self: *FilePickerUI) !void {
 
         ui.texture(.FILE_SELECTED, .{ .identifier = .FilePickerImageSelectedTexture })
             .id("file_picker_image_selected_texture")
-            .position(.percent(0.5, 0.6))
+            .position(.percent(0.5, 0.55))
             .offsetToOrigin()
             .scale(1.8)
             .active(false),
 
-        ui.textbox("No image selected", Textbox.TextboxStyle{}, Textbox.Params{})
+        ui.rectangle(.{
+            .style = .{
+                .color = Color.themePrimary,
+                .roundness = 0.4,
+            },
+            .rounded = true,
+        })
+            .id("image_selected_bar")
+            .elId(.FilePickerImageSelectedBarRect)
+            .position(.percent(0.05, 0.85))
+            .positionRef(.Parent)
+            .size(.percent(0.9, 0.1))
+            .sizeRef(.Parent)
+            .active(false),
+
+        ui.text("FILE SELECTED", .{ .style = .{
+            .font = .JERSEY10_REGULAR,
+            .fontSize = 20,
+            .textColor = Color.themeDark,
+        } })
+            .elId(.FilePickerImageSelectedBarText)
+            .position(.percent(0.5, 0.5))
+            .positionRef(.{ .NodeId = "image_selected_bar" })
+            .offsetToOrigin()
+            .sizeRef(.Parent)
+            .active(false),
+
+        ui.text("No image selected", .{ .style = .{
+            .font = .JERSEY10_REGULAR,
+            .fontSize = 18,
+            .textColor = Color.white,
+        } })
             .id("file_picker_selected_file_textbox")
             .elId(.FilePickerImageSelectedTextbox)
-            .position(.percent(0.05, 0.75))
-            .size(.percent(0.9, 0.25))
+            .position(.percent(0.5, -0.8))
+            .positionRef(.{ .NodeId = "image_selected_bar" })
+            .offsetToOrigin()
             .active(false),
     });
 

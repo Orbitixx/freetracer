@@ -131,6 +131,14 @@ const AppManager = struct {
             .Idle => return error.CannotAdvanceStatePastDataFlashedState,
         };
         rl.setMouseCursor(.default);
+
+        if (self.appState == .SelectionConfirmation) self.layout.emitEvent(
+            .{ .PositionChanged = .{
+                .target = .AppManagerSatteliteGraphic,
+                .position = .percent(0.3, 0.3),
+            } },
+            .{ .excludeSelf = true },
+        );
     }
 
     pub fn resetState(self: *AppManager) void {
@@ -222,13 +230,15 @@ const AppManager = struct {
             },
         }).children(.{
             ui.texture(.ROCKET_GRAPHIC, .{})
-                .position(.percent(0.4, 0.32))
+                // .elId(.AppManagerRocketGraphic)
+                .position(.percent(0.4, 0.38))
                 .positionRef(.Parent)
                 .scale(2)
                 .sizeRef(.Parent)
-                .rotation(-22),
+                .rotation(-33),
 
             ui.texture(.SATTELITE_GRAPHIC, .{})
+                .elId(.AppManagerSatteliteGraphic)
                 .position(.percent(0.7, 0.3))
                 .positionRef(.Parent)
                 .scale(3)

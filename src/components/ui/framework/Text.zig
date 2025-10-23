@@ -160,6 +160,9 @@ pub fn deinit(self: *Text) void {
 pub fn setValue(self: *Text, newValue: [:0]const u8) void {
     self.textBuffer = std.mem.zeroes([MAX_TEXT_LENGTH]u8);
     @memcpy(self.textBuffer[0..if (newValue.len > MAX_TEXT_LENGTH) MAX_TEXT_LENGTH else newValue.len], if (newValue.len > MAX_TEXT_LENGTH) newValue[0..MAX_TEXT_LENGTH] else newValue);
+    const textDims: rl.Vector2 = rl.measureTextEx(self.font, @ptrCast(std.mem.sliceTo(&self.textBuffer, 0x00)), self.style.fontSize, self.style.spacing);
+    self.transform.size = .pixels(textDims.x, textDims.y);
+    self.transform.resolve();
 }
 
 pub fn setPulsate(self: *Text, settings: PulsateSettings) void {

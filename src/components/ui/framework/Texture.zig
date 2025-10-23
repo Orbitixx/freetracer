@@ -92,8 +92,13 @@ pub fn draw(self: *Texture) !void {
 }
 
 pub fn onEvent(self: *Texture, event: UIEvent) void {
-    _ = self;
-    _ = event;
+    switch (event) {
+        .PositionChanged => |ev| {
+            if (ev.target != self.identifier) return;
+            self.transform.position = ev.position;
+        },
+        else => {},
+    }
     // Debug.log(.DEBUG, "Texture recevied a UIEvent.", .{});
 }
 

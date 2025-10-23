@@ -360,15 +360,43 @@ fn handleOnDeviceListActiveStateChanged(self: *DeviceListUI, event: ComponentEve
         .{ .StateChanged = .{ .target = .DeviceListDeviceListBox, .isActive = data.isActive } },
         .{ .excludeSelf = true },
     );
+
     self.layout.emitEvent(
         .{ .StateChanged = .{ .target = .DeviceListRefreshDevicesButton, .isActive = data.isActive } },
         .{ .excludeSelf = true },
     );
 
-    self.layout.emitEvent(.{ .StateChanged = .{ .target = .DeviceListHeaderDivider, .isActive = !data.isActive } }, .{ .excludeSelf = true });
-    self.layout.emitEvent(.{ .StateChanged = .{ .target = .DeviceListDeviceSelectedGlowTexture, .isActive = !data.isActive } }, .{ .excludeSelf = true });
-    self.layout.emitEvent(.{ .StateChanged = .{ .target = .DeviceListDeviceSelectedTexture, .isActive = !data.isActive } }, .{ .excludeSelf = true });
-    self.layout.emitEvent(.{ .StateChanged = .{ .target = .DeviceListPlaceholderTexture, .isActive = false } }, .{ .excludeSelf = true });
+    self.layout.emitEvent(
+        .{ .StateChanged = .{ .target = .DeviceListHeaderDivider, .isActive = !data.isActive } },
+        .{ .excludeSelf = true },
+    );
+    self.layout.emitEvent(
+        .{ .StateChanged = .{ .target = .DeviceListDeviceSelectedGlowTexture, .isActive = !data.isActive } },
+        .{ .excludeSelf = true },
+    );
+    self.layout.emitEvent(
+        .{ .StateChanged = .{ .target = .DeviceListDeviceSelectedTexture, .isActive = !data.isActive } },
+        .{ .excludeSelf = true },
+    );
+    self.layout.emitEvent(
+        .{ .StateChanged = .{ .target = .DeviceListPlaceholderTexture, .isActive = false } },
+        .{ .excludeSelf = true },
+    );
+
+    self.layout.emitEvent(
+        .{ .StateChanged = .{ .target = .DeviceListDeviceSelectedBarRect, .isActive = !data.isActive } },
+        .{ .excludeSelf = true },
+    );
+
+    self.layout.emitEvent(
+        .{ .StateChanged = .{ .target = .DeviceListDeviceSelectedBarText, .isActive = !data.isActive } },
+        .{ .excludeSelf = true },
+    );
+
+    self.layout.emitEvent(
+        .{ .StateChanged = .{ .target = .DeviceListDeviceSelectedText, .isActive = !data.isActive } },
+        .{ .excludeSelf = true },
+    );
 
     return eventResult.succeed();
 }
@@ -444,15 +472,15 @@ fn handleOnSelectedDeviceNameChanged(self: *DeviceListUI, event: ComponentEvent)
     const hasSelection = data.selectedDevice != null;
     const displayName: [:0]const u8 = if (data.selectedDevice) |device| device.getNameSlice() else kStringDeviceListNoDeviceSelected;
 
-    _ = displayName;
+    self.layout.emitEvent(
+        .{ .TextChanged = .{ .target = .DeviceListDeviceSelectedText, .text = displayName } },
+        .{ .excludeSelf = true },
+    );
 
     self.layout.emitEvent(
         .{ .SpriteButtonEnabledChanged = .{ .target = .DeviceListConfirmButton, .enabled = hasSelection } },
         .{ .excludeSelf = true },
     );
-
-    // self.nextButton.setEnabled(hasSelection);
-    // self.updateDeviceNameLabel(displayName, if (hasSelection) MAX_SELECTED_DEVICE_NAME_LEN else null);
 
     return eventResult.succeed();
 }
@@ -618,9 +646,48 @@ fn initLayout(self: *DeviceListUI) !void {
 
         ui.texture(.DEVICE_SELECTED, .{ .identifier = .DeviceListDeviceSelectedTexture })
             .id("device_selected_texture")
-            .position(.percent(0.5, 0.6))
+            .position(.percent(0.5, 0.55))
             .offsetToOrigin()
-            .scale(1.8)
+            .scale(1.45)
+            .active(false),
+
+        ui.rectangle(.{
+            .style = .{
+                .color = Color.themeDanger,
+                .roundness = 0.4,
+            },
+            .rounded = true,
+        })
+            .id("device_selected_bar")
+            .elId(.DeviceListDeviceSelectedBarRect)
+            .position(.percent(0.05, 0.85))
+            .positionRef(.Parent)
+            .size(.percent(0.9, 0.1))
+            .sizeRef(.Parent)
+            .active(false),
+
+        ui.text("TARGET LOCKED", .{ .style = .{
+            .font = .JERSEY10_REGULAR,
+            .fontSize = 20,
+            .textColor = Color.themeDark,
+        } })
+            .elId(.DeviceListDeviceSelectedBarText)
+            .position(.percent(0.5, 0.5))
+            .positionRef(.{ .NodeId = "device_selected_bar" })
+            .offsetToOrigin()
+            .sizeRef(.Parent)
+            .active(false),
+
+        ui.text("No device selected", .{ .style = .{
+            .font = .JERSEY10_REGULAR,
+            .fontSize = 18,
+            .textColor = Color.white,
+        } })
+            .id("file_picker_selected_file_text")
+            .elId(.DeviceListDeviceSelectedText)
+            .position(.percent(0.5, -0.8))
+            .positionRef(.{ .NodeId = "device_selected_bar" })
+            .offsetToOrigin()
             .active(false),
     });
 
@@ -670,7 +737,27 @@ pub const UIConfig = struct {
             pub const OnClick = struct {
                 pub fn call(ctx: *anyopaque) void {
                     const self: *DeviceListUI = @ptrCast(@alignCast(ctx));
-                    self.layout.emitEvent(.{ .StateChanged = .{ .target = .DeviceListPlaceholderTexture, .isActive = false } }, .{ .excludeSelf = true });
+
+                    self.layout.emitEvent(
+                        .{ .StateChanged = .{ .target = .DeviceListPlaceholderTexture, .isActive = false } },
+                        .{ .excludeSelf = true },
+                    );
+
+                    self.layout.emitEvent(
+                        .{ .StateChanged = .{ .target = .DeviceListDeviceSelectedBarRect, .isActive = true } },
+                        .{ .excludeSelf = true },
+                    );
+
+                    self.layout.emitEvent(
+                        .{ .StateChanged = .{ .target = .DeviceListDeviceSelectedBarText, .isActive = true } },
+                        .{ .excludeSelf = true },
+                    );
+
+                    self.layout.emitEvent(
+                        .{ .StateChanged = .{ .target = .DeviceListDeviceSelectedText, .isActive = true } },
+                        .{ .excludeSelf = true },
+                    );
+
                     DeviceList.dispatchComponentFinishedAction.call(self.parent);
                 }
             };
