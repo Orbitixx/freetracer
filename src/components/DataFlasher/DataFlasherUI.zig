@@ -416,10 +416,14 @@ pub fn handleOnISOWriteProgressChanged(self: *DataFlasherUI, event: ComponentEve
     var eventResult = EventResult.init();
     const data = PrivilegedHelper.Events.onISOWriteProgressChanged.getData(event) orelse return eventResult.fail();
 
-    Debug.log(.INFO, "Write progress is: {d}", .{data.newProgress});
+    const rateMb: f64 = @as(f64, @floatFromInt(data.rate)) / 1_000_000.0;
+    const rateAvgMb: f64 = @as(f64, @floatFromInt(data.rate_avg)) / 1_000_000.0;
+    Debug.log(.INFO, "Write progress is: {d}, speed: {d:.2} MB/s, speed (avg): {d:.2} MB/s", .{ data.newProgress, rateMb, rateAvgMb });
 
-    var buf: [5]u8 = std.mem.zeroes([5]u8);
-    const newText: [:0]const u8 = @ptrCast(try std.fmt.bufPrint(buf[0..], "{d}%", .{data.newProgress}));
+    var percentBuf: [6]u8 = undefined;
+    const newTextSlice = try std.fmt.bufPrint(percentBuf[0..], "{d}%", .{data.newProgress});
+    percentBuf[newTextSlice.len] = 0;
+    const newText: [:0]const u8 = percentBuf[0..newTextSlice.len :0];
 
     const params = View.ViewEventParams{ .excludeSelf = true };
 
@@ -427,6 +431,67 @@ pub fn handleOnISOWriteProgressChanged(self: *DataFlasherUI, event: ComponentEve
     self.layout.emitEvent(.{ .TextChanged = .{ .target = .DataFlasherStatusBoxProgressPercentTextBack, .text = newText } }, params);
     self.layout.emitEvent(.{ .TextChanged = .{ .target = .DataFlasherStatusBoxProgressPercentTextFront, .text = newText } }, params);
     self.layout.emitEvent(.{ .ProgressValueChanged = .{ .target = .DataFlasherStatusBoxProgressBox, .percent = data.newProgress } }, params);
+
+    var speedBuf: [64]u8 = undefined;
+    const speedText = std.fmt.bufPrintZ(speedBuf[0..], "{d:.2} MB/s ({d:.2} MB/s avg.)", .{ rateMb, rateAvgMb }) catch "0.00 MB/s";
+
+    self.layout.emitEvent(.{
+        .TextChanged = .{ .target = .DataFlasherStatusBoxSpeedText, .text = speedText },
+    }, params);
+
+    var progressBuf: [64]u8 = undefined;
+
+    const totalBytesF = @as(f64, @floatFromInt(data.bytes_total));
+    const writtenBytesF = @as(f64, @floatFromInt(data.bytes_written));
+
+    const useGigabytes = data.bytes_total >= 1_000_000_000;
+    const unit = if (useGigabytes) "GB" else "MB";
+    const divisor: f64 = if (useGigabytes) 1_000_000_000.0 else 1_000_000.0;
+
+    const valueCurrent = writtenBytesF / divisor;
+    const valueTotal = totalBytesF / divisor;
+
+    const progressText = std.fmt.bufPrintZ(progressBuf[0..], "{d:.2} {s} of {d:.2} {s}", .{ valueCurrent, unit, valueTotal, unit }) catch "? MB of ? MB";
+
+    self.layout.emitEvent(.{
+        .TextChanged = .{ .target = .DataFlasherStatusBoxProgressText, .text = progressText },
+    }, params);
+
+    var etaBuf: [6]u8 = undefined;
+    const etaText: [:0]const u8 = blk: {
+        if (data.rate_avg == 0 or data.bytes_written >= data.bytes_total) {
+            etaBuf = [_]u8{ '0', '0', ':', '0', '0', 0 };
+            break :blk etaBuf[0..5 :0];
+        }
+
+        const remainingBytes = data.bytes_total - data.bytes_written;
+        if (remainingBytes == 0) {
+            etaBuf = [_]u8{ '0', '0', ':', '0', '0', 0 };
+            break :blk etaBuf[0..5 :0];
+        }
+
+        const secondsLeft = std.math.divCeil(u64, remainingBytes, data.rate_avg) catch 0;
+        if (secondsLeft == 0) {
+            etaBuf = [_]u8{ '0', '0', ':', '0', '0', 0 };
+            break :blk etaBuf[0..5 :0];
+        }
+
+        var minutesTotal = secondsLeft / 60;
+        var secondsPart = secondsLeft % 60;
+
+        if (minutesTotal > 99) {
+            minutesTotal = 99;
+            secondsPart = 59;
+        }
+
+        const slice = try std.fmt.bufPrint(etaBuf[0..], "{d:0>2}:{d:0>2}", .{ minutesTotal, secondsPart });
+        etaBuf[slice.len] = 0;
+        break :blk etaBuf[0..slice.len :0];
+    };
+
+    self.layout.emitEvent(.{
+        .TextChanged = .{ .target = .DataFlasherStatusBoxETAText, .text = etaText },
+    }, params);
 
     return eventResult.succeed();
 }
@@ -793,10 +858,10 @@ fn initLayout(self: *DataFlasherUI) !void {
         //     .sizeRef(.{ .NodeId = "logs_textbox" })
         //     .active(false),
 
-        ui.textbox("Pending logs stream...", UIFramework.Textbox.TextboxStyle{ .text = .{
+        ui.textbox("Pending logs stream...\nHello from the long log box\nThis is line 3 of the long logs\nAnd this is line 4", UIFramework.Textbox.TextboxStyle{ .text = .{
             .textColor = Color.offWhite,
             .spacing = 0,
-        }, .lineSpacing = -8 }, UIFramework.Textbox.Params{ .wordWrap = true })
+        }, .lineSpacing = -8 }, UIFramework.Textbox.Params{ .wordWrap = true, .useExtendedTextBuffer = true })
             // .elId()
             .id("logs_textbox")
             .position(.percent(0, 1))

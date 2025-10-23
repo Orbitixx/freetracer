@@ -151,7 +151,7 @@ pub const Events = struct {
 
     pub const onISOWriteProgressChanged = ComponentFramework.defineEvent(
         EventManager.createEventName(ComponentName, "on_iso_write_progress_changed"),
-        struct { newProgress: u64 },
+        struct { newProgress: u64, rate: u64, rate_avg: u64, bytes_written: u64, bytes_total: u64 },
         struct {},
     );
 
@@ -388,6 +388,7 @@ fn displayNeedPermissionsDialog(context: ?*anyopaque) callconv(.c) void {
 
     EventManager.broadcast(Events.onHelperDeviceOpenFailed.create(null, null));
 
+    // TODO: Remove. Deprecated, no longer need full disk access.
     const result = osd.message("Writing to the device failed. MacOS' security policy requires 'Full Disk Access' for an app to write directly to a drive.\n\nFreetracer will only use this to write your selected ISO file to the selected device. Your other data will not be accessed.\n\nTo grant access:\n\nOpen System Settings > Privacy & Security > Full Disk Access.\nClick the (+) button and add Freetracer from the /Applications folder and relaunch Freetracer.", .{ .level = .warning, .buttons = .ok_cancel });
 
     if (result) freetracer_lib.MacOSPermissions.openPrivacySettings();
@@ -498,11 +499,21 @@ fn processResponseMessage(connection: XPCConnection, data: XPCObject) !void {
 
         .ISO_WRITE_PROGRESS => {
             const progress = try XPCService.getUInt64(data, "write_progress");
+            const speed = try XPCService.getUInt64(data, "write_rate");
+            const speed_avg = try XPCService.getUInt64(data, "write_rate_avg");
+            const bytes_written = try XPCService.getUInt64(data, "write_bytes");
+            const bytes_total = try XPCService.getUInt64(data, "write_total_size");
             EventManager.broadcast(Events.onISOWriteProgressChanged.create(
                 null,
-                &Events.onISOWriteProgressChanged.Data{ .newProgress = progress },
+                &Events.onISOWriteProgressChanged.Data{
+                    .newProgress = progress,
+                    .rate = speed,
+                    .rate_avg = speed_avg,
+                    .bytes_total = bytes_total,
+                    .bytes_written = bytes_written,
+                },
             ));
-            Debug.log(.INFO, "Write progress is: {d}", .{progress});
+            // Debug.log(.INFO, "Write progress is: {d}", .{progress});
         },
 
         .ISO_WRITE_SUCCESS => {
@@ -521,7 +532,7 @@ fn processResponseMessage(connection: XPCConnection, data: XPCObject) !void {
                 null,
                 &Events.onWriteVerificationProgressChanged.Data{ .newProgress = progress },
             ));
-            Debug.log(.INFO, "Verification progress is: {d}", .{progress});
+            // Debug.log(.INFO, "Verification progress is: {d}", .{progress});
         },
 
         .WRITE_VERIFICATION_SUCCESS => {

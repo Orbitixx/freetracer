@@ -20,96 +20,12 @@ const XPCService = freetracer_lib.Mach.XPCService;
 const XPCConnection = freetracer_lib.Mach.XPCConnection;
 const XPCObject = freetracer_lib.Mach.XPCObject;
 
-const WRITE_BLOCK_SIZE = 4096;
-
-// pub fn unwrapUserHomePath(buffer: *[std.fs.max_path_bytes]u8, restOfPath: []const u8) ![]u8 {
-//     const userDir = std.posix.getenv("HOME") orelse return error.HomeEnvironmentVariableIsNULL;
-//
-//     @memcpy(buffer[0..userDir.len], userDir);
-//     @memcpy(buffer[userDir.len .. userDir.len + restOfPath.len], restOfPath);
-//
-//     return buffer[0 .. userDir.len + restOfPath.len];
-// }
-//
-// pub fn openFileValidated(unsanitizedIsoPath: []const u8, params: struct { userHomePath: []const u8, imageType: ImageType }) !std.fs.File {
-//
-//     // Buffer overflow protection
-//     if (unsanitizedIsoPath.len > std.fs.max_path_bytes) {
-//         Debug.log(.ERROR, "Provided path is too long (over std.fs.max_path_bytes).", .{});
-//         return error.ISOFilePathTooLong;
-//     }
-//
-//     if (params.userHomePath.len < 3) return error.UserHomePathTooShort;
-//
-//     var realPathBuffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
-//     var sanitizeStringBuffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
-//
-//     const imagePath = std.fs.realpath(unsanitizedIsoPath, &realPathBuffer) catch |err| {
-//         Debug.log(.ERROR, "Unable to resolve the real path of the povided path: {s}. Error: {any}", .{
-//             String.sanitizeString(&sanitizeStringBuffer, unsanitizedIsoPath),
-//             err,
-//         });
-//         return error.UnableToResolveRealISOPath;
-//     };
-//
-//     const printableIsoPath = String.sanitizeString(&sanitizeStringBuffer, imagePath);
-//
-//     if (imagePath.len < 8) {
-//         Debug.log(.ERROR, "Provided path is less than 8 characters long. Likely invalid, aborting for safety...", .{});
-//         return error.ISOFilePathTooShort;
-//     }
-//
-//     const directory = std.fs.path.dirname(imagePath) orelse ".";
-//     const fileName = std.fs.path.basename(imagePath);
-//
-//     if (!isFilePathAllowed(params.userHomePath, directory)) {
-//         Debug.log(.ERROR, "Provided path contains a disallowed part: {s}", .{printableIsoPath});
-//         return error.ISOFileContainsRestrictedPaths;
-//     }
-//
-//     const dir = std.fs.openDirAbsolute(directory, .{ .no_follow = true }) catch |err| {
-//         Debug.log(.ERROR, "Unable to open the directory of specified ISO file. Aborting... Error: {any}", .{err});
-//         return error.UnableToOpenDirectoryOfSpecificedISOFile;
-//     };
-//
-//     const imageFile = dir.openFile(fileName, .{ .mode = .read_only, .lock = .exclusive }) catch |err| {
-//         Debug.log(.ERROR, "Failed to open ISO file or obtain an exclusive lock. Error: {any}", .{err});
-//         return error.UnableToOpenISOFileOrObtainExclusiveLock;
-//     };
-//
-//     const fileStat = imageFile.stat() catch |err| {
-//         Debug.log(.ERROR, "Failed to obtain ISO file stat. Error: {any}", .{err});
-//         return error.UnableToObtainISOFileStat;
-//     };
-//
-//     if (fileStat.kind != std.fs.File.Kind.file) {
-//         Debug.log(
-//             .ERROR,
-//             "The provided ISO path is not a recognized file by file system. Symlinks and other kinds are not allowed. Kind used: {any}",
-//             .{fileStat.kind},
-//         );
-//         return error.InvalidISOFileKind;
-//     }
-//
-//     // Minimum ISO system block: 16 sectors by 2048 bytes each + 1 sector for PVD contents.
-//     if (fileStat.size < 16 * 2048 + 1) return error.InvalidISOSystemStructure;
-//
-//     if (params.imageType == .ISO) {
-//         const isoValidationResult = ISOParser.validateISOFileStructure(imageFile);
-//
-//         // TODO: If ISO structure does not conform to ISO9660, prompt user to proceed or not.
-//         if (isoValidationResult != .ISO_VALID) {
-//             Debug.log(.ERROR, "Invalid ISO file structure detected. Aborting... Error code: {any}", .{isoValidationResult});
-//             return error.InvalidISOStructureDoesNotConformToISO9660;
-//         }
-//     }
-//
-//     return imageFile;
-// }
+const WRITE_BLOCK_SIZE = 1024 * 1_000;
 
 pub fn writeISO(connection: XPCConnection, imageFile: std.fs.File, device: std.fs.File) !void {
-    Debug.log(.DEBUG, "Begin writing prep...", .{});
-    var writeBuffer: [WRITE_BLOCK_SIZE]u8 = undefined;
+    Debug.log(.INFO, "Begin writing prep...", .{});
+    const writeBuffer = try std.heap.page_allocator.alloc(u8, WRITE_BLOCK_SIZE);
+    defer std.heap.page_allocator.free(writeBuffer);
 
     const fileStat = try imageFile.stat();
     const imageSize = fileStat.size;
@@ -118,24 +34,30 @@ pub fn writeISO(connection: XPCConnection, imageFile: std.fs.File, device: std.f
     var previousProgress: u64 = 0;
     var currentProgress: u64 = 0;
     var xpcResponseTimer = try std.time.Timer.start();
+    var overallTimer = try std.time.Timer.start();
+    var bytesSinceUpdate: u64 = 0;
 
     Debug.log(.INFO, "File and device are opened successfully! File size: {d}", .{imageSize});
     Debug.log(.INFO, "Writing ISO to device, please wait...", .{});
+
+    // try imageFile.seekTo(0);
+    // try device.seekTo(0);
 
     while (currentByte < imageSize) {
         previousProgress = currentProgress;
 
         try imageFile.seekTo(currentByte);
-        const bytesRead = try imageFile.read(&writeBuffer);
+        const bytesRead = try imageFile.read(writeBuffer);
 
         if (bytesRead == 0) {
             Debug.log(.INFO, "End of ISO File reached, final block: {d} at {d}!", .{ currentByte / WRITE_BLOCK_SIZE, currentByte });
             break;
         }
 
-        // Important to use the slice syntax here, otherwise if writing &writeBuffer
+        // NOTE: Important to use the slice syntax here, otherwise if writing &writeBuffer
         // it only writes WRITE_BLOCK_SIZE blocks, meaning if the last block is smaller
         // then the data will likely be corrupted.
+        try device.seekTo(currentByte);
         const bytesWritten = try device.write(writeBuffer[0..bytesRead]);
 
         if (bytesWritten != bytesRead or bytesWritten == 0) {
@@ -143,19 +65,45 @@ pub fn writeISO(connection: XPCConnection, imageFile: std.fs.File, device: std.f
             break;
         }
 
-        currentByte += @as(u64, @intCast(bytesWritten));
+        const bytesWrittenU64 = @as(u64, @intCast(bytesWritten));
+        currentByte += bytesWrittenU64;
         currentProgress = try std.math.divFloor(u64, currentByte * @as(u64, 100), imageSize);
+        bytesSinceUpdate += bytesWrittenU64;
+
+        const elapsedNs = xpcResponseTimer.read();
 
         // Only send an XPC message if the progress moved at least 1%; throttle message send rate
         // TODO: Replace by XPC message barrier
-        if (xpcResponseTimer.read() < 500_000 or currentProgress == previousProgress) {
+        if (elapsedNs < 500_000 or currentProgress == previousProgress) {
             if (currentProgress != 100) continue;
         }
+
+        const totalElapsedNs = overallTimer.read();
+        const totalSeconds: f128 = if (totalElapsedNs == 0) 1.0e-9 else @as(f128, @floatFromInt(totalElapsedNs)) / 1_000_000_000.0;
+        var avgRateFloat = @as(f128, @floatFromInt(currentByte)) / totalSeconds;
+        if (!std.math.isFinite(avgRateFloat) or avgRateFloat <= 0) {
+            avgRateFloat = 0;
+        }
+
+        const deltaTimeSeconds: f128 = if (elapsedNs == 0) 1.0e-9 else @as(f128, @floatFromInt(elapsedNs)) / 1_000_000_000.0;
+        var instantRateFloat = @as(f128, @floatFromInt(bytesSinceUpdate)) / deltaTimeSeconds;
+        if (!std.math.isFinite(instantRateFloat) or instantRateFloat <= 0) {
+            instantRateFloat = 0;
+        }
+
+        const maxRate = @as(f128, @floatFromInt(std.math.maxInt(u64)));
+        const averageByteWriteRate: u64 = if (avgRateFloat >= maxRate) std.math.maxInt(u64) else @intFromFloat(avgRateFloat);
+        const instantaneousByteWriteRate: u64 = if (instantRateFloat >= maxRate) std.math.maxInt(u64) else @intFromFloat(instantRateFloat);
 
         const progressUpdate = XPCService.createResponse(.ISO_WRITE_PROGRESS);
         defer XPCService.releaseObject(progressUpdate);
         XPCService.createUInt64(progressUpdate, "write_progress", currentProgress);
+        XPCService.createUInt64(progressUpdate, "write_rate", instantaneousByteWriteRate);
+        XPCService.createUInt64(progressUpdate, "write_rate_avg", averageByteWriteRate);
+        XPCService.createUInt64(progressUpdate, "write_bytes", currentByte);
+        XPCService.createUInt64(progressUpdate, "write_total_size", imageSize);
         XPCService.connectionSendMessage(connection, progressUpdate);
+        bytesSinceUpdate = 0;
         _ = xpcResponseTimer.lap();
     }
 
@@ -165,8 +113,10 @@ pub fn writeISO(connection: XPCConnection, imageFile: std.fs.File, device: std.f
 }
 
 pub fn verifyWrittenBytes(connection: XPCConnection, imageFile: std.fs.File, device: std.fs.File) !void {
-    var imageByteBuffer: [WRITE_BLOCK_SIZE]u8 = undefined;
-    var deviceByteBuffer: [WRITE_BLOCK_SIZE]u8 = undefined;
+    const imageByteBuffer = try std.heap.page_allocator.alloc(u8, WRITE_BLOCK_SIZE);
+    defer std.heap.page_allocator.free(imageByteBuffer);
+    const deviceByteBuffer = try std.heap.page_allocator.alloc(u8, WRITE_BLOCK_SIZE);
+    defer std.heap.page_allocator.free(deviceByteBuffer);
 
     const fileStat = try imageFile.stat();
     const imageSize = fileStat.size;
@@ -183,7 +133,7 @@ pub fn verifyWrittenBytes(connection: XPCConnection, imageFile: std.fs.File, dev
         previousProgress = currentProgress;
 
         try imageFile.seekTo(currentByte);
-        const imageBytesRead = try imageFile.read(&imageByteBuffer);
+        const imageBytesRead = try imageFile.read(imageByteBuffer);
 
         if (imageBytesRead == 0) {
             Debug.log(.INFO, "End of ISO File reached, final block: {d} at {d}!", .{ currentByte / WRITE_BLOCK_SIZE, currentByte });
@@ -191,14 +141,25 @@ pub fn verifyWrittenBytes(connection: XPCConnection, imageFile: std.fs.File, dev
         }
 
         try device.seekTo(currentByte);
-        const deviceBytesRead = try device.read(&deviceByteBuffer);
+        var deviceBytesReadTotal: usize = 0;
+        while (deviceBytesReadTotal < imageBytesRead) {
+            const remainingSlice = deviceByteBuffer[deviceBytesReadTotal..imageBytesRead];
+            const deviceBytesRead = try device.read(remainingSlice);
 
-        if (deviceBytesRead == 0) break;
+            if (deviceBytesRead == 0) {
+                Debug.log(
+                    .ERROR,
+                    "Device returned fewer bytes than expected during verification. Expected: {d}, received: {d}",
+                    .{ imageBytesRead, deviceBytesReadTotal },
+                );
+                return error.MismatchingISOAndDeviceBytesDetected;
+            }
 
-        if (deviceBytesRead != imageBytesRead) return error.MismatchingISOAndDeviceBytesDetected;
+            deviceBytesReadTotal += deviceBytesRead;
+        }
 
         const imageSlice = imageByteBuffer[0..imageBytesRead];
-        const deviceSlice = deviceByteBuffer[0..deviceBytesRead];
+        const deviceSlice = deviceByteBuffer[0..deviceBytesReadTotal];
 
         if (!std.mem.eql(u8, imageSlice, deviceSlice)) return error.MismatchingISOAndDeviceBytesDetected;
 
@@ -222,53 +183,3 @@ pub fn verifyWrittenBytes(connection: XPCConnection, imageFile: std.fs.File, dev
 
     Debug.log(.INFO, "Finished verifying ISO image written to device!", .{});
 }
-//
-// test "unwrapping user home path generates a correct path" {
-//     var buffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
-//     const expectedOutput = std.posix.getenv("HOME");
-//     try std.testing.expect(expectedOutput != null);
-//
-//     const result: [:0]const u8 = @ptrCast(try unwrapUserHomePath(&buffer, ""));
-//     try std.testing.expect(std.mem.eql(u8, expectedOutput.?, result));
-// }
-//
-// test "selecting an ISO in Documents folder is allowed" {
-//     var buffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
-//     const userHomePath = std.posix.getenv("HOME") orelse return error.UserHomePathIsNULL;
-//     const path = try unwrapUserHomePath(&buffer, env.TEST_ISO_FILE_PATH);
-//     try std.testing.expect(isFilePathAllowed(userHomePath, path) == true);
-// }
-//
-// test "selecting an file in other directories is disallowed" {
-//     var buffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
-//
-//     const userHomePath = std.posix.getenv("HOME") orelse return error.UserHomePathIsNULL;
-//
-//     const path1: []const u8 = "/etc/sudoers";
-//     try std.testing.expect(isFilePathAllowed(userHomePath, path1) == false);
-//
-//     const path2: []const u8 = "/dev/zero";
-//     try std.testing.expect(isFilePathAllowed(userHomePath, path2) == false);
-//
-//     const path3: []const u8 = "/Library/LaunchDaemons/";
-//     try std.testing.expect(isFilePathAllowed(userHomePath, path3) == false);
-//
-//     const path4: []const u8 = try unwrapUserHomePath(&buffer, "/Applications/");
-//     try std.testing.expect(isFilePathAllowed(userHomePath, path4) == false);
-//
-//     const path5: []const u8 = try unwrapUserHomePath(&buffer, "/Notes/");
-//     try std.testing.expect(isFilePathAllowed(userHomePath, path5) == false);
-// }
-//
-// test "calling openFileValidated returns a valid file handle" {
-//     const imageFile = try openFileValidated(
-//         // Simulated; during runtime, provided by the XPC client.
-//         env.USER_HOME_PATH ++ env.TEST_ISO_FILE_PATH,
-//         // Simulated; during runtime, provided securily by XPCService.getUserHomePath()
-//         .{ .userHomePath = std.posix.getenv("HOME") orelse return error.UserHomePathIsNULL },
-//     );
-//
-//     defer imageFile.close();
-//
-//     try std.testing.expect(@TypeOf(imageFile) == std.fs.File);
-// }
