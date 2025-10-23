@@ -21,14 +21,20 @@ pub const TEXTURE = enum(u8) {
     RELOAD_ICON,
     BUTTON_UI,
     DOC_IMAGE,
-    FILE_SELECTED,
     STEP_1_INACTIVE,
+    STEP_2_INACTIVE,
+    STEP_3_INACTIVE,
     STAR_V1,
     STAR_V2,
     BUTTON_FRAME,
     BUTTON_FRAME_DANGER,
     IMAGE_TAG,
     COPY_ICON,
+
+    FILE_SELECTED,
+    FILE_SELECTED_GLOW,
+    DEVICE_SELECTED,
+    DEVICE_SELECTED_GLOW,
 
     SHADOW_SM,
     SHADOW_MD,
@@ -142,7 +148,7 @@ pub const ResourceManagerSingleton = struct {
             .fonts = try allocator.alloc(rl.Font, FONTS_COUNT),
             .textures = try allocator.alloc(rl.Texture2D, TEXTURES_COUNT),
             .images = try allocator.alloc(rl.Image, IMAGE_COUNT),
-            .shaders = try allocator.alloc(rl.Shader, SHADERS_COUNT),
+            .shaders = undefined, //try allocator.alloc(rl.Shader, SHADERS_COUNT),
         };
 
         if (instance) |*inst| {
@@ -156,8 +162,16 @@ pub const ResourceManagerSingleton = struct {
             try inst.registerAsset(.{ .Texture = .COPY_ICON }, "images/copy-icon.png");
             try inst.registerAsset(.{ .Texture = .BUTTON_UI }, "images/button_ui.png");
             try inst.registerAsset(.{ .Texture = .DOC_IMAGE }, "images/doc_image.png");
-            try inst.registerAsset(.{ .Texture = .FILE_SELECTED }, "images/doc_image_check.png");
+
+            try inst.registerAsset(.{ .Texture = .FILE_SELECTED }, "images/selected-file-icon.png");
+            try inst.registerAsset(.{ .Texture = .FILE_SELECTED_GLOW }, "images/file-picker-glow.png");
+            try inst.registerAsset(.{ .Texture = .DEVICE_SELECTED }, "images/target-device-icon.png");
+            try inst.registerAsset(.{ .Texture = .DEVICE_SELECTED_GLOW }, "images/device-list-glow.png");
+
             try inst.registerAsset(.{ .Texture = .STEP_1_INACTIVE }, "images/step-1-inactive.png");
+            try inst.registerAsset(.{ .Texture = .STEP_2_INACTIVE }, "images/step-2-inactive.png");
+            try inst.registerAsset(.{ .Texture = .STEP_3_INACTIVE }, "images/step-3-inactive.png");
+
             try inst.registerAsset(.{ .Texture = .STAR_V1 }, "images/star_v1.png");
             try inst.registerAsset(.{ .Texture = .STAR_V2 }, "images/star_v2.png");
             try inst.registerAsset(.{ .Texture = .BUTTON_FRAME }, "images/button_frame.png");
@@ -187,8 +201,8 @@ pub const ResourceManagerSingleton = struct {
             try inst.registerAsset(.{ .Image = .APP_WINDOW_IMAGE }, "images/icon.png");
             Debug.log(.DEBUG, "ResourceManager: images successfully loaded!", .{});
 
-            try inst.registerAsset(.{ .Shader = .PIXELATE }, "shaders/pixelate.fs");
-            try inst.registerAsset(.{ .Shader = .SHADOW }, "shaders/shadow.fs");
+            // try inst.registerAsset(.{ .Shader = .PIXELATE }, "shaders/pixelate.fs");
+            // try inst.registerAsset(.{ .Shader = .SHADOW }, "shaders/shadow.fs");
             Debug.log(.DEBUG, "ResourceManager: shaders successfully loaded!", .{});
         }
 
@@ -232,14 +246,14 @@ pub const ResourceManagerSingleton = struct {
             image.unload();
         }
 
-        for (instance.?.shaders) |shader| {
-            shader.unload();
-        }
+        // for (instance.?.shaders) |shader| {
+        //     shader.unload();
+        // }
 
         allocator.free(instance.?.fonts);
         allocator.free(instance.?.textures);
         allocator.free(instance.?.images);
-        allocator.free(instance.?.shaders);
+        // allocator.free(instance.?.shaders);
 
         instance = null;
     }

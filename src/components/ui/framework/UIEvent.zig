@@ -3,19 +3,25 @@ const UIFramework = @import("./import.zig");
 const Text = UIFramework.Text;
 
 pub const UIElementIdentifier = enum(u8) {
+    FilePickerHeaderDivider,
     FilePickerFileDropzone,
     FilePickerImageInfoTextbox,
     FilePickerImageSizeText,
     FilePickerConfirmButton,
     FilePickerImageSelectedTexture,
     FilePickerImageSelectedTextbox,
+    FilePickerImageSelectedGlowTexture,
 
     DeviceListConfirmButton,
     DeviceListDeviceListBox,
     DeviceListNoDevicesText,
     DeviceListRefreshDevicesButton,
     DeviceListPlaceholderTexture,
+    DeviceListDeviceSelectedTexture,
+    DeviceListDeviceSelectedGlowTexture,
+    DeviceListHeaderDivider,
 
+    DataFlasherHeaderDivider,
     DataFlasherStatusBgRect,
     DataFlasherPlaceholderTexture,
     DataFlasherStatusBoxCoverRect,

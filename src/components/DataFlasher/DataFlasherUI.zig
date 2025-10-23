@@ -385,8 +385,8 @@ pub fn handleOnActiveStateChanged(self: *DataFlasherUI, event: ComponentEvent) !
     }
 
     self.layout.emitEvent(.{ .StateChanged = .{ .isActive = data.isActive } }, .{});
-
     self.layout.emitEvent(.{ .StateChanged = .{ .target = .DataFlasherPlaceholderTexture, .isActive = !data.isActive } }, .{ .excludeSelf = true });
+    self.layout.emitEvent(.{ .StateChanged = .{ .target = .DataFlasherHeaderDivider, .isActive = !data.isActive } }, .{ .excludeSelf = true });
 
     return eventResult.succeed();
 }
@@ -539,11 +539,11 @@ fn initLayout(self: *DataFlasherUI) !void {
     }).children(.{
 
         //
-        ui.texture(.STEP_1_INACTIVE, .{})
+        ui.texture(.STEP_3_INACTIVE, .{})
             .id("header_icon")
             .position(.percent(0.05, 0.03))
             .positionRef(.Parent)
-            .scale(0.5)
+            .scale(1)
             .callbacks(.{ .onStateChange = .{} }), // Consumes .StateChanged event without doing anything
         //
         ui.textbox(DEFAULT_SECTION_HEADER, UIConfig.Styles.HeaderTextbox, UIFramework.Textbox.Params{ .wordWrap = true })
@@ -554,6 +554,17 @@ fn initLayout(self: *DataFlasherUI) !void {
             .size(.percent(0.7, 0.3))
             .sizeRef(.Parent)
             .callbacks(.{ .onStateChange = .{} }), // Consumes .StateChanged event without doing anything
+
+        ui.rectangle(.{ .style = .{
+            .color = Color.themeSectionBorder,
+        } })
+            .elId(.DataFlasherHeaderDivider)
+            .id("header_divider")
+            .position(.percent(0, 1))
+            .positionRefX(.Parent)
+            .positionRefY(.{ .NodeId = "header_textbox" })
+            .size(.mix(.percent(1), .pixels(2)))
+            .sizeRef(.Parent),
 
         ui.texture(.FLASH_PLACEHOLDER, .{})
             .elId(.DataFlasherPlaceholderTexture)

@@ -117,7 +117,7 @@ pub fn start(self: *FilePickerUI) !void {
 
     const component = try self.ensureComponentInitialized();
     try subscribeToEvents(component);
-    try self.initializeUIElements();
+    try self.initLayout();
 
     Debug.log(.DEBUG, "FilePickerUI: component start() finished.", .{});
 }
@@ -184,11 +184,182 @@ fn subscribeToEvents(component: *Component) !void {
     if (!EventManager.subscribe(ComponentName, component)) return error.UnableToSubscribeToEventManager;
 }
 
-fn initializeUIElements(self: *FilePickerUI) !void {
-    try self.initializeBackground();
+/// Updates internal active state and reapplies panel styling; must be called on the main UI thread.
+fn setIsActive(self: *FilePickerUI, isActive: bool) void {
+    self.storeIsActive(isActive);
 }
 
-fn initializeBackground(self: *FilePickerUI) !void {
+fn storeIsActive(self: *FilePickerUI, isActive: bool) void {
+    self.state.lock();
+    defer self.state.unlock();
+    self.state.data.isActive = isActive;
+}
+
+fn readIsActive(self: *FilePickerUI) bool {
+    self.state.lock();
+    defer self.state.unlock();
+    return self.state.data.isActive;
+}
+
+fn updateIsoPathState(self: *FilePickerUI, newPath: [:0]u8) void {
+    self.state.lock();
+    defer self.state.unlock();
+    self.state.data.isoPath = newPath;
+}
+
+fn extractDisplayName(path: [:0]u8) [:0]const u8 {
+    if (std.mem.lastIndexOfScalar(u8, path, '/')) |index| {
+        return path[index + 1 .. path.len :0];
+    }
+    return path;
+}
+
+fn prepareDisplayName(self: *FilePickerUI, newName: [:0]const u8) [:0]const u8 {
+    @memset(&self.displayNameBuffer, Character.NULL);
+
+    const capacity = self.displayNameBuffer.len - 1;
+
+    if (newName.len > DISPLAY_NAME_SUFFIX_LEN and capacity > 0) {
+        const prefix = "...";
+        if (capacity <= prefix.len) {
+            const copyLen = @min(newName.len, capacity);
+            const startC = newName.len - copyLen;
+            @memcpy(self.displayNameBuffer[0..copyLen], newName[startC .. startC + copyLen]);
+            self.displayNameBuffer[copyLen] = Character.NULL;
+            return self.displayNameBuffer[0..copyLen :0];
+        }
+
+        const suffix_len = @min(DISPLAY_NAME_SUFFIX_LEN, capacity - prefix.len);
+        const suffix_start = if (suffix_len >= newName.len) 0 else newName.len - suffix_len;
+
+        @memcpy(self.displayNameBuffer[0..prefix.len], prefix);
+        @memcpy(
+            self.displayNameBuffer[prefix.len .. prefix.len + suffix_len],
+            newName[suffix_start .. suffix_start + suffix_len],
+        );
+
+        const written = prefix.len + suffix_len;
+        self.displayNameBuffer[written] = Character.NULL;
+        return self.displayNameBuffer[0..written :0];
+    }
+
+    const copyLen = @min(newName.len, capacity);
+    @memcpy(self.displayNameBuffer[0..copyLen], newName[0..copyLen]);
+    self.displayNameBuffer[copyLen] = Character.NULL;
+    return self.displayNameBuffer[0..copyLen :0];
+}
+
+fn handleOnRootViewTransformQueried(self: *FilePickerUI, event: ComponentEvent) !EventResult {
+    var eventResult = EventResult.init();
+    const data = Events.onRootViewTransformQueried.getData(event) orelse return eventResult.fail();
+    data.result.* = &self.layout.transform;
+    return eventResult.succeed();
+}
+
+fn handleUIDimensionsQueried(self: *FilePickerUI, event: ComponentEvent) !EventResult {
+    var eventResult = EventResult.init();
+    const data = Events.onUIDimensionsQueried.getData(event) orelse return eventResult.fail();
+    data.result.* = &self.bgRect.transform;
+    return eventResult.succeed();
+}
+
+fn handleActiveStateChanged(self: *FilePickerUI, event: ComponentEvent) !EventResult {
+    var eventResult = EventResult.init();
+    const data = FilePicker.Events.onActiveStateChanged.getData(event) orelse return eventResult.fail();
+    self.setIsActive(data.isActive);
+
+    self.layout.emitEvent(.{ .StateChanged = .{ .isActive = data.isActive } }, .{});
+    self.layout.emitEvent(
+        .{ .StateChanged = .{ .target = .FilePickerHeaderDivider, .isActive = !data.isActive } },
+        .{ .excludeSelf = true },
+    );
+
+    self.layout.emitEvent(
+        .{ .StateChanged = .{ .target = .FilePickerImageSelectedGlowTexture, .isActive = !data.isActive } },
+        .{ .excludeSelf = true },
+    );
+
+    self.layout.emitEvent(
+        .{ .StateChanged = .{ .target = .FilePickerImageSelectedTexture, .isActive = !data.isActive } },
+        .{ .excludeSelf = true },
+    );
+
+    self.layout.emitEvent(
+        .{ .StateChanged = .{ .target = .FilePickerImageSelectedTextbox, .isActive = true } },
+        .{ .excludeSelf = true },
+    );
+
+    if (!data.isActive) rl.setMouseCursor(.default);
+    return eventResult.succeed();
+}
+
+fn handleIsoFilePathChanged(self: *FilePickerUI, event: ComponentEvent) !EventResult {
+    var eventResult = EventResult.init();
+    const data = Events.onISOFilePathChanged.getData(event) orelse return eventResult.fail();
+
+    if (data.newPath.len > 0) {
+        self.updateIsoPathState(data.newPath);
+        const displayName = extractDisplayName(data.newPath);
+
+        var sizeBuf: [36]u8 = std.mem.zeroes([36]u8);
+
+        if (data.size) |size| {
+            const displaySize = if (size > 1_000_000_000) @divTrunc(size, 1_000_000_000) else @divTrunc(size, 1_000_000);
+            const displayUnits = if (size > 1_000_000_000) "GB" else "MB";
+
+            _ = try std.fmt.bufPrint(sizeBuf[0..], "{d:.0} {s}", .{ displaySize, displayUnits });
+
+            self.layout.emitEvent(.{ .TextChanged = .{
+                .target = .FilePickerImageSizeText,
+                .text = @ptrCast(std.mem.sliceTo(&sizeBuf, 0x00)),
+                .style = .{ .textColor = Color.offWhite },
+            } }, .{ .excludeSelf = true });
+        }
+
+        self.layout.emitEvent(
+            .{ .TextChanged = .{
+                .target = .FilePickerImageInfoTextbox,
+                .text = displayName,
+                .style = UIConfig.Styles.ImageInfoTextbox.Selected.text,
+            } },
+            .{ .excludeSelf = true },
+        );
+        self.layout.emitEvent(
+            .{ .TextChanged = .{
+                .target = .FilePickerImageSelectedTextbox,
+                .text = displayName,
+            } },
+            .{ .excludeSelf = true },
+        );
+        self.layout.emitEvent(
+            .{ .SpriteButtonEnabledChanged = .{ .target = .FilePickerConfirmButton, .enabled = true } },
+            .{ .excludeSelf = true },
+        );
+
+        // self.updateIsoTitle(displayName);
+    } else {
+        // self.resetIsoTitle();
+    }
+
+    return eventResult.succeed();
+}
+
+pub fn handleAppResetRequest(self: *FilePickerUI) EventResult {
+    var eventResult = EventResult.init();
+
+    {
+        self.state.lock();
+        defer self.state.unlock();
+        self.state.data.isActive = true;
+        self.state.data.isoPath = null;
+    }
+
+    self.setIsActive(true);
+
+    return eventResult.succeed();
+}
+
+fn initLayout(self: *FilePickerUI) !void {
     var ui = UIChain.init(self.allocator);
 
     self.layout = try ui.view(.{
@@ -212,7 +383,7 @@ fn initializeBackground(self: *FilePickerUI) !void {
             .id("header_icon")
             .position(.percent(0.05, 0.03))
             .positionRef(.Parent)
-            .scale(0.5)
+            .scale(1)
             .callbacks(.{ .onStateChange = .{} }), // Consumes .StateChanged event without doing anything
         //
         ui.textbox(DEFAULT_SECTION_HEADER, UIConfig.Styles.HeaderTextbox, UIFramework.Textbox.Params{ .wordWrap = true })
@@ -223,6 +394,18 @@ fn initializeBackground(self: *FilePickerUI) !void {
             .size(.percent(0.7, 0.3))
             .sizeRef(.Parent)
             .callbacks(.{ .onStateChange = .{} }), // Consumes .StateChanged event without doing anything
+
+        ui.rectangle(.{ .style = .{
+            .color = Color.themeSectionBorder,
+        } })
+            .elId(.FilePickerHeaderDivider)
+            .id("header_divider")
+            .position(.percent(0, 1))
+            .positionRefX(.Parent)
+            .positionRefY(.{ .NodeId = "header_textbox" })
+            .size(.mix(.percent(1), .pixels(2)))
+            .sizeRef(.Parent)
+            .active(false),
 
         ui.fileDropzone(.{
             .identifier = .FilePickerFileDropzone,
@@ -301,7 +484,7 @@ fn initializeBackground(self: *FilePickerUI) !void {
             .texture = .BUTTON_FRAME,
             .callbacks = .{
                 .onClick = .{
-                    .function = FilePickerUI.ConfirmButtonClickHandler.call,
+                    .function = UIConfig.Callbacks.ConfirmButton.OnClick.call,
                     .context = self,
                 },
             },
@@ -313,9 +496,17 @@ fn initializeBackground(self: *FilePickerUI) !void {
             .size(.percent(0.3, 0.4))
             .sizeRef(.{ .NodeId = "image_info_bg" }),
 
+        ui.texture(.FILE_SELECTED_GLOW, .{ .identifier = .FilePickerImageSelectedGlowTexture })
+            .position(.percent(0.5, 0.5))
+            .positionRef(.{ .NodeId = "file_picker_image_selected_texture" })
+            .offsetToOrigin()
+            .sizeRef(.Parent)
+            .scale(1)
+            .active(false),
+
         ui.texture(.FILE_SELECTED, .{ .identifier = .FilePickerImageSelectedTexture })
             .id("file_picker_image_selected_texture")
-            .position(.percent(0.5, 0.5))
+            .position(.percent(0.5, 0.6))
             .offsetToOrigin()
             .scale(1.8)
             .active(false),
@@ -334,191 +525,6 @@ fn initializeBackground(self: *FilePickerUI) !void {
     };
 
     try self.layout.start();
-}
-
-/// Updates internal active state and reapplies panel styling; must be called on the main UI thread.
-fn setIsActive(self: *FilePickerUI, isActive: bool) void {
-    self.storeIsActive(isActive);
-    self.layout.emitEvent(.{ .StateChanged = .{ .isActive = isActive } }, .{});
-}
-
-fn storeIsActive(self: *FilePickerUI, isActive: bool) void {
-    self.state.lock();
-    defer self.state.unlock();
-    self.state.data.isActive = isActive;
-}
-
-fn readIsActive(self: *FilePickerUI) bool {
-    self.state.lock();
-    defer self.state.unlock();
-    return self.state.data.isActive;
-}
-
-fn updateIsoPathState(self: *FilePickerUI, newPath: [:0]u8) void {
-    self.state.lock();
-    defer self.state.unlock();
-    self.state.data.isoPath = newPath;
-}
-
-fn extractDisplayName(path: [:0]u8) [:0]const u8 {
-    if (std.mem.lastIndexOfScalar(u8, path, '/')) |index| {
-        return path[index + 1 .. path.len :0];
-    }
-    return path;
-}
-
-fn prepareDisplayName(self: *FilePickerUI, newName: [:0]const u8) [:0]const u8 {
-    @memset(&self.displayNameBuffer, Character.NULL);
-
-    const capacity = self.displayNameBuffer.len - 1;
-
-    if (newName.len > DISPLAY_NAME_SUFFIX_LEN and capacity > 0) {
-        const prefix = "...";
-        if (capacity <= prefix.len) {
-            const copyLen = @min(newName.len, capacity);
-            const startC = newName.len - copyLen;
-            @memcpy(self.displayNameBuffer[0..copyLen], newName[startC .. startC + copyLen]);
-            self.displayNameBuffer[copyLen] = Character.NULL;
-            return self.displayNameBuffer[0..copyLen :0];
-        }
-
-        const suffix_len = @min(DISPLAY_NAME_SUFFIX_LEN, capacity - prefix.len);
-        const suffix_start = if (suffix_len >= newName.len) 0 else newName.len - suffix_len;
-
-        @memcpy(self.displayNameBuffer[0..prefix.len], prefix);
-        @memcpy(
-            self.displayNameBuffer[prefix.len .. prefix.len + suffix_len],
-            newName[suffix_start .. suffix_start + suffix_len],
-        );
-
-        const written = prefix.len + suffix_len;
-        self.displayNameBuffer[written] = Character.NULL;
-        return self.displayNameBuffer[0..written :0];
-    }
-
-    const copyLen = @min(newName.len, capacity);
-    @memcpy(self.displayNameBuffer[0..copyLen], newName[0..copyLen]);
-    self.displayNameBuffer[copyLen] = Character.NULL;
-    return self.displayNameBuffer[0..copyLen :0];
-}
-
-const ConfirmButtonClickHandler = struct {
-    pub fn call(ctx: *anyopaque) void {
-        const self: *FilePickerUI = @ptrCast(@alignCast(ctx));
-
-        self.parent.*.confirmSelectedImageFile() catch |err| {
-            Debug.log(.ERROR, "FilePickerUI: Unable to confirm selected image file. {any}", .{err});
-
-            const response = osd.message(
-                "Error: unable to confirm the selected image file. Submit bug report on github.com?",
-                .{ .level = .err, .buttons = .yes_no },
-            );
-
-            if (!response) return;
-            const argv: []const []const u8 = &.{ "open", "https://github.com/orbitixx/freetracer/issues/new/choose" };
-            var ch = std.process.Child.init(argv, self.allocator);
-            ch.spawn() catch return;
-        };
-
-        self.layout.emitEvent(
-            .{ .StateChanged = .{ .target = .FilePickerImageSelectedTexture, .isActive = true } },
-            .{ .excludeSelf = true },
-        );
-
-        self.layout.emitEvent(
-            .{ .StateChanged = .{ .target = .FilePickerImageSelectedTextbox, .isActive = true } },
-            .{ .excludeSelf = true },
-        );
-    }
-};
-
-fn handleOnRootViewTransformQueried(self: *FilePickerUI, event: ComponentEvent) !EventResult {
-    var eventResult = EventResult.init();
-    const data = Events.onRootViewTransformQueried.getData(event) orelse return eventResult.fail();
-    data.result.* = &self.layout.transform;
-    return eventResult.succeed();
-}
-
-fn handleUIDimensionsQueried(self: *FilePickerUI, event: ComponentEvent) !EventResult {
-    var eventResult = EventResult.init();
-    const data = Events.onUIDimensionsQueried.getData(event) orelse return eventResult.fail();
-    data.result.* = &self.bgRect.transform;
-    return eventResult.succeed();
-}
-
-fn handleActiveStateChanged(self: *FilePickerUI, event: ComponentEvent) !EventResult {
-    var eventResult = EventResult.init();
-    const data = FilePicker.Events.onActiveStateChanged.getData(event) orelse return eventResult.fail();
-    self.setIsActive(data.isActive);
-    self.layout.emitEvent(.{ .StateChanged = .{ .isActive = data.isActive } }, .{});
-    if (!data.isActive) rl.setMouseCursor(.default);
-    return eventResult.succeed();
-}
-
-fn handleIsoFilePathChanged(self: *FilePickerUI, event: ComponentEvent) !EventResult {
-    var eventResult = EventResult.init();
-    const data = Events.onISOFilePathChanged.getData(event) orelse return eventResult.fail();
-
-    if (data.newPath.len > 0) {
-        self.updateIsoPathState(data.newPath);
-        const displayName = extractDisplayName(data.newPath);
-
-        var sizeBuf: [36]u8 = std.mem.zeroes([36]u8);
-
-        if (data.size) |size| {
-            const displaySize = if (size > 1_000_000_000) @divTrunc(size, 1_000_000_000) else @divTrunc(size, 1_000_000);
-            const displayUnits = if (size > 1_000_000_000) "GB" else "MB";
-
-            _ = try std.fmt.bufPrint(sizeBuf[0..], "{d:.0} {s}", .{ displaySize, displayUnits });
-
-            self.layout.emitEvent(.{ .TextChanged = .{
-                .target = .FilePickerImageSizeText,
-                .text = @ptrCast(std.mem.sliceTo(&sizeBuf, 0x00)),
-                .style = .{ .textColor = Color.offWhite },
-            } }, .{ .excludeSelf = true });
-        }
-
-        self.layout.emitEvent(
-            .{ .TextChanged = .{
-                .target = .FilePickerImageInfoTextbox,
-                .text = displayName,
-                .style = UIConfig.Styles.ImageInfoTextbox.Selected.text,
-            } },
-            .{ .excludeSelf = true },
-        );
-        self.layout.emitEvent(
-            .{ .TextChanged = .{
-                .target = .FilePickerImageSelectedTextbox,
-                .text = displayName,
-            } },
-            .{ .excludeSelf = true },
-        );
-        self.layout.emitEvent(
-            .{ .SpriteButtonEnabledChanged = .{ .target = .FilePickerConfirmButton, .enabled = true } },
-            .{ .excludeSelf = true },
-        );
-
-        // self.updateIsoTitle(displayName);
-    } else {
-        // self.resetIsoTitle();
-    }
-
-    return eventResult.succeed();
-}
-
-pub fn handleAppResetRequest(self: *FilePickerUI) EventResult {
-    var eventResult = EventResult.init();
-
-    {
-        self.state.lock();
-        defer self.state.unlock();
-        self.state.data.isActive = true;
-        self.state.data.isoPath = null;
-    }
-
-    self.setIsActive(true);
-
-    return eventResult.succeed();
 }
 
 const UIConfig = struct {
@@ -546,6 +552,28 @@ const UIConfig = struct {
                     }
 
                     self.transform.resolve();
+                }
+            };
+        };
+
+        const ConfirmButton = struct {
+            pub const OnClick = struct {
+                pub fn call(ctx: *anyopaque) void {
+                    const self: *FilePickerUI = @ptrCast(@alignCast(ctx));
+
+                    self.parent.*.confirmSelectedImageFile() catch |err| {
+                        Debug.log(.ERROR, "FilePickerUI: Unable to confirm selected image file. {any}", .{err});
+
+                        const response = osd.message(
+                            "Error: unable to confirm the selected image file. Submit bug report on github.com?",
+                            .{ .level = .err, .buttons = .yes_no },
+                        );
+
+                        if (!response) return;
+                        const argv: []const []const u8 = &.{ "open", "https://github.com/orbitixx/freetracer/issues/new/choose" };
+                        var ch = std.process.Child.init(argv, self.allocator);
+                        ch.spawn() catch return;
+                    };
                 }
             };
         };

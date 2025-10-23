@@ -207,134 +207,6 @@ fn subscribeToEvents(self: *DeviceListUI) !void {
     } else return error.UnableToSubscribeToEventManager;
 }
 
-fn initLayout(self: *DeviceListUI) !void {
-    var ui = UIChain.init(self.allocator);
-
-    self.layout = try ui.view(.{
-        .id = null,
-        .position = .percent(1, AppConfig.APP_UI_MODULE_PANEL_Y_INACTIVE),
-        .offset_x = AppConfig.APP_UI_MODULE_GAP_X,
-        .size = .percent(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE, AppConfig.APP_UI_MODULE_PANEL_HEIGHT_INACTIVE),
-        .size_transform_height = try AppManager.getGlobalTransform(),
-        .size_transform_width = try AppManager.getGlobalTransform(),
-        .position_transform_x = try UIFramework.queryViewTransform(FilePickerUI),
-        .position_transform_y = try AppManager.getGlobalTransform(),
-        .background = .{
-            .transform = .{},
-            .style = .{
-                .color = Color.themeSectionBg,
-                .borderStyle = .{ .color = Color.themeSectionBorder },
-            },
-            .rounded = true,
-            .bordered = true,
-        },
-    }).children(.{
-        //
-        ui.texture(.STEP_1_INACTIVE, .{})
-            .id("header_icon")
-            .position(.percent(0.05, 0.03))
-            .positionRef(.Parent)
-            .scale(0.5)
-            .callbacks(.{ .onStateChange = .{} }), // Consumes .StateChanged event without doing anything
-        //
-        ui.textbox(DEFAULT_SECTION_HEADER, UIConfig.Styles.HeaderTextbox, UIFramework.Textbox.Params{ .wordWrap = true })
-            .id("header_textbox")
-            .position(.percent(1, 0))
-            .offset(10, -2)
-            .positionRef(.{ .NodeId = "header_icon" })
-            .size(.percent(0.7, 0.3))
-            .sizeRef(.Parent)
-            .callbacks(.{ .onStateChange = .{} }), // Consumes .StateChanged event without doing anything
-
-        ui.spriteButton(.{
-            .identifier = .DeviceListRefreshDevicesButton,
-            .text = "",
-            .texture = .RELOAD_ICON,
-        })
-            .position(.percent(1.05, 0.15))
-            .positionRef(.{ .NodeId = "header_textbox" })
-            .size(.percent(0.07, 0.07))
-            .sizeRef(.Parent)
-            .offsetToOrigin()
-            .active(false)
-            .callbacks(.{
-            .onClick = .{
-                .function = refreshDevices.call,
-                .context = self.parent,
-            },
-        }),
-
-        ui.deviceSelectBoxList(.{
-            .identifier = .DeviceListDeviceListBox,
-            .allocator = self.allocator,
-            .layout = UIConfig.Layout.DeviceSelectBox,
-            .style = UIConfig.Styles.DeviceSelectBoxElement,
-        })
-            .id("device_select_list")
-            .position(.percent(0, 1.7))
-            .positionRef(.{ .NodeId = "header_icon" })
-            .size(.percent(0.9, 0.7))
-            .sizeRef(.Parent)
-            .active(false),
-        // .callbacks(.{ .onStateChange = .{} }),
-
-        ui.texture(.WARNING_ICON, .{})
-            .id("device_list_warning_icon")
-            .position(.percent(0.05, 0.88))
-            .positionRef(.Parent)
-            .active(false),
-
-        ui.textbox("All data on selected device will be erased.", Textbox.TextboxStyle{ .text = .{
-            .fontSize = 14,
-            .textColor = rl.Color.init(255, 194, 14, 255),
-        } }, Textbox.Params{ .wordWrap = true })
-            .id("device_list_warning_textbox")
-            .position(.percent(1.7, 0))
-            .positionRef(.{ .NodeId = "device_list_warning_icon" })
-            .size(.percent(0.48, 0.15))
-            .sizeRef(.Parent)
-            .active(false),
-
-        ui.spriteButton(.{
-            .text = "Confirm",
-            .texture = .BUTTON_FRAME,
-            .callbacks = .{
-                .onClick = .{
-                    .function = DeviceList.dispatchComponentFinishedAction.call,
-                    .context = self.parent,
-                },
-            },
-            .enabled = false,
-            .style = UIConfig.Styles.ConfirmButton,
-        }).position(.percent(1.1, 0))
-            .elId(.DeviceListConfirmButton)
-            .offset(0, -10)
-            .positionRef(.{ .NodeId = "device_list_warning_textbox" })
-            .size(.percent(0.3, 0.1))
-            .sizeRef(.Parent)
-            .active(false),
-
-        ui.text("No devices found", .{})
-            .elId(.DeviceListNoDevicesText)
-            .position(.percent(0.5, 0.5))
-            .positionRef(.Parent)
-            .offsetToOrigin()
-            .active(false),
-
-        ui.texture(.DEVICE_LIST_PLACEHOLDER, .{})
-            .elId(.DeviceListPlaceholderTexture)
-            .position(.percent(0.5, 0.6))
-            .positionRef(.Parent)
-            .scale(2.5)
-            .offsetToOrigin(),
-    });
-
-    self.layout.callbacks.onStateChange = .{ .function = UIConfig.Callbacks.MainView.StateHandler.handler, .context = &self.layout };
-
-    try self.layout.start();
-    try self.bindDeviceSelectList();
-}
-
 fn bindDeviceSelectList(self: *DeviceListUI) DeviceListUIError!void {
     for (self.layout.children.items) |*child| {
         switch (child.*) {
@@ -483,10 +355,7 @@ fn handleOnDeviceListActiveStateChanged(self: *DeviceListUI, event: ComponentEve
         .{ .StateChanged = .{ .isActive = data.isActive } },
         .{},
     );
-    self.layout.emitEvent(
-        .{ .StateChanged = .{ .target = .DeviceListPlaceholderTexture, .isActive = !data.isActive } },
-        .{ .excludeSelf = true },
-    );
+
     self.layout.emitEvent(
         .{ .StateChanged = .{ .target = .DeviceListDeviceListBox, .isActive = data.isActive } },
         .{ .excludeSelf = true },
@@ -495,6 +364,11 @@ fn handleOnDeviceListActiveStateChanged(self: *DeviceListUI, event: ComponentEve
         .{ .StateChanged = .{ .target = .DeviceListRefreshDevicesButton, .isActive = data.isActive } },
         .{ .excludeSelf = true },
     );
+
+    self.layout.emitEvent(.{ .StateChanged = .{ .target = .DeviceListHeaderDivider, .isActive = !data.isActive } }, .{ .excludeSelf = true });
+    self.layout.emitEvent(.{ .StateChanged = .{ .target = .DeviceListDeviceSelectedGlowTexture, .isActive = !data.isActive } }, .{ .excludeSelf = true });
+    self.layout.emitEvent(.{ .StateChanged = .{ .target = .DeviceListDeviceSelectedTexture, .isActive = !data.isActive } }, .{ .excludeSelf = true });
+    self.layout.emitEvent(.{ .StateChanged = .{ .target = .DeviceListPlaceholderTexture, .isActive = false } }, .{ .excludeSelf = true });
 
     return eventResult.succeed();
 }
@@ -602,6 +476,160 @@ pub fn handleAppResetRequest(self: *DeviceListUI) EventResult {
     return eventResult.succeed();
 }
 
+fn initLayout(self: *DeviceListUI) !void {
+    var ui = UIChain.init(self.allocator);
+
+    self.layout = try ui.view(.{
+        .id = null,
+        .position = .percent(1, AppConfig.APP_UI_MODULE_PANEL_Y_INACTIVE),
+        .offset_x = AppConfig.APP_UI_MODULE_GAP_X,
+        .size = .percent(AppConfig.APP_UI_MODULE_PANEL_WIDTH_INACTIVE, AppConfig.APP_UI_MODULE_PANEL_HEIGHT_INACTIVE),
+        .size_transform_height = try AppManager.getGlobalTransform(),
+        .size_transform_width = try AppManager.getGlobalTransform(),
+        .position_transform_x = try UIFramework.queryViewTransform(FilePickerUI),
+        .position_transform_y = try AppManager.getGlobalTransform(),
+        .background = .{
+            .transform = .{},
+            .style = .{
+                .color = Color.themeSectionBg,
+                .borderStyle = .{ .color = Color.themeSectionBorder },
+            },
+            .rounded = true,
+            .bordered = true,
+        },
+    }).children(.{
+        //
+        ui.texture(.STEP_2_INACTIVE, .{})
+            .id("header_icon")
+            .position(.percent(0.05, 0.03))
+            .positionRef(.Parent)
+            .scale(1)
+            .callbacks(.{ .onStateChange = .{} }), // Consumes .StateChanged event without doing anything
+        //
+        ui.textbox(DEFAULT_SECTION_HEADER, UIConfig.Styles.HeaderTextbox, UIFramework.Textbox.Params{ .wordWrap = true })
+            .id("header_textbox")
+            .position(.percent(1, 0))
+            .offset(10, -2)
+            .positionRef(.{ .NodeId = "header_icon" })
+            .size(.percent(0.7, 0.3))
+            .sizeRef(.Parent)
+            .callbacks(.{ .onStateChange = .{} }), // Consumes .StateChanged event without doing anything
+
+        ui.rectangle(.{ .style = .{
+            .color = Color.themeSectionBorder,
+        } })
+            .elId(.DeviceListHeaderDivider)
+            .id("header_divider")
+            .position(.percent(0, 1))
+            .positionRefX(.Parent)
+            .positionRefY(.{ .NodeId = "header_textbox" })
+            .size(.mix(.percent(1), .pixels(2)))
+            .sizeRef(.Parent),
+
+        ui.spriteButton(.{
+            .identifier = .DeviceListRefreshDevicesButton,
+            .text = "",
+            .texture = .RELOAD_ICON,
+        })
+            .position(.percent(1.05, 0.15))
+            .positionRef(.{ .NodeId = "header_textbox" })
+            .size(.percent(0.07, 0.07))
+            .sizeRef(.Parent)
+            .offsetToOrigin()
+            .active(false)
+            .callbacks(.{
+            .onClick = .{
+                .function = refreshDevices.call,
+                .context = self.parent,
+            },
+        }),
+
+        ui.deviceSelectBoxList(.{
+            .identifier = .DeviceListDeviceListBox,
+            .allocator = self.allocator,
+            .layout = UIConfig.Layout.DeviceSelectBox,
+            .style = UIConfig.Styles.DeviceSelectBoxElement,
+        })
+            .id("device_select_list")
+            .position(.percent(0, 1.7))
+            .positionRef(.{ .NodeId = "header_icon" })
+            .size(.percent(0.9, 0.7))
+            .sizeRef(.Parent)
+            .active(false),
+        // .callbacks(.{ .onStateChange = .{} }),
+
+        ui.texture(.WARNING_ICON, .{})
+            .id("device_list_warning_icon")
+            .position(.percent(0.05, 0.88))
+            .positionRef(.Parent)
+            .active(false),
+
+        ui.textbox("All data on selected device will be erased.", Textbox.TextboxStyle{ .text = .{
+            .fontSize = 14,
+            .textColor = rl.Color.init(255, 194, 14, 255),
+        } }, Textbox.Params{ .wordWrap = true })
+            .id("device_list_warning_textbox")
+            .position(.percent(1.7, 0))
+            .positionRef(.{ .NodeId = "device_list_warning_icon" })
+            .size(.percent(0.48, 0.15))
+            .sizeRef(.Parent)
+            .active(false),
+
+        ui.spriteButton(.{
+            .text = "Confirm",
+            .texture = .BUTTON_FRAME,
+            .callbacks = .{
+                .onClick = .{
+                    .function = UIConfig.Callbacks.ConfirmButton.OnClick.call,
+                    .context = self,
+                },
+            },
+            .enabled = false,
+            .style = UIConfig.Styles.ConfirmButton,
+        }).position(.percent(1.1, 0))
+            .elId(.DeviceListConfirmButton)
+            .offset(0, -10)
+            .positionRef(.{ .NodeId = "device_list_warning_textbox" })
+            .size(.percent(0.3, 0.1))
+            .sizeRef(.Parent)
+            .active(false),
+
+        ui.text("No devices found", .{})
+            .elId(.DeviceListNoDevicesText)
+            .position(.percent(0.5, 0.5))
+            .positionRef(.Parent)
+            .offsetToOrigin()
+            .active(false),
+
+        ui.texture(.DEVICE_LIST_PLACEHOLDER, .{})
+            .elId(.DeviceListPlaceholderTexture)
+            .position(.percent(0.5, 0.6))
+            .positionRef(.Parent)
+            .scale(2.5)
+            .offsetToOrigin(),
+
+        ui.texture(.DEVICE_SELECTED_GLOW, .{ .identifier = .DeviceListDeviceSelectedGlowTexture })
+            .position(.percent(0.5, 0.5))
+            .positionRef(.{ .NodeId = "device_selected_texture" })
+            .offsetToOrigin()
+            .sizeRef(.Parent)
+            .scale(1)
+            .active(false),
+
+        ui.texture(.DEVICE_SELECTED, .{ .identifier = .DeviceListDeviceSelectedTexture })
+            .id("device_selected_texture")
+            .position(.percent(0.5, 0.6))
+            .offsetToOrigin()
+            .scale(1.8)
+            .active(false),
+    });
+
+    self.layout.callbacks.onStateChange = .{ .function = UIConfig.Callbacks.MainView.StateHandler.handler, .context = &self.layout };
+
+    try self.layout.start();
+    try self.bindDeviceSelectList();
+}
+
 pub const UIConfig = struct {
     //
     pub const Callbacks = struct {
@@ -634,6 +662,16 @@ pub const UIConfig = struct {
                     }
 
                     self.transform.resolve();
+                }
+            };
+        };
+
+        const ConfirmButton = struct {
+            pub const OnClick = struct {
+                pub fn call(ctx: *anyopaque) void {
+                    const self: *DeviceListUI = @ptrCast(@alignCast(ctx));
+                    self.layout.emitEvent(.{ .StateChanged = .{ .target = .DeviceListPlaceholderTexture, .isActive = false } }, .{ .excludeSelf = true });
+                    DeviceList.dispatchComponentFinishedAction.call(self.parent);
                 }
             };
         };
