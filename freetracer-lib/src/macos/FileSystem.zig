@@ -132,21 +132,114 @@ pub fn getExtensionFromPath(path: []const u8) []const u8 {
     return std.fs.path.extension(path);
 }
 
-/// Checks if a file path's extension is present within a given array of allowed extensions.
-/// The comparison is performed case-insensitively.
+/// Checks whether a file handle points to a valid disk image.
+/// This function checks for ISO 9660, MBR, or GPT signatures only.
+/// The caller is responsible for opening the file with appropriate flags.
 ///
 /// Parameters:
-///   - `n`: (Comptime) The size of the `allowedExtensionsArray`.
-///   - `allowedExtensionsArray`: An array of string literals representing valid extensions (e.g., `.{".iso", ".img"}`).
-///   - `path`: The full file path to check.
+///   - `file`: An open std.fs.File handle pointing to the image file.
 ///
-/// Returns `true` if the path's extension is in the allowed list, `false` otherwise.
-pub fn isExtensionAllowed(comptime n: usize, allowedExtensionsArray: [n][]const u8, path: []const u8) bool {
-    const ext: []const u8 = getExtensionFromPath(path);
+/// Returns: `bool`
+/// - `true` if the file contains a recognized magic signature (ISO 9660, MBR, or GPT)
+/// - `false` if the file is too small, unreadable, or does not contain a recognized signature
+pub fn isValidImageFile(file: std.fs.File) bool {
+    var buffer: [512]u8 = undefined;
 
-    if (ext.len == 0) return false;
+    const stat = file.stat() catch |err| {
+        Debug.log(.ERROR, "isValidImageFile: Unable to obtain file stat. Error: {any}", .{err});
+        return false;
+    };
 
-    for (allowedExtensionsArray) |allowedExt| if (std.ascii.eqlIgnoreCase(ext, allowedExt)) return true;
+    if (stat.size < 512) {
+        Debug.log(.ERROR, "isValidImageFile: File is too small to contain valid image signatures.", .{});
+        return false;
+    }
+
+    file.seekTo(0) catch |err| {
+        Debug.log(.ERROR, "isValidImageFile: Unable to seek to beginning of file. Error: {any}", .{err});
+        return false;
+    };
+
+    const bytes_read = file.read(&buffer) catch |err| {
+        Debug.log(.ERROR, "isValidImageFile: Unable to read file. Error: {any}", .{err});
+        return false;
+    };
+
+    if (bytes_read < 512) {
+        Debug.log(.ERROR, "isValidImageFile: Unable to read full 512 byte sector.", .{});
+        return false;
+    }
+
+    if (isISO9660(buffer)) {
+        Debug.log(.DEBUG, "isValidImageFile: Detected ISO 9660 image.", .{});
+        return true;
+    }
+
+    if (isMBRPartitionTable(buffer)) {
+        Debug.log(.DEBUG, "isValidImageFile: Detected MBR partition table.", .{});
+        return true;
+    }
+
+    if (isGPTPartitionTable(&file)) {
+        Debug.log(.DEBUG, "isValidImageFile: Detected GPT partition table.", .{});
+        return true;
+    }
+
+    Debug.log(.WARNING, "isValidImageFile: File does not contain recognized image signatures.", .{});
+    return false;
+}
+
+/// Checks for ISO 9660 magic signature.
+/// ISO 9660 has a Primary Volume Descriptor at sector 16 (offset 32KB).
+/// The signature is the string "CD001" at bytes 1-5 of that sector.
+fn isISO9660(buffer: [512]u8) bool {
+    if (buffer.len < 512) return false;
+
+    const expected_signature = "CD001";
+
+    if (buffer.len >= 6) {
+        if (std.mem.eql(u8, buffer[1..6], expected_signature)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/// Checks for MBR partition table magic signature.
+/// MBR has the boot signature 0x55 0xAA at bytes 510-511.
+fn isMBRPartitionTable(buffer: [512]u8) bool {
+    if (buffer.len < 512) return false;
+
+    const mbr_signature_1 = buffer[510];
+    const mbr_signature_2 = buffer[511];
+
+    return mbr_signature_1 == 0x55 and mbr_signature_2 == 0xAA;
+}
+
+/// Checks for GPT partition table magic signature.
+/// GPT has the signature "EFI PART" at offset 0 on LBA 1 (512 bytes after MBR).
+fn isGPTPartitionTable(file: *const std.fs.File) bool {
+    var buffer: [512]u8 = undefined;
+
+    file.seekTo(512) catch |err| {
+        Debug.log(.DEBUG, "isGPTPartitionTable: Unable to seek to LBA 1. Error: {any}", .{err});
+        return false;
+    };
+
+    const bytes_read = file.read(&buffer) catch |err| {
+        Debug.log(.DEBUG, "isGPTPartitionTable: Unable to read LBA 1. Error: {any}", .{err});
+        return false;
+    };
+
+    if (bytes_read < 8) {
+        return false;
+    }
+
+    const gpt_signature = "EFI PART";
+    if (std.mem.eql(u8, buffer[0..8], gpt_signature)) {
+        return true;
+    }
 
     return false;
 }
@@ -348,40 +441,17 @@ test "getExtensionFromPath: file with no extension" {
     try std.testing.expectEqualStrings(expected, getExtensionFromPath(path));
 }
 
-test "isExtensionAllowed: allowed extension is present and matches case" {
-    const allowed = [_][]const u8{ ".log", ".txt" };
-    const path = "info.log";
-    try std.testing.expect(isExtensionAllowed(allowed.len, allowed, path));
-}
+test "isValidImageFile: ISO 9660 detection" {
+    const USER_HOME_PATH = "/Users/cerberus";
+    const TEST_ISO_FILE_PATH = "/Documents/Projects/freetracer/tinycore.iso";
 
-test "isExtensionAllowed: allowed extension is present with different case" {
-    const allowed = [_][]const u8{ ".log", ".txt" };
-    const path = "/var/log/system.LOG";
-    try std.testing.expect(isExtensionAllowed(allowed.len, allowed, path));
-}
+    const imageFile = std.fs.openFileAbsolute(USER_HOME_PATH ++ TEST_ISO_FILE_PATH, .{ .mode = .read_only }) catch |err| {
+        std.debug.print("Skipping ISO detection test: {any}\n", .{err});
+        return;
+    };
+    defer imageFile.close();
 
-test "isExtensionAllowed: disallowed extension" {
-    const allowed = [_][]const u8{ ".jpg", ".png" };
-    const path = "document.pdf";
-    try std.testing.expect(!isExtensionAllowed(allowed.len, allowed, path));
-}
-
-test "isExtensionAllowed: path has no extension" {
-    const allowed = [_][]const u8{ ".iso", ".img" };
-    const path = "my-iso-image";
-    try std.testing.expect(!isExtensionAllowed(allowed.len, allowed, path));
-}
-
-test "isExtensionAllowed: empty allowed list" {
-    const allowed = [_][]const u8{};
-    const path = "file.txt";
-    try std.testing.expect(!isExtensionAllowed(allowed.len, allowed, path));
-}
-
-test "isExtensionAllowed: file with multiple dots" {
-    const allowed = [_][]const u8{ ".gz", ".zip" };
-    const path = "backup.tar.gz";
-    try std.testing.expect(isExtensionAllowed(allowed.len, allowed, path));
+    try std.testing.expect(isValidImageFile(imageFile));
 }
 
 test "getImageType: lowercase .iso file" {

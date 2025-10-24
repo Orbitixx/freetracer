@@ -254,19 +254,6 @@ pub fn confirmSelectedImageFile(self: *FilePicker) !void {
 }
 
 fn processSelectedPathLocked(self: *FilePicker, newPath: [:0]u8) !void {
-    if (!fs.isExtensionAllowed(AppConfig.ALLOWED_IMAGE_EXTENSIONS.len, AppConfig.ALLOWED_IMAGE_EXTENSIONS, newPath)) {
-        const proceed = osd.message("The selected file extension is not a recognized image type (.iso, .img). Proceed anyway?", .{
-            .level = .warning,
-            .buttons = .yes_no,
-        });
-
-        if (!proceed) {
-            self.allocator.free(newPath);
-            self.state.data.selectedPath = null;
-            return;
-        }
-    }
-
     const imageType = fs.getImageType(fs.getExtensionFromPath(newPath));
 
     self.state.data.image.path = newPath;
@@ -282,6 +269,19 @@ fn processSelectedPathLocked(self: *FilePicker, newPath: [:0]u8) !void {
 
     const stat = try file.stat();
     defer file.close();
+
+    if (!fs.isValidImageFile(file)) {
+        const proceed = osd.message("The selected file does not appear to contain a bootable file system (ISO9660, GPT or MBR), this is unusual. Proceed anyway?", .{
+            .level = .warning,
+            .buttons = .yes_no,
+        });
+
+        if (!proceed) {
+            self.allocator.free(newPath);
+            self.state.data.selectedPath = null;
+            return;
+        }
+    }
 
     Debug.log(.INFO, "FilePicker selected file: {s}, size: {d:.0}", .{ newPath, stat.size });
 
