@@ -481,7 +481,6 @@ fn initLayout(self: *FilePickerUI) !void {
         })
             .id("image_info_size_text")
             .position(.percent(0, 1))
-            // .offset(0, -24)
             .positionRef(.{ .NodeId = "image_info_textbox" })
             .sizeRef(.{ .NodeId = "image_info_bg" }),
 
