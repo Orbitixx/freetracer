@@ -42,6 +42,8 @@ pub const UIElementIdentifier = enum(u8) {
     DataFlasherStatusBoxSpeedText,
     DataFlasherStatusBoxETAText,
     DataFlasherLogsBgRect,
+    DataFlasherLogsTextbox,
+    DataFlasherCopyLogsButton,
 
     DataFlasherLaunchButton,
 
@@ -62,4 +64,5 @@ pub const UIEvent = union(enum) {
     PositionChanged: struct { target: UIElementIdentifier, position: UIFramework.PositionSpec },
     BorderColorChanged: struct { target: UIElementIdentifier, color: rl.Color },
     ColorChanged: struct { target: UIElementIdentifier, color: rl.Color },
+    CopyTextToClipboard: struct { target: UIElementIdentifier },
 };

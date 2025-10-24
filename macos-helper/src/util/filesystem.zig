@@ -40,9 +40,6 @@ pub fn writeISO(connection: XPCConnection, imageFile: std.fs.File, device: std.f
     Debug.log(.INFO, "File and device are opened successfully! File size: {d}", .{imageSize});
     Debug.log(.INFO, "Writing ISO to device, please wait...", .{});
 
-    // try imageFile.seekTo(0);
-    // try device.seekTo(0);
-
     while (currentByte < imageSize) {
         previousProgress = currentProgress;
 

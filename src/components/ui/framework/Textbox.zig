@@ -165,8 +165,17 @@ pub fn onEvent(self: *Textbox, event: UIEvent) void {
 
     switch (event) {
         .TextChanged => |e| {
-            if (e.text) |newText| self.setText(newText);
+            if (e.text) |newText| {
+                if (self.isUsingExtendedBuffer) self.appendText(newText) else self.setText(newText);
+            }
+
             if (e.style) |textStyle| self.style.text = textStyle;
+        },
+        .CopyTextToClipboard => {
+            if (self.isUsingExtendedBuffer)
+                rl.setClipboardText(@ptrCast(std.mem.sliceTo(&self.extendedTextBuffer, 0x00)))
+            else
+                rl.setClipboardText(self.text);
         },
         inline else => {},
     }

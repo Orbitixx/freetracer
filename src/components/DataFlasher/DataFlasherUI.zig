@@ -123,6 +123,15 @@ displayDeviceTextBuffer: [std.fs.max_path_bytes]u8 = undefined,
 
 layout: View = undefined,
 flashRequested: bool = false,
+flashingStep: enum {
+    Waiting,
+    FileOpened,
+    DeviceOpened,
+    Writing,
+    WriteFinished,
+    Verifying,
+    VerificationFinished,
+} = .Waiting,
 
 pub const Events = struct {
     pub const onActiveStateChanged = ComponentFramework.defineEvent(
@@ -175,38 +184,66 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
         DataFlasher.Events.onActiveStateChanged.Hash => try self.handleOnActiveStateChanged(event),
 
         PrivilegedHelper.Events.onHelperISOFileOpenSuccess.Hash => {
-            // self.isoStatus.switchState(.SUCCESS);
+            self.layout.emitEvent(.{ .TextChanged = .{
+                .target = .DataFlasherLogsTextbox,
+                .text = "\nImage file successfully opened!",
+            } }, .{ .excludeSelf = true });
+            self.flashingStep = .FileOpened;
             return eventResult.succeed();
         },
 
         PrivilegedHelper.Events.onHelperISOFileOpenFailed.Hash => {
+            self.layout.emitEvent(.{ .TextChanged = .{
+                .target = .DataFlasherLogsTextbox,
+                .text = "\nFailed to open the image file...",
+            } }, .{ .excludeSelf = true });
             self.setStatusBoxUIToFailedState();
             return eventResult.succeed();
         },
 
         PrivilegedHelper.Events.onHelperDeviceOpenSuccess.Hash => {
-            // self.deviceStatus.switchState(.SUCCESS);
-            // self.permissionsStatus.switchState(.SUCCESS);
+            self.layout.emitEvent(.{ .TextChanged = .{
+                .target = .DataFlasherLogsTextbox,
+                .text = "\nDevice successfully opened!",
+            } }, .{ .excludeSelf = true });
+            self.flashingStep = .DeviceOpened;
             return eventResult.succeed();
         },
 
         PrivilegedHelper.Events.onHelperDeviceOpenFailed.Hash => {
+            self.layout.emitEvent(.{ .TextChanged = .{
+                .target = .DataFlasherLogsTextbox,
+                .text = "\nFailed to open the device or obtain handle...",
+            } }, .{ .excludeSelf = true });
             self.setStatusBoxUIToFailedState();
             return eventResult.succeed();
         },
 
         PrivilegedHelper.Events.onHelperWriteSuccess.Hash => {
-            // self.writeStatus.switchState(.SUCCESS);
+            self.layout.emitEvent(.{ .TextChanged = .{
+                .target = .DataFlasherLogsTextbox,
+                .text = "\nSuccessfully finished writing to device!",
+            } }, .{ .excludeSelf = true });
+            self.flashingStep = .WriteFinished;
             return eventResult.succeed();
         },
 
         PrivilegedHelper.Events.onHelperWriteFailed.Hash => {
+            self.layout.emitEvent(.{ .TextChanged = .{
+                .target = .DataFlasherLogsTextbox,
+                .text = "\nFailed to write to device...",
+            } }, .{ .excludeSelf = true });
             self.setStatusBoxUIToFailedState();
             return eventResult.succeed();
         },
 
         PrivilegedHelper.Events.onHelperVerificationSuccess.Hash => {
             const params = View.ViewEventParams{ .excludeSelf = true };
+
+            self.layout.emitEvent(.{ .TextChanged = .{
+                .target = .DataFlasherLogsTextbox,
+                .text = "\nSuccessfully verified device bytes!\nYou may now eject the device!",
+            } }, params);
 
             self.layout.emitEvent(.{ .BorderColorChanged = .{
                 .target = .DataFlasherStatusBgRect,
@@ -235,12 +272,16 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
                 .color = Color.themeSuccess,
             } }, params);
 
+            self.flashingStep = .VerificationFinished;
+
             try AppManager.reportAction(.DataFlashed);
             return eventResult.succeed();
         },
 
         PrivilegedHelper.Events.onHelperVerificationFailed.Hash => {
-            // self.verificationStatus.switchState(.FAILURE);
+            self.layout.emitEvent(.{
+                .TextChanged = .{ .target = .DataFlasherLogsTextbox, .text = "\nFailed to verify device bytes.\nPlease try flashing again..." },
+            }, .{ .excludeSelf = true });
             return eventResult.succeed();
         },
 
@@ -384,9 +425,17 @@ pub fn handleOnActiveStateChanged(self: *DataFlasherUI, event: ComponentEvent) !
         // self.onDeactivated();
     }
 
-    self.layout.emitEvent(.{ .StateChanged = .{ .isActive = data.isActive } }, .{});
-    self.layout.emitEvent(.{ .StateChanged = .{ .target = .DataFlasherPlaceholderTexture, .isActive = !data.isActive } }, .{ .excludeSelf = true });
-    self.layout.emitEvent(.{ .StateChanged = .{ .target = .DataFlasherHeaderDivider, .isActive = !data.isActive } }, .{ .excludeSelf = true });
+    self.layout.emitEvent(.{ .StateChanged = .{
+        .isActive = data.isActive,
+    } }, .{});
+    self.layout.emitEvent(.{ .StateChanged = .{
+        .target = .DataFlasherPlaceholderTexture,
+        .isActive = !data.isActive,
+    } }, .{ .excludeSelf = true });
+    self.layout.emitEvent(.{ .StateChanged = .{
+        .target = .DataFlasherHeaderDivider,
+        .isActive = !data.isActive,
+    } }, .{ .excludeSelf = true });
 
     return eventResult.succeed();
 }
@@ -426,6 +475,11 @@ pub fn handleOnISOWriteProgressChanged(self: *DataFlasherUI, event: ComponentEve
     const newText: [:0]const u8 = percentBuf[0..newTextSlice.len :0];
 
     const params = View.ViewEventParams{ .excludeSelf = true };
+
+    if (self.flashingStep != .Writing) {
+        self.layout.emitEvent(.{ .TextChanged = .{ .target = .DataFlasherLogsTextbox, .text = "\nBegan writing to device...\nPlease do not disconnect the device." } }, params);
+        self.flashingStep = .Writing;
+    }
 
     self.layout.emitEvent(.{ .TextChanged = .{ .target = .DataFlasherStatusHeaderText, .text = "WRITING..." } }, params);
     self.layout.emitEvent(.{ .TextChanged = .{ .target = .DataFlasherStatusBoxProgressPercentTextBack, .text = newText } }, params);
@@ -506,6 +560,11 @@ pub fn handleOnWriteVerificationProgressChanged(self: *DataFlasherUI, event: Com
     const newText: [:0]const u8 = @ptrCast(try std.fmt.bufPrint(buf[0..], "{d}%", .{data.newProgress}));
 
     const params = View.ViewEventParams{ .excludeSelf = true };
+
+    if (self.flashingStep != .Verifying) {
+        self.layout.emitEvent(.{ .TextChanged = .{ .target = .DataFlasherLogsTextbox, .text = "\nBegan bytes verification...\nPlease do not disconnect the device." } }, params);
+        self.flashingStep = .Verifying;
+    }
 
     self.layout.emitEvent(.{ .TextChanged = .{ .target = .DataFlasherStatusHeaderText, .text = "VERIFYING..." } }, params);
     self.layout.emitEvent(.{ .TextChanged = .{ .target = .DataFlasherStatusBoxProgressPercentTextBack, .text = newText } }, params);
@@ -838,6 +897,7 @@ fn initLayout(self: *DataFlasherUI) !void {
             .text = "",
             .texture = .COPY_ICON,
         })
+            .elId(.DataFlasherCopyLogsButton)
             .position(.percent(1, 0.05))
             .offset(-25, 0)
             .positionRef(.{ .NodeId = "logs_background_rect" })
@@ -858,12 +918,13 @@ fn initLayout(self: *DataFlasherUI) !void {
         //     .sizeRef(.{ .NodeId = "logs_textbox" })
         //     .active(false),
 
-        ui.textbox("Pending logs stream...\nHello from the long log box\nThis is line 3 of the long logs\nAnd this is line 4", UIFramework.Textbox.TextboxStyle{ .text = .{
+        ui.textbox("Pending logs stream...", UIFramework.Textbox.TextboxStyle{ .text = .{
             .textColor = Color.offWhite,
             .spacing = 0,
         }, .lineSpacing = -8 }, UIFramework.Textbox.Params{ .wordWrap = true, .useExtendedTextBuffer = true })
             // .elId()
             .id("logs_textbox")
+            .elId(.DataFlasherLogsTextbox)
             .position(.percent(0, 1))
             .offset(0, 3)
             .positionRef(.{ .NodeId = "logs_header_text" })
@@ -938,8 +999,12 @@ pub const UIConfig = struct {
 
         pub const CopyLogsButton = struct {
             pub fn OnClick(ctx: *anyopaque) void {
-                _ = ctx;
-                rl.setClipboardText("Hello from Freetracer!");
+                const self: *DataFlasherUI = @ptrCast(@alignCast(ctx));
+
+                self.layout.emitEvent(
+                    .{ .CopyTextToClipboard = .{ .target = .DataFlasherCopyLogsButton } },
+                    .{ .excludeSelf = true },
+                );
             }
         };
 
