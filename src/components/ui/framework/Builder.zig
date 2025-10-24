@@ -77,9 +77,15 @@ pub const ElementChain = struct {
 
     pub fn size(self: ElementChain, s: SizeSpec) ElementChain {
         var c = self;
+
+        // Always set the size normally
         UIElement.transformPtr(&c.el).size = s;
+
+        // Handle special cases
         switch (c.el) {
-            .TexturedCheckbox => |*checkbox| checkbox.autoSize = false,
+            .TexturedCheckbox => |*checkbox| {
+                checkbox.autoSize = false;
+            },
             else => {},
         }
         return c;
@@ -106,18 +112,48 @@ pub const ElementChain = struct {
     pub fn sizeRef(self: ElementChain, r: RelativeRef) ElementChain {
         var c = self;
         c._sizeRef = r;
+
+        // For Textbox elements with max constraints, enable auto-sizing
+        switch (c.el) {
+            .Textbox => |*textbox| {
+                if (c._maxWidth != null or c._maxHeight != null) {
+                    textbox.autoSize = true;
+                }
+            },
+            else => {},
+        }
         return c;
     }
 
     pub fn sizeRefWidth(self: ElementChain, r: RelativeRef) ElementChain {
         var c = self;
         c._sizeRefWidth = r;
+
+        // For Textbox elements with max constraints, enable auto-sizing
+        switch (c.el) {
+            .Textbox => |*textbox| {
+                if (c._maxWidth != null or c._maxHeight != null) {
+                    textbox.autoSize = true;
+                }
+            },
+            else => {},
+        }
         return c;
     }
 
     pub fn sizeRefHeight(self: ElementChain, r: RelativeRef) ElementChain {
         var c = self;
         c._sizeRefHeight = r;
+
+        // For Textbox elements with max constraints, enable auto-sizing
+        switch (c.el) {
+            .Textbox => |*textbox| {
+                if (c._maxWidth != null or c._maxHeight != null) {
+                    textbox.autoSize = true;
+                }
+            },
+            else => {},
+        }
         return c;
     }
 
@@ -144,6 +180,14 @@ pub const ElementChain = struct {
     pub fn maxWidth(self: ElementChain, value: UnitValue) ElementChain {
         var c = self;
         c._maxWidth = value;
+
+        // For Textbox elements, enable auto-sizing when max constraints are set
+        switch (c.el) {
+            .Textbox => |*textbox| {
+                textbox.autoSize = true;
+            },
+            else => {},
+        }
         return c;
     }
 
@@ -154,6 +198,14 @@ pub const ElementChain = struct {
     pub fn maxHeight(self: ElementChain, value: UnitValue) ElementChain {
         var c = self;
         c._maxHeight = value;
+
+        // For Textbox elements, enable auto-sizing when max constraints are set
+        switch (c.el) {
+            .Textbox => |*textbox| {
+                textbox.autoSize = true;
+            },
+            else => {},
+        }
         return c;
     }
 
@@ -218,6 +270,16 @@ pub const ElementChain = struct {
                 if (self.identifier) |elementId| el.identifier = elementId;
                 if (self._callbacks) |cbs| el.callbacks = cbs;
             },
+        }
+
+        // For Textbox, ensure auto-sizing is configured if max constraints are set
+        switch (me) {
+            .Textbox => |*textbox| {
+                if (self._maxWidth != null or self._maxHeight != null) {
+                    textbox.autoSize = true;
+                }
+            },
+            else => {},
         }
 
         // Apply the explicit per-axis refs if provided.

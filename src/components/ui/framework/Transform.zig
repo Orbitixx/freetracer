@@ -23,6 +23,9 @@ max_width: ?UnitValue = null,
 max_height: ?UnitValue = null,
 resolved_max_width: ?f32 = null,
 resolved_max_height: ?f32 = null,
+content_width: ?f32 = null,
+content_height: ?f32 = null,
+use_content_size: bool = false,
 
 // TODO: Remove? Needed by GlobalTransform and section Views
 relativeTransform: ?*const Transform = null,
@@ -103,8 +106,21 @@ pub fn resolve(self: *Transform) void {
     };
 
     // --- compute absolute frame ---
+    // Start with the normal size calculation
     self.w = self.size.width.resolve(size_ref_rect_w.width);
     self.h = self.size.height.resolve(size_ref_rect_h.height);
+
+    // If content-based sizing is enabled, only adjust the height based on content
+    // Keep width as specified to avoid text cutoff issues
+    if (self.use_content_size) {
+        if (self.content_height) |ch| {
+            if (ch > 0) {
+                self.h = ch;
+            }
+        }
+    }
+
+    // Apply max width/height limits
     if (self.max_width) |spec| {
         const limit = spec.resolve(size_ref_rect_w.width);
         self.resolved_max_width = limit;
@@ -119,6 +135,7 @@ pub fn resolve(self: *Transform) void {
     } else {
         self.resolved_max_height = null;
     }
+
     self.x = pos_ref_rect_x.x + self.position.x.resolve(pos_ref_rect_x.width) + self.offset_x;
     self.y = pos_ref_rect_y.y + self.position.y.resolve(pos_ref_rect_y.height) + self.offset_y;
 

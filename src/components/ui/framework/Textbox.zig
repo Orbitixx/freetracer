@@ -60,6 +60,9 @@ callbacks: UIElementCallbacks = .{},
 active: bool = true,
 isUsingExtendedBuffer: bool = false,
 extendedTextBuffer: [8192]u8 = undefined,
+autoSize: bool = false,
+contentWidth: f32 = 0,
+contentHeight: f32 = 0,
 
 pub fn init(allocator: std.mem.Allocator, text: [:0]const u8, transform: Transform, style: TextboxStyle, params: Params) Textbox {
     return .{
@@ -73,10 +76,14 @@ pub fn init(allocator: std.mem.Allocator, text: [:0]const u8, transform: Transfo
         .font = ResourceManager.getFont(style.text.font),
         .params = params,
         .isUsingExtendedBuffer = params.useExtendedTextBuffer,
+        .autoSize = false,
+        .contentWidth = 0,
+        .contentHeight = 0,
     };
 }
 
 pub fn start(self: *Textbox) !void {
+    // First resolve transform to get max width/height constraints
     self.transform.resolve();
     if (self.background) |*bg| bg.transform.resolve();
 
@@ -87,7 +94,14 @@ pub fn start(self: *Textbox) !void {
 
     self.setText(self.text);
 
-    std.debug.print("\nTextbox resolved() Transform in start().", .{});
+    // Now calculate content dimensions after we have the text and constraints
+    if (self.autoSize) {
+        self.updateContentDimensions();
+        // Re-resolve with content dimensions if they're valid
+        if (self.contentHeight > 0) {
+            self.transform.resolve();
+        }
+    }
 }
 
 pub fn update(self: *Textbox) !void {
@@ -95,6 +109,14 @@ pub fn update(self: *Textbox) !void {
 
     self.transform.resolve();
     if (self.background) |*bg| bg.transform.resolve();
+
+    // Update content dimensions after resolving transform so resolved_max_width is available
+    if (self.autoSize) {
+        self.updateContentDimensions();
+        // Re-resolve to apply content dimensions
+        self.transform.resolve();
+        if (self.background) |*bg| bg.transform.resolve();
+    }
 }
 
 pub fn draw(self: *Textbox) !void {
@@ -107,10 +129,13 @@ pub fn draw(self: *Textbox) !void {
         break :blk if (extendedSlice.len == 0) self.text else extendedSlice;
     } else self.text;
 
+    // Use the actual resolved rectangle for drawing, which now includes content-based sizing
+    const drawRect = self.transform.asRaylibRectangle();
+
     drawTextBoxed(
         self.font,
         textToDraw,
-        self.transform.asRaylibRectangle(),
+        drawRect,
         self.style.text.fontSize,
         self.style.text.spacing,
         self.params.wordWrap,
@@ -134,6 +159,11 @@ pub fn setText(self: *Textbox, text: [:0]const u8) void {
 
     self.textBuffer = textValue;
     self.text = @ptrCast(std.mem.sliceTo(&self.textBuffer, 0x00));
+
+    // Update content dimensions when text changes
+    if (self.autoSize) {
+        self.updateContentDimensions();
+    }
 }
 
 pub fn appendText(self: *Textbox, text: [:0]const u8) void {
@@ -146,6 +176,11 @@ pub fn appendText(self: *Textbox, text: [:0]const u8) void {
     }
 
     @memcpy(self.extendedTextBuffer[currentLen .. currentLen + text.len], text);
+
+    // Update content dimensions when text changes
+    if (self.autoSize) {
+        self.updateContentDimensions();
+    }
 }
 
 pub fn setSelection(self: *Textbox, selection: ?Selection) void {
@@ -169,7 +204,13 @@ pub fn onEvent(self: *Textbox, event: UIEvent) void {
                 if (self.isUsingExtendedBuffer) self.appendText(newText) else self.setText(newText);
             }
 
-            if (e.style) |textStyle| self.style.text = textStyle;
+            if (e.style) |textStyle| {
+                self.style.text = textStyle;
+                // Recalculate dimensions if font size changed
+                if (self.autoSize) {
+                    self.updateContentDimensions();
+                }
+            }
         },
         .CopyTextToClipboard => {
             if (self.isUsingExtendedBuffer)
@@ -179,6 +220,151 @@ pub fn onEvent(self: *Textbox, event: UIEvent) void {
         },
         inline else => {},
     }
+}
+
+pub fn updateContentDimensions(self: *Textbox) void {
+    if (!self.autoSize) return;
+
+    const textToDraw = if (self.isUsingExtendedBuffer) blk: {
+        const extendedSlice = self.extendedBufferDisplaySlice();
+        break :blk if (extendedSlice.len == 0) self.text else extendedSlice;
+    } else self.text;
+
+    // Calculate the actual dimensions of the text content
+    const dims = self.calculateTextDimensions(
+        textToDraw,
+        self.style.text.fontSize,
+        self.style.text.spacing,
+        self.params.wordWrap,
+        self.style.lineSpacing,
+    );
+
+    self.contentWidth = dims.width;
+    self.contentHeight = dims.height;
+
+    // Only update height for content-based sizing (not width to avoid cutoff)
+    // Only enable content sizing if we have valid dimensions
+    if (dims.height > 0) {
+        self.transform.content_width = null; // Don't use content width
+        self.transform.content_height = dims.height;
+        self.transform.use_content_size = true;
+    } else {
+        // Don't use content sizing if we don't have valid dimensions
+        self.transform.use_content_size = false;
+    }
+}
+
+fn calculateTextDimensions(
+    self: *Textbox,
+    text: [:0]const u8,
+    fontSize: f32,
+    spacing: f32,
+    wordWrap: bool,
+    extraLineSpacing: f32,
+) struct { width: f32, height: f32 } {
+    if (text.len == 0) return .{ .width = 0, .height = fontSize };
+
+    const font = self.font;
+    const scaleFactor: f32 = if (font.baseSize == 0) 1 else fontSize / @as(f32, @floatFromInt(font.baseSize));
+    const baseLineHeight: f32 = @as(f32, @floatFromInt(if (font.baseSize == 0) @as(i32, @intFromFloat(fontSize)) else font.baseSize)) * scaleFactor;
+
+    // Use resolved max width if available for proper word wrapping
+    const wrapWidth: f32 = if (self.transform.resolved_max_width) |mw|
+        mw
+    else
+        // If no max width is set, use a very large value (no wrapping)
+        999999;
+
+    // Simple approach: calculate line by line
+    var maxLineWidth: f32 = 0;
+    var currentLineWidth: f32 = 0;
+    var lineCount: u32 = 1;
+
+    var textIndex: usize = 0;
+    var lastWordBreak: usize = 0;
+    var lastWordBreakWidth: f32 = 0;
+
+    while (textIndex < text.len) {
+        var codepointByteCount: i32 = 0;
+        const remaining: [:0]const u8 = text[textIndex..];
+        const codepoint = rl.getCodepoint(remaining, &codepointByteCount);
+        var glyphIndex = rl.getGlyphIndex(font, codepoint);
+
+        if (codepoint == 0x3f) codepointByteCount = 1;
+
+        if (glyphIndex < 0) glyphIndex = 0;
+        const glyphIndexUsize = @as(usize, @intCast(glyphIndex));
+
+        var glyphWidth: f32 = 0;
+        if (codepoint != '\n') {
+            const advance = font.glyphs[glyphIndexUsize].advanceX;
+            glyphWidth = if (advance == 0)
+                font.recs[glyphIndexUsize].width * scaleFactor
+            else
+                @as(f32, @floatFromInt(advance)) * scaleFactor;
+
+            // Add spacing between characters (but not after the last one)
+            if (textIndex + @as(usize, @intCast(codepointByteCount)) < text.len) {
+                glyphWidth += spacing;
+            }
+        }
+
+        // Track word breaks for wrapping
+        if (codepoint == ' ' or codepoint == '\t' or codepoint == '\n') {
+            lastWordBreak = textIndex;
+            lastWordBreakWidth = currentLineWidth;
+        }
+
+        // Handle different line break scenarios
+        if (codepoint == '\n') {
+            // Explicit line break
+            maxLineWidth = @max(maxLineWidth, currentLineWidth);
+            currentLineWidth = 0;
+            lineCount += 1;
+            lastWordBreak = textIndex + @as(usize, @intCast(codepointByteCount));
+            lastWordBreakWidth = 0;
+        } else if (wordWrap and (currentLineWidth + glyphWidth) > wrapWidth) {
+            // Need to wrap
+            if (lastWordBreak > 0 and lastWordBreak != textIndex) {
+                // Wrap at last word boundary
+                maxLineWidth = @max(maxLineWidth, lastWordBreakWidth);
+                currentLineWidth = currentLineWidth - lastWordBreakWidth;
+            } else {
+                // No word boundary, wrap at current position
+                maxLineWidth = @max(maxLineWidth, currentLineWidth);
+                currentLineWidth = glyphWidth;
+            }
+            lineCount += 1;
+        } else {
+            // Normal character, add to current line
+            currentLineWidth += glyphWidth;
+        }
+
+        textIndex += @as(usize, @intCast(codepointByteCount));
+    }
+
+    // Don't forget the last line
+    maxLineWidth = @max(maxLineWidth, currentLineWidth);
+
+    // IMPORTANT: Calculate height correctly for text rendering
+    // The drawTextBoxedSelectable function uses baseLineHeight for its rendering checks:
+    // if ((textOffsetY + baseLineHeight) > rect.height) break;
+    //
+    // It increments textOffsetY by lineStep between lines, but checks against baseLineHeight for rendering.
+    // For N lines, the minimum height needed is:
+    // - Line 0 at Y=0: needs 0 + baseLineHeight = baseLineHeight
+    // - Line 1 at Y=lineStep: needs lineStep + baseLineHeight
+    // - Line N at Y=N*lineStep: needs N*lineStep + baseLineHeight
+    //
+    // So minimum rect.height = (lineCount - 1) * lineStep + baseLineHeight
+    // But we should also account for the visual spacing, so we use:
+    // rect.height = lineCount * baseLineHeight + (lineCount - 1) * extraLineSpacing
+    // which simplifies to: lineCount * lineStep + max(0, -extraLineSpacing) to ensure space for the first line
+
+    const resultWidth = maxLineWidth;
+    const minHeightForLines = @as(f32, @floatFromInt(lineCount)) * baseLineHeight + @max(0, -extraLineSpacing) * (@as(f32, @floatFromInt(lineCount)) - 1);
+
+    return .{ .width = resultWidth, .height = minHeightForLines };
 }
 
 pub fn deinit(self: *Textbox) void {

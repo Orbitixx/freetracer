@@ -468,8 +468,9 @@ fn initLayout(self: *FilePickerUI) !void {
             .position(.percent(1.7, 0))
             .offset(0, -4)
             .positionRef(.{ .NodeId = "image_info_icon" })
-            .size(.percent(0.8, 0.5))
-            .maxHeight(0.5)
+            .size(.percent(0.8, 0.5)) // Base size for the textbox
+            .maxWidth(.percent(0.8)) // Maximum width constraint
+            .maxHeight(.percent(0.5)) // Maximum height constraint
             .sizeRef(.{ .NodeId = "image_info_bg" }),
 
         ui.text("5.06 GB", .{
@@ -480,7 +481,7 @@ fn initLayout(self: *FilePickerUI) !void {
         })
             .id("image_info_size_text")
             .position(.percent(0, 1))
-            .offset(0, -24)
+            // .offset(0, -24)
             .positionRef(.{ .NodeId = "image_info_textbox" })
             .sizeRef(.{ .NodeId = "image_info_bg" }),
 
