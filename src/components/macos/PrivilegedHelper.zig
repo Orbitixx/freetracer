@@ -404,7 +404,6 @@ fn displayNeedPermissionsDialog(context: ?*anyopaque) callconv(.c) void {
 
 pub fn deinit(self: *PrivilegedHelper) void {
     self.cleanupComponentState();
-    self.xpcClient.deinit();
 }
 
 pub fn reinitializeXPCConnection(self: *PrivilegedHelper) !void {

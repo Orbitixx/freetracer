@@ -254,6 +254,7 @@ pub fn confirmSelectedImageFile(self: *FilePicker) !void {
 }
 
 fn processSelectedPathLocked(self: *FilePicker, newPath: [:0]u8) !void {
+    Debug.log(.DEBUG, "processSelectedPathLocked: attempting to validate the selected image file: {s}", .{newPath});
     const imageType = fs.getImageType(fs.getExtensionFromPath(newPath));
 
     self.state.data.image.path = newPath;
@@ -266,12 +267,15 @@ fn processSelectedPathLocked(self: *FilePicker, newPath: [:0]u8) !void {
         _ = osd.message(@ptrCast(std.mem.sliceTo(&buf, 0x00)), .{ .buttons = .ok, .level = .err });
         return err;
     };
-
-    const stat = try file.stat();
     defer file.close();
 
+    const stat = try file.stat();
+
+    Debug.log(.DEBUG, "processSelectedPathLocked: successfully opened file. Size: {d}", .{stat.size});
+    Debug.log(.DEBUG, "processSelectedPathLocked: attempting to validate structure...", .{});
+
     if (!fs.isValidImageFile(file)) {
-        const proceed = osd.message("The selected file does not appear to contain a bootable file system (ISO9660, GPT or MBR), this is unusual. Proceed anyway?", .{
+        const proceed = osd.message("The selected file does not appear to contain a bootable file system (ISO 9660, GPT or MBR), this is unusual and may have unintended consequences. Are you sure you want to proceed?", .{
             .level = .warning,
             .buttons = .yes_no,
         });

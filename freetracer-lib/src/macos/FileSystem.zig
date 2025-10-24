@@ -319,17 +319,17 @@ pub fn openFileValidated(unsanitizedIsoPath: []const u8, params: struct { userHo
     }
 
     // Minimum ISO system block: 16 sectors by 2048 bytes each + 1 sector for PVD contents.
-    if (fileStat.size < 16 * 2048 + 1) return error.InvalidISOSystemStructure;
+    if (fileStat.size < (16 + 1) * 2048) return error.InvalidISOSystemStructure;
 
-    if (params.imageType == .ISO) {
-        const isoValidationResult = ISOParser.validateISOFileStructure(imageFile);
-
-        // TODO: If ISO structure does not conform to ISO9660, prompt user to proceed or not.
-        if (isoValidationResult != .ISO_VALID) {
-            Debug.log(.ERROR, "Invalid ISO file structure detected. Aborting... Error code: {any}", .{isoValidationResult});
-            return error.InvalidISOStructureDoesNotConformToISO9660;
-        }
-    }
+    // if (params.imageType == .ISO) {
+    //     const isoValidationResult = ISOParser.validateISOFileStructure(imageFile);
+    //
+    //     // TODO: If ISO structure does not conform to ISO9660, prompt user to proceed or not.
+    //     if (isoValidationResult != .ISO_VALID) {
+    //         Debug.log(.ERROR, "Invalid ISO file structure detected. Aborting... Error code: {any}", .{isoValidationResult});
+    //         return error.InvalidISOStructureDoesNotConformToISO9660;
+    //     }
+    // }
 
     return imageFile;
 }

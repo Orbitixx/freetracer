@@ -180,8 +180,11 @@ pub const XPCService = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        xpc.xpc_connection_cancel(self.service);
-        xpc.xpc_release(self.service);
+        if (self.service != null) {
+            xpc.xpc_connection_cancel(self.service);
+            xpc.xpc_release(self.service);
+            self.service = null;
+        }
     }
 
     pub fn pingServer(connection: XPCConnection) void {
