@@ -18,6 +18,7 @@ const DeviceSelectBoxList = UIFramework.DeviceSelectBoxList;
 const ProgressBox = UIFramework.ProgressBox;
 
 const UIElementIdentifier = UIFramework.UIElementIdentifier;
+const UnitValue = UIFramework.UnitValue;
 
 pub const ElementChain = struct {
     allocator: std.mem.Allocator,
@@ -38,6 +39,8 @@ pub const ElementChain = struct {
     _sizeTransformHeight: ?*const Transform = null,
     _origin_center_x: bool = false,
     _origin_center_y: bool = false,
+    _maxWidth: ?UnitValue = null,
+    _maxHeight: ?UnitValue = null,
     relative: ?RelativeRef = null, // what to resolve against (Parent or NodeId)
     _callbacks: ?UIFramework.UIElementCallbacks = null,
 
@@ -138,6 +141,26 @@ pub const ElementChain = struct {
         return c;
     }
 
+    pub fn maxWidth(self: ElementChain, value: UnitValue) ElementChain {
+        var c = self;
+        c._maxWidth = value;
+        return c;
+    }
+
+    pub fn maxWidthPixels(self: ElementChain, value: f32) ElementChain {
+        return self.maxWidth(UnitValue.pixels(value));
+    }
+
+    pub fn maxHeight(self: ElementChain, value: UnitValue) ElementChain {
+        var c = self;
+        c._maxHeight = value;
+        return c;
+    }
+
+    pub fn maxHeightPixels(self: ElementChain, value: f32) ElementChain {
+        return self.maxHeight(UnitValue.pixels(value));
+    }
+
     pub fn relativeTransform(self: ElementChain, rt: *const Transform) ElementChain {
         var c = self;
         c._relativeTransform = rt;
@@ -211,6 +234,8 @@ pub const ElementChain = struct {
         if (self._sizeTransformHeight) |rt| tr.size_transform_height = rt;
         if (self._origin_center_x) tr.origin_center_x = true;
         if (self._origin_center_y) tr.origin_center_y = true;
+        if (self._maxWidth) |mw| tr.max_width = mw;
+        if (self._maxHeight) |mh| tr.max_height = mh;
 
         // Leep 'relative' as a general fallback for 'both'
         if (self.relative) |r| tr.relative = r;
@@ -270,6 +295,8 @@ pub const ElementChain = struct {
         if (self._sizeTransformHeight) |rt| view_value.transform.size_transform_height = rt;
         if (self._origin_center_x) view_value.transform.origin_center_x = true;
         if (self._origin_center_y) view_value.transform.origin_center_y = true;
+        if (self._maxWidth) |mw| view_value.transform.max_width = mw;
+        if (self._maxHeight) |mh| view_value.transform.max_height = mh;
 
         inline for (kids) |kid| try kid.buildInto(&view_value);
         return view_value;
@@ -312,6 +339,8 @@ pub const UIChain = struct {
         size_transform_height: ?*const Transform = null,
         relative: ?RelativeRef = null,
         background: ?Rectangle = null,
+        max_width: ?UnitValue = null,
+        max_height: ?UnitValue = null,
     };
 
     pub fn view(self: UIChain, cfg: ViewConfig) ElementChain {
@@ -332,6 +361,8 @@ pub const UIChain = struct {
         t.relative = cfg.relative;
         t.offset_x = cfg.offset_x;
         t.offset_y = cfg.offset_y;
+        t.max_width = cfg.max_width;
+        t.max_height = cfg.max_height;
 
         return .{
             .allocator = self.allocator,

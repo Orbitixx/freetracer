@@ -6,6 +6,7 @@ const PositionSpec = types.PositionSpec;
 const SizeSpec = types.SizeSpec;
 const TransformResolverFn = types.TransformResolverFn;
 
+const UnitValue = types.UnitValue;
 const Transform = @This();
 
 x: f32 = 0,
@@ -18,6 +19,10 @@ size: SizeSpec = .{ .width = .{}, .height = .{} },
 
 scale: f32 = 1,
 rotation: f32 = 0,
+max_width: ?UnitValue = null,
+max_height: ?UnitValue = null,
+resolved_max_width: ?f32 = null,
+resolved_max_height: ?f32 = null,
 
 // TODO: Remove? Needed by GlobalTransform and section Views
 relativeTransform: ?*const Transform = null,
@@ -100,6 +105,20 @@ pub fn resolve(self: *Transform) void {
     // --- compute absolute frame ---
     self.w = self.size.width.resolve(size_ref_rect_w.width);
     self.h = self.size.height.resolve(size_ref_rect_h.height);
+    if (self.max_width) |spec| {
+        const limit = spec.resolve(size_ref_rect_w.width);
+        self.resolved_max_width = limit;
+        if (self.w > limit) self.w = limit;
+    } else {
+        self.resolved_max_width = null;
+    }
+    if (self.max_height) |spec| {
+        const limit = spec.resolve(size_ref_rect_h.height);
+        self.resolved_max_height = limit;
+        if (self.h > limit) self.h = limit;
+    } else {
+        self.resolved_max_height = null;
+    }
     self.x = pos_ref_rect_x.x + self.position.x.resolve(pos_ref_rect_x.width) + self.offset_x;
     self.y = pos_ref_rect_y.y + self.position.y.resolve(pos_ref_rect_y.height) + self.offset_y;
 
@@ -119,4 +138,12 @@ pub fn sizeAsVector2(self: Transform) rl.Vector2 {
 }
 pub fn asRaylibRectangle(self: Transform) rl.Rectangle {
     return .{ .x = self.x, .y = self.y, .width = self.w * self.scale, .height = self.h * self.scale };
+}
+
+pub fn resolvedMaxWidth(self: Transform) ?f32 {
+    return self.resolved_max_width;
+}
+
+pub fn resolvedMaxHeight(self: Transform) ?f32 {
+    return self.resolved_max_height;
 }

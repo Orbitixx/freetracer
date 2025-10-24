@@ -53,6 +53,7 @@ pub const PulsateState = struct {
 identifier: ?UIElementIdentifier = null,
 transform: Transform = .{},
 textBuffer: [MAX_TEXT_LENGTH]u8,
+originalText: [MAX_TEXT_LENGTH]u8,
 style: TextStyle,
 font: rl.Font,
 background: ?Rectangle = null,
@@ -74,23 +75,32 @@ pub fn init(identifier: ?UIElementIdentifier, value: [:0]const u8, transform: Tr
         if (value.len > MAX_TEXT_LENGTH) value[0..MAX_TEXT_LENGTH] else value,
     );
 
-    return .{
+    var text = Text{
         .identifier = identifier,
         .transform = transform,
-        .textBuffer = textValue,
+        .textBuffer = std.mem.zeroes([MAX_TEXT_LENGTH]u8),
+        .originalText = textValue,
         .style = style,
         .font = ResourceManager.getFont(style.font),
     };
+    _ = text.updateDisplayFromOriginal();
+    return text;
 }
 
 pub fn start(self: *Text) !void {
     self.transform.resolve();
-    const textDims: rl.Vector2 = rl.measureTextEx(self.font, @ptrCast(std.mem.sliceTo(&self.textBuffer, 0x00)), self.style.fontSize, self.style.spacing);
+    self.enforceMaxWidth();
+    const textDims = self.currentTextDimensions();
     self.transform.size = .pixels(textDims.x, textDims.y);
+    self.transform.resolve();
 }
 
 pub fn update(self: *Text) !void {
     if (!self.active) return;
+    self.transform.resolve();
+    self.enforceMaxWidth();
+    const textDims = self.currentTextDimensions();
+    self.transform.size = .pixels(textDims.x, textDims.y);
     self.transform.resolve();
 
     if (self.pulsate.enabled) {
@@ -158,9 +168,20 @@ pub fn deinit(self: *Text) void {
 }
 
 pub fn setValue(self: *Text, newValue: [:0]const u8) void {
-    self.textBuffer = std.mem.zeroes([MAX_TEXT_LENGTH]u8);
-    @memcpy(self.textBuffer[0..if (newValue.len > MAX_TEXT_LENGTH) MAX_TEXT_LENGTH else newValue.len], if (newValue.len > MAX_TEXT_LENGTH) newValue[0..MAX_TEXT_LENGTH] else newValue);
-    const textDims: rl.Vector2 = rl.measureTextEx(self.font, @ptrCast(std.mem.sliceTo(&self.textBuffer, 0x00)), self.style.fontSize, self.style.spacing);
+    const source = std.mem.sliceTo(newValue, 0x00);
+    @memset(self.originalText[0..], 0x00);
+
+    if (source.len > 0) {
+        const maxCopy = @min(source.len, MAX_TEXT_LENGTH - 1);
+        if (maxCopy > 0) @memcpy(self.originalText[0..maxCopy], source[0..maxCopy]);
+        self.originalText[maxCopy] = 0;
+    }
+
+    _ = self.updateDisplayFromOriginal();
+
+    self.transform.resolve();
+    self.enforceMaxWidth();
+    const textDims = self.currentTextDimensions();
     self.transform.size = .pixels(textDims.x, textDims.y);
     self.transform.resolve();
 }
@@ -186,6 +207,95 @@ fn clampPulsateAlpha(self: *Text) void {
     if (self.pulsate.minAlpha > self.style.textColor.a) {
         self.pulsate.minAlpha = self.style.textColor.a;
     }
+}
+
+fn enforceMaxWidth(self: *Text) void {
+    if (self.transform.resolvedMaxWidth() == null and self.transform.max_width == null) return;
+    _ = self.updateDisplayFromOriginal();
+}
+
+fn writeValueWithConstraints(self: *Text, value: []const u8) usize {
+    @memset(self.textBuffer[0..], 0x00);
+    if (value.len == 0) return 0;
+    const maxCopyLen = MAX_TEXT_LENGTH - 1;
+    const truncatedLen = @min(value.len, maxCopyLen);
+    const truncated = value[0..truncatedLen];
+
+    if (self.transform.resolvedMaxWidth()) |limit| {
+        return self.writeEllipsized(truncated, limit);
+    }
+
+    @memcpy(self.textBuffer[0..truncatedLen], truncated);
+    self.textBuffer[truncatedLen] = 0;
+    return truncatedLen;
+}
+
+fn writeEllipsized(self: *Text, value: []const u8, maxWidth: f32) usize {
+    const ellipsis: [:0]const u8 = "...";
+    const ellipsisLen = ellipsis.len;
+    const ellipsisWidth = rl.measureTextEx(self.font, ellipsis, self.style.fontSize, self.style.spacing).x;
+
+    if (value.len == 0) {
+        self.textBuffer[0] = 0;
+        return 0;
+    }
+
+    @memcpy(self.textBuffer[0..value.len], value);
+    self.textBuffer[value.len] = 0;
+    if (self.measureBuffer(value.len) <= maxWidth) {
+        return value.len;
+    }
+
+    if (ellipsisWidth > maxWidth) {
+        self.textBuffer[0] = 0;
+        return 0;
+    }
+
+    const maxBufferLen = MAX_TEXT_LENGTH - 1;
+    var prefixLen: usize = if (maxBufferLen > ellipsisLen)
+        @min(value.len, maxBufferLen - ellipsisLen)
+    else
+        0;
+
+    while (true) {
+        const totalLen = prefixLen + ellipsisLen;
+        if (totalLen <= maxBufferLen) {
+            if (prefixLen > 0) @memcpy(self.textBuffer[0..prefixLen], value[0..prefixLen]);
+            @memcpy(self.textBuffer[prefixLen .. prefixLen + ellipsisLen], ellipsis[0..ellipsisLen]);
+            self.textBuffer[prefixLen + ellipsisLen] = 0;
+            if (self.measureBuffer(prefixLen + ellipsisLen) <= maxWidth) {
+                return prefixLen + ellipsisLen;
+            }
+        }
+
+        if (prefixLen == 0) break;
+        prefixLen -= 1;
+    }
+
+    if (ellipsisLen <= maxBufferLen) {
+        @memcpy(self.textBuffer[0..ellipsisLen], ellipsis[0..ellipsisLen]);
+        self.textBuffer[ellipsisLen] = 0;
+        if (self.measureBuffer(ellipsisLen) <= maxWidth) {
+            return ellipsisLen;
+        }
+    }
+
+    self.textBuffer[0] = 0;
+    return 0;
+}
+
+fn measureBuffer(self: *Text, len: usize) f32 {
+    if (len == 0) return 0;
+    return rl.measureTextEx(self.font, @ptrCast(self.textBuffer[0..len :0]), self.style.fontSize, self.style.spacing).x;
+}
+
+fn currentTextDimensions(self: *Text) rl.Vector2 {
+    return rl.measureTextEx(self.font, @ptrCast(std.mem.sliceTo(&self.textBuffer, 0x00)), self.style.fontSize, self.style.spacing);
+}
+
+fn updateDisplayFromOriginal(self: *Text) usize {
+    const original = std.mem.sliceTo(&self.originalText, 0x00);
+    return self.writeValueWithConstraints(original[0..original.len]);
 }
 
 // pub fn getDimensions(self: Text) TextDimensions {

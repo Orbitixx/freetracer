@@ -1,5 +1,7 @@
 const std = @import("std");
 
+// fn buildHelper() void {}
+
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
 // runner.

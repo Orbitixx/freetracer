@@ -469,6 +469,7 @@ fn initLayout(self: *FilePickerUI) !void {
             .offset(0, -4)
             .positionRef(.{ .NodeId = "image_info_icon" })
             .size(.percent(0.8, 0.5))
+            .maxHeight(0.5)
             .sizeRef(.{ .NodeId = "image_info_bg" }),
 
         ui.text("5.06 GB", .{
@@ -558,6 +559,7 @@ fn initLayout(self: *FilePickerUI) !void {
             .elId(.FilePickerImageSelectedTextbox)
             .position(.percent(0.5, -0.8))
             .positionRef(.{ .NodeId = "image_selected_bar" })
+            .maxWidth(.percent(0.9))
             .offsetToOrigin()
             .active(false),
     });

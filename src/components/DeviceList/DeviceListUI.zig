@@ -687,6 +687,7 @@ fn initLayout(self: *DeviceListUI) !void {
             .elId(.DeviceListDeviceSelectedText)
             .position(.percent(0.5, -0.8))
             .positionRef(.{ .NodeId = "device_selected_bar" })
+            .maxWidth(.percent(0.9))
             .offsetToOrigin()
             .active(false),
     });
