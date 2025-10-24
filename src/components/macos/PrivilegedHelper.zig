@@ -269,9 +269,14 @@ pub fn update(self: *PrivilegedHelper) !void {
             self.reinstallAttempts += 1;
 
             if (installResult == HelperInstallCode.SUCCESS) {
-                Debug.log(.INFO, "Fretracer Helper Tool is successfully installed!", .{});
+                Debug.log(.INFO, "Freetracer Helper Tool is successfully installed!", .{});
+
+                self.reinitializeXPCConnection() catch |err| {
+                    Debug.log(.ERROR, "Failed to reinitialize XPC connection after daemon reinstall: {any}", .{err});
+                    return error.FailedToReinitializeXPCConnection;
+                };
+
                 self.dispatchComponentAction();
-                XPCService.pingServer(self.xpcClient.service);
             } else return error.FailedToInstallPrivilegedHelperTool;
         }
     } else if (self.xpcClient.timer.isTimerSet and self.reinstallAttempts >= 1) {
@@ -330,9 +335,12 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
                     return error.UnableToUpdateHelperTool;
                 }
 
+                self.reinitializeXPCConnection() catch |err| {
+                    Debug.log(.ERROR, "Failed to reinitialize XPC connection after daemon update: {any}", .{err});
+                    return error.FailedToReinitializeXPCConnection;
+                };
+
                 self.dispatchComponentAction();
-                self.xpcClient.timer.start();
-                XPCService.pingServer(self.xpcClient.service);
                 break :eventLoop;
             }
 
@@ -395,8 +403,26 @@ fn displayNeedPermissionsDialog(context: ?*anyopaque) callconv(.c) void {
 }
 
 pub fn deinit(self: *PrivilegedHelper) void {
-    //
     self.cleanupComponentState();
+    self.xpcClient.deinit();
+}
+
+pub fn reinitializeXPCConnection(self: *PrivilegedHelper) !void {
+    Debug.log(.INFO, "Reinitializing XPC connection after daemon update...", .{});
+
+    self.xpcClient.deinit();
+
+    self.xpcClient = try XPCService.init(.{
+        .isServer = false,
+        .serviceName = "Freetracer XPC Client",
+        .serverBundleId = @ptrCast(env.HELPER_BUNDLE_ID),
+        .clientBundleId = @ptrCast(env.BUNDLE_ID),
+        .requestHandler = @ptrCast(&PrivilegedHelper.messageHandler),
+    });
+
+    self.xpcClient.start();
+
+    Debug.log(.INFO, "XPC connection successfully reinitialized and started.", .{});
 }
 
 pub fn workerRun(worker: *ComponentWorker, context: *anyopaque) void {

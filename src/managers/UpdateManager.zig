@@ -1,7 +1,7 @@
 const std = @import("std");
 const osd = @import("osdialog");
 const freetracer_lib = @import("freetracer-lib");
-const env = @import("../env.zig");
+const AppConfig = @import("../config.zig");
 const Debug = freetracer_lib.Debug;
 
 const UpdateManagerState = struct {};
@@ -114,7 +114,7 @@ pub const UpdateManagerSingleton = struct {
 
             w.join();
 
-            if (std.mem.eql(u8, env.APP_VERSION, instance.?.newVersion)) return;
+            if (std.mem.eql(u8, AppConfig.APP_VERSION, instance.?.newVersion)) return;
 
             const shouldUpdate = osd.message("A new version of Freetracer is available on Github. Download it now?\n\nUpdates are strongly recommended for security purposes.", .{ .buttons = .yes_no, .level = .info });
 
@@ -154,7 +154,7 @@ pub const UpdateManagerSingleton = struct {
         defer client.deinit();
 
         const options = std.http.Client.FetchOptions{
-            .location = .{ .url = env.APP_RELEASES_API_ENDPOINT },
+            .location = .{ .url = AppConfig.APP_RELEASES_API_ENDPOINT },
             .method = .GET,
             .response_writer = &body_writer.writer,
         };
