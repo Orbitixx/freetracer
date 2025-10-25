@@ -207,26 +207,30 @@ fn sendXPCReply(connection: XPCConnection, reply: HelperResponseCode, comptime l
 
 fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) !void {
     //
-    const isoPath: [:0]const u8 = try XPCService.parseString(data, "isoPath");
+    Debug.log(.INFO, "Getting keys...", .{});
+
+    const imagePath: [:0]const u8 = try XPCService.parseString(data, "imagePath");
     const deviceBsdName: [:0]const u8 = try XPCService.parseString(data, "disk");
+    Debug.log(.INFO, "Got first two keys...", .{});
 
     const deviceServiceId: c_uint = @intCast(XPCService.getUInt64(data, "deviceServiceId") catch 0);
     if (deviceServiceId == 0) return error.FailedToParseDeviceServiceId;
 
     const deviceTypeInt: u64 = try XPCService.getUInt64(data, "deviceType");
-    const imageTypeInt: u64 = try XPCService.getUInt64(data, "imageType");
 
+    Debug.log(.INFO, "Getting user flag key...", .{});
+    const userForcedImageFlag: u64 = try XPCService.getUInt64(data, "userForcedFlag");
+    Debug.log(.INFO, "Got user flag key...", .{});
     const deviceType = try meta.intToEnum(DeviceType, deviceTypeInt);
-    const imageType = try meta.intToEnum(ImageType, imageTypeInt);
 
-    if (isoPath.len == 0) return RequestValidationError.EmptyIsoPath;
+    if (imagePath.len == 0) return RequestValidationError.EmptyIsoPath;
     if (deviceBsdName.len == 0) return RequestValidationError.EmptyDeviceIdentifier;
 
     Debug.log(.INFO, "Received service: {d}", .{deviceServiceId});
 
     const userHomePath: []const u8 = try XPCService.getUserHomePath(connection);
 
-    const isoFile = fs.openFileValidated(isoPath, .{ .userHomePath = userHomePath, .imageType = imageType }) catch |err| {
+    const imageFile = fs.openFileValidated(imagePath, .{ .userHomePath = userHomePath }) catch |err| {
         respondWithErrorAndTerminate(
             .{ .err = err, .message = "Unable to open ISO file or its directory." },
             .{ .xpcConnection = connection, .xpcResponseCode = .ISO_FILE_INVALID },
@@ -234,7 +238,17 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) !void {
         return;
     };
 
-    defer isoFile.close();
+    defer imageFile.close();
+
+    const imageValidationResult = fs.validateImageFile(imageFile);
+
+    if (!imageValidationResult.isValid and userForcedImageFlag == 0) {
+        respondWithErrorAndTerminate(
+            .{ .err = error.ImageValidationFailed, .message = "Failed to validate image and user did not force unknown image." },
+            .{ .xpcConnection = connection, .xpcResponseCode = .ISO_FILE_INVALID },
+        );
+        return;
+    }
 
     sendXPCReply(connection, .ISO_FILE_VALID, "ISO File is determined to be valid and is successfully opened.");
 
@@ -261,7 +275,7 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) !void {
 
     sendXPCReply(connection, .DEVICE_VALID, "Device is determined to be valid and is successfully opened.");
 
-    fsops.writeISO(connection, isoFile, deviceHandle.raw) catch |err| {
+    fsops.writeISO(connection, imageFile, deviceHandle.raw) catch |err| {
         respondWithErrorAndTerminate(
             .{ .err = err, .message = "Unable to write ISO to device." },
             .{ .xpcConnection = connection, .xpcResponseCode = .ISO_WRITE_FAIL },
@@ -271,7 +285,7 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) !void {
 
     sendXPCReply(connection, .ISO_WRITE_SUCCESS, "ISO image successfully written to device!");
 
-    fsops.verifyWrittenBytes(connection, isoFile, deviceHandle.raw) catch |err| {
+    fsops.verifyWrittenBytes(connection, imageFile, deviceHandle.raw) catch |err| {
         respondWithErrorAndTerminate(
             .{ .err = err, .message = "Unable to verify written ISO image." },
             .{ .xpcConnection = connection, .xpcResponseCode = .WRITE_VERIFICATION_FAIL },

@@ -11,6 +11,18 @@ const ImageType = @import("../types.zig").ImageType;
 const String = @import("../util/string.zig");
 const ISOParser = @import("../ISOParser.zig");
 
+pub const FileSystemType = enum {
+    ISO9660,
+    MBR,
+    GPT,
+    UNKNOWN,
+};
+
+pub const ImageFileValidationResult = struct {
+    isValid: bool = false,
+    fileSystem: FileSystemType = .UNKNOWN,
+};
+
 /// Error set for path operations.
 pub const PathError = error{
     HomeEnvironmentVariableIsNULL,
@@ -142,51 +154,58 @@ pub fn getExtensionFromPath(path: []const u8) []const u8 {
 /// Returns: `bool`
 /// - `true` if the file contains a recognized magic signature (ISO 9660, MBR, or GPT)
 /// - `false` if the file is too small, unreadable, or does not contain a recognized signature
-pub fn isValidImageFile(file: std.fs.File) bool {
+pub fn validateImageFile(file: std.fs.File) ImageFileValidationResult {
+    Debug.log(.DEBUG, "isValidImageFile: Starting validation", .{});
     var buffer: [512]u8 = undefined;
+    const badResult = ImageFileValidationResult{};
 
     const stat = file.stat() catch |err| {
         Debug.log(.ERROR, "isValidImageFile: Unable to obtain file stat. Error: {any}", .{err});
-        return false;
+        return badResult;
     };
 
     if (stat.size < 512) {
         Debug.log(.ERROR, "isValidImageFile: File is too small to contain valid image signatures.", .{});
-        return false;
+        return badResult;
     }
 
+    Debug.log(.DEBUG, "isValidImageFile: Seeking to start of file", .{});
     file.seekTo(0) catch |err| {
         Debug.log(.ERROR, "isValidImageFile: Unable to seek to beginning of file. Error: {any}", .{err});
-        return false;
+        return badResult;
     };
 
+    Debug.log(.DEBUG, "isValidImageFile: Reading first 512 bytes", .{});
     const bytes_read = file.read(&buffer) catch |err| {
         Debug.log(.ERROR, "isValidImageFile: Unable to read file. Error: {any}", .{err});
-        return false;
+        return badResult;
     };
+
+    Debug.log(.DEBUG, "isValidImageFile: Read {d} bytes", .{bytes_read});
 
     if (bytes_read < 512) {
         Debug.log(.ERROR, "isValidImageFile: Unable to read full 512 byte sector.", .{});
-        return false;
+        return badResult;
     }
 
     if (isISO9660(buffer)) {
         Debug.log(.DEBUG, "isValidImageFile: Detected ISO 9660 image.", .{});
-        return true;
+        return .{ .isValid = true, .fileSystem = .ISO9660 };
     }
 
     if (isMBRPartitionTable(buffer)) {
         Debug.log(.DEBUG, "isValidImageFile: Detected MBR partition table.", .{});
-        return true;
+        return .{ .isValid = true, .fileSystem = .MBR };
     }
 
+    Debug.log(.DEBUG, "isValidImageFile: Checking for GPT partition table", .{});
     if (isGPTPartitionTable(&file)) {
         Debug.log(.DEBUG, "isValidImageFile: Detected GPT partition table.", .{});
-        return true;
+        return .{ .isValid = true, .fileSystem = .GPT };
     }
 
     Debug.log(.WARNING, "isValidImageFile: File does not contain recognized image signatures.", .{});
-    return false;
+    return badResult;
 }
 
 /// Checks for ISO 9660 magic signature.
@@ -220,27 +239,35 @@ fn isMBRPartitionTable(buffer: [512]u8) bool {
 /// Checks for GPT partition table magic signature.
 /// GPT has the signature "EFI PART" at offset 0 on LBA 1 (512 bytes after MBR).
 fn isGPTPartitionTable(file: *const std.fs.File) bool {
+    Debug.log(.DEBUG, "isGPTPartitionTable: Starting GPT check", .{});
     var buffer: [512]u8 = undefined;
 
+    Debug.log(.DEBUG, "isGPTPartitionTable: Seeking to LBA 1 (offset 512)", .{});
     file.seekTo(512) catch |err| {
         Debug.log(.DEBUG, "isGPTPartitionTable: Unable to seek to LBA 1. Error: {any}", .{err});
         return false;
     };
 
+    Debug.log(.DEBUG, "isGPTPartitionTable: Reading LBA 1", .{});
     const bytes_read = file.read(&buffer) catch |err| {
         Debug.log(.DEBUG, "isGPTPartitionTable: Unable to read LBA 1. Error: {any}", .{err});
         return false;
     };
 
+    Debug.log(.DEBUG, "isGPTPartitionTable: Read {d} bytes from LBA 1", .{bytes_read});
+
     if (bytes_read < 8) {
+        Debug.log(.DEBUG, "isGPTPartitionTable: Not enough bytes read", .{});
         return false;
     }
 
     const gpt_signature = "EFI PART";
     if (std.mem.eql(u8, buffer[0..8], gpt_signature)) {
+        Debug.log(.DEBUG, "isGPTPartitionTable: Found GPT signature", .{});
         return true;
     }
 
+    Debug.log(.DEBUG, "isGPTPartitionTable: No GPT signature found", .{});
     return false;
 }
 
@@ -258,11 +285,12 @@ pub fn getImageType(path: []const u8) ImageType {
     return .Other;
 }
 
-pub fn openFileValidated(unsanitizedIsoPath: []const u8, params: struct { userHomePath: []const u8, imageType: ImageType }) !std.fs.File {
+pub fn openFileValidated(unsanitizedIsoPath: []const u8, params: struct { userHomePath: []const u8 }) !std.fs.File {
+    Debug.log(.DEBUG, "openFileValidated: Starting validation for path", .{});
 
     // Buffer overflow protection
     if (unsanitizedIsoPath.len > std.fs.max_path_bytes) {
-        Debug.log(.ERROR, "Provided path is too long (over std.fs.max_path_bytes).", .{});
+        Debug.log(.ERROR, "openFileValidated: Provided path is too long (over std.fs.max_path_bytes).", .{});
         return error.ISOFilePathTooLong;
     }
 
@@ -271,67 +299,82 @@ pub fn openFileValidated(unsanitizedIsoPath: []const u8, params: struct { userHo
     var realPathBuffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
     var sanitizeStringBuffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
 
+    Debug.log(.DEBUG, "openFileValidated: Attempting to resolve real path", .{});
     const imagePath = std.fs.realpath(unsanitizedIsoPath, &realPathBuffer) catch |err| {
-        Debug.log(.ERROR, "Unable to resolve the real path of the povided path: {s}. Error: {any}", .{
+        Debug.log(.ERROR, "openFileValidated: Unable to resolve the real path of the povided path: {s}. Error: {any}", .{
             String.sanitizeString(&sanitizeStringBuffer, unsanitizedIsoPath),
             err,
         });
         return error.UnableToResolveRealISOPath;
     };
 
+    Debug.log(.DEBUG, "openFileValidated: Real path resolved successfully", .{});
     const printableIsoPath = String.sanitizeString(&sanitizeStringBuffer, imagePath);
 
     if (imagePath.len < 8) {
-        Debug.log(.ERROR, "Provided path is less than 8 characters long. Likely invalid, aborting for safety...", .{});
+        Debug.log(.ERROR, "openFileValidated: Provided path is less than 8 characters long. Likely invalid, aborting for safety...", .{});
         return error.ISOFilePathTooShort;
     }
 
     const directory = std.fs.path.dirname(imagePath) orelse ".";
     const fileName = std.fs.path.basename(imagePath);
 
+    Debug.log(.DEBUG, "openFileValidated: Checking if path is allowed", .{});
     if (!isFilePathAllowed(params.userHomePath, directory)) {
-        Debug.log(.ERROR, "Provided path contains a disallowed part: {s}", .{printableIsoPath});
+        Debug.log(.ERROR, "openFileValidated: Provided path contains a disallowed part: {s}", .{printableIsoPath});
         return error.ISOFileContainsRestrictedPaths;
     }
 
+    Debug.log(.DEBUG, "openFileValidated: Opening directory", .{});
     const dir = std.fs.openDirAbsolute(directory, .{ .no_follow = true }) catch |err| {
-        Debug.log(.ERROR, "Unable to open the directory of specified ISO file. Aborting... Error: {any}", .{err});
+        Debug.log(.ERROR, "openFileValidated: Unable to open the directory of specified ISO file. Aborting... Error: {any}", .{err});
         return error.UnableToOpenDirectoryOfSpecificedISOFile;
     };
 
-    const imageFile = dir.openFile(fileName, .{ .mode = .read_only, .lock = .exclusive }) catch |err| {
-        Debug.log(.ERROR, "Failed to open ISO file or obtain an exclusive lock. Error: {any}", .{err});
+    Debug.log(.DEBUG, "openFileValidated: Opening file without lock first", .{});
+    const imageFile = dir.openFile(fileName, .{ .mode = .read_only, .lock = .none }) catch |err| {
+        Debug.log(.ERROR, "openFileValidated: Failed to open ISO file. Error: {any}", .{err});
         return error.UnableToOpenISOFileOrObtainExclusiveLock;
     };
 
+    Debug.log(.DEBUG, "openFileValidated: Getting file statistics", .{});
     const fileStat = imageFile.stat() catch |err| {
-        Debug.log(.ERROR, "Failed to obtain ISO file stat. Error: {any}", .{err});
+        Debug.log(.ERROR, "openFileValidated: Failed to obtain ISO file stat. Error: {any}", .{err});
         return error.UnableToObtainISOFileStat;
     };
+
+    Debug.log(.DEBUG, "openFileValidated: File size is {d} bytes", .{fileStat.size});
 
     if (fileStat.kind != std.fs.File.Kind.file) {
         Debug.log(
             .ERROR,
-            "The provided ISO path is not a recognized file by file system. Symlinks and other kinds are not allowed. Kind used: {any}",
+            "openFileValidated: The provided ISO path is not a recognized file by file system. Symlinks and other kinds are not allowed. Kind used: {any}",
             .{fileStat.kind},
         );
         return error.InvalidISOFileKind;
     }
 
     // Minimum ISO system block: 16 sectors by 2048 bytes each + 1 sector for PVD contents.
-    if (fileStat.size < (16 + 1) * 2048) return error.InvalidISOSystemStructure;
+    if (fileStat.size < (16 + 1) * 2048) {
+        Debug.log(.ERROR, "openFileValidated: File size {d} is smaller than minimum required {d}", .{ fileStat.size, (16 + 1) * 2048 });
+        return error.InvalidISOSystemStructure;
+    }
 
-    // if (params.imageType == .ISO) {
-    //     const isoValidationResult = ISOParser.validateISOFileStructure(imageFile);
-    //
-    //     // TODO: If ISO structure does not conform to ISO9660, prompt user to proceed or not.
-    //     if (isoValidationResult != .ISO_VALID) {
-    //         Debug.log(.ERROR, "Invalid ISO file structure detected. Aborting... Error code: {any}", .{isoValidationResult});
-    //         return error.InvalidISOStructureDoesNotConformToISO9660;
-    //     }
-    // }
+    Debug.log(.DEBUG, "openFileValidated: All validations passed, returning file handle", .{});
 
     return imageFile;
+}
+
+pub fn validateISOStructure(imageType: FileSystemType, imageFile: std.fs.File) void {
+    if (imageType == .ISO9660) {
+        const isoValidationResult = ISOParser.validateISOFileStructure(imageFile);
+
+        // TODO: If ISO structure does not conform to ISO9660, prompt user to proceed or not.
+        if (isoValidationResult != .ISO_VALID) {
+            Debug.log(.ERROR, "Invalid ISO file structure detected. Aborting... Error code: {any}", .{isoValidationResult});
+            return error.InvalidISOStructureDoesNotConformToISO9660;
+        }
+    }
 }
 
 // --- Unit Tests ---
@@ -441,7 +484,7 @@ test "getExtensionFromPath: file with no extension" {
     try std.testing.expectEqualStrings(expected, getExtensionFromPath(path));
 }
 
-test "isValidImageFile: ISO 9660 detection" {
+test "validateImageFile: ISO 9660 detection" {
     const USER_HOME_PATH = "/Users/cerberus";
     const TEST_ISO_FILE_PATH = "/Documents/Projects/freetracer/tinycore.iso";
 
@@ -451,7 +494,7 @@ test "isValidImageFile: ISO 9660 detection" {
     };
     defer imageFile.close();
 
-    try std.testing.expect(isValidImageFile(imageFile));
+    try std.testing.expect(validateImageFile(imageFile).isValid);
 }
 
 test "getImageType: lowercase .iso file" {

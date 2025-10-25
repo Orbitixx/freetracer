@@ -618,7 +618,7 @@ fn setStatusBoxUIToFailedState(self: *DataFlasherUI) void {
 
     self.layout.emitEvent(.{ .TextChanged = .{
         .target = .DataFlasherStatusHeaderText,
-        .text = "DONE!",
+        .text = "ERROR!",
         .style = UIConfig.Styles.StatusPanel.StepText.Failure.style,
         .pulsate = .{ .enabled = true },
     } }, params);
@@ -1002,7 +1002,7 @@ pub const UIConfig = struct {
                 const self: *DataFlasherUI = @ptrCast(@alignCast(ctx));
 
                 self.layout.emitEvent(
-                    .{ .CopyTextToClipboard = .{ .target = .DataFlasherCopyLogsButton } },
+                    .{ .CopyTextToClipboard = .{ .target = .DataFlasherLogsTextbox } },
                     .{ .excludeSelf = true },
                 );
             }

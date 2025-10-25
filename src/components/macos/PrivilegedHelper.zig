@@ -1,8 +1,8 @@
 /// PrivilegedHelper mediates between the GUI and the privileged helper by owning XPC client state,
 /// staging selected image/device metadata, and emitting component events in response to helper replies.
 /// Inbound: component events from the UI and XPC reply dictionaries; Outbound: XPC requests to the helper
-/// (write ISO, query version) plus UI events for progress/errors. No direct disk I/O occurs here beyond
-/// validating identifiers and retaining ISO/device selections for the helper.
+/// (write image, query version) plus UI events for progress/errors. No direct disk I/O occurs here beyond
+/// validating identifiers and retaining image/device selections for the helper.
 // ----------------------------------------------------------------------------------------------------
 const std = @import("std");
 const rl = @import("raylib");
@@ -31,7 +31,7 @@ const HelperRequestCode = freetracer_lib.constants.HelperRequestCode;
 const HelperResponseCode = freetracer_lib.constants.HelperResponseCode;
 const HelperInstallCode = freetracer_lib.constants.HelperInstallCode;
 
-const ISOFilePicker = @import("../FilePicker/FilePicker.zig");
+const FilePicker = @import("../FilePicker/FilePicker.zig");
 const PrivilegedHelperTool = @import("../../modules/macos/PrivilegedHelperTool.zig");
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
 const WindowManager = @import("../../managers/WindowManager.zig").WindowManagerSingleton;
@@ -45,10 +45,11 @@ const PrivilegedHelperState = struct {
     isActive: bool = false,
     isHelperInstalled: bool = false,
     installedVersion: [:0]const u8 = "-1",
-    isoPath: ?[:0]const u8 = null,
+    imagePath: ?[:0]const u8 = null,
     targetDisk: ?[:0]const u8 = null,
     device: ?StorageDevice = null,
     imageType: ImageType = undefined,
+    userForcedUnknownImage: bool = false,
 };
 
 const ComponentFramework = @import("../framework/import/index.zig");
@@ -78,13 +79,14 @@ needsDiskPermissions: bool = false,
 
 pub const Events = struct {
     //
-    pub const onWriteISOToDeviceRequest = ComponentFramework.defineEvent(
+    pub const onWriteImageToDeviceRequest = ComponentFramework.defineEvent(
         EventManager.createEventName(ComponentName, "on_write_iso_to_device"),
         struct {
-            isoPath: [:0]const u8,
+            imagePath: [:0]const u8,
             imageType: ImageType,
             targetDisk: [:0]const u8,
             device: StorageDevice,
+            userForcedUnknownImage: bool,
         },
         struct {},
     );
@@ -299,10 +301,15 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
 
     eventLoop: switch (event.hash) {
         //
-        Events.onWriteISOToDeviceRequest.Hash => {
-            const data = Events.onWriteISOToDeviceRequest.getData(event) orelse break :eventLoop;
+        Events.onWriteImageToDeviceRequest.Hash => {
+            const data = Events.onWriteImageToDeviceRequest.getData(event) orelse break :eventLoop;
 
-            try self.acquireStateDataOwnership(data.isoPath, data.targetDisk, data.device, data.imageType);
+            try self.acquireStateDataOwnership(
+                data.imagePath,
+                data.targetDisk,
+                data.device,
+                data.userForcedUnknownImage,
+            );
 
             self.installHelperIfNotInstalled() catch |err| {
                 Debug.log(.ERROR, "An error occurred while trying to install Freetracer Helper Tool. Exiting event loop... {any}", .{err});
@@ -347,17 +354,16 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
             self.state.lock();
             errdefer self.state.unlock();
 
-            if (self.state.data.targetDisk == null or self.state.data.isoPath == null) {
-                Debug.log(.ERROR, "PrivilegedHelper Component's state value of targetDisk or isoPath is NULL when it should not be. Aborting...", .{});
+            if (self.state.data.targetDisk == null or self.state.data.imagePath == null) {
+                Debug.log(.ERROR, "PrivilegedHelper Component's state value of targetDisk or imagePath is NULL when it should not be. Aborting...", .{});
                 break :eventLoop;
             }
 
             const targetDisk: [:0]const u8 = self.state.data.targetDisk.?;
-            const isoPath: [:0]const u8 = self.state.data.isoPath.?;
+            const imagePath: [:0]const u8 = self.state.data.imagePath.?;
             const deviceServiceId: c_uint = self.state.data.device.?.serviceId;
             const deviceType: DeviceType = self.state.data.device.?.type;
-            const imageType: ImageType = self.state.data.imageType;
-            // const imageType: ImageType = EventManager.signal("iso_file_picker", )
+            const userForcedUnknownImage: bool = self.state.data.userForcedUnknownImage;
 
             Debug.log(.INFO, "Sending deviceServiceId: {d}", .{deviceServiceId});
 
@@ -366,7 +372,13 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
 
             Debug.log(.INFO, "Sending target disk: {s}", .{targetDisk});
 
-            self.requestWrite(targetDisk, isoPath, deviceServiceId, deviceType, imageType);
+            self.requestWrite(
+                targetDisk,
+                imagePath,
+                deviceServiceId,
+                deviceType,
+                userForcedUnknownImage,
+            );
 
             eventResult.validate(.SUCCESS);
         },
@@ -624,15 +636,15 @@ fn installHelperIfNotInstalled(self: *PrivilegedHelper) !void {
     } else Debug.log(.INFO, "Determined that Freetracer Helper Tool is already installed.", .{});
 }
 
-/// Precondition: isoPath/targetDisk originate from trusted UI selection; this function performs final validation before XPC.
+/// Precondition: imagePath/targetDisk originate from trusted UI selection; this function performs final validation before XPC.
 /// Posts the WRITE_ISO_TO_DEVICE request and leaves ownership of state data with `self.state` for helper callbacks.
-fn requestWrite(self: *PrivilegedHelper, targetDisk: [:0]const u8, isoPath: [:0]const u8, deviceServiceId: c_uint, deviceType: DeviceType, imageType: ImageType) void {
+fn requestWrite(self: *PrivilegedHelper, targetDisk: [:0]const u8, imagePath: [:0]const u8, deviceServiceId: c_uint, deviceType: DeviceType, userForcedFlag: bool) void {
     // Install or update the Privileged Helper Tool before sending unmount request
 
     Debug.log(.DEBUG, "requestWrite() received targetDisk: {s}", .{targetDisk});
 
-    if (isoPath.len == 0) {
-        Debug.log(.ERROR, "PrivilegedHelper.requestWrite(): empty isoPath provided. Aborting...", .{});
+    if (imagePath.len == 0) {
+        Debug.log(.ERROR, "PrivilegedHelper.requestWrite(): empty imagePath provided. Aborting...", .{});
         return;
     }
 
@@ -663,10 +675,10 @@ fn requestWrite(self: *PrivilegedHelper, targetDisk: [:0]const u8, isoPath: [:0]
     const request = XPCService.createRequest(.WRITE_ISO_TO_DEVICE);
     defer XPCService.releaseObject(request);
     XPCService.createString(request, "disk", targetDisk);
-    XPCService.createString(request, "isoPath", isoPath);
+    XPCService.createString(request, "imagePath", imagePath);
     XPCService.createUInt64(request, "deviceServiceId", deviceServiceId);
     XPCService.createUInt64(request, "deviceType", @intFromEnum(deviceType));
-    XPCService.createUInt64(request, "imageType", @intFromEnum(imageType));
+    XPCService.createUInt64(request, "userForcedFlag", @as(u64, @intCast(@intFromBool(userForcedFlag))));
     XPCService.connectionSendMessage(self.xpcClient.service, request);
 }
 
@@ -683,19 +695,19 @@ fn requestMacOSInteractivePermissionDialog(devicePath: [:0]u8) void {
 
 /// Copies the UI-provided ISO and disk identifiers into component-owned storage; caller must hold no state lock.
 /// On failure previous state is cleared and ownership remains unchanged, preventing partial updates.
-fn acquireStateDataOwnership(self: *PrivilegedHelper, isoPath: [:0]const u8, targetDisk: [:0]const u8, device: StorageDevice, imageType: ImageType) !void {
+fn acquireStateDataOwnership(self: *PrivilegedHelper, imagePath: [:0]const u8, targetDisk: [:0]const u8, device: StorageDevice, userForcedFlag: bool) !void {
     self.cleanupComponentState();
     self.state.lock();
     defer self.state.unlock();
-    const iso_copy = try self.allocator.dupeZ(u8, isoPath);
-    errdefer self.allocator.free(iso_copy);
-    const disk_copy = try self.allocator.dupeZ(u8, targetDisk);
-    errdefer self.allocator.free(disk_copy);
-    self.state.data.isoPath = iso_copy;
-    self.state.data.targetDisk = disk_copy;
+    const imagePathCopy = try self.allocator.dupeZ(u8, imagePath);
+    errdefer self.allocator.free(imagePathCopy);
+    const bsdNameCopy = try self.allocator.dupeZ(u8, targetDisk);
+    errdefer self.allocator.free(bsdNameCopy);
+    self.state.data.imagePath = imagePathCopy;
+    self.state.data.targetDisk = bsdNameCopy;
     self.state.data.device = device;
-    self.state.data.imageType = imageType;
-    Debug.log(.INFO, "Set to state: \n\tISO Path: {s}\n\ttargetDisk: {s}", .{ self.state.data.isoPath.?, self.state.data.targetDisk.? });
+    self.state.data.userForcedUnknownImage = userForcedFlag;
+    Debug.log(.INFO, "Set to state: \n\tImage Path: {s}\n\ttargetDisk: {s}", .{ self.state.data.imagePath.?, self.state.data.targetDisk.? });
 }
 
 /// Releases any retained ISO/device selections and resets state so future operations start from a clean slate.
@@ -703,9 +715,9 @@ fn cleanupComponentState(self: *PrivilegedHelper) void {
     self.state.lock();
     defer self.state.unlock();
 
-    if (self.state.data.isoPath) |path| {
+    if (self.state.data.imagePath) |path| {
         self.allocator.free(path);
-        self.state.data.isoPath = null;
+        self.state.data.imagePath = null;
     }
     if (self.state.data.targetDisk) |disk| {
         self.allocator.free(disk);

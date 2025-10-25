@@ -31,11 +31,13 @@ pub const FilePickerState = struct {
     selectedPath: ?[:0]u8 = null,
     isSelecting: bool = false,
     image: Image = .{},
+    userForcedUnknownImage: bool = false,
 };
 
 pub const ImageQueryObject = struct {
     imagePath: [:0]u8 = undefined,
     image: Image = undefined,
+    userForcedUnknownImage: bool = false,
 };
 
 const ComponentState = ComponentFramework.ComponentState(FilePickerState);
@@ -80,7 +82,7 @@ pub const Events = struct {
         struct {},
     );
 
-    pub const onISOFilePathQueried = ComponentFramework.defineEvent(
+    pub const onImageDetailsQueried = ComponentFramework.defineEvent(
         EventManager.createEventName(ComponentName, "on_iso_file_path_queried"),
         struct {
             result: *ImageQueryObject,
@@ -181,8 +183,8 @@ pub fn handleEvent(self: *FilePicker, event: ComponentEvent) !EventResult {
     var eventResult = EventResult.init();
 
     return switch (event.hash) {
-        Events.onISOFileSelected.Hash => try self.handleISOFileSelected(),
-        Events.onISOFilePathQueried.Hash => try self.handleISOFilePathQueried(event),
+        Events.onISOFileSelected.Hash => try self.handleImageFileSelected(),
+        Events.onImageDetailsQueried.Hash => try self.handleImageDetailsQueried(event),
         AppManager.Events.AppResetEvent.Hash => self.handleAppResetRequest(),
         else => eventResult.fail(),
     };
@@ -198,17 +200,17 @@ pub fn deinit(self: *FilePicker) void {
 
 /// Handles the `onISOFilePathQueried` event, providing the currently selected path to the requester.
 /// Avoids heap allocation by having the requester provide memory for the response.
-fn handleISOFilePathQueried(self: *FilePicker, event: ComponentEvent) !EventResult {
+fn handleImageDetailsQueried(self: *FilePicker, event: ComponentEvent) !EventResult {
     self.state.lock();
     defer self.state.unlock();
 
     const path = self.state.data.selectedPath;
     var eventResult = EventResult.init();
 
-    const data = Events.onISOFilePathQueried.getData(event) orelse return eventResult.fail();
+    const data = Events.onImageDetailsQueried.getData(event) orelse return eventResult.fail();
 
     if (path == null or self.state.data.isSelecting) {
-        Debug.log(.WARNING, "ISOFilePicker: Query failed. Path is null or selection is in progress.", .{});
+        Debug.log(.WARNING, "FilePicker: Query failed. Path is null or selection is in progress.", .{});
         return eventResult.fail();
     }
 
@@ -216,6 +218,7 @@ fn handleISOFilePathQueried(self: *FilePicker, event: ComponentEvent) !EventResu
     data.result.* = ImageQueryObject{
         .imagePath = path.?,
         .image = self.state.data.image,
+        .userForcedUnknownImage = self.state.data.userForcedUnknownImage,
     };
 
     return eventResult.succeed();
@@ -225,7 +228,7 @@ fn handleISOFilePathQueried(self: *FilePicker, event: ComponentEvent) !EventResu
 /// This function is responsible for validating the file and updating state and other components.
 /// Validates the worker-selected path, updates component state, and notifies dependents.
 /// Requires the component state lock to be held when invoked.
-fn handleISOFileSelected(self: *FilePicker) !EventResult {
+fn handleImageFileSelected(self: *FilePicker) !EventResult {
     self.state.lock();
     defer self.state.unlock();
 
@@ -235,7 +238,7 @@ fn handleISOFileSelected(self: *FilePicker) !EventResult {
     var eventResult = EventResult.init();
 
     if (isSelecting or selectedPath == null) {
-        Debug.log(.WARNING, "ISOFilePicker: State reflects file is still being selected or path is NULL.", .{});
+        Debug.log(.WARNING, "FilePicker: State reflects file is still being selected or path is NULL.", .{});
         return eventResult.fail();
     }
 
@@ -257,39 +260,52 @@ fn processSelectedPathLocked(self: *FilePicker, newPath: [:0]u8) !void {
     Debug.log(.DEBUG, "processSelectedPathLocked: attempting to validate the selected image file: {s}", .{newPath});
     const imageType = fs.getImageType(fs.getExtensionFromPath(newPath));
 
+    Debug.log(.DEBUG, "processSelectedPathLocked: detected image type", .{});
     self.state.data.image.path = newPath;
     self.state.data.image.type = imageType;
 
-    const file = fs.openFileValidated(newPath, .{ .userHomePath = std.posix.getenv("HOME") orelse return error.UnableToGetUserPath, .imageType = imageType }) catch |err| {
+    Debug.log(.DEBUG, "processSelectedPathLocked: calling openFileValidated", .{});
+
+    const file = fs.openFileValidated(newPath, .{
+        .userHomePath = std.posix.getenv("HOME") orelse return error.UnableToGetUserPath,
+    }) catch |err| {
+        Debug.log(.DEBUG, "processSelectedPathLocked: openFileValidated returned error", .{});
         var buf: [256]u8 = std.mem.zeroes([256]u8);
         _ = try std.fmt.bufPrint(&buf, "Could not obtain a validated file handle for selected file. Error: {any}.", .{err});
-        Debug.log(.ERROR, "Could not obtain a validated file handle for selected path: {s}; error: {any}", .{ std.mem.sliceTo(&buf, 0x00), err });
+        Debug.log(.ERROR, "processSelectedPathLocked: Could not obtain a validated file handle for selected path: {s}; error: {any}", .{ std.mem.sliceTo(&buf, 0x00), err });
         _ = osd.message(@ptrCast(std.mem.sliceTo(&buf, 0x00)), .{ .buttons = .ok, .level = .err });
         return err;
     };
+
     defer file.close();
 
+    Debug.log(.DEBUG, "processSelectedPathLocked: openFileValidated succeeded, getting file stats", .{});
     const stat = try file.stat();
 
     Debug.log(.DEBUG, "processSelectedPathLocked: successfully opened file. Size: {d}", .{stat.size});
     Debug.log(.DEBUG, "processSelectedPathLocked: attempting to validate structure...", .{});
 
-    if (!fs.isValidImageFile(file)) {
+    if (!fs.validateImageFile(file).isValid) {
+        Debug.log(.DEBUG, "processSelectedPathLocked: file structure validation failed, showing dialog", .{});
         const proceed = osd.message("The selected file does not appear to contain a bootable file system (ISO 9660, GPT or MBR), this is unusual and may have unintended consequences. Are you sure you want to proceed?", .{
             .level = .warning,
             .buttons = .yes_no,
         });
 
         if (!proceed) {
+            Debug.log(.DEBUG, "processSelectedPathLocked: user declined to proceed, cleaning up", .{});
             self.allocator.free(newPath);
             self.state.data.selectedPath = null;
             return;
+        } else {
+            self.state.data.userForcedUnknownImage = true;
         }
     }
 
     Debug.log(.INFO, "FilePicker selected file: {s}, size: {d:.0}", .{ newPath, stat.size });
 
     if (self.uiComponent) |*ui| {
+        Debug.log(.DEBUG, "processSelectedPathLocked: notifying UI component of path change", .{});
         const pathChangedEvent = FilePickerUI.Events.onISOFilePathChanged.create(self.asComponentPtr(), &.{
             .newPath = newPath,
             .size = stat.size,
@@ -298,7 +314,7 @@ fn processSelectedPathLocked(self: *FilePicker, newPath: [:0]u8) !void {
         _ = try ui.handleEvent(pathChangedEvent);
     }
 
-    // self.confirmSelectedImageFile();
+    Debug.log(.DEBUG, "processSelectedPathLocked: completed successfully", .{});
 }
 
 pub fn acceptDroppedFile(self: *FilePicker, path: []const u8) !void {

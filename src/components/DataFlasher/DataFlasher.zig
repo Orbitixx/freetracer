@@ -16,7 +16,7 @@ const ComponentName = EventManager.ComponentName.DATA_FLASHER;
 const ComponentFramework = @import("../framework/import/index.zig");
 // const WorkerContext = @import("./WorkerContext.zig", .{});
 const DeviceList = @import("../DeviceList/DeviceList.zig");
-const ISOFilePicker = @import("../FilePicker/FilePicker.zig");
+const FilePicker = @import("../FilePicker/FilePicker.zig");
 const PrivilegedHelper = @import("../macos/PrivilegedHelper.zig");
 
 const DataFlasherUI = @import("./DataFlasherUI.zig");
@@ -26,10 +26,11 @@ const DataFlasherUI = @import("./DataFlasherUI.zig");
 const DataFlasherState = struct {
     isActive: bool = false,
     // owned by FilePicker
-    isoPath: ?[:0]const u8 = null,
+    imagePath: ?[:0]const u8 = null,
     // owned by DeviceList (via state ArrayList)
     device: ?StorageDevice = null,
     image: Image = .{},
+    userForcedUnknownImage: bool = false,
 };
 
 const DataFlasher = @This();
@@ -126,22 +127,24 @@ pub fn dispatchComponentAction(self: *DataFlasher) void {
     // NOTE: Need to be careful with the memory access operations here since targetDisk (and obtained slice below)
     // live/s only within the scope of this function.
     var device: StorageDevice = undefined;
-    var isoPath: [:0]const u8 = undefined;
+    var imagePath: [:0]const u8 = undefined;
     var imageType: ImageType = undefined;
+    var userForcedUnknownImage: bool = undefined;
 
     {
         self.state.lock();
         defer self.state.unlock();
         device = self.state.data.device.?;
-        isoPath = self.state.data.isoPath.?;
+        imagePath = self.state.data.imagePath.?;
         imageType = self.state.data.image.type;
+        userForcedUnknownImage = self.state.data.userForcedUnknownImage;
     }
 
     self.state.lock();
     errdefer self.state.unlock();
 
-    if (isoPath.len > 3) {
-        Debug.log(.DEBUG, "DataFlasher.dispatchComponentAction(): ISO path is confirmed as: {s}", .{isoPath});
+    if (imagePath.len > 3) {
+        Debug.log(.DEBUG, "DataFlasher.dispatchComponentAction(): ISO path is confirmed as: {s}", .{imagePath});
     } else {
         Debug.log(.WARNING, "DataFlasher.dispatchComponentAction(): ISO path is NULL! Aborting...", .{});
         return;
@@ -160,7 +163,7 @@ pub fn dispatchComponentAction(self: *DataFlasher) void {
     // it has no need to understand the internal filesystem structure of the ISO file. Therefore, the most secure approach
     // is to avoid parsing the ISO 9660 filesystem structure entirely.
 
-    // const isoParserResult = ISOParser.parseIso(self.allocator, isoPath, device.size);
+    // const isoParserResult = ISOParser.parseIso(self.allocator, imagePath, device.size);
     //
     // if (isoParserResult != ISOParser.ISO_PARSER_RESULT.ISO_VALID) {
     //     var message: [*:0]const u8 = "";
@@ -187,11 +190,12 @@ pub fn dispatchComponentAction(self: *DataFlasher) void {
     // Send a request to unmount the target disk to the PrivilegedHelper Component, which will communicate with the Helper Tool
     const flashResult = EventManager.signal(
         "privileged_helper",
-        PrivilegedHelper.Events.onWriteISOToDeviceRequest.create(self.asComponentPtr(), &.{
+        PrivilegedHelper.Events.onWriteImageToDeviceRequest.create(self.asComponentPtr(), &.{
             .targetDisk = device.getBsdNameSlice(),
             .device = device,
-            .isoPath = isoPath,
+            .imagePath = imagePath,
             .imageType = imageType,
+            .userForcedUnknownImage = userForcedUnknownImage,
         }),
     ) catch |err| errBlk: {
         Debug.log(.ERROR, "DataFlasher: Received an error dispatching a disk write request. Aborting... Error: {any}", .{err});
@@ -209,15 +213,15 @@ pub const asComponent = ComponentImplementation.asComponent;
 pub const asComponentPtr = ComponentImplementation.asComponentPtr;
 pub const asInstance = ComponentImplementation.asInstance;
 
-fn queryAndSaveISOPath(self: *DataFlasher) !void {
+fn queryAndSaveImageDetails(self: *DataFlasher) !void {
     //
     self.state.lock();
     defer self.state.unlock();
 
-    var imageInfo: ISOFilePicker.ImageQueryObject = .{};
-    const data = ISOFilePicker.Events.onISOFilePathQueried.Data{ .result = &imageInfo };
+    var imageInfo: FilePicker.ImageQueryObject = .{};
+    const data = FilePicker.Events.onImageDetailsQueried.Data{ .result = &imageInfo };
 
-    const eventResult = try EventManager.signal("iso_file_picker", ISOFilePicker.Events.onISOFilePathQueried.create(self.asComponentPtr(), &data));
+    const eventResult = try EventManager.signal("iso_file_picker", FilePicker.Events.onImageDetailsQueried.create(self.asComponentPtr(), &data));
 
     if (!eventResult.success) return error.DataFlasherFailedToQueryImagePath;
 
@@ -226,8 +230,9 @@ fn queryAndSaveISOPath(self: *DataFlasher) !void {
         return error.DataFlasherReceivedInvalidImagePath;
     }
 
-    self.state.data.isoPath = imageInfo.imagePath;
+    self.state.data.imagePath = imageInfo.imagePath;
     self.state.data.image = imageInfo.image;
+    self.state.data.userForcedUnknownImage = imageInfo.userForcedUnknownImage;
 }
 
 fn queryAndSaveSelectedDevice(self: *DataFlasher) !void {
@@ -256,7 +261,7 @@ fn handleDeviceListActiveStateChanged(self: *DataFlasher, event: ComponentEvent)
     const data = DeviceList.Events.onDeviceListActiveStateChanged.getData(event) orelse return eventResult.fail();
     if (data.isActive == true) return eventResult.succeed();
 
-    try self.queryAndSaveISOPath();
+    try self.queryAndSaveImageDetails();
     try self.queryAndSaveSelectedDevice();
 
     Debug.log(.DEBUG, "DataFlasher.handleEvent.onDeviceListActiveStateChanged: successfully obtained path and devices responses.", .{});
@@ -267,11 +272,11 @@ fn handleDeviceListActiveStateChanged(self: *DataFlasher, event: ComponentEvent)
         defer self.state.unlock();
         self.state.data.isActive = true;
 
-        std.debug.assert(self.state.data.isoPath != null and self.state.data.isoPath.?.len > 2);
+        std.debug.assert(self.state.data.imagePath != null and self.state.data.imagePath.?.len > 2);
         std.debug.assert(self.state.data.device != null and @TypeOf(self.state.data.device.?) == StorageDevice);
 
-        Debug.log(.DEBUG, "DataFlasher received:\n\tisoPath: {s}\n\tdevice: {s} ({any})\n", .{
-            self.state.data.isoPath.?,
+        Debug.log(.DEBUG, "DataFlasher received:\n\timagePath: {s}\n\tdevice: {s} ({any})\n", .{
+            self.state.data.imagePath.?,
             self.state.data.device.?.getBsdNameSlice(),
             self.state.data.device.?.type,
         });
@@ -299,7 +304,7 @@ pub fn handleAppResetRequest(self: *DataFlasher) EventResult {
 
     self.state.data.isActive = false;
     self.state.data.device = null;
-    self.state.data.isoPath = null;
+    self.state.data.imagePath = null;
 
     return eventResult.succeed();
 }
