@@ -58,6 +58,15 @@ pub fn init(allocator: std.mem.Allocator, settings: LoggerSettings) !void {
     };
 }
 
+pub fn setLoggingSeverity(newLevel: SeverityLevel) !void {
+    mutex.lock();
+    defer mutex.unlock();
+
+    if (instance) |*inst| {
+        inst.currentSeverityLevel = newLevel;
+    } else return error.DebugLoggerIsNotInitialized;
+}
+
 pub fn deinit() void {
     mutex.lock();
     defer mutex.unlock();
@@ -102,42 +111,31 @@ pub fn getLatestLog() [:0]const u8 {
     } else return "";
 }
 
+fn getSeverityPrefix(level: SeverityLevel) [:0]const u8 {
+    return switch (level) {
+        .DEBUG => "DEBUG",
+        .INFO => "INFO",
+        .WARNING => "WARNING",
+        .ERROR => "ERROR",
+    };
+}
+
 pub const Logger = struct {
     allocator: std.mem.Allocator,
     utcCorrectionHours: i8 = -4,
     logFile: ?std.fs.File = null,
     latestLog: ?[:0]const u8 = null,
+    currentSeverityLevel: SeverityLevel = .INFO,
+
+    fn shouldLog(self: *const Logger, messageLevel: SeverityLevel) bool {
+        return @intFromEnum(messageLevel) >= @intFromEnum(self.currentSeverityLevel);
+    }
 
     pub fn log(self: *Logger, comptime level: SeverityLevel, comptime fmt: []const u8, args: anytype) void {
         const t = time.now(self.utcCorrectionHours);
 
-        const severityPrefix: [:0]const u8 = switch (level) {
-            .DEBUG => "DEBUG",
-            .INFO => "INFO",
-            .WARNING => "WARNING",
-            .ERROR => "ERROR",
-        };
+        const severityPrefix = getSeverityPrefix(level);
 
-        // switch (level) {
-        //     .DEBUG => {
-        //         logFn = std.log.debug;
-        //         severityPrefix = "DEBUG";
-        //     },
-        //     .INFO => {
-        //         logFn = std.log.info;
-        //         severityPrefix = "INFO";
-        //     },
-        //     .WARNING => {
-        //         logFn = std.log.warn;
-        //         severityPrefix = "WARNING";
-        //     },
-        //     .ERROR => {
-        //         logFn = std.log.err;
-        //         severityPrefix = "ERROR";
-        //     },
-        // }
-        //
-        // Create the full message with timestamp and format arguments
         const full_message = std.fmt.allocPrintSentinel(
             self.allocator,
             "[{d:0>2}/{d:0>2}/{d} {d:0>2}:{d:0>2}:{d:0>2}] {s}: " ++ fmt,
@@ -161,11 +159,13 @@ pub const Logger = struct {
 
         if (full_message.len < 1) return;
 
-        switch (level) {
-            .DEBUG => std.log.debug("{s}", .{full_message}),
-            .INFO => std.log.info("{s}", .{full_message}),
-            .WARNING => std.log.warn("{s}", .{full_message}),
-            .ERROR => std.log.err("{s}", .{full_message}),
+        if (self.shouldLog(level)) {
+            switch (level) {
+                .DEBUG => std.log.debug("{s}", .{full_message}),
+                .INFO => std.log.info("{s}", .{full_message}),
+                .WARNING => std.log.warn("{s}", .{full_message}),
+                .ERROR => std.log.err("{s}", .{full_message}),
+            }
         }
 
         if (self.logFile != null) self.writeLogToFile("\n{s}", .{full_message});

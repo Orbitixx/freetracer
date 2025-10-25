@@ -179,8 +179,10 @@ const AppManager = struct {
         try Debug.init(self.allocator, .{ .standaloneLogFilePath = logsPath });
         defer Debug.deinit();
 
-        try PreferencesManager.init(self.allocator, prefsPath);
+        var isFirstAppLaunch = try PreferencesManager.init(self.allocator, prefsPath);
         defer PreferencesManager.deinit();
+
+        try Debug.setLoggingSeverity(try PreferencesManager.getDebugLevel());
 
         try WindowManager.init();
         defer WindowManager.deinit();
@@ -191,11 +193,11 @@ const AppManager = struct {
         try EventManager.init(self.allocator);
         defer EventManager.deinit();
 
-        // TODO: catch with OSD
-        const shouldUpdate = try PreferencesManager.getCheckUpdates();
-
-        // TODO: add user consent for enabling check
-        try UpdateManager.init(self.allocator, shouldUpdate);
+        try UpdateManager.init(
+            self.allocator,
+            if (isFirstAppLaunch) true else PreferencesManager.getCheckUpdates() catch false,
+            !isFirstAppLaunch,
+        );
         defer UpdateManager.deinit();
 
         // Belongs in WindowManager maybe?
@@ -323,14 +325,6 @@ const AppManager = struct {
         const centerY: i32 = @intFromFloat(WindowManager.getWindowHeight() / 2);
         const radius: f32 = WindowManager.getWindowWidth() / 2 + WindowManager.getWindowWidth() * 0.2;
 
-        // Charcoal gradient
-        // const innerColor: rl.Color = rl.Color.init(32, 32, 44, 255);
-        // const outerColor: rl.Color = rl.Color.init(19, 20, 32, 255);
-
-        // Desaturated teal
-        // const innerColor: rl.Color = rl.Color.init(33, 44, 55, 255);
-        // const outerColor: rl.Color = rl.Color.init(23, 25, 39, 255);
-        //
         const innerColor: rl.Color = rl.Color.init(32, 32, 44, 255);
         const outerColor: rl.Color = Color.themeBg;
 
@@ -398,6 +392,12 @@ const AppManager = struct {
             try componentRegistry.drawAll();
 
             rl.endDrawing();
+
+            if (isFirstAppLaunch) {
+                const shouldUpdate = PreferencesManager.getCheckUpdatesPermission();
+                if (shouldUpdate) UpdateManager.checkForUpdates();
+                isFirstAppLaunch = false;
+            }
 
             //----------------------------------------------------------------------------------
             //--- @END DRAW --------------------------------------------------------------------

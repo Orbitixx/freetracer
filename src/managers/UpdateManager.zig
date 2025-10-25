@@ -52,13 +52,11 @@ pub const UpdateManagerSingleton = struct {
 
     var instance: ?UpdateManager = null;
     var mutex: std.Thread.Mutex = .{};
-    // var updateTextLine: UI.Text = undefined;
     var bgRect: UI.Rectangle = undefined;
-    // var updateTextBuffer: [80]u8 = undefined;
     var state: State = undefined;
     var worker: ?Worker = null;
 
-    pub fn init(allocator: std.mem.Allocator, enabled: bool) !void {
+    pub fn init(allocator: std.mem.Allocator, enabled: bool, autoStart: bool) !void {
         mutex.lock();
         defer mutex.unlock();
 
@@ -82,28 +80,10 @@ pub const UpdateManagerSingleton = struct {
                 .run_context = &instance,
             }, .{});
 
-            if (worker) |*w| try w.start();
+            if (autoStart) {
+                if (worker) |*w| try w.start();
+            }
         } else Debug.log(.INFO, "App update check is disabled in ./config/freetraces/preferences.json. Skipping app version check.", .{});
-
-        // updateTextBuffer = std.mem.zeroes([80]u8);
-        //
-        // updateTextLine = UI.Text.init(
-        //     @ptrCast(std.mem.sliceTo(&updateTextBuffer, 0x00)),
-        //     .{ .x = relX(0.02), .y = relY(0.95) },
-        //     .{ .font = .ROBOTO_REGULAR, .fontSize = 14, .textColor = Color.lightGray },
-        // );
-        //
-        // bgRect = UI.Rectangle{
-        //     .transform = .{
-        //         .x = 0,
-        //         .y = relY(0.95),
-        //         .w = WindowManager.getWindowWidth(),
-        //         .h = relY(0.05),
-        //     },
-        //     .style = .{
-        //         .color = Color.transparentDark,
-        //     },
-        // };
     }
 
     pub fn update() void {
@@ -188,9 +168,16 @@ pub const UpdateManagerSingleton = struct {
         }
     }
 
-    pub fn draw() void {
-        // bgRect.draw();
-        // updateTextLine.draw();
+    pub fn draw() void {}
+
+    pub fn checkForUpdates() void {
+        if (instance) |_| if (worker) |*wrk| wrk.start() catch |err| {
+            Debug.log(.ERROR, "Failed to performed update check: {any}", .{err});
+            _ = osd.message(
+                "Freetracer encountered an issue attempting to check for an update.",
+                .{ .buttons = .ok, .level = .warning },
+            );
+        };
     }
 
     pub fn latestVersion() [:0]const u8 {
