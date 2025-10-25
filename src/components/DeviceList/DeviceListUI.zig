@@ -302,6 +302,7 @@ fn appendDeviceSelectBox(self: *DeviceListUI, device: StorageDevice) !void {
             .name = device.getNameSlice(),
             .path = @ptrCast(std.mem.sliceTo(&pathBuf, 0x00)),
             .media = deviceTypeLabelZ(device),
+            .size = device.size,
         },
         .callbacks = .{
             .onClick = .{ .function = DeviceList.selectDeviceActionWrapper.call, .context = context },
@@ -796,7 +797,7 @@ pub const UIConfig = struct {
             .contentSpacing = 20,
             .lineSpacing = 6,
             .textLineSpacing = 4,
-            .primaryText = .{ .font = .ROBOTO_REGULAR, .fontSize = 20, .textColor = Color.white },
+            .primaryText = .{ .font = .JERSEY10_REGULAR, .fontSize = 28, .textColor = Color.white },
             .secondaryText = .{ .font = .JERSEY10_REGULAR, .fontSize = 20, .textColor = Color.offWhite },
             .detailText = .{ .font = .ROBOTO_REGULAR, .fontSize = 14, .textColor = Color.lightGray },
             .scale = 0.7,

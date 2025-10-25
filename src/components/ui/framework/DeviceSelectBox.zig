@@ -30,6 +30,7 @@ pub const Content = struct {
     name: [:0]const u8,
     path: [:0]const u8,
     media: [:0]const u8,
+    size: i64,
 };
 
 pub const Style = struct {
@@ -114,7 +115,7 @@ pub fn init(config: Config) DeviceSelectBox {
 
     box.storeText(&box.nameBuffer, config.content.name);
     box.storeText(&box.pathBuffer, config.content.path);
-    box.storeText(&box.mediaBuffer, config.content.media);
+    box.formatSizeToBuffer(&box.mediaBuffer, config.content.size);
 
     return box;
 }
@@ -258,7 +259,7 @@ pub fn setEnabled(self: *DeviceSelectBox, flag: bool) void {
 pub fn setContent(self: *DeviceSelectBox, content: Content) void {
     self.storeText(&self.nameBuffer, content.name);
     self.storeText(&self.pathBuffer, content.path);
-    self.storeText(&self.mediaBuffer, content.media);
+    self.formatSizeToBuffer(&self.mediaBuffer, content.size);
     self.layoutDirty = true;
 }
 
@@ -282,6 +283,26 @@ fn storeText(_: *DeviceSelectBox, buffer: *[MAX_TEXT_LENGTH:0]u8, value: [:0]con
     buffer.* = std.mem.zeroes([MAX_TEXT_LENGTH:0]u8);
     const len = @min(value.len, MAX_TEXT_LENGTH - 1);
     if (len > 0) @memcpy(buffer[0..len], value[0..len]);
+    buffer[len] = 0;
+}
+
+fn formatSizeToBuffer(_: *DeviceSelectBox, buffer: *[MAX_TEXT_LENGTH:0]u8, sizeBytes: i64) void {
+    buffer.* = std.mem.zeroes([MAX_TEXT_LENGTH:0]u8);
+
+    const sizeGB: f64 = @as(f64, @floatFromInt(sizeBytes)) / (1_000_000_000);
+
+    var fbs: [32]u8 = undefined;
+    const written = std.fmt.bufPrint(&fbs, "{d:.1}", .{sizeGB}) catch {
+        const fallback = "Unknown";
+        const len = @min(fallback.len, MAX_TEXT_LENGTH - 1);
+        @memcpy(buffer[0..len], fallback[0..len]);
+        buffer[len] = 0;
+        return;
+    };
+
+    const len = @min(written.len + 3, MAX_TEXT_LENGTH - 1);
+    @memcpy(buffer[0..written.len], written);
+    @memcpy(buffer[written.len .. written.len + 3], " GB");
     buffer[len] = 0;
 }
 
@@ -333,9 +354,24 @@ fn updateLayout(self: *DeviceSelectBox, rect: rl.Rectangle) void {
 
     const contentStartX = padded.x + iconAreaWidth + self.style.contentSpacing;
 
-    const nameDims = rl.measureTextEx(self.primaryFont, @ptrCast(std.mem.sliceTo(&self.nameBuffer, 0x00)), self.style.primaryText.fontSize, self.style.primaryText.spacing);
-    const pathDims = rl.measureTextEx(self.secondaryFont, @ptrCast(std.mem.sliceTo(&self.pathBuffer, 0x00)), self.style.secondaryText.fontSize, self.style.secondaryText.spacing);
-    const mediaDims = rl.measureTextEx(self.detailFont, @ptrCast(std.mem.sliceTo(&self.mediaBuffer, 0x00)), self.style.detailText.fontSize, self.style.detailText.spacing);
+    const nameDims = rl.measureTextEx(
+        self.primaryFont,
+        @ptrCast(std.mem.sliceTo(&self.nameBuffer, 0x00)),
+        self.style.primaryText.fontSize,
+        self.style.primaryText.spacing,
+    );
+    const pathDims = rl.measureTextEx(
+        self.secondaryFont,
+        @ptrCast(std.mem.sliceTo(&self.pathBuffer, 0x00)),
+        self.style.secondaryText.fontSize,
+        self.style.secondaryText.spacing,
+    );
+    const mediaDims = rl.measureTextEx(
+        self.detailFont,
+        @ptrCast(std.mem.sliceTo(&self.mediaBuffer, 0x00)),
+        self.style.detailText.fontSize,
+        self.style.detailText.spacing,
+    );
 
     const line_gap = if (self.style.textLineSpacing != 0) self.style.textLineSpacing else self.style.lineSpacing;
     const totalTextHeight = nameDims.y + pathDims.y + mediaDims.y + line_gap * 2;

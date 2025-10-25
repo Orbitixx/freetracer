@@ -85,7 +85,35 @@ fn getStorageDeviceFromService(service: c.io_service_t, deviceType: DeviceType) 
     var defaultDeviceName: [MAX_DEVICE_NAME:0]u8 = std.mem.zeroes([MAX_DEVICE_NAME:0]u8);
     @memcpy(defaultDeviceName[0..DefaultNameString.len], DefaultNameString);
 
-    const deviceName: [MAX_DEVICE_NAME:0]u8 = try getVolumeNameFromBSDName(bsdNameSlice) orelse defaultDeviceName;
+    var deviceName: [MAX_DEVICE_NAME:0]u8 = undefined;
+    if (getDeviceNameFromIOService(service, deviceType)) |name| {
+        deviceName = name;
+    } else if (deviceType == .SD) {
+        if (try getVolumeNameFromBSDName(bsdNameSlice)) |volumeName| {
+            const volSlice = std.mem.sliceTo(&volumeName, Character.NULL);
+            deviceName = std.mem.zeroes([MAX_DEVICE_NAME:0]u8);
+            const sdPrefix = "SD Card (";
+            const maxVolChars = 6;
+            const volChars = @min(volSlice.len, maxVolChars);
+
+            var offset: usize = 0;
+            @memcpy(deviceName[offset..][0..sdPrefix.len], sdPrefix);
+            offset += sdPrefix.len;
+            if (volChars > 0) {
+                @memcpy(deviceName[offset..][0..volChars], volSlice[0..volChars]);
+                offset += volChars;
+            }
+            deviceName[offset] = ')';
+        } else {
+            deviceName = std.mem.zeroes([MAX_DEVICE_NAME:0]u8);
+            const sdCardName = "SD Card";
+            @memcpy(deviceName[0..sdCardName.len], sdCardName);
+        }
+    } else if (try getVolumeNameFromBSDName(bsdNameSlice)) |volumeName| {
+        deviceName = volumeName;
+    } else {
+        deviceName = defaultDeviceName;
+    }
 
     Debug.log(.DEBUG, "\tPreparing to query device type...", .{});
     // const deviceType: DeviceType = getDeviceType(service);
@@ -198,6 +226,59 @@ fn checkPhysicalDevice(service: c.io_service_t) PhysicalDeviceCheckResult {
     if (currentService != service) _ = c.IOObjectRelease(currentService);
     result = .{ .isPhysical = false };
     return result;
+}
+
+fn getDeviceNameFromIOService(service: c.io_service_t, deviceType: DeviceType) ?[MAX_DEVICE_NAME:0]u8 {
+    const productNameKeyString = if (deviceType == .USB) "USB Product Name" else "Product Name";
+
+    const productNameKey = c.CFStringCreateWithCString(c.kCFAllocatorDefault, productNameKeyString, c.kCFStringEncodingUTF8);
+    defer _ = c.CFRelease(productNameKey);
+
+    var currentService = service;
+    var kernResult: c.kern_return_t = undefined;
+
+    for (0..constants.MAX_IOKIT_DEVICE_RECURSE_NUM) |_| {
+        var parentService: c.io_object_t = undefined;
+        kernResult = c.IORegistryEntryGetParentEntry(currentService, c.kIOServicePlane, &parentService);
+
+        if (kernResult != c.KERN_SUCCESS or parentService == 0) break;
+
+        const productNameRef = c.IORegistryEntryCreateCFProperty(parentService, productNameKey, c.kCFAllocatorDefault, 0);
+
+        if (productNameRef != null) {
+            defer _ = c.CFRelease(productNameRef);
+
+            if (c.CFGetTypeID(productNameRef) == c.CFStringGetTypeID()) {
+                var productBuf: [MAX_DEVICE_NAME:0]u8 = std.mem.zeroes([MAX_DEVICE_NAME:0]u8);
+                if (c.CFStringGetCString(@ptrCast(productNameRef), &productBuf, MAX_DEVICE_NAME, c.kCFStringEncodingUTF8) != 0) {
+                    const productSlice = std.mem.sliceTo(&productBuf, Character.NULL);
+                    const trimmed = std.mem.trim(u8, productSlice, " ");
+
+                    if (trimmed.len > 0) {
+                        var result: [MAX_DEVICE_NAME:0]u8 = std.mem.zeroes([MAX_DEVICE_NAME:0]u8);
+                        @memcpy(result[0..trimmed.len], trimmed);
+                        if (currentService != service) _ = c.IOObjectRelease(currentService);
+                        _ = c.IOObjectRelease(parentService);
+                        return result;
+                    }
+                }
+            }
+        }
+
+        if (currentService != service) _ = c.IOObjectRelease(currentService);
+        currentService = parentService;
+    }
+
+    if (currentService != service) _ = c.IOObjectRelease(currentService);
+
+    if (deviceType == .SD) {
+        var fallbackName: [MAX_DEVICE_NAME:0]u8 = std.mem.zeroes([MAX_DEVICE_NAME:0]u8);
+        const sdCardName = "SD Card";
+        @memcpy(fallbackName[0..sdCardName.len], sdCardName);
+        return fallbackName;
+    }
+
+    return null;
 }
 
 fn getVolumeNameFromBSDName(bsdName: []const u8) !?[MAX_DEVICE_NAME:0]u8 {
