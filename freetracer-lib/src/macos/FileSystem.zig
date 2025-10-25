@@ -13,8 +13,10 @@ const ISOParser = @import("../ISOParser.zig");
 
 pub const FileSystemType = enum {
     ISO9660,
+    ISO9660_EL_TORITO,
     MBR,
     GPT,
+    UDF,
     UNKNOWN,
 };
 
@@ -144,15 +146,175 @@ pub fn getExtensionFromPath(path: []const u8) []const u8 {
     return std.fs.path.extension(path);
 }
 
+fn isElToritoBootable(file: *const std.fs.File) bool {
+    Debug.log(.DEBUG, "isElToritoBootable: Checking for El Torito boot record", .{});
+    var buffer: [512]u8 = undefined;
+
+    file.seekTo(0) catch |err| {
+        Debug.log(.DEBUG, "isElToritoBootable: Unable to seek to start. Error: {any}", .{err});
+        return false;
+    };
+
+    const bytes_read = file.read(&buffer) catch |err| {
+        Debug.log(.DEBUG, "isElToritoBootable: Unable to read file. Error: {any}", .{err});
+        return false;
+    };
+
+    if (bytes_read < 512) {
+        Debug.log(.DEBUG, "isElToritoBootable: File too small to read sector", .{});
+        return false;
+    }
+
+    if (!isISO9660(buffer)) {
+        return false;
+    }
+
+    var catalog_lba_buffer: [512]u8 = undefined;
+
+    file.seekTo(32768) catch |err| {
+        Debug.log(.DEBUG, "isElToritoBootable: Unable to seek to sector 16. Error: {any}", .{err});
+        return false;
+    };
+
+    const catalog_bytes = file.read(&catalog_lba_buffer) catch |err| {
+        Debug.log(.DEBUG, "isElToritoBootable: Unable to read sector 16. Error: {any}", .{err});
+        return false;
+    };
+
+    if (catalog_bytes < 512) {
+        Debug.log(.DEBUG, "isElToritoBootable: Unable to read full sector", .{});
+        return false;
+    }
+
+    if (catalog_lba_buffer[0] != 0x00) {
+        Debug.log(.DEBUG, "isElToritoBootable: Sector 16 is not boot record (type code: 0x{x})", .{catalog_lba_buffer[0]});
+        return false;
+    }
+
+    const boot_id_slice = catalog_lba_buffer[1..6];
+    if (!std.mem.eql(u8, boot_id_slice, "CD001")) {
+        Debug.log(.DEBUG, "isElToritoBootable: Boot record lacks proper identifier", .{});
+        return false;
+    }
+
+    const catalog_lba_offset: u32 = @bitCast([4]u8{
+        catalog_lba_buffer[71],
+        catalog_lba_buffer[72],
+        catalog_lba_buffer[73],
+        catalog_lba_buffer[74],
+    });
+
+    file.seekTo(catalog_lba_offset * 2048) catch |err| {
+        Debug.log(.DEBUG, "isElToritoBootable: Unable to seek to boot catalog. Error: {any}", .{err});
+        return false;
+    };
+
+    const boot_cat_bytes = file.read(&buffer) catch |err| {
+        Debug.log(.DEBUG, "isElToritoBootable: Unable to read boot catalog. Error: {any}", .{err});
+        return false;
+    };
+
+    if (boot_cat_bytes < 32) {
+        Debug.log(.DEBUG, "isElToritoBootable: Boot catalog sector too small", .{});
+        return false;
+    }
+
+    if (buffer[0] != 0x01) {
+        Debug.log(.DEBUG, "isElToritoBootable: Boot catalog validation entry header invalid (0x{x})", .{buffer[0]});
+        return false;
+    }
+
+    if (buffer[30] == 0x55 and buffer[31] == 0xAA) {
+        Debug.log(.DEBUG, "isElToritoBootable: Found valid El Torito boot catalog signature", .{});
+        return true;
+    }
+
+    Debug.log(.DEBUG, "isElToritoBootable: Boot catalog signature not found", .{});
+    return false;
+}
+
+fn isUDF(file: *const std.fs.File) bool {
+    Debug.log(.DEBUG, "isUDF: Checking for UDF signatures", .{});
+    var buffer: [512]u8 = undefined;
+
+    const file_stat = file.stat() catch |err| {
+        Debug.log(.DEBUG, "isUDF: Unable to stat file. Error: {any}", .{err});
+        return false;
+    };
+
+    if (file_stat.size < 32 * 2048) {
+        Debug.log(.DEBUG, "isUDF: File too small for UDF (minimum 32 sectors)", .{});
+        return false;
+    }
+
+    file.seekTo(256) catch |err| {
+        Debug.log(.DEBUG, "isUDF: Unable to seek to byte 256. Error: {any}", .{err});
+        return false;
+    };
+
+    const bytes_read = file.read(&buffer) catch |err| {
+        Debug.log(.DEBUG, "isUDF: Unable to read at offset 256. Error: {any}", .{err});
+        return false;
+    };
+
+    if (bytes_read < 512) {
+        Debug.log(.DEBUG, "isUDF: Insufficient bytes read", .{});
+        return false;
+    }
+
+    const vsd_ident_slice = buffer[1..6];
+    if (std.mem.eql(u8, vsd_ident_slice, "CD001")) {
+        Debug.log(.DEBUG, "isUDF: Found ISO 9660 VSD, not pure UDF", .{});
+        return false;
+    }
+
+    if (std.mem.eql(u8, vsd_ident_slice, "BEA01")) {
+        Debug.log(.DEBUG, "isUDF: Found UDF Beginning Extended Area Descriptor", .{});
+        return true;
+    }
+
+    if (std.mem.eql(u8, vsd_ident_slice, "NSR02") or std.mem.eql(u8, vsd_ident_slice, "NSR03")) {
+        Debug.log(.DEBUG, "isUDF: Found UDF Namespace descriptor (version 2 or 3)", .{});
+        return true;
+    }
+
+    file.seekTo(32768) catch |err| {
+        Debug.log(.DEBUG, "isUDF: Unable to seek to sector 16. Error: {any}", .{err});
+        return false;
+    };
+
+    const sector16_bytes = file.read(&buffer) catch |err| {
+        Debug.log(.DEBUG, "isUDF: Unable to read sector 16. Error: {any}", .{err});
+        return false;
+    };
+
+    if (sector16_bytes < 512) {
+        Debug.log(.DEBUG, "isUDF: Unable to read full sector 16", .{});
+        return false;
+    }
+
+    const sector16_ident = buffer[1..6];
+    if (std.mem.eql(u8, sector16_ident, "BEA01") or
+        std.mem.eql(u8, sector16_ident, "NSR02") or
+        std.mem.eql(u8, sector16_ident, "NSR03"))
+    {
+        Debug.log(.DEBUG, "isUDF: Found UDF descriptor at sector 16", .{});
+        return true;
+    }
+
+    Debug.log(.DEBUG, "isUDF: No UDF signatures found", .{});
+    return false;
+}
+
 /// Checks whether a file handle points to a valid disk image.
-/// This function checks for ISO 9660, MBR, or GPT signatures only.
+/// This function checks for ISO 9660, El Torito, MBR, GPT, and UDF signatures.
 /// The caller is responsible for opening the file with appropriate flags.
 ///
 /// Parameters:
 ///   - `file`: An open std.fs.File handle pointing to the image file.
 ///
 /// Returns: `bool`
-/// - `true` if the file contains a recognized magic signature (ISO 9660, MBR, or GPT)
+/// - `true` if the file contains a recognized magic signature (ISO 9660, El Torito, MBR, GPT, or UDF)
 /// - `false` if the file is too small, unreadable, or does not contain a recognized signature
 pub fn validateImageFile(file: std.fs.File) ImageFileValidationResult {
     Debug.log(.DEBUG, "isValidImageFile: Starting validation", .{});
@@ -190,7 +352,17 @@ pub fn validateImageFile(file: std.fs.File) ImageFileValidationResult {
 
     if (isISO9660(buffer)) {
         Debug.log(.DEBUG, "isValidImageFile: Detected ISO 9660 image.", .{});
+        if (isElToritoBootable(&file)) {
+            Debug.log(.DEBUG, "isValidImageFile: ISO contains El Torito boot catalog.", .{});
+            return .{ .isValid = true, .fileSystem = .ISO9660_EL_TORITO };
+        }
         return .{ .isValid = true, .fileSystem = .ISO9660 };
+    }
+
+    Debug.log(.DEBUG, "isValidImageFile: Checking for UDF", .{});
+    if (isUDF(&file)) {
+        Debug.log(.DEBUG, "isValidImageFile: Detected UDF filesystem.", .{});
+        return .{ .isValid = true, .fileSystem = .UDF };
     }
 
     if (isMBRPartitionTable(buffer)) {
