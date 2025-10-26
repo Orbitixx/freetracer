@@ -797,9 +797,9 @@ pub const UIConfig = struct {
             .contentSpacing = 20,
             .lineSpacing = 6,
             .textLineSpacing = 4,
-            .primaryText = .{ .font = .JERSEY10_REGULAR, .fontSize = 28, .textColor = Color.white },
-            .secondaryText = .{ .font = .JERSEY10_REGULAR, .fontSize = 20, .textColor = Color.offWhite },
-            .detailText = .{ .font = .ROBOTO_REGULAR, .fontSize = 14, .textColor = Color.lightGray },
+            .primaryText = .{ .font = .JERSEY10_REGULAR, .fontSize = 24, .textColor = Color.white },
+            .secondaryText = .{ .font = .ROBOTO_REGULAR, .fontSize = 16, .textColor = Color.offWhite },
+            .detailText = .{ .font = .ROBOTO_REGULAR, .fontSize = 16, .textColor = Color.lightGray },
             .scale = 0.7,
         };
 
