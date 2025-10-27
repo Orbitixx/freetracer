@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+		<string>en</string>
+	<key>CFBundleDisplayName</key>
+		<string>Freetracer</string>
+	<key>CFBundleExecutable</key>
+		<string>Freetracer</string>
+	<key>CFBundleIconFile</key>
+		<string>Freetracer.icns</string>
+	<key>CFBundleIdentifier</key>
+		<string>com.orbitixx.freetracer</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+		<string>6.0</string>
+	<key>CFBundleName</key>
+		<string>Freetracer</string>
+	<key>CFBundlePackageType</key>
+		<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+		<string>1.0.0</string>
+	<key>CFBundleVersion</key>
+		<string>1</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+		<string>Freetracer needs access to Downloads folder scope to access a specific ISO file within it.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+		<string>Freetracer needs access to Documents folder scope to access a specific ISO file within it, write logs and save user preferences.</string>
+	<key>NSDesktopFolderUsageDescription</key>
+		<string>Freetracer needs access to Desktop folder scope to access a specific ISO file within it.</string>	
+	<key>MachServices</key>
+      		<dict>
+        		<key>com.orbitixx.freetracer</key>
+          			<true/>
+      		</dict>
+	<key>SMPrivilegedExecutables</key>
+		<dict>
+			<key>com.orbitixx.freetracer-helper</key>
+				<string>identifier "com.orbitixx.freetracer-helper" and anchor apple generic and certificate leaf[subject.OU] = "TW4N5HWZXY" and certificate 1[field.1.2.840.113635.100.6.2.1] /* exists */</string>
+		</dict>
+</dict>
+</plist>

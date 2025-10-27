@@ -5,7 +5,7 @@ TODO.md
 *.sh
 *.py
 *.iso
-*.plist
+# *.plist
 *.ttf
 
 .DS_Store

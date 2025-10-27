@@ -8,8 +8,6 @@ pub const TEST_ISO_FILE_PATH = "/Path/to/known/bootable/iso";
 
 pub const HELPER_VERSION: [:0]const u8 = "1.0";
 
-const UTC_CORRECTION_HOURS: i8 = -4;
-
 pub const INFO_PLIST =
     \\<?xml version="1.0" encoding="UTF-8"?>
     \\<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -30,7 +28,7 @@ pub const INFO_PLIST =
     \\  </dict>
     \\  <key>SMAuthorizedClients</key>
     \\      <array>
-    \\          <string>identifier "com.example.myapp" and anchor apple generic and certificate leaf[subject.CN] = "Apple Development: FirstName LastName (XXXXXXXXXX)" and certificate 1[field.1.2.840.113635.100.6.2.1] /* exists */</string>
+    \\          <string>identifier "com.example.myapp" and anchor apple generic and certificate leaf[subject.OU] = "XXXXXXXXX" and certificate 1[field.1.2.840.113635.100.6.2.1] /* exists */</string>
     \\      </array>
     \\</dict>
     \\</plist> 

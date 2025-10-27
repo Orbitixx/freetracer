@@ -2,6 +2,21 @@
 // simple delays without tying call-sites directly to std.time internals.
 const std = @import("std");
 
+extern "c" fn localtime(t: *const std.c.time_t) ?*tm;
+extern "c" fn gmtime(t: *const std.c.time_t) ?*tm;
+
+const tm = extern struct {
+    tm_sec: c_int,
+    tm_min: c_int,
+    tm_hour: c_int,
+    tm_mday: c_int,
+    tm_mon: c_int,
+    tm_year: c_int,
+    tm_wday: c_int,
+    tm_yday: c_int,
+    tm_isdst: c_int,
+};
+
 /// Normalized representation of a civil timestamp used in debug logging.
 pub const DateTime = struct {
     month: u4,
@@ -57,11 +72,43 @@ pub fn fromTimestamp(timestamp: i64, utcCorrectionHours: i8) DateTime {
     };
 }
 
-/// Returns the current DateTime, adjusted for a given UTC offset.
+/// Detects the system's local UTC offset in hours, accounting for DST.
+/// Returns the offset as an i8 (e.g., -5 for EST, -4 for EDT, 1 for CET).
+/// Defaults to 0 if detection fails.
+pub fn getLocalUTCOffset() i8 {
+    var now_timestamp: std.c.time_t = @intCast(std.time.timestamp());
+    const local_time = localtime(&now_timestamp);
+
+    if (local_time != null) {
+        const gmt_time = gmtime(&now_timestamp);
+        if (gmt_time != null) {
+            const local = local_time.?.*;
+            const gmt = gmt_time.?.*;
+
+            const local_secs: i64 = local.tm_hour * 3600 + local.tm_min * 60 + local.tm_sec;
+            var gmt_secs: i64 = gmt.tm_hour * 3600 + gmt.tm_min * 60 + gmt.tm_sec;
+
+            if (local.tm_mday != gmt.tm_mday) {
+                if (local.tm_mday > gmt.tm_mday) {
+                    gmt_secs -= 86400;
+                } else {
+                    gmt_secs += 86400;
+                }
+            }
+
+            const diff_secs = local_secs - gmt_secs;
+            const hours = @divTrunc(diff_secs, 3600);
+            return @as(i8, @intCast(hours));
+        }
+    }
+
+    return 0;
+}
+
+/// Returns the current DateTime, adjusted for the system's local UTC offset.
 /// This function is non-deterministic as it depends on the system clock.
-pub fn now(utcCorrectionHours: i8) DateTime {
-    // This function now simply wraps the testable 'fromTimestamp' function.
-    return fromTimestamp(std.time.timestamp(), utcCorrectionHours);
+pub fn now() DateTime {
+    return fromTimestamp(std.time.timestamp(), getLocalUTCOffset());
 }
 
 // Test block for the fromTimestamp function.

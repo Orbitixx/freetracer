@@ -14,7 +14,7 @@ var mutex: std.Thread.Mutex = .{};
 var latest_snapshot: ?[:0]u8 = null;
 
 pub const LoggerSettings = struct {
-    utcCorrectionHours: i8 = -4,
+    utcCorrectionHours: ?i8 = null,
     standaloneLogFilePath: ?[]const u8 = null,
     envLogSeverityLevel: SeverityLevel = .DEBUG,
 };
@@ -51,9 +51,14 @@ pub fn init(allocator: std.mem.Allocator, settings: LoggerSettings) !void {
         return; // Already initialized
     }
 
+    const utc_offset = if (settings.utcCorrectionHours) |offset|
+        (if (@abs(offset) >= 23) time.getLocalUTCOffset() else offset)
+    else
+        time.getLocalUTCOffset();
+
     instance = Logger{
         .allocator = allocator,
-        .utcCorrectionHours = if (@abs(settings.utcCorrectionHours) >= 23) -4 else settings.utcCorrectionHours,
+        .utcCorrectionHours = utc_offset,
         .logFile = if (settings.standaloneLogFilePath != null) try std.fs.cwd().createFile(settings.standaloneLogFilePath.?, .{}) else null,
     };
 }
@@ -132,7 +137,7 @@ pub const Logger = struct {
     }
 
     pub fn log(self: *Logger, comptime level: SeverityLevel, comptime fmt: []const u8, args: anytype) void {
-        const t = time.now(self.utcCorrectionHours);
+        const t = time.now();
 
         const severityPrefix = getSeverityPrefix(level);
 
