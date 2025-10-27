@@ -15,6 +15,8 @@ const FileDropzone = UIFramework.FileDropzone;
 const SpriteButton = UIFramework.SpriteButton;
 const ProgressBox = UIFramework.ProgressBox;
 const UIEvent = UIFramework.UIEvent;
+const UIElementIdentifier = UIFramework.UIElementIdentifier;
+const MAX_CHILDREN = UIFramework.UIEventImport.MAX_VIEW_EVENT_EXEMPT_CHILDREN;
 
 pub const StateChangeHandler = struct {
     function: ?*const fn (ctx: *anyopaque, flag: bool) void = null,
@@ -121,7 +123,6 @@ pub const UIElement = union(enum) {
                         // if target identifer is specified...
                         //
                         if (ev.target) |target| {
-                            // std.debug.print("\nUIElement.onEvent.StateChanged: target does not match element.target; aborting.", .{});
                             if (target != element.identifier) return;
 
                             if (element.callbacks.onStateChange) |onStateChange| {
@@ -134,19 +135,18 @@ pub const UIElement = union(enum) {
 
                             // if target identifier is NOT specified
                         } else {
+                            if (isElementInArray(element.identifier, ev.except)) return;
+                            const isInverted = isElementInArray(element.identifier, ev.invert);
+
                             if (element.callbacks.onStateChange) |onStateChange| {
-                                // Debug.log(
-                                //     .DEBUG,
-                                //     "UIElement.onEvent.StateChanged: target not set, executing setActive function. Responding element: {any}",
-                                //     .{@TypeOf(element)},
-                                // );
+
                                 // To avoid flickering when element is activated
                                 element.transform.resolve();
-                                if (onStateChange.function) |handler| handler(element, ev.isActive);
+                                if (onStateChange.function) |handler| handler(element, if (isInverted) !ev.isActive else ev.isActive);
                             } else {
                                 // To avoid flickering when element is activated
                                 element.transform.resolve();
-                                element.active = ev.isActive;
+                                element.active = if (isInverted) !ev.isActive else ev.isActive;
                             }
                         }
                     },
@@ -158,7 +158,6 @@ pub const UIElement = union(enum) {
                         }
                     },
                     inline else => {
-                        // std.debug.print("\nUIElement.onEvent (other) invoked.", .{});
                         @constCast(element).onEvent(event);
                     },
                 }
@@ -168,12 +167,20 @@ pub const UIElement = union(enum) {
 
     pub fn transformPtr(self: *UIElement) *Transform {
         return switch (self.*) {
-            // .View => |*v| &v.transform,
-            // .Text => |*t| &t.transform,
-            // .Textbox => |*tb| &tb.transform,
-            // .Texture => |*tex| &tex.transform,
-            // .FileDropzone => |*fdz| &fdz.transform,
             inline else => |*el| &el.transform,
         };
     }
 };
+
+pub fn isElementInArray(ownId: ?UIElementIdentifier, children: ?[MAX_CHILDREN]UIElementIdentifier) bool {
+    if (ownId == null) return false;
+
+    if (children) |affectedChildren| {
+        for (affectedChildren) |id| {
+            if (id == .ZeroElement) break; // Stop at first null (sentinel)
+            if (ownId == id) return true;
+        }
+    }
+
+    return false;
+}

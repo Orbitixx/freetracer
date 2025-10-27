@@ -76,14 +76,14 @@ pub const Events = struct {
         struct {},
     );
 
-    pub const onISOFileSelected = ComponentFramework.defineEvent(
-        EventManager.createEventName(ComponentName, "on_iso_file_selected"),
+    pub const onImageFileSelected = ComponentFramework.defineEvent(
+        EventManager.createEventName(ComponentName, "on_image_file_selected"),
         struct { newPath: ?[:0]u8 = null },
         struct {},
     );
 
     pub const onImageDetailsQueried = ComponentFramework.defineEvent(
-        EventManager.createEventName(ComponentName, "on_iso_file_path_queried"),
+        EventManager.createEventName(ComponentName, "on_image_details_queried"),
         struct {
             result: *ImageQueryObject,
         },
@@ -183,7 +183,7 @@ pub fn handleEvent(self: *FilePicker, event: ComponentEvent) !EventResult {
     var eventResult = EventResult.init();
 
     return switch (event.hash) {
-        Events.onISOFileSelected.Hash => try self.handleImageFileSelected(),
+        Events.onImageFileSelected.Hash => try self.handleImageFileSelected(),
         Events.onImageDetailsQueried.Hash => try self.handleImageDetailsQueried(event),
         AppManager.Events.AppResetEvent.Hash => self.handleAppResetRequest(),
         else => eventResult.fail(),
@@ -198,7 +198,7 @@ pub fn deinit(self: *FilePicker) void {
     self.state.data.image = .{};
 }
 
-/// Handles the `onISOFilePathQueried` event, providing the currently selected path to the requester.
+/// Handles the `onImageDetailsQueried` event, providing the currently selected path to the requester.
 /// Avoids heap allocation by having the requester provide memory for the response.
 fn handleImageDetailsQueried(self: *FilePicker, event: ComponentEvent) !EventResult {
     self.state.lock();
@@ -224,7 +224,7 @@ fn handleImageDetailsQueried(self: *FilePicker, event: ComponentEvent) !EventRes
     return eventResult.succeed();
 }
 
-/// Handles the `onISOFileSelected` event after the worker finishes.
+/// Handles the `onImageFileSelected` event after the worker finishes.
 /// This function is responsible for validating the file and updating state and other components.
 /// Validates the worker-selected path, updates component state, and notifies dependents.
 /// Requires the component state lock to be held when invoked.
@@ -306,7 +306,7 @@ fn processSelectedPathLocked(self: *FilePicker, newPath: [:0]u8) !void {
 
     if (self.uiComponent) |*ui| {
         Debug.log(.DEBUG, "processSelectedPathLocked: notifying UI component of path change", .{});
-        const pathChangedEvent = FilePickerUI.Events.onISOFilePathChanged.create(self.asComponentPtr(), &.{
+        const pathChangedEvent = FilePickerUI.Events.onImageFilePathChanged.create(self.asComponentPtr(), &.{
             .newPath = newPath,
             .size = stat.size,
         });
@@ -405,7 +405,7 @@ pub fn workerRun(worker: *ComponentWorker, context: *anyopaque) void {
     worker.state.data.selectedPath = selectedPath;
     worker.state.unlock();
 
-    const event = FilePicker.Events.onISOFileSelected.create(
+    const event = FilePicker.Events.onImageFileSelected.create(
         &FilePicker.asInstance(worker.context.run_context).component.?,
         &.{},
     );

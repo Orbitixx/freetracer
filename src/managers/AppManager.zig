@@ -133,10 +133,12 @@ const AppManager = struct {
         rl.setMouseCursor(.default);
 
         if (self.appState == .SelectionConfirmation) self.layout.emitEvent(
-            .{ .PositionChanged = .{
-                .target = .AppManagerSatteliteGraphic,
-                .position = .percent(0.3, 0.3),
-            } },
+            .{ .PositionChanged = .{ .target = .AppManagerSatteliteGraphic, .position = .percent(0.3, 0.3) } },
+            .{ .excludeSelf = true },
+        );
+
+        if (self.appState != .ImageSelection) self.layout.emitEvent(
+            .{ .StateChanged = .{ .target = .AppManagerResetAppButton, .isActive = true } },
             .{ .excludeSelf = true },
         );
     }
@@ -149,6 +151,11 @@ const AppManager = struct {
 
         self.appState = .ImageSelection;
         self.lastAction = null;
+
+        self.layout.emitEvent(
+            .{ .StateChanged = .{ .target = .AppManagerResetAppButton, .isActive = false } },
+            .{ .excludeSelf = true },
+        );
 
         const resetEvent = Events.AppResetEvent.create(null, null);
         EventManager.broadcast(resetEvent);
@@ -215,40 +222,8 @@ const AppManager = struct {
         self.globalTransform.resolve();
 
         var ui = UIChain.init(self.allocator);
-
-        self.layout = try ui.view(.{
-            .id = null,
-            .position = .percent(0, 0),
-            .size = .percent(1, 1),
-            .relativeTransform = &self.globalTransform,
-            .background = .{
-                .transform = .{},
-                .style = .{
-                    .color = Color.transparent,
-                    .borderStyle = .{ .color = Color.transparent },
-                },
-                .rounded = true,
-                .bordered = true,
-            },
-        }).children(.{
-            ui.texture(.ROCKET_GRAPHIC, .{})
-                // .elId(.AppManagerRocketGraphic)
-                .position(.percent(0.4, 0.38))
-                .positionRef(.Parent)
-                .scale(2)
-                .sizeRef(.Parent)
-                .rotation(-33),
-
-            ui.texture(.SATTELITE_GRAPHIC, .{})
-                .elId(.AppManagerSatteliteGraphic)
-                .position(.percent(0.7, 0.3))
-                .positionRef(.Parent)
-                .scale(3)
-                .sizeRef(.Parent)
-                .offsetToOrigin(),
-        });
+        self.layout = try self.initLayout(&ui);
         defer self.layout.deinit();
-
         try self.layout.start();
 
         Debug.log(.DEBUG, "Global Transform set: {any}", .{self.globalTransform});
@@ -279,19 +254,6 @@ const AppManager = struct {
         var privilegedHelper = try PrivilegedHelper.init(self.allocator);
         try componentRegistry.register(ComponentID.PrivilegedHelper, @constCast(privilegedHelper.asComponentPtr()));
         try privilegedHelper.start();
-
-        var resetAppButton = Button.init(
-            "Restart",
-            null,
-            .{ .x = WindowManager.relW(0.7), .y = WindowManager.relH(0.05) },
-            .Primary,
-            .{ .context = self, .function = AppManagerSingleton.resetStateButtonHandler },
-            self.allocator,
-        );
-
-        try resetAppButton.start();
-        resetAppButton.setPosition(.{ .x = 0, .y = 0 });
-        resetAppButton.rect.rounded = true;
 
         //----------------------------------------------------------------------------------
         //--- @END COMPONENTS --------------------------------------------------------------
@@ -328,24 +290,6 @@ const AppManager = struct {
         const innerColor: rl.Color = rl.Color.init(32, 32, 44, 255);
         const outerColor: rl.Color = Color.themeBg;
 
-        // var logText = UI.Text.init(
-        //     "",
-        //     .{ .x = relX(0.02), .y = relY(0.935) },
-        //     .{ .font = .ROBOTO_REGULAR, .fontSize = 14, .textColor = Color.lightGray },
-        // );
-        //
-        // const logLineBgRect = UI.Rectangle{
-        //     .transform = .{
-        //         .x = 0,
-        //         .y = relY(0.95),
-        //         .w = WindowManager.getWindowWidth(),
-        //         .h = relY(0.05),
-        //     },
-        //     .style = .{
-        //         .color = Color.transparentDark,
-        //     },
-        // };
-
         // Main application GUI.loop
         while (!rl.windowShouldClose()) { // Detect window close button or ESC key
             //----------------------------------------------------------------------------------
@@ -378,15 +322,8 @@ const AppManager = struct {
             subLogoText.draw();
             versionText.draw();
 
-            // try resetAppButton.update();
-            // try resetAppButton.draw();
-
             // TODO: unnecessary call on every frame -- extract the whole component out, save as flag
             // if (self.appState == .DataFlashing) resetAppButton.setEnabled(false) else resetAppButton.setEnabled(true);
-
-            // logLineBgRect.draw();
-            // logText.value = Debug.getLatestLog();
-            // logText.draw();
 
             UpdateManager.draw();
             try componentRegistry.drawAll();
@@ -405,9 +342,75 @@ const AppManager = struct {
 
         }
     }
+
+    fn initLayout(self: *AppManager, ui: *UIChain) !View {
+        return try ui.view(.{
+            .id = null,
+            .position = .percent(0, 0),
+            .size = .percent(1, 1),
+            .relativeTransform = &self.globalTransform,
+            .background = .{
+                .transform = .{},
+                .style = .{
+                    .color = Color.transparent,
+                    .borderStyle = .{ .color = Color.transparent },
+                },
+                .rounded = true,
+                .bordered = true,
+            },
+        }).children(.{
+            ui.texture(.ROCKET_GRAPHIC, .{})
+                // .elId(.AppManagerRocketGraphic)
+                .position(.percent(0.4, 0.38))
+                .positionRef(.Parent)
+                .scale(2)
+                .sizeRef(.Parent)
+                .rotation(-33),
+
+            ui.texture(.SATTELITE_GRAPHIC, .{})
+                .elId(.AppManagerSatteliteGraphic)
+                .position(.percent(0.7, 0.3))
+                .positionRef(.Parent)
+                .scale(3)
+                .sizeRef(.Parent)
+                .offsetToOrigin(),
+
+            ui.spriteButton(.{
+                .text = "Start Over",
+                .texture = .BUTTON_FRAME_DANGER,
+                .style = UIConfig.Styles.ResetAppButton,
+            })
+                .elId(.AppManagerResetAppButton)
+                .position(.percent(AppConfig.APP_UI_MODULE_PANEL_FILE_PICKER_X, AppConfig.APP_UI_MODULE_PANEL_Y))
+                .positionRef(.Parent)
+                .size(.percent(0.13, 0.08))
+                .callbacks(.{ .onClick = .{
+                    .function = UIConfig.Callbacks.ResetAppButton.OnClick,
+                    .context = self,
+                } })
+                .active(false),
+        });
+    }
 };
 
-pub fn resetStateButtonHandler(ctx: *anyopaque) void {
-    var self: *AppManager = @ptrCast(@alignCast(ctx));
-    self.resetState();
-}
+pub const UIConfig = struct {
+    pub const Callbacks = struct {
+        pub const ResetAppButton = struct {
+            pub fn OnClick(ctx: *anyopaque) void {
+                const appManager: *AppManager = @ptrCast(@alignCast(ctx));
+                appManager.resetState();
+            }
+        };
+    };
+
+    pub const Styles = struct {
+        const ResetAppButton: UIFramework.SpriteButton.Style = .{
+            .font = .JERSEY10_REGULAR,
+            .fontSize = 22,
+            .textColor = Color.themeDanger,
+            .tint = Color.themeDanger,
+            .hoverTint = Color.themeSecondary,
+            .hoverTextColor = Color.themeSecondary,
+        };
+    };
+};

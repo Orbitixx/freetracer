@@ -47,7 +47,7 @@ const DISPLAY_NAME_SUFFIX_LEN: usize = 14;
 // and a worker/event thread (handleEvent). Access must be guarded by state.lock().
 pub const FilePickerUIState = struct {
     isActive: bool = true,
-    isoPath: ?[:0]u8 = null,
+    imagePath: ?[:0]u8 = null,
 };
 pub const ComponentState = ComponentFramework.ComponentState(FilePickerUIState);
 
@@ -64,29 +64,15 @@ displayNameBuffer: [AppConfig.IMAGE_DISPLAY_NAME_BUFFER_LEN:0]u8 = undefined,
 layout: View = undefined,
 
 pub const Events = struct {
-    pub const onISOFilePathChanged = ComponentFramework.defineEvent(
-        EventManager.createEventName(ComponentName, "iso_file_path_changed"),
+    pub const onImageFilePathChanged = ComponentFramework.defineEvent(
+        EventManager.createEventName(ComponentName, "on_image_file_path_changed"),
         struct { newPath: [:0]u8, size: ?u64 = null },
         struct {},
     );
 
     pub const onActiveStateChanged = ComponentFramework.defineEvent(
-        EventManager.createEventName(ComponentName, "active_state_changed"),
+        EventManager.createEventName(ComponentName, "on_active_state_changed"),
         struct { isActive: bool },
-        struct {},
-    );
-
-    // TODO: Check: Deprecated ?
-    pub const onGetUIDimensions = ComponentFramework.defineEvent(
-        EventManager.createEventName(ComponentName, "get_ui_width"),
-        struct { transform: Transform },
-        struct {},
-    );
-
-    // TODO: Deprecated
-    pub const onUIDimensionsQueried = ComponentFramework.defineEvent(
-        EventManager.createEventName(ComponentName, "get_ui"),
-        struct { result: **Transform },
         struct {},
     );
 
@@ -128,9 +114,7 @@ pub fn handleEvent(self: *FilePickerUI, event: ComponentEvent) !EventResult {
     var eventResult = EventResult.init();
 
     return switch (event.hash) {
-        Events.onISOFilePathChanged.Hash => try self.handleIsoFilePathChanged(event),
-        // TODO: Deprecated
-        // Events.onUIDimensionsQueried.Hash => try self.handleUIDimensionsQueried(event),
+        Events.onImageFilePathChanged.Hash => try self.handleIsoFilePathChanged(event),
         Events.onRootViewTransformQueried.Hash => try self.handleOnRootViewTransformQueried(event),
         FilePicker.Events.onActiveStateChanged.Hash => try self.handleActiveStateChanged(event),
         AppManager.Events.AppResetEvent.Hash => self.handleAppResetRequest(),
@@ -147,7 +131,6 @@ pub fn update(self: *FilePickerUI) !void {
 pub fn draw(self: *FilePickerUI) !void {
     const isActive = self.readIsActive();
 
-    // self.bgRect.draw();
     try self.layout.draw();
 
     if (isActive) try self.drawActive() else try self.drawInactive();
@@ -187,6 +170,21 @@ fn subscribeToEvents(component: *Component) !void {
 /// Updates internal active state and reapplies panel styling; must be called on the main UI thread.
 fn setIsActive(self: *FilePickerUI, isActive: bool) void {
     self.storeIsActive(isActive);
+
+    self.layout.emitEvent(
+        .{ .StateChanged = .{
+            .target = null,
+            .isActive = isActive,
+            .invert = UIFramework.invertChildren(.{
+                .FilePickerImageSelectedGlowTexture,
+                .FilePickerImageSelectedTexture,
+                .FilePickerImageSelectedTextbox,
+                .FilePickerImageSelectedBarRect,
+                .FilePickerImageSelectedBarText,
+            }),
+        } },
+        .{ .excludeSelf = false },
+    );
 }
 
 fn storeIsActive(self: *FilePickerUI, isActive: bool) void {
@@ -201,10 +199,10 @@ fn readIsActive(self: *FilePickerUI) bool {
     return self.state.data.isActive;
 }
 
-fn updateIsoPathState(self: *FilePickerUI, newPath: [:0]u8) void {
+fn updateImagePathState(self: *FilePickerUI, newPath: [:0]u8) void {
     self.state.lock();
     defer self.state.unlock();
-    self.state.data.isoPath = newPath;
+    self.state.data.imagePath = newPath;
 }
 
 fn extractDisplayName(path: [:0]u8) [:0]const u8 {
@@ -268,37 +266,37 @@ fn handleActiveStateChanged(self: *FilePickerUI, event: ComponentEvent) !EventRe
     const data = FilePicker.Events.onActiveStateChanged.getData(event) orelse return eventResult.fail();
     self.setIsActive(data.isActive);
 
-    self.layout.emitEvent(.{ .StateChanged = .{ .isActive = data.isActive } }, .{});
-
-    self.layout.emitEvent(
-        .{ .StateChanged = .{ .target = .FilePickerHeaderDivider, .isActive = !data.isActive } },
-        .{ .excludeSelf = true },
-    );
-
-    self.layout.emitEvent(
-        .{ .StateChanged = .{ .target = .FilePickerImageSelectedGlowTexture, .isActive = !data.isActive } },
-        .{ .excludeSelf = true },
-    );
-
-    self.layout.emitEvent(
-        .{ .StateChanged = .{ .target = .FilePickerImageSelectedTexture, .isActive = !data.isActive } },
-        .{ .excludeSelf = true },
-    );
-
-    self.layout.emitEvent(
-        .{ .StateChanged = .{ .target = .FilePickerImageSelectedTextbox, .isActive = !data.isActive } },
-        .{ .excludeSelf = true },
-    );
-
-    self.layout.emitEvent(
-        .{ .StateChanged = .{ .target = .FilePickerImageSelectedBarRect, .isActive = !data.isActive } },
-        .{ .excludeSelf = true },
-    );
-
-    self.layout.emitEvent(
-        .{ .StateChanged = .{ .target = .FilePickerImageSelectedBarText, .isActive = !data.isActive } },
-        .{ .excludeSelf = true },
-    );
+    // self.layout.emitEvent(.{ .StateChanged = .{ .isActive = data.isActive } }, .{});
+    //
+    // self.layout.emitEvent(
+    //     .{ .StateChanged = .{ .target = .FilePickerHeaderDivider, .isActive = !data.isActive } },
+    //     .{ .excludeSelf = true },
+    // );
+    //
+    // self.layout.emitEvent(
+    //     .{ .StateChanged = .{ .target = .FilePickerImageSelectedGlowTexture, .isActive = !data.isActive } },
+    //     .{ .excludeSelf = true },
+    // );
+    //
+    // self.layout.emitEvent(
+    //     .{ .StateChanged = .{ .target = .FilePickerImageSelectedTexture, .isActive = !data.isActive } },
+    //     .{ .excludeSelf = true },
+    // );
+    //
+    // self.layout.emitEvent(
+    //     .{ .StateChanged = .{ .target = .FilePickerImageSelectedTextbox, .isActive = !data.isActive } },
+    //     .{ .excludeSelf = true },
+    // );
+    //
+    // self.layout.emitEvent(
+    //     .{ .StateChanged = .{ .target = .FilePickerImageSelectedBarRect, .isActive = !data.isActive } },
+    //     .{ .excludeSelf = true },
+    // );
+    //
+    // self.layout.emitEvent(
+    //     .{ .StateChanged = .{ .target = .FilePickerImageSelectedBarText, .isActive = !data.isActive } },
+    //     .{ .excludeSelf = true },
+    // );
 
     if (!data.isActive) rl.setMouseCursor(.default);
     return eventResult.succeed();
@@ -306,10 +304,10 @@ fn handleActiveStateChanged(self: *FilePickerUI, event: ComponentEvent) !EventRe
 
 fn handleIsoFilePathChanged(self: *FilePickerUI, event: ComponentEvent) !EventResult {
     var eventResult = EventResult.init();
-    const data = Events.onISOFilePathChanged.getData(event) orelse return eventResult.fail();
+    const data = Events.onImageFilePathChanged.getData(event) orelse return eventResult.fail();
 
     if (data.newPath.len > 0) {
-        self.updateIsoPathState(data.newPath);
+        self.updateImagePathState(data.newPath);
         const displayName = extractDisplayName(data.newPath);
 
         var sizeBuf: [36]u8 = std.mem.zeroes([36]u8);
@@ -339,6 +337,7 @@ fn handleIsoFilePathChanged(self: *FilePickerUI, event: ComponentEvent) !EventRe
             .{ .TextChanged = .{
                 .target = .FilePickerImageSelectedTextbox,
                 .text = displayName,
+                .style = .{ .textColor = Color.white },
             } },
             .{ .excludeSelf = true },
         );
@@ -346,10 +345,9 @@ fn handleIsoFilePathChanged(self: *FilePickerUI, event: ComponentEvent) !EventRe
             .{ .SpriteButtonEnabledChanged = .{ .target = .FilePickerConfirmButton, .enabled = true } },
             .{ .excludeSelf = true },
         );
-
-        // self.updateIsoTitle(displayName);
     } else {
-        // self.resetIsoTitle();
+        _ = osd.message("The selected file retuns a zero length path!", .{ .buttons = .ok, .level = .err });
+        _ = self.handleAppResetRequest();
     }
 
     return eventResult.succeed();
@@ -362,8 +360,45 @@ pub fn handleAppResetRequest(self: *FilePickerUI) EventResult {
         self.state.lock();
         defer self.state.unlock();
         self.state.data.isActive = true;
-        self.state.data.isoPath = null;
+        self.state.data.imagePath = null;
     }
+
+    self.layout.emitEvent(
+        .{ .TextChanged = .{
+            .target = .FilePickerImageInfoTextbox,
+            .text = "e.g. Ubuntu 24.04 LTS.iso",
+            .style = UIConfig.Styles.ImageInfoTextbox.Normal.text,
+        } },
+        .{ .excludeSelf = true },
+    );
+
+    self.layout.emitEvent(
+        .{ .TextChanged = .{
+            .target = .FilePickerImageSelectedTextbox,
+            .text = "No image selected",
+            .style = UIConfig.Styles.ImageInfoTextbox.Normal.text,
+        } },
+        .{ .excludeSelf = true },
+    );
+
+    self.layout.emitEvent(
+        .{ .TextChanged = .{
+            .target = .FilePickerImageSizeText,
+            .text = "5.06 GB",
+            .style = .{
+                .textColor = rl.Color.gray,
+            },
+        } },
+        .{ .excludeSelf = true },
+    );
+
+    self.layout.emitEvent(
+        .{ .SpriteButtonEnabledChanged = .{
+            .target = .FilePickerConfirmButton,
+            .enabled = false,
+        } },
+        .{ .excludeSelf = true },
+    );
 
     self.setIsActive(true);
 

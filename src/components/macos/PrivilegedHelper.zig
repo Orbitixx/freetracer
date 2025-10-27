@@ -283,7 +283,7 @@ pub fn update(self: *PrivilegedHelper) !void {
         }
     } else if (self.xpcClient.timer.isTimerSet and self.reinstallAttempts >= 1) {
         // TODO: quit app gracefully
-        _ = osd.message("Unfortunately, Freetracer still fails to communicate with the Freetracer Helper Tool. Unable to proceed at this stage -- apologies. Please submit a bug report at github.com/obx0/freetracer", .{ .level = .err, .buttons = .ok });
+        _ = osd.message("Unfortunately, Freetracer still fails to communicate with the Freetracer Helper Tool. Unable to proceed at this stage -- apologies.\n\nPlease consider submitting a bug report at github.com/orbitixx/freetracer", .{ .level = .err, .buttons = .ok });
     }
 }
 
@@ -390,28 +390,14 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
 
         Events.onHelperNeedsDiskPermissions.Hash => {
             self.xpcClient.timer.reset();
-            Debug.log(.INFO, "Helper tool requires disk access permissions, alerting user.", .{});
+            Debug.log(.ERROR, "Helper tool requires disk access permissions, alerting user. This call should NOT occur. Please submit a bug report.", .{});
             self.needsDiskPermissions = true;
-            c.dispatch_async_f(c.dispatch_get_main_queue(), null, displayNeedPermissionsDialog);
         },
 
         else => {},
     }
 
     return eventResult;
-}
-
-/// TODO: Remove.
-/// Deprecated and unnecessary. Full Disk Access is no longer neccessary since v0.9
-fn displayNeedPermissionsDialog(context: ?*anyopaque) callconv(.c) void {
-    _ = context;
-
-    EventManager.broadcast(Events.onHelperDeviceOpenFailed.create(null, null));
-
-    // TODO: Remove. Deprecated, no longer need full disk access.
-    const result = osd.message("Writing to the device failed. MacOS' security policy requires 'Full Disk Access' for an app to write directly to a drive.\n\nFreetracer will only use this to write your selected ISO file to the selected device. Your other data will not be accessed.\n\nTo grant access:\n\nOpen System Settings > Privacy & Security > Full Disk Access.\nClick the (+) button and add Freetracer from the /Applications folder and relaunch Freetracer.", .{ .level = .warning, .buttons = .ok_cancel });
-
-    if (result) freetracer_lib.MacOSPermissions.openPrivacySettings();
 }
 
 pub fn deinit(self: *PrivilegedHelper) void {

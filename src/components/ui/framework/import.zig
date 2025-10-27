@@ -17,8 +17,9 @@ pub const DeviceSelectBoxList = @import("./DeviceSelectBoxList.zig");
 pub const ProgressBox = @import("./ProgressBox.zig");
 
 pub const UIElement = @import("./UIElement.zig").UIElement;
-pub const UIEvent = @import("./UIEvent.zig").UIEvent;
-pub const UIElementIdentifier = @import("./UIEvent.zig").UIElementIdentifier;
+pub const UIEventImport = @import("./UIEvent.zig");
+pub const UIEvent = UIEventImport.UIEvent;
+pub const UIElementIdentifier = UIEventImport.UIElementIdentifier;
 pub const UIElementCallbacks = @import("./UIElement.zig").UIElementCallbacks;
 
 pub const types = @import("./types.zig");
@@ -32,3 +33,5 @@ pub const util = @import("./util.zig");
 pub const resolveRelative = util.resolveRelative;
 pub const getTransformOf = util.getTransformOf;
 pub const queryViewTransform = util.queryViewTransform;
+pub const exceptChildren = UIEventImport.exceptChildren;
+pub const invertChildren = UIEventImport.invertChildren;
