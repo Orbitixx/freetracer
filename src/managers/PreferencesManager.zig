@@ -16,21 +16,25 @@ pub const PreferenceError = error{
 pub const PreferenceKey = enum {
     CheckUpdates,
     DebugLevel,
+    ForceHelperInstall,
 };
 
 const Defaults = struct {
     pub const checkUpdates = false;
     pub const debugLevel = SeverityLevel.DEBUG;
+    pub const forceHelperInstall = false;
 };
 
 const Preferences = struct {
     checkUpdates: bool = Defaults.checkUpdates,
     debugLevel: SeverityLevel = Defaults.debugLevel,
+    forceHelperInstall: bool = Defaults.forceHelperInstall,
 };
 
 const FilePayload = struct {
     checkUpdates: ?bool = null,
     debugLevel: ?u8 = null,
+    forceHelperInstall: ?bool = null,
 };
 
 const PreferencesManager = struct {
@@ -107,6 +111,10 @@ const PreferencesManager = struct {
                 self.data.debugLevel = @enumFromInt(value);
             }
         }
+
+        if (parsed.value.forceHelperInstall) |value| {
+            self.data.forceHelperInstall = value;
+        }
     }
 
     fn ensureDirectoryExists(self: *PreferencesManager) !void {
@@ -160,6 +168,7 @@ const PreferencesManager = struct {
         const payload = json.Stringify.valueAlloc(self.allocator, .{
             .checkUpdates = self.data.checkUpdates,
             .debugLevel = @intFromEnum(self.data.debugLevel),
+            .forceHelperInstall = self.data.forceHelperInstall,
         }, .{
             .whitespace = .indent_1,
         }) catch |err| {
@@ -261,6 +270,30 @@ pub fn setDebugLevel(value: SeverityLevel) !void {
     if (instance) |*inst| {
         if (inst.data.debugLevel != value) {
             inst.data.debugLevel = value;
+            try inst.persist();
+        }
+        return;
+    }
+    return PreferenceError.NotInitialized;
+}
+
+pub fn getForceHelperInstall() !bool {
+    mutex.lock();
+    defer mutex.unlock();
+
+    if (instance) |inst| {
+        return inst.data.forceHelperInstall;
+    }
+    return PreferenceError.NotInitialized;
+}
+
+pub fn setForceHelperInstall(value: bool) !void {
+    mutex.lock();
+    defer mutex.unlock();
+
+    if (instance) |*inst| {
+        if (inst.data.forceHelperInstall != value) {
+            inst.data.forceHelperInstall = value;
             try inst.persist();
         }
         return;

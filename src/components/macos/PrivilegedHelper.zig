@@ -35,6 +35,7 @@ const FilePicker = @import("../FilePicker/FilePicker.zig");
 const PrivilegedHelperTool = @import("../../modules/macos/PrivilegedHelperTool.zig");
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
 const WindowManager = @import("../../managers/WindowManager.zig").WindowManagerSingleton;
+const PreferencesManager = @import("../../managers/PreferencesManager.zig");
 const AppManager = @import("../../managers/AppManager.zig");
 const winRelX = WindowManager.relW;
 const winRelY = WindowManager.relH;
@@ -611,7 +612,9 @@ fn validateDeviceIdentifier(identifier: [:0]const u8) !void {
 }
 
 fn installHelperIfNotInstalled(self: *PrivilegedHelper) !void {
-    if (!self.isHelperInstalled) {
+    const forceHelperUpdate = try PreferencesManager.getForceHelperInstall();
+
+    if (!self.isHelperInstalled or forceHelperUpdate) {
         const installResult = PrivilegedHelperTool.installPrivilegedHelperTool();
         waitForHelperToolInstall();
 

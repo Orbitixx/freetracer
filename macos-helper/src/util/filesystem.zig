@@ -20,7 +20,7 @@ const XPCService = freetracer_lib.Mach.XPCService;
 const XPCConnection = freetracer_lib.Mach.XPCConnection;
 const XPCObject = freetracer_lib.Mach.XPCObject;
 
-const WRITE_BLOCK_SIZE = 1024 * 1_000;
+const WRITE_BLOCK_SIZE = 1 * 1_024 * 1_000;
 
 pub fn writeISO(connection: XPCConnection, imageFile: std.fs.File, device: std.fs.File) !void {
     Debug.log(.INFO, "Begin writing prep...", .{});
