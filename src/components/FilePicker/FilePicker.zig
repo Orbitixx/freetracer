@@ -287,7 +287,7 @@ fn processSelectedPathLocked(self: *FilePicker, newPath: [:0]u8) !void {
 
     if (!fs.validateImageFile(file).isValid) {
         Debug.log(.DEBUG, "processSelectedPathLocked: file structure validation failed, showing dialog", .{});
-        const proceed = osd.message("The selected file does not appear to contain a bootable file system (ISO 9660, GPT or MBR), this is unusual and may have unintended consequences. Are you sure you want to proceed?", .{
+        const proceed = osd.message("The selected file does not appear to contain a bootable file system (ISO 9660, UDF, GPT or MBR), this is unusual and may have unintended consequences. Are you sure you want to proceed?", .{
             .level = .warning,
             .buttons = .yes_no,
         });

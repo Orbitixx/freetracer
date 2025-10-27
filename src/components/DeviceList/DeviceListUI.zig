@@ -115,13 +115,6 @@ pub const Events = struct {
         struct { result: **UIFramework.Transform },
         struct {},
     );
-
-    // TODO: Deprecated
-    pub const onUITransformQueried = ComponentFramework.defineEvent(
-        EventManager.createEventName(ComponentName, "on_ui_transform_queried"),
-        struct { result: **DeprecatedUI.Primitives.Transform },
-        struct {},
-    );
 };
 
 // Creates and returns an instance of DeviceListUI component
@@ -218,6 +211,26 @@ fn bindDeviceSelectList(self: *DeviceListUI) DeviceListUIError!void {
         }
     }
     return DeviceListUIError.DeviceSelectBoxListMissing;
+}
+
+fn setIsActive(self: *DeviceListUI, isActive: bool) void {
+    self.storeIsActive(isActive);
+
+    self.layout.emitEvent(
+        .{ .StateChanged = .{
+            .isActive = isActive,
+            .invert = UIFramework.invertChildren(.{
+                .DeviceListHeaderDivider,
+                .DeviceListDeviceSelectedGlowTexture,
+                .DeviceListDeviceSelectedTexture,
+                .DeviceListPlaceholderTexture,
+                .DeviceListDeviceSelectedBarRect,
+                .DeviceListDeviceSelectedBarText,
+                .DeviceListDeviceSelectedText,
+            }),
+        } },
+        .{ .excludeSelf = false },
+    );
 }
 
 fn storeIsActive(self: *DeviceListUI, isActive: bool) void {
@@ -350,55 +363,57 @@ fn handleOnDeviceListActiveStateChanged(self: *DeviceListUI, event: ComponentEve
 
     const data = DeviceList.Events.onDeviceListActiveStateChanged.getData(event) orelse return eventResult.fail();
 
-    self.storeIsActive(data.isActive);
+    self.setIsActive(data.isActive);
 
-    self.layout.emitEvent(
-        .{ .StateChanged = .{ .isActive = data.isActive } },
-        .{},
-    );
-
-    self.layout.emitEvent(
-        .{ .StateChanged = .{ .target = .DeviceListDeviceListBox, .isActive = data.isActive } },
-        .{ .excludeSelf = true },
-    );
-
-    self.layout.emitEvent(
-        .{ .StateChanged = .{ .target = .DeviceListRefreshDevicesButton, .isActive = data.isActive } },
-        .{ .excludeSelf = true },
-    );
-
-    self.layout.emitEvent(
-        .{ .StateChanged = .{ .target = .DeviceListHeaderDivider, .isActive = !data.isActive } },
-        .{ .excludeSelf = true },
-    );
-    self.layout.emitEvent(
-        .{ .StateChanged = .{ .target = .DeviceListDeviceSelectedGlowTexture, .isActive = !data.isActive } },
-        .{ .excludeSelf = true },
-    );
-    self.layout.emitEvent(
-        .{ .StateChanged = .{ .target = .DeviceListDeviceSelectedTexture, .isActive = !data.isActive } },
-        .{ .excludeSelf = true },
-    );
+    // self.storeIsActive(data.isActive);
+    //
+    // self.layout.emitEvent(
+    //     .{ .StateChanged = .{ .isActive = data.isActive } },
+    //     .{},
+    // );
+    //
+    // self.layout.emitEvent(
+    //     .{ .StateChanged = .{ .target = .DeviceListDeviceListBox, .isActive = data.isActive } },
+    //     .{ .excludeSelf = true },
+    // );
+    //
+    // self.layout.emitEvent(
+    //     .{ .StateChanged = .{ .target = .DeviceListRefreshDevicesButton, .isActive = data.isActive } },
+    //     .{ .excludeSelf = true },
+    // );
+    //
+    // self.layout.emitEvent(
+    //     .{ .StateChanged = .{ .target = .DeviceListHeaderDivider, .isActive = !data.isActive } },
+    //     .{ .excludeSelf = true },
+    // );
+    // self.layout.emitEvent(
+    //     .{ .StateChanged = .{ .target = .DeviceListDeviceSelectedGlowTexture, .isActive = !data.isActive } },
+    //     .{ .excludeSelf = true },
+    // );
+    // self.layout.emitEvent(
+    //     .{ .StateChanged = .{ .target = .DeviceListDeviceSelectedTexture, .isActive = !data.isActive } },
+    //     .{ .excludeSelf = true },
+    // );
     self.layout.emitEvent(
         .{ .StateChanged = .{ .target = .DeviceListPlaceholderTexture, .isActive = false } },
         .{ .excludeSelf = true },
     );
-
-    self.layout.emitEvent(
-        .{ .StateChanged = .{ .target = .DeviceListDeviceSelectedBarRect, .isActive = !data.isActive } },
-        .{ .excludeSelf = true },
-    );
-
-    self.layout.emitEvent(
-        .{ .StateChanged = .{ .target = .DeviceListDeviceSelectedBarText, .isActive = !data.isActive } },
-        .{ .excludeSelf = true },
-    );
-
-    self.layout.emitEvent(
-        .{ .StateChanged = .{ .target = .DeviceListDeviceSelectedText, .isActive = !data.isActive } },
-        .{ .excludeSelf = true },
-    );
-
+    //
+    // self.layout.emitEvent(
+    //     .{ .StateChanged = .{ .target = .DeviceListDeviceSelectedBarRect, .isActive = !data.isActive } },
+    //     .{ .excludeSelf = true },
+    // );
+    //
+    // self.layout.emitEvent(
+    //     .{ .StateChanged = .{ .target = .DeviceListDeviceSelectedBarText, .isActive = !data.isActive } },
+    //     .{ .excludeSelf = true },
+    // );
+    //
+    // self.layout.emitEvent(
+    //     .{ .StateChanged = .{ .target = .DeviceListDeviceSelectedText, .isActive = !data.isActive } },
+    //     .{ .excludeSelf = true },
+    // );
+    //
     return eventResult.succeed();
 }
 
@@ -425,7 +440,6 @@ fn handleOnDevicesReadyToRender(self: *DeviceListUI) !EventResult {
     //
     Debug.log(.DEBUG, "DeviceListUI: onDevicesReadyToRender() start.", .{});
     self.clearDeviceSelectBoxes();
-    // self.nextButton.setEnabled(false);
 
     self.state.lock();
     defer self.state.unlock();
@@ -489,18 +503,28 @@ fn handleOnSelectedDeviceNameChanged(self: *DeviceListUI, event: ComponentEvent)
 pub fn handleAppResetRequest(self: *DeviceListUI) EventResult {
     var eventResult = EventResult.init();
 
+    self.storeIsActive(false);
+
+    self.layout.emitEvent(
+        .{ .StateChanged = .{
+            .isActive = false,
+            .invert = UIFramework.invertChildren(.{
+                .DeviceListHeaderDivider,
+                .DeviceListPlaceholderTexture,
+            }),
+        } },
+        .{ .excludeSelf = false },
+    );
+
+    self.clearDeviceSelectBoxes();
+
     {
         self.state.lock();
         defer self.state.unlock();
         self.state.data.selectedDevice = null;
         self.state.data.isActive = false;
+        self.state.data.devices.clearAndFree(self.allocator);
     }
-
-    self.clearDeviceSelectBoxes();
-    // self.nextButton.setEnabled(false);
-
-    // self.updateDeviceNameLabel(kStringDeviceListNoDeviceSelected, null);
-    // self.applyPanelMode(panelAppearanceInactive());
 
     return eventResult.succeed();
 }

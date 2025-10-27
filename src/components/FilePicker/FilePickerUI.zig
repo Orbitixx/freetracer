@@ -114,7 +114,7 @@ pub fn handleEvent(self: *FilePickerUI, event: ComponentEvent) !EventResult {
     var eventResult = EventResult.init();
 
     return switch (event.hash) {
-        Events.onImageFilePathChanged.Hash => try self.handleIsoFilePathChanged(event),
+        Events.onImageFilePathChanged.Hash => try self.handleImageFilePathChanged(event),
         Events.onRootViewTransformQueried.Hash => try self.handleOnRootViewTransformQueried(event),
         FilePicker.Events.onActiveStateChanged.Hash => try self.handleActiveStateChanged(event),
         AppManager.Events.AppResetEvent.Hash => self.handleAppResetRequest(),
@@ -176,6 +176,7 @@ fn setIsActive(self: *FilePickerUI, isActive: bool) void {
             .target = null,
             .isActive = isActive,
             .invert = UIFramework.invertChildren(.{
+                .FilePickerHeaderDivider,
                 .FilePickerImageSelectedGlowTexture,
                 .FilePickerImageSelectedTexture,
                 .FilePickerImageSelectedTextbox,
@@ -266,43 +267,11 @@ fn handleActiveStateChanged(self: *FilePickerUI, event: ComponentEvent) !EventRe
     const data = FilePicker.Events.onActiveStateChanged.getData(event) orelse return eventResult.fail();
     self.setIsActive(data.isActive);
 
-    // self.layout.emitEvent(.{ .StateChanged = .{ .isActive = data.isActive } }, .{});
-    //
-    // self.layout.emitEvent(
-    //     .{ .StateChanged = .{ .target = .FilePickerHeaderDivider, .isActive = !data.isActive } },
-    //     .{ .excludeSelf = true },
-    // );
-    //
-    // self.layout.emitEvent(
-    //     .{ .StateChanged = .{ .target = .FilePickerImageSelectedGlowTexture, .isActive = !data.isActive } },
-    //     .{ .excludeSelf = true },
-    // );
-    //
-    // self.layout.emitEvent(
-    //     .{ .StateChanged = .{ .target = .FilePickerImageSelectedTexture, .isActive = !data.isActive } },
-    //     .{ .excludeSelf = true },
-    // );
-    //
-    // self.layout.emitEvent(
-    //     .{ .StateChanged = .{ .target = .FilePickerImageSelectedTextbox, .isActive = !data.isActive } },
-    //     .{ .excludeSelf = true },
-    // );
-    //
-    // self.layout.emitEvent(
-    //     .{ .StateChanged = .{ .target = .FilePickerImageSelectedBarRect, .isActive = !data.isActive } },
-    //     .{ .excludeSelf = true },
-    // );
-    //
-    // self.layout.emitEvent(
-    //     .{ .StateChanged = .{ .target = .FilePickerImageSelectedBarText, .isActive = !data.isActive } },
-    //     .{ .excludeSelf = true },
-    // );
-
     if (!data.isActive) rl.setMouseCursor(.default);
     return eventResult.succeed();
 }
 
-fn handleIsoFilePathChanged(self: *FilePickerUI, event: ComponentEvent) !EventResult {
+fn handleImageFilePathChanged(self: *FilePickerUI, event: ComponentEvent) !EventResult {
     var eventResult = EventResult.init();
     const data = Events.onImageFilePathChanged.getData(event) orelse return eventResult.fail();
 
@@ -333,6 +302,7 @@ fn handleIsoFilePathChanged(self: *FilePickerUI, event: ComponentEvent) !EventRe
             } },
             .{ .excludeSelf = true },
         );
+
         self.layout.emitEvent(
             .{ .TextChanged = .{
                 .target = .FilePickerImageSelectedTextbox,
@@ -341,6 +311,7 @@ fn handleIsoFilePathChanged(self: *FilePickerUI, event: ComponentEvent) !EventRe
             } },
             .{ .excludeSelf = true },
         );
+
         self.layout.emitEvent(
             .{ .SpriteButtonEnabledChanged = .{ .target = .FilePickerConfirmButton, .enabled = true } },
             .{ .excludeSelf = true },
