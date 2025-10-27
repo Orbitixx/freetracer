@@ -1,17 +1,18 @@
-
 env.zig
 TODO.md
 
 *.sh
 *.py
 *.iso
-# *.plist
 *.ttf
+*.dmg
+
 
 .DS_Store
 
 *.app/
 zig-out/
+dmgstage/
 src/resources/
 Icons/
 

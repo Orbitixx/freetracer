@@ -8,16 +8,16 @@ pub const ResourceError = error{
 
 const FONTS_COUNT = std.meta.fields(FONT).len;
 const TEXTURES_COUNT = std.meta.fields(TEXTURE).len;
-const IMAGE_COUNT = std.meta.fields(IMAGE).len;
-const SHADERS_COUNT = std.meta.fields(ShaderResource).len;
+// const IMAGE_COUNT = std.meta.fields(IMAGE).len;
+// const SHADERS_COUNT = std.meta.fields(ShaderResource).len;
 
 pub const FONT = enum(u8) { ROBOTO_REGULAR, JERSEY10_REGULAR };
-pub const IMAGE = enum(u8) { APP_WINDOW_IMAGE };
-pub const ShaderResource = enum(u8) { PIXELATE, SHADOW };
+// pub const IMAGE = enum(u8) { APP_WINDOW_IMAGE };
+// pub const ShaderResource = enum(u8) { PIXELATE, SHADOW };
 
 pub const TEXTURE = enum(u8) {
-    DISK_IMAGE,
-    USB_IMAGE,
+    // DISK_IMAGE,
+    // USB_IMAGE,
     RELOAD_ICON,
     BUTTON_UI,
     DOC_IMAGE,
@@ -36,9 +36,9 @@ pub const TEXTURE = enum(u8) {
     DEVICE_SELECTED,
     DEVICE_SELECTED_GLOW,
 
-    SHADOW_SM,
-    SHADOW_MD,
-    SHADOW_LG,
+    // SHADOW_SM,
+    // SHADOW_MD,
+    // SHADOW_LG,
 
     CHECKBOX_NORMAL,
     CHECKBOX_CHECKED,
@@ -60,9 +60,9 @@ pub const TEXTURE = enum(u8) {
 
 pub const Asset = union(enum) {
     Font: FONT,
-    Image: IMAGE,
+    // Image: IMAGE,
     Texture: TEXTURE,
-    Shader: ShaderResource,
+    // Shader: ShaderResource,
 };
 
 pub const Texture = rl.Texture2D;
@@ -78,8 +78,8 @@ pub const ResourceManagerSingleton = struct {
         allocator: std.mem.Allocator,
         fonts: []rl.Font,
         textures: []rl.Texture2D,
-        images: []rl.Image,
-        shaders: []rl.Shader,
+        // images: []rl.Image,
+        // shaders: []rl.Shader,
 
         pub fn getFont(self: ResourceManager, font: FONT) rl.Font {
             // if (self.fonts.len < 1) return ResourceError.NoFontsLoaded;
@@ -90,13 +90,13 @@ pub const ResourceManagerSingleton = struct {
             return self.textures[@intFromEnum(texture)];
         }
 
-        pub fn getImage(self: ResourceManager, image: IMAGE) rl.Image {
-            return self.images[@intFromEnum(image)];
-        }
+        // pub fn getImage(self: ResourceManager, image: IMAGE) rl.Image {
+        //     return self.images[@intFromEnum(image)];
+        // }
 
-        pub fn getShader(self: ResourceManager, shader: ShaderResource) rl.Shader {
-            return self.shaders[@intFromEnum(shader)];
-        }
+        // pub fn getShader(self: ResourceManager, shader: ShaderResource) rl.Shader {
+        //     return self.shaders[@intFromEnum(shader)];
+        // }
 
         fn registerAsset(self: ResourceManager, asset: Asset, fileName: []const u8) !void {
             const file = try getResourcePath(self.allocator, fileName);
@@ -112,8 +112,8 @@ pub const ResourceManagerSingleton = struct {
                     self.fonts[@intFromEnum(f)] = font;
                     if (f == .ROBOTO_REGULAR) ResourceManagerSingleton.defaultFont = font;
                 },
-                .Image => |i| self.images[@intFromEnum(i)] = try rl.loadImage(file),
-                .Shader => |s| self.shaders[@intFromEnum(s)] = try rl.loadShader(null, file),
+                // .Image => |i| self.images[@intFromEnum(i)] = try rl.loadImage(file),
+                // .Shader => |s| self.shaders[@intFromEnum(s)] = try rl.loadShader(null, file),
                 .Texture => |t| {
                     const texture = try rl.loadTexture(file);
                     rl.setTextureFilter(texture, .point);
@@ -147,8 +147,8 @@ pub const ResourceManagerSingleton = struct {
             .allocator = allocator,
             .fonts = try allocator.alloc(rl.Font, FONTS_COUNT),
             .textures = try allocator.alloc(rl.Texture2D, TEXTURES_COUNT),
-            .images = try allocator.alloc(rl.Image, IMAGE_COUNT),
-            .shaders = undefined, //try allocator.alloc(rl.Shader, SHADERS_COUNT),
+            // .images = try allocator.alloc(rl.Image, IMAGE_COUNT),
+            // .shaders = undefined, //try allocator.alloc(rl.Shader, SHADERS_COUNT),
         };
 
         if (instance) |*inst| {
@@ -156,8 +156,8 @@ pub const ResourceManagerSingleton = struct {
             try inst.registerAsset(.{ .Font = .JERSEY10_REGULAR }, "fonts/Jersey10-Regular.ttf");
             Debug.log(.DEBUG, "ResourceManager: fonts successfully loaded!", .{});
 
-            try inst.registerAsset(.{ .Texture = .DISK_IMAGE }, "images/disk_image.png");
-            try inst.registerAsset(.{ .Texture = .USB_IMAGE }, "images/usb_image.png");
+            // try inst.registerAsset(.{ .Texture = .DISK_IMAGE }, "images/disk_image.png");
+            // try inst.registerAsset(.{ .Texture = .USB_IMAGE }, "images/usb_image.png");
             try inst.registerAsset(.{ .Texture = .RELOAD_ICON }, "images/icon-reload.png");
             try inst.registerAsset(.{ .Texture = .COPY_ICON }, "images/copy-icon.png");
             try inst.registerAsset(.{ .Texture = .BUTTON_UI }, "images/button_ui.png");
@@ -182,9 +182,9 @@ pub const ResourceManagerSingleton = struct {
             try inst.registerAsset(.{ .Texture = .WARNING_ICON }, "images/warning-icon.png");
             try inst.registerAsset(.{ .Texture = .DANGER_LINES }, "images/danger-lines.png");
 
-            try inst.registerAsset(.{ .Texture = .SHADOW_SM }, "images/shadow-sm.png");
-            try inst.registerAsset(.{ .Texture = .SHADOW_MD }, "images/shadow-md.png");
-            try inst.registerAsset(.{ .Texture = .SHADOW_LG }, "images/shadow-lg.png");
+            // try inst.registerAsset(.{ .Texture = .SHADOW_SM }, "images/shadow-sm.png");
+            // try inst.registerAsset(.{ .Texture = .SHADOW_MD }, "images/shadow-md.png");
+            // try inst.registerAsset(.{ .Texture = .SHADOW_LG }, "images/shadow-lg.png");
 
             try inst.registerAsset(.{ .Texture = .FLASH_PLACEHOLDER }, "images/flash-placeholder.png");
             try inst.registerAsset(.{ .Texture = .DEVICE_LIST_PLACEHOLDER }, "images/device-list-placeholder.png");
@@ -198,12 +198,12 @@ pub const ResourceManagerSingleton = struct {
             try inst.registerAsset(.{ .Texture = .ROCKET_GRAPHIC }, "images/rocket.png");
             Debug.log(.DEBUG, "ResourceManager: textures successfully loaded!", .{});
 
-            try inst.registerAsset(.{ .Image = .APP_WINDOW_IMAGE }, "images/icon.png");
-            Debug.log(.DEBUG, "ResourceManager: images successfully loaded!", .{});
+            // try inst.registerAsset(.{ .Image = .APP_WINDOW_IMAGE }, "images/icon.png");
+            // Debug.log(.DEBUG, "ResourceManager: images successfully loaded!", .{});
 
             // try inst.registerAsset(.{ .Shader = .PIXELATE }, "shaders/pixelate.fs");
             // try inst.registerAsset(.{ .Shader = .SHADOW }, "shaders/shadow.fs");
-            Debug.log(.DEBUG, "ResourceManager: shaders successfully loaded!", .{});
+            // Debug.log(.DEBUG, "ResourceManager: shaders successfully loaded!", .{});
         }
 
         Debug.log(.INFO, "ResourceManager: finished initialization!", .{});
@@ -220,13 +220,13 @@ pub const ResourceManagerSingleton = struct {
         return instance.?.getTexture(texture);
     }
 
-    pub fn getImage(image: IMAGE) !rl.Image {
-        return if (instance) |inst| inst.getImage(image) else error.UnableToGetImage;
-    }
-
-    pub fn getShader(shader: ShaderResource) !rl.Shader {
-        return if (instance) |inst| inst.getShader(shader) else error.UnableToGetShader;
-    }
+    // pub fn getImage(image: IMAGE) !rl.Image {
+    //     return if (instance) |inst| inst.getImage(image) else error.UnableToGetImage;
+    // }
+    //
+    // pub fn getShader(shader: ShaderResource) !rl.Shader {
+    //     return if (instance) |inst| inst.getShader(shader) else error.UnableToGetShader;
+    // }
 
     pub fn deinit() void {
         if (instance == null) {
@@ -242,9 +242,9 @@ pub const ResourceManagerSingleton = struct {
             texture.unload();
         }
 
-        for (instance.?.images) |image| {
-            image.unload();
-        }
+        // for (instance.?.images) |image| {
+        //     image.unload();
+        // }
 
         // for (instance.?.shaders) |shader| {
         //     shader.unload();
@@ -252,7 +252,7 @@ pub const ResourceManagerSingleton = struct {
 
         allocator.free(instance.?.fonts);
         allocator.free(instance.?.textures);
-        allocator.free(instance.?.images);
+        // allocator.free(instance.?.images);
         // allocator.free(instance.?.shaders);
 
         instance = null;

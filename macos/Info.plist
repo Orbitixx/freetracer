@@ -36,7 +36,7 @@
 	<key>SMPrivilegedExecutables</key>
 		<dict>
 			<key>com.orbitixx.freetracer-helper</key>
-				<string>identifier "com.orbitixx.freetracer-helper" and anchor apple generic and certificate leaf[subject.OU] = "TW4N5HWZXY" and certificate 1[field.1.2.840.113635.100.6.2.1] /* exists */</string>
+				<string>identifier "com.orbitixx.freetracer-helper" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and certificate leaf[subject.OU] = TW4N5HWZXY</string>
 		</dict>
 </dict>
 </plist>
