@@ -19,6 +19,8 @@ const ResourceManagerImport = @import("../../../managers/ResourceManager.zig");
 const ResourceManager = ResourceManagerImport.ResourceManagerSingleton;
 const FontResource = ResourceManagerImport.FONT;
 
+const TextEllipsis = @import("./TextEllipsis.zig");
+
 pub const TextStyle = struct {
     textColor: rl.Color = Color.white,
     font: FontResource = .ROBOTO_REGULAR,
@@ -214,88 +216,33 @@ fn enforceMaxWidth(self: *Text) void {
     _ = self.updateDisplayFromOriginal();
 }
 
-fn writeValueWithConstraints(self: *Text, value: []const u8) usize {
+fn updateDisplayFromOriginal(self: *Text) usize {
+    const original = std.mem.sliceTo(&self.originalText, 0x00);
+
+    // If there's a max width constraint, use TextEllipsis utility
+    if (self.transform.resolvedMaxWidth()) |maxWidth| {
+        return TextEllipsis.ellipsizeToBuffer(
+            &self.textBuffer,
+            original,
+            self.font,
+            self.style.fontSize,
+            self.style.spacing,
+            maxWidth,
+        );
+    }
+
+    // No constraint: copy original to display buffer as-is
     @memset(self.textBuffer[0..], 0x00);
-    if (value.len == 0) return 0;
-    const maxCopyLen = MAX_TEXT_LENGTH - 1;
-    const truncatedLen = @min(value.len, maxCopyLen);
-    const truncated = value[0..truncatedLen];
-
-    if (self.transform.resolvedMaxWidth()) |limit| {
-        return self.writeEllipsized(truncated, limit);
+    const maxCopyLen = @min(original.len, MAX_TEXT_LENGTH - 1);
+    if (maxCopyLen > 0) {
+        @memcpy(self.textBuffer[0..maxCopyLen], original[0..maxCopyLen]);
     }
-
-    @memcpy(self.textBuffer[0..truncatedLen], truncated);
-    self.textBuffer[truncatedLen] = 0;
-    return truncatedLen;
-}
-
-fn writeEllipsized(self: *Text, value: []const u8, maxWidth: f32) usize {
-    const ellipsis: [:0]const u8 = "...";
-    const ellipsisLen = ellipsis.len;
-    const ellipsisWidth = rl.measureTextEx(self.font, ellipsis, self.style.fontSize, self.style.spacing).x;
-
-    if (value.len == 0) {
-        self.textBuffer[0] = 0;
-        return 0;
-    }
-
-    @memcpy(self.textBuffer[0..value.len], value);
-    self.textBuffer[value.len] = 0;
-    if (self.measureBuffer(value.len) <= maxWidth) {
-        return value.len;
-    }
-
-    if (ellipsisWidth > maxWidth) {
-        self.textBuffer[0] = 0;
-        return 0;
-    }
-
-    const maxBufferLen = MAX_TEXT_LENGTH - 1;
-    var prefixLen: usize = if (maxBufferLen > ellipsisLen)
-        @min(value.len, maxBufferLen - ellipsisLen)
-    else
-        0;
-
-    while (true) {
-        const totalLen = prefixLen + ellipsisLen;
-        if (totalLen <= maxBufferLen) {
-            if (prefixLen > 0) @memcpy(self.textBuffer[0..prefixLen], value[0..prefixLen]);
-            @memcpy(self.textBuffer[prefixLen .. prefixLen + ellipsisLen], ellipsis[0..ellipsisLen]);
-            self.textBuffer[prefixLen + ellipsisLen] = 0;
-            if (self.measureBuffer(prefixLen + ellipsisLen) <= maxWidth) {
-                return prefixLen + ellipsisLen;
-            }
-        }
-
-        if (prefixLen == 0) break;
-        prefixLen -= 1;
-    }
-
-    if (ellipsisLen <= maxBufferLen) {
-        @memcpy(self.textBuffer[0..ellipsisLen], ellipsis[0..ellipsisLen]);
-        self.textBuffer[ellipsisLen] = 0;
-        if (self.measureBuffer(ellipsisLen) <= maxWidth) {
-            return ellipsisLen;
-        }
-    }
-
-    self.textBuffer[0] = 0;
-    return 0;
-}
-
-fn measureBuffer(self: *Text, len: usize) f32 {
-    if (len == 0) return 0;
-    return rl.measureTextEx(self.font, @ptrCast(self.textBuffer[0..len :0]), self.style.fontSize, self.style.spacing).x;
+    self.textBuffer[maxCopyLen] = 0;
+    return maxCopyLen;
 }
 
 fn currentTextDimensions(self: *Text) rl.Vector2 {
     return rl.measureTextEx(self.font, @ptrCast(std.mem.sliceTo(&self.textBuffer, 0x00)), self.style.fontSize, self.style.spacing);
-}
-
-fn updateDisplayFromOriginal(self: *Text) usize {
-    const original = std.mem.sliceTo(&self.originalText, 0x00);
-    return self.writeValueWithConstraints(original[0..original.len]);
 }
 
 // pub fn getDimensions(self: Text) TextDimensions {

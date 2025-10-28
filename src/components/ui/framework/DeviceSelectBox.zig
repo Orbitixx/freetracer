@@ -16,6 +16,8 @@ const ResourceManager = ResourceManagerImport.ResourceManagerSingleton;
 const TextureResource = ResourceManagerImport.TextureResource;
 const FontResource = ResourceManagerImport.FONT;
 
+const TextEllipsis = @import("./TextEllipsis.zig");
+
 const DeviceSelectBox = @This();
 
 const MAX_TEXT_LENGTH = 192;
@@ -89,6 +91,11 @@ nameBuffer: [MAX_TEXT_LENGTH:0]u8 = std.mem.zeroes([MAX_TEXT_LENGTH:0]u8),
 pathBuffer: [MAX_TEXT_LENGTH:0]u8 = std.mem.zeroes([MAX_TEXT_LENGTH:0]u8),
 mediaBuffer: [MAX_TEXT_LENGTH:0]u8 = std.mem.zeroes([MAX_TEXT_LENGTH:0]u8),
 
+// Original text to support re-ellipsization on layout changes
+originalName: [MAX_TEXT_LENGTH:0]u8 = std.mem.zeroes([MAX_TEXT_LENGTH:0]u8),
+originalPath: [MAX_TEXT_LENGTH:0]u8 = std.mem.zeroes([MAX_TEXT_LENGTH:0]u8),
+originalMedia: [MAX_TEXT_LENGTH:0]u8 = std.mem.zeroes([MAX_TEXT_LENGTH:0]u8),
+
 lastRect: rl.Rectangle = rectZero(),
 iconRect: rl.Rectangle = rectZero(),
 primaryPos: rl.Vector2 = .{ .x = 0, .y = 0 },
@@ -113,9 +120,9 @@ pub fn init(config: Config) DeviceSelectBox {
         .detailFont = ResourceManager.getFont(config.style.detailText.font),
     };
 
-    box.storeText(&box.nameBuffer, config.content.name);
-    box.storeText(&box.pathBuffer, config.content.path);
-    box.formatSizeToBuffer(&box.mediaBuffer, config.content.size);
+    storeText(&box.nameBuffer, &box.originalName, config.content.name);
+    storeText(&box.pathBuffer, &box.originalPath, config.content.path);
+    formatSizeToBuffer(&box.mediaBuffer, &box.originalMedia, config.content.size);
 
     return box;
 }
@@ -257,9 +264,9 @@ pub fn setEnabled(self: *DeviceSelectBox, flag: bool) void {
 }
 
 pub fn setContent(self: *DeviceSelectBox, content: Content) void {
-    self.storeText(&self.nameBuffer, content.name);
-    self.storeText(&self.pathBuffer, content.path);
-    self.formatSizeToBuffer(&self.mediaBuffer, content.size);
+    storeText(&self.nameBuffer, &self.originalName, content.name);
+    storeText(&self.pathBuffer, &self.originalPath, content.path);
+    formatSizeToBuffer(&self.mediaBuffer, &self.originalMedia, content.size);
     self.layoutDirty = true;
 }
 
@@ -279,15 +286,22 @@ pub fn deinit(self: *DeviceSelectBox) void {
     _ = self;
 }
 
-fn storeText(_: *DeviceSelectBox, buffer: *[MAX_TEXT_LENGTH:0]u8, value: [:0]const u8) void {
-    buffer.* = std.mem.zeroes([MAX_TEXT_LENGTH:0]u8);
+fn storeText(buffer: *[MAX_TEXT_LENGTH:0]u8, original: *[MAX_TEXT_LENGTH:0]u8, value: [:0]const u8) void {
+    // Store original text for re-ellipsization
+    original.* = std.mem.zeroes([MAX_TEXT_LENGTH:0]u8);
     const len = @min(value.len, MAX_TEXT_LENGTH - 1);
+    if (len > 0) @memcpy(original[0..len], value[0..len]);
+    original[len] = 0;
+
+    // Initially copy to display buffer (will be ellipsized in updateLayout)
+    buffer.* = std.mem.zeroes([MAX_TEXT_LENGTH:0]u8);
     if (len > 0) @memcpy(buffer[0..len], value[0..len]);
     buffer[len] = 0;
 }
 
-fn formatSizeToBuffer(_: *DeviceSelectBox, buffer: *[MAX_TEXT_LENGTH:0]u8, sizeBytes: i64) void {
+fn formatSizeToBuffer(buffer: *[MAX_TEXT_LENGTH:0]u8, original: *[MAX_TEXT_LENGTH:0]u8, sizeBytes: i64) void {
     buffer.* = std.mem.zeroes([MAX_TEXT_LENGTH:0]u8);
+    original.* = std.mem.zeroes([MAX_TEXT_LENGTH:0]u8);
 
     const sizeGB: f64 = @as(f64, @floatFromInt(sizeBytes)) / (1_000_000_000);
 
@@ -297,6 +311,8 @@ fn formatSizeToBuffer(_: *DeviceSelectBox, buffer: *[MAX_TEXT_LENGTH:0]u8, sizeB
         const len = @min(fallback.len, MAX_TEXT_LENGTH - 1);
         @memcpy(buffer[0..len], fallback[0..len]);
         buffer[len] = 0;
+        @memcpy(original[0..len], fallback[0..len]);
+        original[len] = 0;
         return;
     };
 
@@ -304,6 +320,11 @@ fn formatSizeToBuffer(_: *DeviceSelectBox, buffer: *[MAX_TEXT_LENGTH:0]u8, sizeB
     @memcpy(buffer[0..written.len], written);
     @memcpy(buffer[written.len .. written.len + 3], " GB");
     buffer[len] = 0;
+
+    // Store original with " GB" suffix
+    @memcpy(original[0..written.len], written);
+    @memcpy(original[written.len .. written.len + 3], " GB");
+    original[len] = 0;
 }
 
 fn updateLayout(self: *DeviceSelectBox, rect: rl.Rectangle) void {
@@ -353,6 +374,36 @@ fn updateLayout(self: *DeviceSelectBox, rect: rl.Rectangle) void {
     };
 
     const contentStartX = padded.x + iconAreaWidth + self.style.contentSpacing;
+    const contentMaxX = padded.x + padded.width;
+    const availableTextWidth = @max(0.0, contentMaxX - contentStartX);
+
+    // Apply ellipsization to each text line based on available width
+    _ = TextEllipsis.ellipsizeToBuffer(
+        &self.nameBuffer,
+        std.mem.sliceTo(&self.originalName, 0x00),
+        self.primaryFont,
+        self.style.primaryText.fontSize,
+        self.style.primaryText.spacing,
+        availableTextWidth,
+    );
+
+    _ = TextEllipsis.ellipsizeToBuffer(
+        &self.pathBuffer,
+        std.mem.sliceTo(&self.originalPath, 0x00),
+        self.secondaryFont,
+        self.style.secondaryText.fontSize,
+        self.style.secondaryText.spacing,
+        availableTextWidth,
+    );
+
+    _ = TextEllipsis.ellipsizeToBuffer(
+        &self.mediaBuffer,
+        std.mem.sliceTo(&self.originalMedia, 0x00),
+        self.detailFont,
+        self.style.detailText.fontSize,
+        self.style.detailText.spacing,
+        availableTextWidth,
+    );
 
     const nameDims = rl.measureTextEx(
         self.primaryFont,
