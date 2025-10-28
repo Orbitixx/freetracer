@@ -307,7 +307,7 @@ fn handleImageFilePathChanged(self: *FilePickerUI, event: ComponentEvent) !Event
             .{ .TextChanged = .{
                 .target = .FilePickerImageSelectedTextbox,
                 .text = displayName,
-                .style = .{ .textColor = Color.white },
+                .style = .{ .textColor = Color.white, .fontSize = 18 },
             } },
             .{ .excludeSelf = true },
         );

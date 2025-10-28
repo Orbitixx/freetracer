@@ -45,6 +45,9 @@ pub const c = if (isMac) @cImport({
     @cInclude("fcntl.h");
     @cInclude("string.h");
     @cInclude("unistd.h");
+
+    // for posix_fallocate
+    @cInclude("fcntl.h");
 }) else if (isLinux) @cImport({
     // @cInclude("blkid/blkid.h");
 });

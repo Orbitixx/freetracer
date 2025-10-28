@@ -275,7 +275,7 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) !void {
 
     sendXPCReply(connection, .DEVICE_VALID, "Device is determined to be valid and is successfully opened.");
 
-    fsops.writeISO(connection, imageFile, deviceHandle.raw) catch |err| {
+    fsops.writeISO(connection, imageFile, deviceHandle) catch |err| {
         respondWithErrorAndTerminate(
             .{ .err = err, .message = "Unable to write ISO to device." },
             .{ .xpcConnection = connection, .xpcResponseCode = .ISO_WRITE_FAIL },
@@ -285,7 +285,7 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) !void {
 
     sendXPCReply(connection, .ISO_WRITE_SUCCESS, "ISO image successfully written to device!");
 
-    fsops.verifyWrittenBytes(connection, imageFile, deviceHandle.raw) catch |err| {
+    fsops.verifyWrittenBytes(connection, imageFile, deviceHandle) catch |err| {
         respondWithErrorAndTerminate(
             .{ .err = err, .message = "Unable to verify written ISO image." },
             .{ .xpcConnection = connection, .xpcResponseCode = .WRITE_VERIFICATION_FAIL },
