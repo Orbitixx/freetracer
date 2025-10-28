@@ -21,11 +21,53 @@ const XPCService = freetracer_lib.Mach.XPCService;
 const XPCConnection = freetracer_lib.Mach.XPCConnection;
 const XPCObject = freetracer_lib.Mach.XPCObject;
 
+const MIN_WRITE_SIZE = 4 * 1_024 * 1_024; // 4 MB minimum
+const MAX_WRITE_SIZE = 16 * 1_024 * 1_024; // 16 MB maximum
+
+/// Queries device limits and returns clamped write chunk size aligned to physical block size.
+/// Returns 4 MiB on any failure or suspicious values.
+fn probeDeviceWriteSize(device: std.fs.File) u64 {
+    const fd: c_int = @intCast(device.handle);
+    var blockSize: u32 = 4096; // Default: 4KB sectors
+    var maxBlockCount: u32 = 0;
+
+    // Query physical block size
+    if (c.ioctl(fd, c.DKIOCGETBLOCKSIZE, @as(?*c_uint, @ptrCast(&blockSize))) != 0 or blockSize == 0) {
+        Debug.log(.WARNING, "DKIOCGETBLOCKSIZE failed, using default 4KB block size", .{});
+        blockSize = 4096;
+    } else {
+        Debug.log(.INFO, "Device block size: {d} bytes", .{blockSize});
+    }
+
+    // Query max write blocks
+    if (c.ioctl(fd, c.DKIOCGETMAXBLOCKCOUNTWRITE, @as(?*c_uint, @ptrCast(&maxBlockCount))) != 0 or maxBlockCount == 0) {
+        Debug.log(.WARNING, "DKIOCGETMAXBLOCKCOUNTWRITE failed, using default 1024 blocks", .{});
+        maxBlockCount = 1024;
+    } else {
+        Debug.log(.INFO, "Device max block count: {d}", .{maxBlockCount});
+    }
+
+    // Calculate: (blockSize * maxBlockCount), then clamp to [4MiB, 16MiB]
+    const calculated = @as(u64, @intCast(blockSize)) * @as(u64, @intCast(maxBlockCount));
+    const clamped = std.math.clamp(calculated, MIN_WRITE_SIZE, MAX_WRITE_SIZE);
+
+    // Round down to nearest multiple of blockSize for alignment
+    const aligned = (clamped / blockSize) * blockSize;
+    const finalSize = if (aligned > 0) aligned else MIN_WRITE_SIZE;
+
+    Debug.log(.INFO, "Probed write chunk size: {d} bytes ({d} MB, aligned to {d}-byte blocks)", .{
+        finalSize,
+        finalSize / (1024 * 1024),
+        blockSize,
+    });
+
+    return finalSize;
+}
+
 pub fn writeISO(connection: XPCConnection, imageFile: std.fs.File, deviceHandle: DeviceHandle) !void {
     Debug.log(.INFO, "Begin writing prep...", .{});
 
     const device = deviceHandle.raw;
-    // const deviceStat = try device.stat();
 
     const noCacheDevice = c.fcntl(device.handle, c.F_NOCACHE, @as(c_int, 1));
     const noCacheImage = c.fcntl(imageFile.handle, c.F_NOCACHE, @as(c_int, 1));
@@ -33,45 +75,37 @@ pub fn writeISO(connection: XPCConnection, imageFile: std.fs.File, deviceHandle:
 
     Debug.log(.INFO, "fcntl results are: device = {d}, image = {d}, prefetch = {d}", .{ noCacheDevice, noCacheImage, imagePrefetcher });
 
-    // c.posix_fallocate(device.handle, 0, bytes)
-
-    // Use optimized block size for USB/SD devices
-    const WRITE_BLOCK_SIZE = 4 * 1_024 * 1_024; // 4 MB block size
-
-    // Batch progress updates to reduce XPC message overhead
-    const PROGRESS_UPDATE_INTERVAL_BYTES = 8 * 1_024 * 1_024; // Update UI every 8MB
-    const PROGRESS_UPDATE_INTERVAL_NS = 100_000_000; // Also update every 100ms to prevent XPC saturation
-    const TIMER_CHECK_INTERVAL = 100; // Check elapsed time every N iterations
-
-    // Double-buffering: allocate two buffers to enable prefetch while writing
-    const buffer1 = try std.heap.page_allocator.alloc(u8, WRITE_BLOCK_SIZE);
-    defer std.heap.page_allocator.free(buffer1);
-    const buffer2 = try std.heap.page_allocator.alloc(u8, WRITE_BLOCK_SIZE);
-    defer std.heap.page_allocator.free(buffer2);
+    // Probe device for optimal write chunk size
+    const CHUNK_SIZE = probeDeviceWriteSize(device);
 
     const fileStat = try imageFile.stat();
     const imageSize = fileStat.size;
 
-    var currentByte: u64 = 0;
-    var lastProgressUpdateByte: u64 = 0;
-    var currentProgress: u64 = 0;
+    // Allocate single read buffer (no extra buffering layer)
+    const readBuffer = try std.heap.page_allocator.alloc(u8, CHUNK_SIZE);
+    defer std.heap.page_allocator.free(readBuffer);
+
     var xpcResponseTimer = try std.time.Timer.start();
     var overallTimer = try std.time.Timer.start();
-    var bytesSinceUpdate: u64 = 0;
-    var iterationCount: u32 = 0;
-    var timerCheckCounter: u32 = 0;
 
     Debug.log(.INFO, "File and device are opened successfully! File size: {d}", .{imageSize});
-    Debug.log(.INFO, "Writing ISO to device with {d}MB blocks (optimized for large files), please wait...", .{WRITE_BLOCK_SIZE / (1024 * 1024)});
+    Debug.log(.INFO, "Writing ISO to device with {d}MB chunks, please wait...", .{CHUNK_SIZE / (1024 * 1024)});
 
     // Seek both files to start
     try imageFile.seekTo(0);
     try device.seekTo(0);
 
+    // Progress tracking variables
+    var currentByte: u64 = 0;
+    var lastProgressUpdateByte: u64 = 0;
+    var bytesSinceUpdate: u64 = 0;
+    var timerCheckCounter: u32 = 0;
+
+    const PROGRESS_UPDATE_INTERVAL_BYTES = 8 * 1_024 * 1_024; // Update UI every 8MB
+    const PROGRESS_UPDATE_INTERVAL_NS = 100_000_000; // Also update every 100ms
+    const TIMER_CHECK_INTERVAL = 100; // Check elapsed time every N iterations
+
     while (currentByte < imageSize) {
-        // Use double-buffering: alternate between two buffers
-        // This allows OS to prefetch into one buffer while we write from the other
-        const readBuffer = if (iterationCount % 2 == 0) buffer1 else buffer2;
         const bytesRead = try imageFile.read(readBuffer);
 
         if (bytesRead == 0) {
@@ -79,23 +113,13 @@ pub fn writeISO(connection: XPCConnection, imageFile: std.fs.File, deviceHandle:
             break;
         }
 
-        // NOTE: Important to use the slice syntax here, otherwise if writing &readBuffer
-        // it only writes WRITE_BLOCK_SIZE bytes, meaning if the last block is smaller
-        // then the data will likely be corrupted.
-        const bytesWritten = try device.write(readBuffer[0..bytesRead]);
+        // Direct write to device (no extra buffering)
+        try device.writeAll(readBuffer[0..bytesRead]);
 
-        if (bytesWritten != bytesRead or bytesWritten == 0) {
-            Debug.log(.ERROR, "CRITICAL ERROR: failed to correctly write to device. Aborting...", .{});
-            break;
-        }
+        currentByte += @as(u64, @intCast(bytesRead));
+        bytesSinceUpdate += @as(u64, @intCast(bytesRead));
 
-        const bytesWrittenU64 = @as(u64, @intCast(bytesWritten));
-        currentByte += bytesWrittenU64;
-        bytesSinceUpdate += bytesWrittenU64;
-        iterationCount += 1;
-
-        // Batch progress updates to reduce XPC overhead
-        // Check byte-based updates always, but only check time-based updates periodically
+        // Check if we should send progress update
         const bytesSincLastUpdate = currentByte - lastProgressUpdateByte;
         const shouldUpdateByBytes = bytesSincLastUpdate >= PROGRESS_UPDATE_INTERVAL_BYTES;
         const isComplete = currentByte >= imageSize;
@@ -109,7 +133,7 @@ pub fn writeISO(connection: XPCConnection, imageFile: std.fs.File, deviceHandle:
         }
 
         if (shouldUpdateByBytes or shouldUpdateByTime or isComplete) {
-            currentProgress = try std.math.divFloor(u64, currentByte * @as(u64, 100), imageSize);
+            const currentProgress = try std.math.divFloor(u64, currentByte * 100, imageSize);
 
             const totalElapsedNs = overallTimer.read();
             const totalSeconds: f128 = if (totalElapsedNs == 0) 1.0e-9 else @as(f128, @floatFromInt(totalElapsedNs)) / 1_000_000_000.0;
@@ -144,7 +168,7 @@ pub fn writeISO(connection: XPCConnection, imageFile: std.fs.File, deviceHandle:
         }
     }
 
-    // Final sync to ensure all data is written
+    // Single sync at the end to ensure all data is written to disk
     try device.sync();
 
     Debug.log(.INFO, "Finished writing ISO image to device!", .{});
@@ -153,17 +177,17 @@ pub fn writeISO(connection: XPCConnection, imageFile: std.fs.File, deviceHandle:
 pub fn verifyWrittenBytes(connection: XPCConnection, imageFile: std.fs.File, deviceHandle: DeviceHandle) !void {
     const device = deviceHandle.raw;
 
-    // Use optimized block size for USB/SD devices
-    const WRITE_BLOCK_SIZE = 4 * 1_024 * 1_024; // 4 MB block size
+    // Use the same probed chunk size for consistency
+    const CHUNK_SIZE = probeDeviceWriteSize(device);
 
     // Batch progress updates to reduce XPC message overhead
     const PROGRESS_UPDATE_INTERVAL_BYTES = 8 * 1_024 * 1_024; // Update UI every 8MB
     const PROGRESS_UPDATE_INTERVAL_NS = 100_000_000; // Also update every 100ms to prevent XPC saturation
     const TIMER_CHECK_INTERVAL = 100; // Check elapsed time every N iterations
 
-    const imageByteBuffer = try std.heap.page_allocator.alloc(u8, WRITE_BLOCK_SIZE);
+    const imageByteBuffer = try std.heap.page_allocator.alloc(u8, CHUNK_SIZE);
     defer std.heap.page_allocator.free(imageByteBuffer);
-    const deviceByteBuffer = try std.heap.page_allocator.alloc(u8, WRITE_BLOCK_SIZE);
+    const deviceByteBuffer = try std.heap.page_allocator.alloc(u8, CHUNK_SIZE);
     defer std.heap.page_allocator.free(deviceByteBuffer);
 
     const fileStat = try imageFile.stat();
@@ -173,11 +197,10 @@ pub fn verifyWrittenBytes(connection: XPCConnection, imageFile: std.fs.File, dev
     var lastProgressUpdateByte: u64 = 0;
     var currentProgress: u64 = 0;
     var xpcResponseTimer = try std.time.Timer.start();
-    var iterationCount: u32 = 0;
     var timerCheckCounter: u32 = 0;
 
     Debug.log(.INFO, "File and device are opened successfully! File size: {d}", .{imageSize});
-    Debug.log(.INFO, "Verifying ISO bytes written to device with {d}MB blocks (optimized), please wait...", .{WRITE_BLOCK_SIZE / (1024 * 1024)});
+    Debug.log(.INFO, "Verifying ISO bytes written to device with {d}MB chunks, please wait...", .{CHUNK_SIZE / (1024 * 1024)});
 
     // Seek both files to start
     try imageFile.seekTo(0);
@@ -216,7 +239,6 @@ pub fn verifyWrittenBytes(connection: XPCConnection, imageFile: std.fs.File, dev
         if (!std.mem.eql(u8, imageSlice, deviceSlice)) return error.MismatchingISOAndDeviceBytesDetected;
 
         currentByte += @as(u64, @intCast(imageBytesRead));
-        iterationCount += 1;
 
         // Batch progress updates to reduce XPC overhead
         // Check byte-based updates always, but only check time-based updates periodically
