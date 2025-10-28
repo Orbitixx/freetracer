@@ -23,6 +23,22 @@ const String = freetracer_lib.String;
 const DeviceType = freetracer_lib.types.DeviceType;
 const ImageType = freetracer_lib.types.ImageType;
 
+/// Configuration flags for ISO write operation
+pub const WriteConfig = struct {
+    userForcedFlag: bool = false,
+    ejectDeviceFlag: bool = true,
+    verifyBytesFlag: bool = true,
+};
+
+/// Consolidated request data bundled for XPC transmission
+pub const WriteRequest = struct {
+    targetDisk: [:0]const u8,
+    imagePath: [:0]const u8,
+    device: StorageDevice,
+    imageType: ImageType,
+    config: WriteConfig,
+};
+
 const xpc = freetracer_lib.xpc;
 const XPCService = freetracer_lib.Mach.XPCService;
 const XPCConnection = freetracer_lib.Mach.XPCConnection;
@@ -50,7 +66,7 @@ const PrivilegedHelperState = struct {
     targetDisk: ?[:0]const u8 = null,
     device: ?StorageDevice = null,
     imageType: ImageType = undefined,
-    userForcedUnknownImage: bool = false,
+    config: WriteConfig = .{},
 };
 
 const ComponentFramework = @import("../framework/import/index.zig");
@@ -82,13 +98,7 @@ pub const Events = struct {
     //
     pub const onWriteImageToDeviceRequest = ComponentFramework.defineEvent(
         EventManager.createEventName(ComponentName, "on_write_iso_to_device"),
-        struct {
-            imagePath: [:0]const u8,
-            imageType: ImageType,
-            targetDisk: [:0]const u8,
-            device: StorageDevice,
-            userForcedUnknownImage: bool,
-        },
+        WriteRequest,
         struct {},
     );
 
@@ -172,6 +182,12 @@ pub const Events = struct {
 
     pub const onHelperVerificationSuccess = ComponentFramework.defineEvent(
         EventManager.createEventName(ComponentName, "on_helper_verification_success"),
+        struct {},
+        struct {},
+    );
+
+    pub const onDeviceFlashComplete = ComponentFramework.defineEvent(
+        EventManager.createEventName(ComponentName, "on_device_flag_complete"),
         struct {},
         struct {},
     );
@@ -303,14 +319,9 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
     eventLoop: switch (event.hash) {
         //
         Events.onWriteImageToDeviceRequest.Hash => {
-            const data = Events.onWriteImageToDeviceRequest.getData(event) orelse break :eventLoop;
+            const request = Events.onWriteImageToDeviceRequest.getData(event) orelse break :eventLoop;
 
-            try self.acquireStateDataOwnership(
-                data.imagePath,
-                data.targetDisk,
-                data.device,
-                data.userForcedUnknownImage,
-            );
+            try self.acquireStateDataOwnership(request.*);
 
             self.installHelperIfNotInstalled() catch |err| {
                 Debug.log(.ERROR, "An error occurred while trying to install Freetracer Helper Tool. Exiting event loop... {any}", .{err});
@@ -329,7 +340,6 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
             eventResult.validate(.SUCCESS);
         },
 
-        // TODO: Count internally number of attempts to avoid being stuck in an inifinite loop here
         Events.onHelperVersionReceived.Hash => {
             self.xpcClient.timer.reset();
 
@@ -355,31 +365,24 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
             self.state.lock();
             errdefer self.state.unlock();
 
-            if (self.state.data.targetDisk == null or self.state.data.imagePath == null) {
-                Debug.log(.ERROR, "PrivilegedHelper Component's state value of targetDisk or imagePath is NULL when it should not be. Aborting...", .{});
+            if (self.state.data.targetDisk == null or self.state.data.imagePath == null or self.state.data.device == null) {
+                Debug.log(.ERROR, "PrivilegedHelper Component's state is missing required data (targetDisk, imagePath, or device). Aborting...", .{});
                 break :eventLoop;
             }
 
-            const targetDisk: [:0]const u8 = self.state.data.targetDisk.?;
-            const imagePath: [:0]const u8 = self.state.data.imagePath.?;
-            const deviceServiceId: c_uint = self.state.data.device.?.serviceId;
-            const deviceType: DeviceType = self.state.data.device.?.type;
-            const userForcedUnknownImage: bool = self.state.data.userForcedUnknownImage;
+            const writeRequest = WriteRequest{
+                .targetDisk = self.state.data.targetDisk.?,
+                .imagePath = self.state.data.imagePath.?,
+                .device = self.state.data.device.?,
+                .imageType = self.state.data.imageType,
+                .config = self.state.data.config,
+            };
 
-            Debug.log(.INFO, "Sending deviceServiceId: {d}", .{deviceServiceId});
-
-            Debug.log(.INFO, "targetDisk local set to the state value of: {s}", .{self.state.data.targetDisk.?});
+            Debug.log(.INFO, "Sending deviceServiceId: {d}", .{writeRequest.device.serviceId});
+            Debug.log(.INFO, "Sending target disk: {s}", .{writeRequest.targetDisk});
             self.state.unlock();
 
-            Debug.log(.INFO, "Sending target disk: {s}", .{targetDisk});
-
-            self.requestWrite(
-                targetDisk,
-                imagePath,
-                deviceServiceId,
-                deviceType,
-                userForcedUnknownImage,
-            );
+            try self.requestWrite(writeRequest);
 
             eventResult.validate(.SUCCESS);
         },
@@ -556,7 +559,6 @@ fn processResponseMessage(connection: XPCConnection, data: XPCObject) !void {
                 null,
                 &Events.onWriteVerificationProgressChanged.Data{ .newProgress = progress },
             ));
-            // Debug.log(.INFO, "Verification progress is: {d}", .{progress});
         },
 
         .WRITE_VERIFICATION_SUCCESS => {
@@ -567,6 +569,11 @@ fn processResponseMessage(connection: XPCConnection, data: XPCObject) !void {
         .WRITE_VERIFICATION_FAIL => {
             Debug.log(.ERROR, "Helper failed to verify bytes written to device.", .{});
             EventManager.broadcast(Events.onHelperVerificationFailed.create(null, null));
+        },
+
+        .DEVICE_FLASH_COMPLETE => {
+            Debug.log(.INFO, "Successfully finished writing image to device! All done.", .{});
+            EventManager.broadcast(Events.onDeviceFlashComplete.create(null, null));
         },
     }
 
@@ -625,50 +632,64 @@ fn installHelperIfNotInstalled(self: *PrivilegedHelper) !void {
     } else Debug.log(.INFO, "Determined that Freetracer Helper Tool is already installed.", .{});
 }
 
-/// Precondition: imagePath/targetDisk originate from trusted UI selection; this function performs final validation before XPC.
-/// Posts the WRITE_ISO_TO_DEVICE request and leaves ownership of state data with `self.state` for helper callbacks.
-fn requestWrite(self: *PrivilegedHelper, targetDisk: [:0]const u8, imagePath: [:0]const u8, deviceServiceId: c_uint, deviceType: DeviceType, userForcedFlag: bool) void {
-    // Install or update the Privileged Helper Tool before sending unmount request
+/// Validates and constructs the XPC request dictionary from consolidated write request data
+/// Returns a properly formatted XPC dictionary or error if validation fails
+fn buildXPCWriteRequest(writeRequest: WriteRequest) !XPCObject {
+    const request = XPCService.createRequest(.WRITE_ISO_TO_DEVICE);
+    errdefer XPCService.releaseObject(request);
 
-    Debug.log(.DEBUG, "requestWrite() received targetDisk: {s}", .{targetDisk});
+    // Add core identifiers
+    XPCService.createString(request, "disk", writeRequest.targetDisk);
+    XPCService.createString(request, "imagePath", writeRequest.imagePath);
 
-    if (imagePath.len == 0) {
-        Debug.log(.ERROR, "PrivilegedHelper.requestWrite(): empty imagePath provided. Aborting...", .{});
-        return;
+    // Add device metadata
+    XPCService.createUInt64(request, "deviceServiceId", writeRequest.device.serviceId);
+    XPCService.createUInt64(request, "deviceType", @intFromEnum(writeRequest.imageType));
+
+    // Add configuration flags as a nested structure
+    XPCService.createUInt64(request, "config_userForced", @as(u64, @intCast(@intFromBool(writeRequest.config.userForcedFlag))));
+    XPCService.createUInt64(request, "config_ejectDevice", @as(u64, @intCast(@intFromBool(writeRequest.config.ejectDeviceFlag))));
+    XPCService.createUInt64(request, "config_verifyBytes", @as(u64, @intCast(@intFromBool(writeRequest.config.verifyBytesFlag))));
+
+    return request;
+}
+
+/// Validates write request parameters and constructs device path for permission dialog.
+/// Precondition: writeRequest data originates from trusted UI selection.
+fn validateAndPrepareWriteRequest(writeRequest: WriteRequest) ![:0]u8 {
+    if (writeRequest.imagePath.len == 0) {
+        return error.EmptyImagePath;
     }
 
-    if (targetDisk.len < 2) {
-        Debug.log(.ERROR, "PrivilegedHelper.requestWrite(): malformed targetDisk ('{any}') Aborting...", .{targetDisk});
-        return;
+    if (writeRequest.targetDisk.len < 2) {
+        return error.MalformedTargetDisk;
     }
 
-    // TODO: outsource this to a common lib function which does sanitization and other sanity checks
-
-    validateDeviceIdentifier(targetDisk) catch |err| {
-        Debug.log(.ERROR, "PrivilegedHelper.requestWrite(): invalid targetDisk '{s}'. Err: {any}", .{ targetDisk, err });
-        return;
-    };
-
-    const deviceDir = "/dev/";
+    try validateDeviceIdentifier(writeRequest.targetDisk);
 
     var devicePathBuf: [std.fs.max_name_bytes]u8 = std.mem.zeroes([std.fs.max_name_bytes]u8);
+    const devicePath = try String.concatStrings(std.fs.max_name_bytes, &devicePathBuf, "/dev/", @ptrCast(writeRequest.targetDisk));
 
-    const devicePath = String.concatStrings(std.fs.max_name_bytes, &devicePathBuf, deviceDir, @ptrCast(targetDisk)) catch |err| {
-        Debug.log(.ERROR, "Error while concatenating devicePath from directory and target disk. Err: {any}", .{err});
-        return;
+    return @ptrCast(devicePath);
+}
+
+/// Precondition: writeRequest originates from trusted UI selection; this function performs final validation before XPC.
+/// Posts the WRITE_ISO_TO_DEVICE request and leaves ownership of state data with `self.state` for helper callbacks.
+fn requestWrite(self: *PrivilegedHelper, writeRequest: WriteRequest) !void {
+    Debug.log(.DEBUG, "requestWrite() received targetDisk: {s}", .{writeRequest.targetDisk});
+
+    const devicePath = validateAndPrepareWriteRequest(writeRequest) catch |err| {
+        Debug.log(.ERROR, "PrivilegedHelper.requestWrite(): validation failed. Err: {any}", .{err});
+        return err;
     };
 
     // NOTE: Critical and important permissions call
     requestMacOSInteractivePermissionDialog(devicePath);
 
-    const request = XPCService.createRequest(.WRITE_ISO_TO_DEVICE);
-    defer XPCService.releaseObject(request);
-    XPCService.createString(request, "disk", targetDisk);
-    XPCService.createString(request, "imagePath", imagePath);
-    XPCService.createUInt64(request, "deviceServiceId", deviceServiceId);
-    XPCService.createUInt64(request, "deviceType", @intFromEnum(deviceType));
-    XPCService.createUInt64(request, "userForcedFlag", @as(u64, @intCast(@intFromBool(userForcedFlag))));
-    XPCService.connectionSendMessage(self.xpcClient.service, request);
+    const xpcRequest = try buildXPCWriteRequest(writeRequest);
+    defer XPCService.releaseObject(xpcRequest);
+
+    XPCService.connectionSendMessage(self.xpcClient.service, xpcRequest);
 }
 
 /// Critical function, whose C open syscall gets intercepted by MacOS to present
@@ -682,21 +703,33 @@ fn requestMacOSInteractivePermissionDialog(devicePath: [:0]u8) void {
     _ = c.close(fd);
 }
 
-/// Copies the UI-provided ISO and disk identifiers into component-owned storage; caller must hold no state lock.
-/// On failure previous state is cleared and ownership remains unchanged, preventing partial updates.
-fn acquireStateDataOwnership(self: *PrivilegedHelper, imagePath: [:0]const u8, targetDisk: [:0]const u8, device: StorageDevice, userForcedFlag: bool) !void {
+/// Copies the UI-provided ISO, disk identifiers, and configuration into component-owned storage.
+/// Caller must hold no state lock. On failure previous state is cleared and ownership remains unchanged,
+/// preventing partial updates. This ensures atomic state transitions.
+fn acquireStateDataOwnership(self: *PrivilegedHelper, writeRequest: WriteRequest) !void {
     self.cleanupComponentState();
     self.state.lock();
     defer self.state.unlock();
-    const imagePathCopy = try self.allocator.dupeZ(u8, imagePath);
+
+    const imagePathCopy = try self.allocator.dupeZ(u8, writeRequest.imagePath);
     errdefer self.allocator.free(imagePathCopy);
-    const bsdNameCopy = try self.allocator.dupeZ(u8, targetDisk);
+
+    const bsdNameCopy = try self.allocator.dupeZ(u8, writeRequest.targetDisk);
     errdefer self.allocator.free(bsdNameCopy);
+
     self.state.data.imagePath = imagePathCopy;
     self.state.data.targetDisk = bsdNameCopy;
-    self.state.data.device = device;
-    self.state.data.userForcedUnknownImage = userForcedFlag;
-    Debug.log(.INFO, "Set to state: \n\tImage Path: {s}\n\ttargetDisk: {s}", .{ self.state.data.imagePath.?, self.state.data.targetDisk.? });
+    self.state.data.device = writeRequest.device;
+    self.state.data.imageType = writeRequest.imageType;
+    self.state.data.config = writeRequest.config;
+
+    Debug.log(.INFO, "Acquired state ownership:\n\tImage Path: {s}\n\ttargetDisk: {s}\n\tConfig: userForced={}, ejectDevice={}, verifyBytes={}", .{
+        self.state.data.imagePath.?,
+        self.state.data.targetDisk.?,
+        self.state.data.config.userForcedFlag,
+        self.state.data.config.ejectDeviceFlag,
+        self.state.data.config.verifyBytesFlag,
+    });
 }
 
 /// Releases any retained ISO/device selections and resets state so future operations start from a clean slate.
@@ -715,6 +748,7 @@ fn cleanupComponentState(self: *PrivilegedHelper) void {
 
     self.state.data.device = null;
     self.state.data.imageType = undefined;
+    self.state.data.config = .{};
 }
 
 const ComponentImplementation = ComponentFramework.ImplementComponent(PrivilegedHelper);

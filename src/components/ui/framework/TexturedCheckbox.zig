@@ -234,8 +234,16 @@ pub fn draw(self: *TexturedCheckbox) !void {
 }
 
 pub fn onEvent(self: *TexturedCheckbox, event: UIEvent) void {
-    _ = self;
-    _ = event;
+    switch (event) {
+        inline else => |ev| if (ev.target != self.identifier) return,
+    }
+
+    switch (event) {
+        .EnabledChanged => |ev| {
+            self.enabled = ev.enabled;
+        },
+        else => {},
+    }
 }
 
 pub fn deinit(self: *TexturedCheckbox) void {

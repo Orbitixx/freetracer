@@ -50,6 +50,8 @@ pub const UIElementIdentifier = enum(u8) {
     DataFlasherLogsBgRect,
     DataFlasherLogsTextbox,
     DataFlasherCopyLogsButton,
+    DataFlasherVerifyBytesCheckbox,
+    DataFlasherEjectDeviceCheckbox,
 
     DataFlasherLaunchButton,
 
@@ -91,6 +93,7 @@ pub const UIEvent = union(enum) {
     },
 
     SpriteButtonEnabledChanged: struct { target: UIElementIdentifier, enabled: bool },
+    EnabledChanged: struct { target: UIElementIdentifier, enabled: bool },
     ProgressValueChanged: struct { target: UIElementIdentifier, percent: u64 },
     SizeChanged: struct { target: UIElementIdentifier, size: UIFramework.SizeSpec },
     PositionChanged: struct { target: UIElementIdentifier, position: UIFramework.PositionSpec },

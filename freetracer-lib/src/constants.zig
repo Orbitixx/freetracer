@@ -68,6 +68,8 @@ pub const HelperResponseCode = enum(i64) {
     WRITE_VERIFICATION_PROGRESS,
     WRITE_VERIFICATION_SUCCESS,
     WRITE_VERIFICATION_FAIL,
+
+    DEVICE_FLASH_COMPLETE,
 };
 
 pub const HelperReturnCode = enum(i32) {

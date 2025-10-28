@@ -206,23 +206,32 @@ fn sendXPCReply(connection: XPCConnection, reply: HelperResponseCode, comptime l
 }
 
 fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) !void {
-    //
-    Debug.log(.INFO, "Getting keys...", .{});
+    Debug.log(.INFO, "Parsing write request from XPC message...", .{});
 
+    // Parse core identifiers and device metadata
     const imagePath: [:0]const u8 = try XPCService.parseString(data, "imagePath");
     const deviceBsdName: [:0]const u8 = try XPCService.parseString(data, "disk");
-    Debug.log(.INFO, "Got first two keys...", .{});
-
     const deviceServiceId: c_uint = @intCast(XPCService.getUInt64(data, "deviceServiceId") catch 0);
+
     if (deviceServiceId == 0) return error.FailedToParseDeviceServiceId;
 
     const deviceTypeInt: u64 = try XPCService.getUInt64(data, "deviceType");
-
-    Debug.log(.INFO, "Getting user flag key...", .{});
-    const userForcedImageFlag: u64 = try XPCService.getUInt64(data, "userForcedFlag");
-    Debug.log(.INFO, "Got user flag key...", .{});
     const deviceType = try meta.intToEnum(DeviceType, deviceTypeInt);
 
+    // Parse consolidated configuration flags
+    const configUserForced: u64 = XPCService.getUInt64(data, "config_userForced") catch 0;
+    const configEjectDevice: u64 = XPCService.getUInt64(data, "config_ejectDevice") catch 0;
+    const configVerifyBytes: u64 = XPCService.getUInt64(data, "config_verifyBytes") catch 0;
+
+    Debug.log(.INFO, "Parsed write request: disk={s}, deviceServiceId={d}, config={{userForced={}, ejectDevice={}, verifyBytes={}}}", .{
+        deviceBsdName,
+        deviceServiceId,
+        configUserForced != 0,
+        configEjectDevice != 0,
+        configVerifyBytes != 0,
+    });
+
+    // Validate core parameters
     if (imagePath.len == 0) return RequestValidationError.EmptyIsoPath;
     if (deviceBsdName.len == 0) return RequestValidationError.EmptyDeviceIdentifier;
 
@@ -242,7 +251,7 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) !void {
 
     const imageValidationResult = fs.validateImageFile(imageFile);
 
-    if (!imageValidationResult.isValid and userForcedImageFlag == 0) {
+    if (!imageValidationResult.isValid and configUserForced == 0) {
         respondWithErrorAndTerminate(
             .{ .err = error.ImageValidationFailed, .message = "Failed to validate image and user did not force unknown image." },
             .{ .xpcConnection = connection, .xpcResponseCode = .ISO_FILE_INVALID },
@@ -277,33 +286,46 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) !void {
 
     fsops.writeISO(connection, imageFile, deviceHandle) catch |err| {
         respondWithErrorAndTerminate(
-            .{ .err = err, .message = "Unable to write ISO to device." },
+            .{ .err = err, .message = "Unable to write image to device." },
             .{ .xpcConnection = connection, .xpcResponseCode = .ISO_WRITE_FAIL },
         );
         return;
     };
 
-    sendXPCReply(connection, .ISO_WRITE_SUCCESS, "ISO image successfully written to device!");
+    sendXPCReply(connection, .ISO_WRITE_SUCCESS, "Image successfully written to device!");
 
-    fsops.verifyWrittenBytes(connection, imageFile, deviceHandle) catch |err| {
-        respondWithErrorAndTerminate(
-            .{ .err = err, .message = "Unable to verify written ISO image." },
-            .{ .xpcConnection = connection, .xpcResponseCode = .WRITE_VERIFICATION_FAIL },
-        );
-        return;
-    };
+    // Only verify written bytes if the config flag is enabled
+    if (configVerifyBytes != 0) {
+        fsops.verifyWrittenBytes(connection, imageFile, deviceHandle) catch |err| {
+            respondWithErrorAndTerminate(
+                .{ .err = err, .message = "Unable to verify the written image." },
+                .{ .xpcConnection = connection, .xpcResponseCode = .WRITE_VERIFICATION_FAIL },
+            );
+            return;
+        };
 
-    sendXPCReply(connection, .WRITE_VERIFICATION_SUCCESS, "Written ISO image successfully verified!");
+        sendXPCReply(connection, .WRITE_VERIFICATION_SUCCESS, "Written image bytes successfully verified!");
+    } else {
+        Debug.log(.INFO, "Verification skipped: config.verifyBytes flag is disabled.", .{});
+    }
 
     deviceHandle.close();
 
-    dev.flushAndEject(&deviceHandle) catch |err| {
-        respondWithErrorAndTerminate(
-            .{ .err = err, .message = "Unable to flush disk caches or eject device." },
-            .{ .xpcConnection = connection, .xpcResponseCode = .WRITE_VERIFICATION_FAIL },
-        );
-        return;
-    };
+    // Only eject device if the config flag is enabled
+    if (configEjectDevice != 0) {
+        dev.flushAndEject(&deviceHandle) catch |err| {
+            respondWithErrorAndTerminate(
+                .{ .err = err, .message = "Unable to flush disk caches or eject device." },
+                .{ .xpcConnection = connection, .xpcResponseCode = .WRITE_VERIFICATION_FAIL },
+            );
+            return;
+        };
+        Debug.log(.INFO, "Device ejected successfully.", .{});
+    } else {
+        Debug.log(.INFO, "Device eject skipped: config.ejectDevice flag is disabled.", .{});
+    }
+
+    sendXPCReply(connection, .DEVICE_FLASH_COMPLETE, "Successfully finished the flashing process. Now terminating the helper...");
 
     ShutdownManager.exitSuccessfully();
 }

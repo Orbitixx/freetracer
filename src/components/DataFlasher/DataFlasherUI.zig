@@ -245,6 +245,25 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
                 .text = "\nSuccessfully verified device bytes!\nYou may now eject the device!",
             } }, params);
 
+            self.flashingStep = .VerificationFinished;
+
+            try AppManager.reportAction(.DataFlashed);
+            return eventResult.succeed();
+        },
+
+        PrivilegedHelper.Events.onHelperVerificationFailed.Hash => {
+            self.layout.emitEvent(.{
+                .TextChanged = .{
+                    .target = .DataFlasherLogsTextbox,
+                    .text = "\nFailed to verify device bytes.\nPlease try flashing again...",
+                },
+            }, .{ .excludeSelf = true });
+            return eventResult.succeed();
+        },
+
+        PrivilegedHelper.Events.onDeviceFlashComplete.Hash => {
+            const params = View.ViewEventParams{ .excludeSelf = true };
+
             self.layout.emitEvent(.{ .BorderColorChanged = .{
                 .target = .DataFlasherStatusBgRect,
                 .color = Color.themeSuccess,
@@ -272,16 +291,6 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
                 .color = Color.themeSuccess,
             } }, params);
 
-            self.flashingStep = .VerificationFinished;
-
-            try AppManager.reportAction(.DataFlashed);
-            return eventResult.succeed();
-        },
-
-        PrivilegedHelper.Events.onHelperVerificationFailed.Hash => {
-            self.layout.emitEvent(.{
-                .TextChanged = .{ .target = .DataFlasherLogsTextbox, .text = "\nFailed to verify device bytes.\nPlease try flashing again..." },
-            }, .{ .excludeSelf = true });
             return eventResult.succeed();
         },
 
@@ -342,37 +351,13 @@ fn readParentSelection(self: *DataFlasherUI) ParentSelection {
     return selection;
 }
 
-fn updateIsoDisplay(self: *DataFlasherUI, isoPath: [:0]const u8) void {
-    @memset(&self.displayISOTextBuffer, 0);
-
-    const availableWidth = (1 - SECTION_PADDING) * self.bgRect.transform.getWidth() - (ICON_SIZE + ICON_TEXT_GAP_X);
-
-    self.isoText.value = isoPath;
-    const dims = self.isoText.getDimensions();
-
-    var finalValue: [:0]const u8 = NULL_TEXT;
-    if (dims.width > availableWidth) {
-        Debug.log(.DEBUG, "DataFlasherUI: truncated ISO path for display", .{});
-        finalValue = ellipsizePath(self.displayISOTextBuffer[0..], isoPath, MAX_PATH_DISPLAY_LENGTH);
-    } else {
-        const buffer = self.displayISOTextBuffer[0..];
-        const copied = std.fmt.bufPrintZ(buffer, "{s}", .{isoPath}) catch |err| blk: {
-            Debug.log(.ERROR, "DataFlasherUI: failed to cache ISO path for display: {any}", .{err});
-            break :blk NULL_TEXT;
-        };
-        finalValue = copied;
-    }
-}
-
 fn updateDeviceDisplay(self: *DataFlasherUI, device: ?StorageDevice) void {
     @memset(&self.displayDeviceTextBuffer, 0);
 
     if (device) |dev| {
-        const label = formatDeviceLabel(self.displayDeviceTextBuffer[0..], dev.getNameSlice(), dev.getBsdNameSlice());
-        _ = label;
-        // setTextValue(&self.deviceText, label);
+        _ = formatDeviceLabel(self.displayDeviceTextBuffer[0..], dev.getNameSlice(), dev.getBsdNameSlice());
     } else {
-        // setTextValue(&self.deviceText, NULL_TEXT);
+        // TODO: Handle this unlikely case
     }
 }
 /// Truncates a file path with a "..." in the middle to fit within max_chars.
@@ -416,22 +401,17 @@ pub fn handleOnActiveStateChanged(self: *DataFlasherUI, event: ComponentEvent) !
     const data = DataFlasher.Events.onActiveStateChanged.getData(event) orelse return eventResult.fail();
 
     self.storeIsActive(data.isActive);
-
-    if (data.isActive) {
-        Debug.log(.DEBUG, "DataFlasherUI: setting UI to ACTIVE.", .{});
-        // self.onActivated();
-    } else {
-        Debug.log(.DEBUG, "DataFlasherUI: setting UI to INACTIVE.", .{});
-        // self.onDeactivated();
-    }
+    Debug.log(.DEBUG, "DataFlasherUI: setting UI active state to: {any}", .{data.isActive});
 
     self.layout.emitEvent(.{ .StateChanged = .{
         .isActive = data.isActive,
     } }, .{});
+
     self.layout.emitEvent(.{ .StateChanged = .{
         .target = .DataFlasherPlaceholderTexture,
         .isActive = !data.isActive,
     } }, .{ .excludeSelf = true });
+
     self.layout.emitEvent(.{ .StateChanged = .{
         .target = .DataFlasherHeaderDivider,
         .isActive = !data.isActive,
@@ -439,27 +419,6 @@ pub fn handleOnActiveStateChanged(self: *DataFlasherUI, event: ComponentEvent) !
 
     return eventResult.succeed();
 }
-
-// fn onActivated(self: *DataFlasherUI) void {
-//     const selection = self.readParentSelection();
-//     const isoPath = selection.isoPath orelse NULL_TEXT;
-//     _ = isoPath;
-//
-//     // self.applyPanelMode(panelAppearanceActive());
-//
-//     // self.updateIsoDisplay(isoPath);
-//     // self.updateDeviceDisplay(selection.device);
-//
-//     // const ready = selection.isoPath != null and selection.device != null;
-//     // self.button.setEnabled(ready);
-//
-//     // self.applyLayoutFromBounds();
-// }
-
-// fn onDeactivated(self: *DataFlasherUI) void {
-//     // self.button.setEnabled(false);
-//     // self.applyPanelMode(panelAppearanceInactive());
-// }
 
 pub fn handleOnISOWriteProgressChanged(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
     var eventResult = EventResult.init();
@@ -477,14 +436,33 @@ pub fn handleOnISOWriteProgressChanged(self: *DataFlasherUI, event: ComponentEve
     const params = View.ViewEventParams{ .excludeSelf = true };
 
     if (self.flashingStep != .Writing) {
-        self.layout.emitEvent(.{ .TextChanged = .{ .target = .DataFlasherLogsTextbox, .text = "\nBegan writing to device...\nPlease do not disconnect the device." } }, params);
+        self.layout.emitEvent(.{ .TextChanged = .{
+            .target = .DataFlasherLogsTextbox,
+            .text = "\nBegan writing to device...\nPlease do not disconnect the device.",
+        } }, params);
+
         self.flashingStep = .Writing;
     }
 
-    self.layout.emitEvent(.{ .TextChanged = .{ .target = .DataFlasherStatusHeaderText, .text = "WRITING..." } }, params);
-    self.layout.emitEvent(.{ .TextChanged = .{ .target = .DataFlasherStatusBoxProgressPercentTextBack, .text = newText } }, params);
-    self.layout.emitEvent(.{ .TextChanged = .{ .target = .DataFlasherStatusBoxProgressPercentTextFront, .text = newText } }, params);
-    self.layout.emitEvent(.{ .ProgressValueChanged = .{ .target = .DataFlasherStatusBoxProgressBox, .percent = data.newProgress } }, params);
+    self.layout.emitEvent(.{ .TextChanged = .{
+        .target = .DataFlasherStatusHeaderText,
+        .text = "WRITING...",
+    } }, params);
+
+    self.layout.emitEvent(.{ .TextChanged = .{
+        .target = .DataFlasherStatusBoxProgressPercentTextBack,
+        .text = newText,
+    } }, params);
+
+    self.layout.emitEvent(.{ .TextChanged = .{
+        .target = .DataFlasherStatusBoxProgressPercentTextFront,
+        .text = newText,
+    } }, params);
+
+    self.layout.emitEvent(.{ .ProgressValueChanged = .{
+        .target = .DataFlasherStatusBoxProgressBox,
+        .percent = data.newProgress,
+    } }, params);
 
     var speedBuf: [64]u8 = undefined;
     const speedText = std.fmt.bufPrintZ(speedBuf[0..], "{d:.2} MB/s ({d:.2} MB/s avg.)", .{ rateMb, rateAvgMb }) catch "0.00 MB/s";
@@ -566,13 +544,25 @@ pub fn handleOnWriteVerificationProgressChanged(self: *DataFlasherUI, event: Com
         self.flashingStep = .Verifying;
     }
 
-    self.layout.emitEvent(.{ .TextChanged = .{ .target = .DataFlasherStatusHeaderText, .text = "VERIFYING..." } }, params);
-    self.layout.emitEvent(.{ .TextChanged = .{ .target = .DataFlasherStatusBoxProgressPercentTextBack, .text = newText } }, params);
-    self.layout.emitEvent(.{ .TextChanged = .{ .target = .DataFlasherStatusBoxProgressPercentTextFront, .text = newText } }, params);
-    self.layout.emitEvent(.{ .ProgressValueChanged = .{ .target = .DataFlasherStatusBoxProgressBox, .percent = data.newProgress } }, params);
+    self.layout.emitEvent(.{ .TextChanged = .{
+        .target = .DataFlasherStatusHeaderText,
+        .text = "VERIFYING...",
+    } }, params);
 
-    // self.progressBox.text.value = "Verifying device blocks...";
-    // self.progressBox.setProgressTo(self.bgRect, data.newProgress);
+    self.layout.emitEvent(.{ .TextChanged = .{
+        .target = .DataFlasherStatusBoxProgressPercentTextBack,
+        .text = newText,
+    } }, params);
+
+    self.layout.emitEvent(.{ .TextChanged = .{
+        .target = .DataFlasherStatusBoxProgressPercentTextFront,
+        .text = newText,
+    } }, params);
+
+    self.layout.emitEvent(.{ .ProgressValueChanged = .{
+        .target = .DataFlasherStatusBoxProgressBox,
+        .percent = data.newProgress,
+    } }, params);
 
     return eventResult.succeed();
 }
@@ -591,19 +581,8 @@ pub fn handleAppResetRequest(self: *DataFlasherUI) EventResult {
         self.displayISOTextBuffer = std.mem.zeroes([std.fs.max_path_bytes]u8);
         self.displayDeviceTextBuffer = std.mem.zeroes([std.fs.max_path_bytes]u8);
 
-        // setTextValue(&self.isoText, NULL_TEXT);
-        // setTextValue(&self.deviceText, NULL_TEXT);
-
-        // self.progressBox.text.value = "";
-        // self.progressBox.value = 0;
-        // self.progressBox.percentTextBuf = std.mem.zeroes([5]u8);
-        // self.progressBox.percentText.value = "";
-        // self.progressBox.rect.transform.w = 0;
         self.flashRequested = false;
     }
-
-    // self.button.setEnabled(false);
-    // self.applyPanelMode(panelAppearanceInactive());
 
     return eventResult.succeed();
 }
@@ -848,18 +827,31 @@ fn initLayout(self: *DataFlasherUI) !void {
             .sizeRef(.{ .NodeId = "status_box_cover_rect" })
             .active(false),
 
-        ui.texturedCheckbox(.{ .text = "Verify bytes after write", .checked = true })
+        ui.texturedCheckbox(.{
+            .text = "Verify bytes after write",
+            .checked = true,
+        })
             .id("checkbox_verify")
+            .elId(.DataFlasherVerifyBytesCheckbox)
             .position(.percent(0, 1.1))
             .positionRef(.{ .NodeId = "status_background_rect" })
             .size(.pixels(14, 14))
+            .callbacks(.{ .onClick = .{
+                .function = DataFlasher.toggleConfigFlagVerifyBytes,
+                .context = self.parent,
+            } })
             .active(false),
 
         ui.texturedCheckbox(.{ .text = "Eject device on completion", .checked = true })
             .id("checkbox_eject")
+            .elId(.DataFlasherEjectDeviceCheckbox)
             .position(.percent(0, 1.3))
             .positionRef(.{ .NodeId = "checkbox_verify" })
             .size(.pixels(14, 14))
+            .callbacks(.{ .onClick = .{
+                .function = DataFlasher.toggleConfigFlagEjectDevice,
+                .context = self.parent,
+            } })
             .active(false),
 
         ui.rectangle(.{
@@ -910,13 +902,6 @@ fn initLayout(self: *DataFlasherUI) !void {
                 .context = self,
             },
         }),
-
-        // ui.rectangle(.{ .style = .{ .color = Color.white } })
-        //     .position(.percent(0, 0))
-        //     .positionRef(.{ .NodeId = "logs_textbox" })
-        //     .size(.percent(1, 1))
-        //     .sizeRef(.{ .NodeId = "logs_textbox" })
-        //     .active(false),
 
         ui.textbox("Pending logs stream...", UIFramework.Textbox.TextboxStyle{ .text = .{
             .textColor = Color.offWhite,
@@ -1014,12 +999,30 @@ pub const UIConfig = struct {
 
                 const params = View.ViewEventParams{ .excludeSelf = true };
 
-                component.layout.emitEvent(.{ .StateChanged = .{ .target = .DataFlasherStatusBoxCoverRect, .isActive = false } }, params);
-                component.layout.emitEvent(.{ .StateChanged = .{ .target = .DataFlasherStatusBoxCoverText, .isActive = false } }, params);
-                component.layout.emitEvent(.{ .StateChanged = .{ .target = .DataFlasherStatusBoxCoverTexture, .isActive = false } }, params);
-                component.layout.emitEvent(.{ .StateChanged = .{ .target = .DataFlasherLaunchButton, .isActive = false } }, params);
+                component.layout.emitEvent(.{ .StateChanged = .{
+                    .target = .DataFlasherStatusBoxCoverRect,
+                    .isActive = false,
+                } }, params);
 
-                component.layout.emitEvent(.{ .SizeChanged = .{ .target = .DataFlasherLogsBgRect, .size = .percent(0.9, 0.25) } }, params);
+                component.layout.emitEvent(.{ .StateChanged = .{
+                    .target = .DataFlasherStatusBoxCoverText,
+                    .isActive = false,
+                } }, params);
+
+                component.layout.emitEvent(.{ .StateChanged = .{
+                    .target = .DataFlasherStatusBoxCoverTexture,
+                    .isActive = false,
+                } }, params);
+
+                component.layout.emitEvent(.{ .StateChanged = .{
+                    .target = .DataFlasherLaunchButton,
+                    .isActive = false,
+                } }, params);
+
+                component.layout.emitEvent(.{ .SizeChanged = .{
+                    .target = .DataFlasherLogsBgRect,
+                    .size = .percent(0.9, 0.25),
+                } }, params);
 
                 component.layout.emitEvent(.{ .TextChanged = .{
                     .target = .DataFlasherStatusHeaderText,
@@ -1036,6 +1039,22 @@ pub const UIConfig = struct {
                     .target = .DataFlasherStatusBoxProgressPercentTextFront,
                     .style = UIConfig.Styles.StatusPanel.ProgressPercentFront.Active.style,
                 } }, params);
+
+                component.layout.emitEvent(
+                    .{ .EnabledChanged = .{
+                        .target = .DataFlasherEjectDeviceCheckbox,
+                        .enabled = false,
+                    } },
+                    params,
+                );
+
+                component.layout.emitEvent(
+                    .{ .EnabledChanged = .{
+                        .target = .DataFlasherVerifyBytesCheckbox,
+                        .enabled = false,
+                    } },
+                    params,
+                );
 
                 DataFlasher.flashISOtoDeviceWrapper.call(component.parent);
             }

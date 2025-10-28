@@ -30,7 +30,7 @@ const DataFlasherState = struct {
     // owned by DeviceList (via state ArrayList)
     device: ?StorageDevice = null,
     image: Image = .{},
-    userForcedUnknownImage: bool = false,
+    config: PrivilegedHelper.WriteConfig = .{},
 };
 
 const DataFlasher = @This();
@@ -129,7 +129,7 @@ pub fn dispatchComponentAction(self: *DataFlasher) void {
     var device: StorageDevice = undefined;
     var imagePath: [:0]const u8 = undefined;
     var imageType: ImageType = undefined;
-    var userForcedUnknownImage: bool = undefined;
+    var writeConfig: PrivilegedHelper.WriteConfig = .{};
 
     {
         self.state.lock();
@@ -137,7 +137,7 @@ pub fn dispatchComponentAction(self: *DataFlasher) void {
         device = self.state.data.device.?;
         imagePath = self.state.data.imagePath.?;
         imageType = self.state.data.image.type;
-        userForcedUnknownImage = self.state.data.userForcedUnknownImage;
+        writeConfig = self.state.data.config;
     }
 
     self.state.lock();
@@ -187,16 +187,18 @@ pub fn dispatchComponentAction(self: *DataFlasher) void {
     //     return;
     // }
 
-    // Send a request to unmount the target disk to the PrivilegedHelper Component, which will communicate with the Helper Tool
+    // Send a request to write to target disk to the PrivilegedHelper Component, which will communicate with the Helper Tool
+    const writeRequest = PrivilegedHelper.WriteRequest{
+        .targetDisk = device.getBsdNameSlice(),
+        .imagePath = imagePath,
+        .device = device,
+        .imageType = imageType,
+        .config = writeConfig,
+    };
+
     const flashResult = EventManager.signal(
         "privileged_helper",
-        PrivilegedHelper.Events.onWriteImageToDeviceRequest.create(self.asComponentPtr(), &.{
-            .targetDisk = device.getBsdNameSlice(),
-            .device = device,
-            .imagePath = imagePath,
-            .imageType = imageType,
-            .userForcedUnknownImage = userForcedUnknownImage,
-        }),
+        PrivilegedHelper.Events.onWriteImageToDeviceRequest.create(self.asComponentPtr(), &writeRequest),
     ) catch |err| errBlk: {
         Debug.log(.ERROR, "DataFlasher: Received an error dispatching a disk write request. Aborting... Error: {any}", .{err});
         break :errBlk EventResult{ .success = false, .validation = .FAILURE };
@@ -232,7 +234,7 @@ fn queryAndSaveImageDetails(self: *DataFlasher) !void {
 
     self.state.data.imagePath = imageInfo.imagePath;
     self.state.data.image = imageInfo.image;
-    self.state.data.userForcedUnknownImage = imageInfo.userForcedUnknownImage;
+    self.state.data.config.userForcedFlag = imageInfo.userForcedUnknownImage;
 }
 
 fn queryAndSaveSelectedDevice(self: *DataFlasher) !void {
@@ -295,6 +297,20 @@ pub const flashISOtoDeviceWrapper = struct {
         self.dispatchComponentAction();
     }
 };
+
+pub fn toggleConfigFlagVerifyBytes(ctx: *anyopaque) void {
+    var self: *DataFlasher = @ptrCast(@alignCast(ctx));
+    self.state.lock();
+    defer self.state.unlock();
+    self.state.data.config.verifyBytesFlag = !self.state.data.config.verifyBytesFlag;
+}
+
+pub fn toggleConfigFlagEjectDevice(ctx: *anyopaque) void {
+    var self: *DataFlasher = @ptrCast(@alignCast(ctx));
+    self.state.lock();
+    defer self.state.unlock();
+    self.state.data.config.ejectDeviceFlag = !self.state.data.config.ejectDeviceFlag;
+}
 
 pub fn handleAppResetRequest(self: *DataFlasher) EventResult {
     var eventResult = EventResult.init();
