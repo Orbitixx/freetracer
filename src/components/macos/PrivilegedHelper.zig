@@ -186,6 +186,18 @@ pub const Events = struct {
         struct {},
     );
 
+    pub const onHelperEjectDeviceSuccess = ComponentFramework.defineEvent(
+        EventManager.createEventName(ComponentName, "on_helper_device_eject_success"),
+        struct {},
+        struct {},
+    );
+
+    pub const onHelperEjectDeviceFailed = ComponentFramework.defineEvent(
+        EventManager.createEventName(ComponentName, "on_helper_device_eject_failed"),
+        struct {},
+        struct {},
+    );
+
     pub const onDeviceFlashComplete = ComponentFramework.defineEvent(
         EventManager.createEventName(ComponentName, "on_device_flag_complete"),
         struct {},
@@ -569,6 +581,16 @@ fn processResponseMessage(connection: XPCConnection, data: XPCObject) !void {
         .WRITE_VERIFICATION_FAIL => {
             Debug.log(.ERROR, "Helper failed to verify bytes written to device.", .{});
             EventManager.broadcast(Events.onHelperVerificationFailed.create(null, null));
+        },
+
+        .DEVICE_EJECT_SUCCESS => {
+            Debug.log(.INFO, "Helper successfully ejected device.", .{});
+            EventManager.broadcast(Events.onHelperEjectDeviceSuccess.create(null, null));
+        },
+
+        .DEVICE_EJECT_FAIL => {
+            Debug.log(.ERROR, "Helper failed to eject device.", .{});
+            EventManager.broadcast(Events.onHelperEjectDeviceFailed.create(null, null));
         },
 
         .DEVICE_FLASH_COMPLETE => {

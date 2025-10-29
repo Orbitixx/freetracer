@@ -151,6 +151,7 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
                 .text = "\nFailed to open the image file...",
             } }, .{ .excludeSelf = true });
             self.setStatusBoxUIToFailedState();
+            try AppManager.reportAction(.FlashFailed);
             return eventResult.succeed();
         },
 
@@ -169,6 +170,7 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
                 .text = "\nFailed to open the device or obtain handle...",
             } }, .{ .excludeSelf = true });
             self.setStatusBoxUIToFailedState();
+            try AppManager.reportAction(.FlashFailed);
             return eventResult.succeed();
         },
 
@@ -195,12 +197,11 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
 
             self.layout.emitEvent(.{ .TextChanged = .{
                 .target = .DataFlasherLogsTextbox,
-                .text = "\nSuccessfully verified device bytes!\n",
+                .text = "\nSuccessfully verified device bytes!",
             } }, params);
 
             self.flashingStep = .VerificationFinished;
 
-            // try AppManager.reportAction(.DataFlashed);
             return eventResult.succeed();
         },
 
@@ -214,50 +215,28 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
             return eventResult.succeed();
         },
 
-        PrivilegedHelper.Events.onDeviceFlashComplete.Hash => {
-            if (self.reportedCompletion) return eventResult.succeed();
-
-            const params = View.ViewEventParams{ .excludeSelf = true };
-
-            try AppManager.reportAction(.DataFlashed);
-
-            self.reportedCompletion = true;
-
-            self.layout.emitEvent(.{ .BorderColorChanged = .{
-                .target = .DataFlasherStatusBgRect,
-                .color = Color.themeSuccess,
-            } }, params);
-
-            self.layout.emitEvent(.{ .TextChanged = .{
-                .target = .DataFlasherStatusHeaderText,
-                .text = "DONE!",
-                .style = UIConfig.Styles.StatusPanel.StepText.Success.style,
-                .pulsate = .{ .enabled = true },
-            } }, params);
-
-            self.layout.emitEvent(.{ .TextChanged = .{
-                .target = .DataFlasherStatusBoxProgressPercentTextBack,
-                .style = UIConfig.Styles.StatusPanel.ProgressPercentBack.Success.style,
-            } }, params);
-
-            self.layout.emitEvent(.{ .TextChanged = .{
-                .target = .DataFlasherStatusBoxProgressPercentTextFront,
-                .style = UIConfig.Styles.StatusPanel.ProgressPercentFront.Success.style,
-            } }, params);
-
-            self.layout.emitEvent(.{ .ColorChanged = .{
-                .target = .DataFlasherStatusBoxProgressBox,
-                .color = Color.themeSuccess,
-            } }, params);
-
+        PrivilegedHelper.Events.onHelperEjectDeviceSuccess.Hash => {
             self.layout.emitEvent(.{
                 .TextChanged = .{
                     .target = .DataFlasherLogsTextbox,
-                    .text = "\nFinished flashing device!\nYou may now eject the device!",
+                    .text = "\nYou may now eject the device!",
                 },
             }, .{ .excludeSelf = true });
-
             return eventResult.succeed();
+        },
+
+        PrivilegedHelper.Events.onHelperEjectDeviceFailed.Hash => {
+            self.layout.emitEvent(.{
+                .TextChanged = .{
+                    .target = .DataFlasherLogsTextbox,
+                    .text = "\nWARNING: Failed to eject device...",
+                },
+            }, .{ .excludeSelf = true });
+            return self.handleOnDeviceFlashComplete();
+        },
+
+        PrivilegedHelper.Events.onDeviceFlashComplete.Hash => {
+            return self.handleOnDeviceFlashComplete();
         },
 
         PrivilegedHelper.Events.onISOWriteProgressChanged.Hash => try self.handleOnISOWriteProgressChanged(event),
@@ -532,6 +511,54 @@ pub fn handleOnWriteVerificationProgressChanged(self: *DataFlasherUI, event: Com
     return eventResult.succeed();
 }
 
+pub fn handleOnDeviceFlashComplete(self: *DataFlasherUI) !EventResult {
+    var eventResult = EventResult.init();
+
+    if (self.reportedCompletion) return eventResult.succeed();
+
+    const params = View.ViewEventParams{ .excludeSelf = true };
+
+    try AppManager.reportAction(.DataFlashed);
+
+    self.reportedCompletion = true;
+
+    self.layout.emitEvent(.{ .BorderColorChanged = .{
+        .target = .DataFlasherStatusBgRect,
+        .color = Color.themeSuccess,
+    } }, params);
+
+    self.layout.emitEvent(.{ .TextChanged = .{
+        .target = .DataFlasherStatusHeaderText,
+        .text = "DONE!",
+        .style = UIConfig.Styles.StatusPanel.StepText.Success.style,
+        .pulsate = .{ .enabled = true },
+    } }, params);
+
+    self.layout.emitEvent(.{ .TextChanged = .{
+        .target = .DataFlasherStatusBoxProgressPercentTextBack,
+        .style = UIConfig.Styles.StatusPanel.ProgressPercentBack.Success.style,
+    } }, params);
+
+    self.layout.emitEvent(.{ .TextChanged = .{
+        .target = .DataFlasherStatusBoxProgressPercentTextFront,
+        .style = UIConfig.Styles.StatusPanel.ProgressPercentFront.Success.style,
+    } }, params);
+
+    self.layout.emitEvent(.{ .ColorChanged = .{
+        .target = .DataFlasherStatusBoxProgressBox,
+        .color = Color.themeSuccess,
+    } }, params);
+
+    self.layout.emitEvent(.{
+        .TextChanged = .{
+            .target = .DataFlasherLogsTextbox,
+            .text = "\nFinished flashing device and cleanup!",
+        },
+    }, .{ .excludeSelf = true });
+
+    return eventResult.succeed();
+}
+
 pub fn handleAppResetRequest(self: *DataFlasherUI) EventResult {
     var eventResult = EventResult.init();
 
@@ -605,6 +632,11 @@ pub fn handleAppResetRequest(self: *DataFlasherUI) EventResult {
         .target = .DataFlasherLogsTextbox,
     } }, params);
 
+    self.layout.emitEvent(.{ .SizeChanged = .{
+        .target = .DataFlasherLogsBgRect,
+        .size = .percent(0.9, 0.15),
+    } }, params);
+
     return eventResult.succeed();
 }
 
@@ -636,6 +668,16 @@ fn setStatusBoxUIToFailedState(self: *DataFlasherUI) void {
     self.layout.emitEvent(.{ .ColorChanged = .{
         .target = .DataFlasherStatusBoxProgressBox,
         .color = Color.themeFailure,
+    } }, params);
+
+    self.layout.emitEvent(.{ .EnabledChanged = .{
+        .target = .DataFlasherEjectDeviceCheckbox,
+        .enabled = true,
+    } }, params);
+
+    self.layout.emitEvent(.{ .EnabledChanged = .{
+        .target = .DataFlasherVerifyBytesCheckbox,
+        .enabled = true,
     } }, params);
 }
 

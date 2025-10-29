@@ -60,6 +60,7 @@ const ActionReport = enum(u8) {
     DeviceSelected,
     SelectionConfirmed,
     DataFlashed,
+    FlashFailed,
 };
 
 pub const Events = struct {
@@ -103,6 +104,13 @@ pub fn reportAction(action: ActionReport) !void {
             inst.lastAction = action;
             try inst.advanceState();
             Debug.log(.DEBUG, "AppManager: state successfully transitioned to {any}", .{inst.appState});
+        } else if (action == .FlashFailed) {
+            Debug.log(.WARNING, "AppManager received action report that flash failed...", .{});
+            inst.lastAction = action;
+            inst.appState = .SelectionConfirmation;
+            Debug.log(.DEBUG, "AppManager: state successfully transitioned to {any}", .{inst.appState});
+        } else {
+            Debug.log(.WARNING, "AppManager: unrecognized action reported: {any}", .{action});
         }
     } else return error.AppManagerInstanceIsNULL;
 }

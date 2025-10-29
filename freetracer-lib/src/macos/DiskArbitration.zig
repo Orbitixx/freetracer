@@ -130,13 +130,15 @@ pub fn unmountDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, conte
         unmountStatus.* = false;
         const status = c.DADissenterGetStatus(dissenter);
         const statusStringRef = c.DADissenterGetStatusString(dissenter);
-        var statusString: [256]u8 = undefined;
+        var statusBuffer: [256:0]u8 = std.mem.zeroes([256:0]u8);
+        var statusMessage: [:0]const u8 = "unavailable";
 
         if (statusStringRef != null) {
-            _ = c.CFStringGetCString(statusStringRef, &statusString, statusString.len, c.kCFStringEncodingUTF8);
+            const wroteCString = c.CFStringGetCString(statusStringRef, &statusBuffer, statusBuffer.len, c.kCFStringEncodingUTF8) != 0;
+            if (wroteCString) statusMessage = statusBuffer[0..];
         }
 
-        Debug.log(.ERROR, "Failed to unmount {s}. Dissenter status code: {any}, status message: {s}", .{ bsdName, status, statusString });
+        Debug.log(.ERROR, "Failed to unmount {s}. Dissenter status code: {any}, status message: {s}", .{ bsdName, status, statusMessage });
         const currentLoop = c.CFRunLoopGetCurrent();
         c.CFRunLoopStop(currentLoop);
     } else {
@@ -172,13 +174,15 @@ pub fn ejectDiskCallback(disk: c.DADiskRef, dissenter: c.DADissenterRef, context
         ejectStatus.* = false;
         const status = c.DADissenterGetStatus(dissenter);
         const statusStringRef = c.DADissenterGetStatusString(dissenter);
-        var statusString: [256]u8 = undefined;
+        var statusBuffer: [256:0]u8 = std.mem.zeroes([256:0]u8);
+        var statusMessage: [:0]const u8 = "unavailable";
 
         if (statusStringRef != null) {
-            _ = c.CFStringGetCString(statusStringRef, &statusString, statusString.len, c.kCFStringEncodingUTF8);
+            const wroteCString = c.CFStringGetCString(statusStringRef, &statusBuffer, statusBuffer.len, c.kCFStringEncodingUTF8) != 0;
+            if (wroteCString) statusMessage = statusBuffer[0..];
         }
 
-        Debug.log(.ERROR, "Failed to eject {s}. Dissenter status code: {any}, status message: {s}", .{ bsdName, status, statusString });
+        Debug.log(.ERROR, "Failed to eject {s}. Dissenter status code: {any}, status message: {s}", .{ bsdName, status, statusMessage });
         const currentLoop = c.CFRunLoopGetCurrent();
         c.CFRunLoopStop(currentLoop);
     } else {

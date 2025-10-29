@@ -151,28 +151,15 @@ fn deriveCanonicalNames(sanitized: [:0]const u8) !CanonicalDiskNames {
     };
 }
 
-/// Issues a DKIOCSYNCHRONIZECACHE ioctl on the block handle and ejects the disk
-/// via DiskArbitration so Disk Utility observes the updated partition map.
-pub fn flushAndEject(handle: *DeviceHandle) !void {
-    // var blockPathBuf: [std.fs.max_name_bytes]u8 = std.mem.zeroes([std.fs.max_name_bytes]u8);
-    // const blockSlice = std.mem.sliceTo(handle.getBlockName(), Character.NULL);
-    // const blockPath = try String.concatStrings(std.fs.max_name_bytes, &blockPathBuf, "/dev/", blockSlice);
-    // const blockPathSlice = std.mem.sliceTo(blockPath, Character.NULL);
-    //
-    // const blockFile = try std.fs.openFileAbsolute(blockPathSlice, .{ .mode = .read_write, .lock = .none });
-    // defer blockFile.close();
-    //
-    // const fd: c_int = @intCast(blockFile.handle);
-    // const ioctlResult = std.posix.system.ioctl(fd, c.DKIOCSYNCHRONIZECACHE, @as(c_int, 0));
-    //
-    // if (ioctlResult != 0) {
-    //     const err_num: c_int = @intFromEnum(std.posix.errno(ioctlResult));
-    //     const err_str = c.strerror(err_num);
-    //     Debug.log(.ERROR, "ioctl(DKIOCSYNCHRONIZECACHE) failed with errno {any}: {s}", .{ err_num, err_str });
-    //     return error.UnableToSynchronizeDeviceCache;
-    // }
-
+/// Ejects the disk via DiskArbitration so Disk Utility observes the updated partition map.
+pub fn ejectDevice(handle: *DeviceHandle) !void {
     var ejectStatus: bool = false;
+    var timer = try std.time.Timer.start();
+
     try da.requestEject(handle.getBlockName(), handle.deviceType, &ejectStatus);
-    while (!ejectStatus) std.Thread.sleep(500_000_000);
+
+    while (!ejectStatus) {
+        if (timer.read() > 5_000_000_000) return error.TimedOutUnableToEjectDevice;
+        _ = std.Thread.sleep(500_000_000);
+    }
 }

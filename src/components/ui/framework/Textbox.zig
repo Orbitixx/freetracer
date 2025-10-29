@@ -205,8 +205,6 @@ pub fn onEvent(self: *Textbox, event: UIEvent) void {
         inline else => |e| if (e.target != self.identifier) return,
     }
 
-    // Debug.log(.DEBUG, "Textbox ({any}) recevied a UIEvent: {any}", .{ self.identifier, event });
-
     switch (event) {
         .TextChanged => |e| {
             if (e.text) |newText| {

@@ -408,18 +408,20 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) !void {
         Debug.log(.INFO, "Verification skipped: config.verifyBytes flag is disabled.", .{});
     }
 
+    // NOTE: Must close the handle first, otherwise eject will return DeviceBusy
     deviceHandle.close();
 
     // Eject device step: flush disk cache and eject media from drive (optional, config-driven).
     if (configEjectDevice != 0) {
-        dev.flushAndEject(&deviceHandle) catch |err| {
+        dev.ejectDevice(&deviceHandle) catch |err| {
             respondWithErrorAndTerminate(
                 .{ .err = err, .message = "Unable to flush disk caches or eject device." },
-                .{ .xpcConnection = connection, .xpcResponseCode = .WRITE_VERIFICATION_FAIL },
+                .{ .xpcConnection = connection, .xpcResponseCode = .DEVICE_EJECT_FAIL },
             );
             return;
         };
         Debug.log(.INFO, "Device ejected successfully.", .{});
+        sendXPCReply(connection, .DEVICE_EJECT_SUCCESS, "Device successfully ejected!");
     } else {
         Debug.log(.INFO, "Device eject skipped: config.ejectDevice flag is disabled.", .{});
     }
@@ -428,9 +430,11 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) !void {
     // No issues in testing, but leaving in for a good measure. This is an important step to communicate back.
     // TODO: use XPC API to ensure a handshake delivery
     for (0..3) |_| {
-        sendXPCReply(connection, .DEVICE_FLASH_COMPLETE, "Successfully finished the flashing process. Now terminating the helper...");
+        sendXPCReply(connection, .DEVICE_FLASH_COMPLETE, "Successfully finished the flashing process. Sending a repeating message...");
         std.Thread.sleep(50_000_000); // 50 ms gap
     }
+
+    Debug.log(.INFO, "Finished executing, now termining helper...", .{});
 
     ShutdownManager.exitSuccessfully();
 }
