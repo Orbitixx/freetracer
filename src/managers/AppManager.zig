@@ -101,13 +101,24 @@ pub fn reportAction(action: ActionReport) !void {
     if (instance) |*inst| {
         if (action == .ImageSelected or action == .DeviceSelected or action == .SelectionConfirmed or action == .DataFlashed) {
             Debug.log(.DEBUG, "AppManager: action reported: {any}, current state: {any}", .{ action, inst.appState });
+
             inst.lastAction = action;
             try inst.advanceState();
+
             Debug.log(.DEBUG, "AppManager: state successfully transitioned to {any}", .{inst.appState});
+            //
         } else if (action == .FlashFailed) {
+            //
             Debug.log(.WARNING, "AppManager received action report that flash failed...", .{});
+
             inst.lastAction = action;
             inst.appState = .SelectionConfirmation;
+
+            inst.layout.emitEvent(
+                .{ .SpriteButtonEnabledChanged = .{ .target = .AppManagerResetAppButton, .enabled = true } },
+                .{ .excludeSelf = true },
+            );
+
             Debug.log(.DEBUG, "AppManager: state successfully transitioned to {any}", .{inst.appState});
         } else {
             Debug.log(.WARNING, "AppManager: unrecognized action reported: {any}", .{action});

@@ -8,6 +8,7 @@
 const std = @import("std");
 const rl = @import("raylib");
 const freetracer_lib = @import("freetracer-lib");
+const osd = @import("osdialog");
 const Debug = freetracer_lib.Debug;
 
 const AppConfig = @import("../../config.zig");
@@ -52,6 +53,8 @@ const Styles = @import("../ui/Styles.zig");
 const Color = Styles.Color;
 
 const PrivilegedHelper = @import("../macos/PrivilegedHelper.zig");
+
+const utils = @import("../../utils/misc.zig");
 
 const WindowManager = @import("../../managers/WindowManager.zig").WindowManagerSingleton;
 const winRelX = WindowManager.relW;
@@ -152,6 +155,18 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
             } }, .{ .excludeSelf = true });
             self.setStatusBoxUIToFailedState();
             try AppManager.reportAction(.FlashFailed);
+            utils.fromXPCThreadCallMainThreadDialog(UIConfig.Callbacks.DialogMessageWrapper.handleFailedToOpenImageMessage);
+            return eventResult.succeed();
+        },
+
+        PrivilegedHelper.Events.onHelperImageFileStructureUnrecognized.Hash => {
+            self.layout.emitEvent(.{ .TextChanged = .{
+                .target = .DataFlasherLogsTextbox,
+                .text = "\nSelected image structure unrecognized!",
+            } }, .{ .excludeSelf = true });
+            self.setStatusBoxUIToFailedState();
+            try AppManager.reportAction(.FlashFailed);
+            utils.fromXPCThreadCallMainThreadDialog(UIConfig.Callbacks.DialogMessageWrapper.handleFailedToRecognizeImageMessage);
             return eventResult.succeed();
         },
 
@@ -171,6 +186,14 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
             } }, .{ .excludeSelf = true });
             self.setStatusBoxUIToFailedState();
             try AppManager.reportAction(.FlashFailed);
+            utils.fromXPCThreadCallMainThreadDialog(UIConfig.Callbacks.DialogMessageWrapper.handleFailedToOpenDeviceMessage);
+            return eventResult.succeed();
+        },
+
+        PrivilegedHelper.Events.onHelperNeedsDiskPermissions.Hash => {
+            self.setStatusBoxUIToFailedState();
+            try AppManager.reportAction(.FlashFailed);
+            utils.fromXPCThreadCallMainThreadDialog(UIConfig.Callbacks.DialogMessageWrapper.handleNeedPermissionsMessage);
             return eventResult.succeed();
         },
 
@@ -189,6 +212,7 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
                 .text = "\nFailed to write to device...",
             } }, .{ .excludeSelf = true });
             self.setStatusBoxUIToFailedState();
+            utils.fromXPCThreadCallMainThreadDialog(UIConfig.Callbacks.DialogMessageWrapper.handleFailedWriteMessage);
             return eventResult.succeed();
         },
 
@@ -212,6 +236,9 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
                     .text = "\nFailed to verify device bytes.\nPlease try flashing again...",
                 },
             }, .{ .excludeSelf = true });
+            try AppManager.reportAction(.FlashFailed);
+            self.setStatusBoxUIToFailedState();
+            utils.fromXPCThreadCallMainThreadDialog(UIConfig.Callbacks.DialogMessageWrapper.handleFailedVerificationMessage);
             return eventResult.succeed();
         },
 
@@ -232,6 +259,7 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
                     .text = "\nWARNING: Failed to eject device...",
                 },
             }, .{ .excludeSelf = true });
+            utils.fromXPCThreadCallMainThreadDialog(UIConfig.Callbacks.DialogMessageWrapper.handleFailedToEjectDeviceMessage);
             return self.handleOnDeviceFlashComplete();
         },
 
@@ -353,6 +381,16 @@ pub fn setIsActive(self: *DataFlasherUI, isActive: bool) void {
             .DataFlasherHeaderDivider,
         }),
     } }, .{});
+
+    self.layout.emitEvent(.{ .EnabledChanged = .{
+        .target = .DataFlasherVerifyBytesCheckbox,
+        .enabled = true,
+    } }, .{ .excludeSelf = true });
+
+    self.layout.emitEvent(.{ .EnabledChanged = .{
+        .target = .DataFlasherEjectDeviceCheckbox,
+        .enabled = true,
+    } }, .{ .excludeSelf = true });
 }
 
 pub fn handleOnActiveStateChanged(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
@@ -1129,6 +1167,44 @@ pub const UIConfig = struct {
                 self.active = flag;
 
                 if (!flag) rl.setMouseCursor(.default);
+            }
+        };
+
+        pub const DialogMessageWrapper = struct {
+            //
+            pub fn handleFailedToOpenImageMessage(ctx: ?*anyopaque) callconv(.c) void {
+                _ = ctx;
+                _ = osd.message("Freetracer was denied access to selected image file.\n\nPlease make sure the image is located in ~/Desktop, ~/Documents, or ~/Downloads locations.\n\nIf this still doesn't work, please remove Freetracer from Files & Folders permission entirely in Settings > Privacy & Security > Files & Folders. Freetracer will attempt to request renewed access on next launch.", .{ .buttons = .ok, .level = .err });
+            }
+
+            pub fn handleFailedToRecognizeImageMessage(ctx: ?*anyopaque) callconv(.c) void {
+                _ = ctx;
+                _ = osd.message("Freetracer did not recognize image structure and force flash flag is OFF.\n\nIf you wish to proceed flashing this image in spite of this warning, please start over and accept `Proceed anyway` when prompted.", .{ .buttons = .ok, .level = .err });
+            }
+
+            pub fn handleFailedToOpenDeviceMessage(ctx: ?*anyopaque) callconv(.c) void {
+                _ = ctx;
+                _ = osd.message("Freetracer appears to have access to the device but is unable to obtain a stable handle.\n\nPlease ensure no other process is actively using the device.\n\nTo troubleshoot, you could try unmounting volumes from the device (not ejecting) using Disk Utility.", .{ .buttons = .ok, .level = .err });
+            }
+
+            pub fn handleFailedToEjectDeviceMessage(ctx: ?*anyopaque) callconv(.c) void {
+                _ = ctx;
+                _ = osd.message("Freetracer successfully flashed the device but is unable to eject it.\n\nIf no volumes on the devices are mounted, you may physically eject as is. Otherwise, please try ejecting it via Disk Utility.", .{ .buttons = .ok, .level = .warning });
+            }
+
+            pub fn handleNeedPermissionsMessage(ctx: ?*anyopaque) callconv(.c) void {
+                _ = ctx;
+                _ = osd.message("Freetracer was denied access to selected device.\n\nPlease make sure Freetracer has 'Removable Volumes' permission in Settings > Privacy & Security > Files & Folders.\n\nTo troubleshoot, please remove Freetracer from Files & Folders permission entirely in Settings > Privacy & Security > Files & Folders. Freetracer will attempt to request renewed access on next launch.", .{ .buttons = .ok, .level = .err });
+            }
+
+            pub fn handleFailedWriteMessage(ctx: ?*anyopaque) callconv(.c) void {
+                _ = ctx;
+                _ = osd.message("Freetracer failed to write to the device. Do NOT rely on this write.\n\nPlease check launchd daemon logs (/var/log/obx.stderr) for the exact error and consider reporting a bug.\n\nPlease use the Disk Utility to format the drive (use any format except APFS) and try flashing again.", .{ .buttons = .ok, .level = .err });
+            }
+
+            pub fn handleFailedVerificationMessage(ctx: ?*anyopaque) callconv(.c) void {
+                _ = ctx;
+                _ = osd.message("Freetracer failed to verify written bytes. Do NOT rely on this write.\n\nPlease check launchd daemon logs (/var/log/obx.stderr) for the exact error and consider reporting a bug.\n\nPlease use the Disk Utility to format the drive (use any format except APFS) and try flashing again.", .{ .buttons = .ok, .level = .err });
             }
         };
     };

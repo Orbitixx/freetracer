@@ -138,6 +138,12 @@ pub const Events = struct {
         struct {},
     );
 
+    pub const onHelperImageFileStructureUnrecognized = ComponentFramework.defineEvent(
+        EventManager.createEventName(ComponentName, "on_helper_image_file_unrecognized"),
+        struct {},
+        struct {},
+    );
+
     pub const onHelperDeviceOpenFailed = ComponentFramework.defineEvent(
         EventManager.createEventName(ComponentName, "on_helper_device_open_failed"),
         struct {},
@@ -513,13 +519,18 @@ fn processResponseMessage(connection: XPCConnection, data: XPCObject) !void {
         },
 
         .ISO_FILE_VALID => {
-            Debug.log(.INFO, "Helper reported that the ISO file provided is valid.", .{});
+            Debug.log(.INFO, "Helper reported that the image file provided is valid.", .{});
             EventManager.broadcast(Events.onHelperISOFileOpenSuccess.create(null, null));
         },
 
         .ISO_FILE_INVALID => {
-            Debug.log(.ERROR, "Helper reported that the ISO file is INVALID.", .{});
+            Debug.log(.ERROR, "Helper reported that the image file is INVALID.", .{});
             EventManager.broadcast(Events.onHelperISOFileOpenFailed.create(null, null));
+        },
+
+        .IMAGE_STRUCTURE_UNRECOGNIZED => {
+            Debug.log(.ERROR, "Helper reported that the image file contains an unrecognized structure.", .{});
+            EventManager.broadcast(Events.onHelperImageFileStructureUnrecognized.create(null, null));
         },
 
         .DEVICE_VALID => {
@@ -533,6 +544,7 @@ fn processResponseMessage(connection: XPCConnection, data: XPCObject) !void {
         },
 
         .NEED_DISK_PERMISSIONS => {
+            Debug.log(.ERROR, "Helper reported that it doesn't have Removable Volumes permission.", .{});
             EventManager.broadcast(Events.onHelperNeedsDiskPermissions.create(null, null));
         },
 

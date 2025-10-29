@@ -55,6 +55,7 @@ pub const HelperResponseCode = enum(i64) {
 
     ISO_FILE_VALID,
     ISO_FILE_INVALID,
+    IMAGE_STRUCTURE_UNRECOGNIZED,
 
     DEVICE_VALID,
     DEVICE_INVALID,

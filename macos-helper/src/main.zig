@@ -297,9 +297,9 @@ fn sendXPCReply(connection: XPCConnection, reply: HelperResponseCode, comptime l
 ///
 /// Sequence:
 /// 1. Parse and validate XPC payload.
-/// 2. Open and validate ISO image file.
+/// 2. Open and validate image image file.
 /// 3. Open device (with permission error handling).
-/// 4. Write ISO to device (with progress updates over XPC).
+/// 4. Write image to device (with progress updates over XPC).
 /// 5. Optionally verify written bytes.
 /// 6. Optionally eject device.
 /// 7. Exit helper on success or error.
@@ -339,7 +339,7 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) !void {
 
     const imageFile = fs.openFileValidated(imagePath, .{ .userHomePath = userHomePath }) catch |err| {
         respondWithErrorAndTerminate(
-            .{ .err = err, .message = "Unable to open ISO file or its directory." },
+            .{ .err = err, .message = "Unable to open the image file or its directory." },
             .{ .xpcConnection = connection, .xpcResponseCode = .ISO_FILE_INVALID },
         );
         return;
@@ -352,12 +352,12 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) !void {
     if (!imageValidationResult.isValid and configUserForced == 0) {
         respondWithErrorAndTerminate(
             .{ .err = error.ImageValidationFailed, .message = "Failed to validate image and user did not force unknown image." },
-            .{ .xpcConnection = connection, .xpcResponseCode = .ISO_FILE_INVALID },
+            .{ .xpcConnection = connection, .xpcResponseCode = .IMAGE_STRUCTURE_UNRECOGNIZED },
         );
         return;
     }
 
-    sendXPCReply(connection, .ISO_FILE_VALID, "ISO File is determined to be valid and is successfully opened.");
+    sendXPCReply(connection, .ISO_FILE_VALID, "Image file is determined to be valid and is successfully opened.");
 
     var deviceHandle = dev.openDeviceValidated(deviceBsdName, deviceType) catch |err| {
         switch (err) {
@@ -408,14 +408,14 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) !void {
         Debug.log(.INFO, "Verification skipped: config.verifyBytes flag is disabled.", .{});
     }
 
-    // NOTE: Must close the handle first, otherwise eject will return DeviceBusy
+    // NOTE: Must close the handle first, otherwise eject will return DeviceBusy.
     deviceHandle.close();
 
-    // Eject device step: flush disk cache and eject media from drive (optional, config-driven).
+    // Eject device step: optional, config-driven.
     if (configEjectDevice != 0) {
         dev.ejectDevice(&deviceHandle) catch |err| {
             respondWithErrorAndTerminate(
-                .{ .err = err, .message = "Unable to flush disk caches or eject device." },
+                .{ .err = err, .message = "Unable to eject device." },
                 .{ .xpcConnection = connection, .xpcResponseCode = .DEVICE_EJECT_FAIL },
             );
             return;
