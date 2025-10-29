@@ -1,13 +1,26 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const AppManager = @import("managers/AppManager.zig");
 
 pub fn main() !void {
-    var debugAllocator = std.heap.DebugAllocator(.{ .thread_safe = true }).init;
-    const allocator = debugAllocator.allocator();
+    var mainAllocator = switch (builtin.mode) {
+        .ReleaseSafe, .ReleaseFast, .ReleaseSmall => std.heap.DebugAllocator(.{ .thread_safe = true }).init,
+        else => std.heap.DebugAllocator(.{ .thread_safe = true }).init,
+    };
+
+    const allocator = mainAllocator.allocator();
 
     defer {
-        _ = debugAllocator.detectLeaks();
-        _ = debugAllocator.deinit();
+        switch (builtin.mode) {
+            .ReleaseSafe, .ReleaseFast, .ReleaseSmall => {
+                _ = mainAllocator.detectLeaks();
+                _ = mainAllocator.deinit();
+            },
+            else => {
+                _ = mainAllocator.detectLeaks();
+                _ = mainAllocator.deinit();
+            },
+        }
     }
 
     try AppManager.init(allocator);

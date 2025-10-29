@@ -183,6 +183,15 @@ pub fn appendText(self: *Textbox, text: [:0]const u8) void {
     }
 }
 
+pub fn resetText(self: *Textbox, text: [:0]const u8) void {
+    if (self.isUsingExtendedBuffer) {
+        self.extendedTextBuffer = std.mem.zeroes([8192]u8);
+        if (self.text.len > 0) self.appendText(text);
+    }
+
+    self.setText(self.text);
+}
+
 pub fn setSelection(self: *Textbox, selection: ?Selection) void {
     self.selection = selection;
 }
@@ -201,6 +210,11 @@ pub fn onEvent(self: *Textbox, event: UIEvent) void {
     switch (event) {
         .TextChanged => |e| {
             if (e.text) |newText| {
+                if (e.reset) {
+                    self.resetText(newText);
+                    return;
+                }
+
                 if (self.isUsingExtendedBuffer) self.appendText(newText) else self.setText(newText);
             }
 

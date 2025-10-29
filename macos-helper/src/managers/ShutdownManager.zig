@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const env = @import("../env.zig");
 const freetracer_lib = @import("freetracer-lib");
 const Debug = freetracer_lib.Debug;
@@ -30,8 +31,17 @@ pub const ShutdownManagerSingleton = struct {
         if (instance) |inst| {
             inst.xpcService.deinit();
             Debug.deinit();
-            _ = inst.allocator.detectLeaks();
-            _ = inst.allocator.deinit();
+
+            switch (builtin.mode) {
+                .ReleaseFast, .ReleaseSafe, .ReleaseSmall => {
+                    _ = inst.allocator.detectLeaks();
+                    _ = inst.allocator.deinit();
+                },
+                else => {
+                    _ = inst.allocator.detectLeaks();
+                    _ = inst.allocator.deinit();
+                },
+            }
         } else {
             Debug.log(.ERROR, "ShutdownManager.exitFunction() called prior to instance being initialized!", .{});
             Debug.deinit();

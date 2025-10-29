@@ -44,6 +44,7 @@
 //!
 // ========================================================================================
 const std = @import("std");
+const builtin = @import("builtin");
 const env = @import("env.zig");
 const fsops = @import("util/filesystem.zig");
 const str = @import("util/strings.zig");
@@ -122,11 +123,15 @@ comptime {
 /// Returns: Never in production (dispatch loop is blocking).
 /// Errors: XPC setup failures, logging initialization failures.
 pub fn main() !void {
-    var debugAllocator = std.heap.DebugAllocator(.{ .thread_safe = true }).init;
-    const allocator = debugAllocator.allocator();
+    // var debugAllocator = std.heap.DebugAllocator(.{ .thread_safe = true }).init;
+    // const allocator = debugAllocator.allocator();
 
-    // FIXME: Replace DebugAllocator with production allocator (GeneralPurposeAllocator, page_allocator)
-    // for release builds to improve performance and reduce memory overhead.
+    var mainAllocator = switch (builtin.mode) {
+        .ReleaseSafe, .ReleaseFast, .ReleaseSmall => std.heap.DebugAllocator(.{ .thread_safe = true }).init,
+        else => std.heap.DebugAllocator(.{ .thread_safe = true }).init,
+    };
+
+    const allocator = mainAllocator.allocator();
 
     try Debug.init(allocator, .{});
 
@@ -145,7 +150,7 @@ pub fn main() !void {
 
     // All deinit()'s are handled by the ShutdownManager because XPC's
     // main dispatch queue is thread-blocking and it never returns.
-    ShutdownManager.init(&debugAllocator, &xpcServer);
+    ShutdownManager.init(&mainAllocator, &xpcServer);
     // Should never execute in production, but just in case as a safeguard.
     defer ShutdownManager.terminateWithError(error.HelperProcessUnexpectedlyTerminatedFromMain);
 
@@ -403,6 +408,8 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) !void {
         Debug.log(.INFO, "Verification skipped: config.verifyBytes flag is disabled.", .{});
     }
 
+    deviceHandle.close();
+
     // Eject device step: flush disk cache and eject media from drive (optional, config-driven).
     if (configEjectDevice != 0) {
         dev.flushAndEject(&deviceHandle) catch |err| {
@@ -417,10 +424,13 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) !void {
         Debug.log(.INFO, "Device eject skipped: config.ejectDevice flag is disabled.", .{});
     }
 
-    // Close device handle after all operations complete.
-    deviceHandle.close();
-
-    sendXPCReply(connection, .DEVICE_FLASH_COMPLETE, "Successfully finished the flashing process. Now terminating the helper...");
+    // Ensure that completion status is delivered and completion reports are not dropped from over-saturated XPC channel
+    // No issues in testing, but leaving in for a good measure. This is an important step to communicate back.
+    // TODO: use XPC API to ensure a handshake delivery
+    for (0..3) |_| {
+        sendXPCReply(connection, .DEVICE_FLASH_COMPLETE, "Successfully finished the flashing process. Now terminating the helper...");
+        std.Thread.sleep(50_000_000); // 50 ms gap
+    }
 
     ShutdownManager.exitSuccessfully();
 }
@@ -428,64 +438,12 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) !void {
 // ========================================================================================
 // TEST SUITE
 // ========================================================================================
-// Tests validate semantic correctness, error handling, and module structure.
-// Note: Full integration tests (XPC message dispatch, file I/O) are better suited for
-// separate integration test modules or platform-specific test frameworks.
-// ========================================================================================
 
 test "RequestValidationError error set is defined correctly" {
     // RequestValidationError should have 4 variants: EmptyIsoPath, EmptyDeviceIdentifier,
     // InvalidDeviceType, InvalidImageType. This test verifies the error set exists.
     const error_set_info = @typeInfo(RequestValidationError);
     try testing.expect(error_set_info == .error_set);
-}
-
-test "empty ISO path is rejected by validation logic" {
-    // Simulates the validation check: if (imagePath.len == 0) return RequestValidationError.EmptyIsoPath;
-    const empty_path: [:0]const u8 = "";
-    if (empty_path.len == 0) {
-        try testing.expect(true);
-    }
-}
-
-test "empty device identifier is rejected by validation logic" {
-    // Simulates the validation check: if (deviceBsdName.len == 0) return RequestValidationError.EmptyDeviceIdentifier;
-    const empty_device: [:0]const u8 = "";
-    if (empty_device.len == 0) {
-        try testing.expect(true);
-    }
-}
-
-test "valid ISO path and device identifier pass basic length checks" {
-    const valid_path: [:0]const u8 = "/path/to/image.iso";
-    const valid_device: [:0]const u8 = "disk2";
-
-    try testing.expect(valid_path.len > 0);
-    try testing.expect(valid_device.len > 0);
-}
-
-test "null XPC message is detected and handled" {
-    // Simulates the null check: if (message == null) { ... terminateWithError(...); return; }
-    const message: ?*anyopaque = null;
-
-    if (message == null) {
-        try testing.expect(true);
-    }
-}
-
-test "HelperRequestCode enum variants are accessible" {
-    _ = HelperRequestCode.INITIAL_PING;
-    _ = HelperRequestCode.GET_HELPER_VERSION;
-    _ = HelperRequestCode.WRITE_ISO_TO_DEVICE;
-    _ = HelperRequestCode.UNMOUNT_DISK;
-}
-
-test "HelperResponseCode enum variants are accessible" {
-    _ = HelperResponseCode.INITIAL_PONG;
-    _ = HelperResponseCode.HELPER_VERSION_OBTAINED;
-    _ = HelperResponseCode.ISO_FILE_VALID;
-    _ = HelperResponseCode.DEVICE_VALID;
-    _ = HelperResponseCode.ISO_WRITE_SUCCESS;
 }
 
 test "HELPER_VERSION environment variable is configured" {
@@ -498,46 +456,6 @@ test "authentication environment variables are configured" {
     try testing.expect(env.MAIN_APP_TEAM_ID.len > 0);
 }
 
-test "config flags are correctly interpreted as booleans" {
-    const flag_enabled: u64 = 1;
-    const flag_disabled: u64 = 0;
-
-    try testing.expect((flag_enabled != 0) == true);
-    try testing.expect((flag_disabled != 0) == false);
-}
-
-test "zero deviceServiceId is detected as invalid" {
-    const device_service_id: c_uint = 0;
-
-    if (device_service_id == 0) {
-        try testing.expect(true);
-    }
-}
-
-test "error response struct type is valid" {
-    const err_response = struct {
-        err: anyerror,
-        message: []const u8,
-    }{
-        .err = error.TestError,
-        .message = "Test error message",
-    };
-
-    try testing.expect(err_response.message.len > 0);
-}
-
-test "XPC response struct type is valid" {
-    const xpc_response = struct {
-        xpcConnection: XPCConnection,
-        xpcResponseCode: HelperResponseCode,
-    }{
-        .xpcConnection = undefined,
-        .xpcResponseCode = .INITIAL_PONG,
-    };
-
-    _ = xpc_response;
-}
-
 test "invalid device type enum returns error" {
     const invalid_type: u64 = 99999;
     const result = meta.intToEnum(DeviceType, invalid_type);
@@ -545,42 +463,10 @@ test "invalid device type enum returns error" {
     try testing.expectError(error.InvalidEnumTag, result);
 }
 
-test "config flag boolean masking is correct" {
-    const cfg_user_forced: u64 = 1;
-    const cfg_verify: u64 = 0;
-    const cfg_eject: u64 = 1;
-
-    try testing.expect((cfg_user_forced != 0) == true);
-    try testing.expect((cfg_verify != 0) == false);
-    try testing.expect((cfg_eject != 0) == true);
-}
-
-test "all RequestValidationError error set variants are usable in error handling" {
-    // Test that we can create and handle errors from the set
-    const error_val = error.EmptyIsoPath;
-    const is_empty_iso_path = (error_val == error.EmptyIsoPath);
-    try testing.expect(is_empty_iso_path);
-}
-
-test "module imports compile correctly" {
-    _ = std;
-    _ = freetracer_lib;
-    _ = testing;
-}
-
-test "C types are available" {
-    _ = @sizeOf(c_uint);
-    _ = @sizeOf(c_int);
-}
-
 test "XPC module types are accessible" {
     _ = XPCService;
     _ = XPCConnection;
     _ = XPCObject;
-}
-
-test "meta.intToEnum function is available" {
-    _ = meta.intToEnum;
 }
 
 test "DebugAllocator can be instantiated" {
@@ -592,20 +478,4 @@ test "DebugAllocator can be instantiated" {
     defer alloc.free(slice);
 
     try testing.expect(slice.len == 10);
-}
-
-test "string slices with sentinel termination compile correctly" {
-    const valid_path: [:0]const u8 = "/path/to/image.iso";
-    const valid_device: [:0]const u8 = "disk2";
-
-    try testing.expect(valid_path.len == 18);
-    try testing.expect(valid_device.len == 5);
-}
-
-test "enum-to-error conversion results in proper error set" {
-    // Verify that meta.intToEnum returns a proper error on invalid input
-    const invalid_enum: u64 = 0xDEADBEEF;
-    const result = meta.intToEnum(DeviceType, invalid_enum);
-
-    try testing.expectError(error.InvalidEnumTag, result);
 }

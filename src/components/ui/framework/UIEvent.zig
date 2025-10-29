@@ -82,6 +82,7 @@ pub const UIEvent = union(enum) {
         text: ?[:0]const u8 = null,
         style: ?Text.TextStyle = null,
         pulsate: ?Text.PulsateState = null,
+        reset: bool = false,
     },
 
     StateChanged: struct {

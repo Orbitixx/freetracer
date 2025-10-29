@@ -84,6 +84,8 @@ flashingStep: enum {
     VerificationFinished,
 } = .Waiting,
 
+reportedCompletion: bool = false,
+
 pub const Events = struct {
     pub const onActiveStateChanged = ComponentFramework.defineEvent(
         EventManager.createEventName(ComponentName, "on_active_state_changed"),
@@ -193,12 +195,12 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
 
             self.layout.emitEvent(.{ .TextChanged = .{
                 .target = .DataFlasherLogsTextbox,
-                .text = "\nSuccessfully verified device bytes!\nYou may now eject the device!",
+                .text = "\nSuccessfully verified device bytes!\n",
             } }, params);
 
             self.flashingStep = .VerificationFinished;
 
-            try AppManager.reportAction(.DataFlashed);
+            // try AppManager.reportAction(.DataFlashed);
             return eventResult.succeed();
         },
 
@@ -213,7 +215,13 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
         },
 
         PrivilegedHelper.Events.onDeviceFlashComplete.Hash => {
+            if (self.reportedCompletion) return eventResult.succeed();
+
             const params = View.ViewEventParams{ .excludeSelf = true };
+
+            try AppManager.reportAction(.DataFlashed);
+
+            self.reportedCompletion = true;
 
             self.layout.emitEvent(.{ .BorderColorChanged = .{
                 .target = .DataFlasherStatusBgRect,
@@ -242,7 +250,12 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
                 .color = Color.themeSuccess,
             } }, params);
 
-            try AppManager.reportAction(.DataFlashed);
+            self.layout.emitEvent(.{
+                .TextChanged = .{
+                    .target = .DataFlasherLogsTextbox,
+                    .text = "\nFinished flashing device!\nYou may now eject the device!",
+                },
+            }, .{ .excludeSelf = true });
 
             return eventResult.succeed();
         },
@@ -536,6 +549,7 @@ pub fn handleAppResetRequest(self: *DataFlasherUI) EventResult {
     }
 
     self.setIsActive(false);
+    self.reportedCompletion = false;
 
     const params: View.ViewEventParams = .{ .excludeSelf = true };
 
@@ -584,6 +598,12 @@ pub fn handleAppResetRequest(self: *DataFlasherUI) EventResult {
     self.layout.emitEvent(.{
         .TextChanged = .{ .target = .DataFlasherStatusBoxETAText, .text = "00:00" },
     }, params);
+
+    self.layout.emitEvent(.{ .TextChanged = .{
+        .text = "Pending logs stream...",
+        .reset = true,
+        .target = .DataFlasherLogsTextbox,
+    } }, params);
 
     return eventResult.succeed();
 }
