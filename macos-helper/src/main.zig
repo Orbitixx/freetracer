@@ -10,21 +10,16 @@
 //!   team ID (verified in `xpcRequestHandler` via `XPCService.authenticateMessage`).
 //!   Only processes signed by the trusted team are allowed to call this helper.
 //!
-//! - **Implicit Trust Boundary:** Once authenticated, all HelperRequestCode operations are
-//!   allowed without further per-operation ACL checks. Future deployments MUST add
-//!   whitelist validation to prevent compromised GUI processes from invoking arbitrary
-//!   operations. See SECURITY.md for hardening guidelines.
-//!
 //! - **Input Validation:** Core parameters (imagePath, deviceBsdName) are validated by
 //!   `fs.openFileValidated()` and `dev.openDeviceValidated()`. Malformed XPC payloads
-//!   are caught and propagated as errors; silent defaults MUST be avoided.
+//!   are caught and propagated as errors.
 //!
 //! ## Request/Response Contract
 //!
 //! Request codes are defined in `freetracer_lib.constants.HelperRequestCode`:
 //!   - INITIAL_PING: Heartbeat; responds with INITIAL_PONG.
 //!   - GET_HELPER_VERSION: Fetch helper version string; responds with HELPER_VERSION_OBTAINED.
-//!   - WRITE_ISO_TO_DEVICE: Write ISO image to device with optional verification & eject.
+//!   - WRITE_ISO_TO_DEVICE: Write image to device with optional verification & eject.
 //!
 //! Response codes are defined in `freetracer_lib.constants.HelperResponseCode`:
 //!   - ISO_FILE_VALID, DEVICE_VALID, ISO_WRITE_SUCCESS, etc. (see constants.zig)
@@ -36,11 +31,6 @@
 //! 3. For each XPC message, `xpcRequestHandler()` is invoked by the dispatch queue.
 //! 4. On error or completion, `ShutdownManager.terminateWithError()` or
 //!    `ShutdownManager.exitSuccessfully()` schedules async exit via dispatch queue.
-//!
-//! ## Memory & Allocator
-//!
-//! All allocations use `DebugAllocator` for leak detection during development.
-//! See line 70 TODO: Replace with production allocator (GeneralPurposeAllocator or page_allocator).
 //!
 // ========================================================================================
 const std = @import("std");

@@ -1,7 +1,7 @@
 // Main config file for app settings
 
-pub const APP_VERSION = "0.9";
-pub const PRIVILEGED_TOOL_LATEST_VERSION: [:0]const u8 = "0.9";
+pub const APP_VERSION = "1.0rc";
+pub const PRIVILEGED_TOOL_LATEST_VERSION: [:0]const u8 = "1.0rc";
 
 pub const DISK_PREFIX: []const u8 = "/dev/";
 
@@ -10,8 +10,6 @@ pub const MAIN_APP_LOGS_PATH = "/freetracer.log";
 pub const PREFERENCES_PATH = "/.config/freetracer/preferences.json";
 pub const APP_RELEASES_API_ENDPOINT = "https://api.github.com/repos/obx0/osdialog-zig/releases/latest";
 
-// TODO: Deprecated, remove once no impact
-pub const ALLOWED_IMAGE_EXTENSIONS = [_][]const u8{ ".iso", ".img" };
 pub const MAX_EXT_LEN = 6;
 
 pub const IMAGE_DISPLAY_NAME_BUFFER_LEN = 36;

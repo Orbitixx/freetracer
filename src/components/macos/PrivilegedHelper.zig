@@ -314,7 +314,11 @@ pub fn update(self: *PrivilegedHelper) !void {
                 };
 
                 self.dispatchComponentAction();
-            } else return error.FailedToInstallPrivilegedHelperTool;
+            } else {
+                Debug.log(.ERROR, "PrivilegedHelper: failed to install privileged helper tool. Code: {any}", .{installResult});
+                _ = osd.message("Freetracer failed to install the its helper tool, which is a critical part of Freetracer. It is responsible for all privileged operations like flashing and ejecting.\n\nPlease ensure you have a properly signed application bundle and app/helper expected versions match.", .{ .buttons = .ok, .level = .err });
+                return error.FailedToInstallPrivilegedHelperTool;
+            }
         }
     } else if (self.xpcClient.timer.isTimerSet and self.reinstallAttempts >= 1) {
         // TODO: quit app gracefully

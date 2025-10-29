@@ -62,6 +62,8 @@ pub const WindowManagerSingleton = struct {
 
         instance = Window{};
         try instance.?.init();
+
+        Debug.log(.INFO, "WindowManager initialized", .{});
     }
 
     pub fn getWindowWidth() f32 {

@@ -88,6 +88,8 @@ pub const EventManagerSingleton = struct {
             .allocator = allocator,
             .subscribers = std.AutoHashMap(ComponentHash, *Component).init(allocator),
         };
+
+        Debug.log(.INFO, "EventManager initialized", .{});
     }
 
     /// Puts a *Component pointer into the EventManager.instance.subscribers AutoHashMap
