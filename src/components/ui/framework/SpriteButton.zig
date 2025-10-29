@@ -202,6 +202,10 @@ pub fn draw(self: *SpriteButton) !void {
 
 pub fn onEvent(self: *SpriteButton, event: UIEvent) void {
     switch (event) {
+        inline else => |e| if (e.target != self.identifier) return,
+    }
+
+    switch (event) {
         .SpriteButtonEnabledChanged => |e| {
             self.enabled = e.enabled;
         },

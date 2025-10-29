@@ -33,18 +33,8 @@ const Component = ComponentFramework.Component;
 const ComponentEvent = ComponentFramework.Event;
 const EventResult = ComponentFramework.EventResult;
 
-const DeprecatedUI = @import("../ui/import/index.zig");
-const Panel = DeprecatedUI.Panel;
-const Button = DeprecatedUI.Button;
-const Rectangle = DeprecatedUI.Primitives.Rectangle;
-const Text = DeprecatedUI.Primitives.Text;
-const Transform = DeprecatedUI.Primitives.Transform;
-const Texture = DeprecatedUI.Primitives.Texture;
-const Layout = DeprecatedUI.Layout;
-const UI = DeprecatedUI.utils;
-
-const Styles = DeprecatedUI.Styles;
-const Color = DeprecatedUI.Styles.Color;
+const Styles = @import("../ui/Styles.zig");
+const Color = Styles.Color;
 
 const UIFramework = @import("../ui/framework/import.zig");
 const UIChain = UIFramework.UIChain;
@@ -119,7 +109,7 @@ pub const Events = struct {
 
 // Creates and returns an instance of DeviceListUI component
 pub fn init(allocator: std.mem.Allocator, parent: *DeviceList) !DeviceListUI {
-    Debug.log(.DEBUG, "DeviceListUI: start() called.", .{});
+    Debug.log(.DEBUG, "DeviceListUI: init() called.", .{});
 
     parent.state.lock();
     defer parent.state.unlock();
@@ -338,6 +328,19 @@ const refreshDevices = struct {
             ui.clearDeviceSelectBoxes();
         }
 
+        {
+            component.state.lock();
+            defer component.state.unlock();
+            component.state.data.selectedDevice = null;
+            component.state.data.devices.clearAndFree(component.allocator);
+        }
+
+        // Broadcast the selection changed event to update UI
+        EventManager.broadcast(DeviceListUI.Events.onSelectedDeviceNameChanged.create(
+            component.asComponentPtr(),
+            &.{ .selectedDevice = null },
+        ));
+
         component.dispatchComponentAction();
     }
 };
@@ -354,8 +357,6 @@ fn updateDeviceNameLabel(self: *DeviceListUI, value: [:0]const u8, truncate_len:
     }
 
     self.selectedDeviceNameBuf[truncated_len] = 0;
-    // self.deviceNameLabel.value = std.mem.sliceTo(self.selectedDeviceNameBuf[0..], 0);
-
 }
 
 fn handleOnDeviceListActiveStateChanged(self: *DeviceListUI, event: ComponentEvent) !EventResult {
@@ -365,55 +366,11 @@ fn handleOnDeviceListActiveStateChanged(self: *DeviceListUI, event: ComponentEve
 
     self.setIsActive(data.isActive);
 
-    // self.storeIsActive(data.isActive);
-    //
-    // self.layout.emitEvent(
-    //     .{ .StateChanged = .{ .isActive = data.isActive } },
-    //     .{},
-    // );
-    //
-    // self.layout.emitEvent(
-    //     .{ .StateChanged = .{ .target = .DeviceListDeviceListBox, .isActive = data.isActive } },
-    //     .{ .excludeSelf = true },
-    // );
-    //
-    // self.layout.emitEvent(
-    //     .{ .StateChanged = .{ .target = .DeviceListRefreshDevicesButton, .isActive = data.isActive } },
-    //     .{ .excludeSelf = true },
-    // );
-    //
-    // self.layout.emitEvent(
-    //     .{ .StateChanged = .{ .target = .DeviceListHeaderDivider, .isActive = !data.isActive } },
-    //     .{ .excludeSelf = true },
-    // );
-    // self.layout.emitEvent(
-    //     .{ .StateChanged = .{ .target = .DeviceListDeviceSelectedGlowTexture, .isActive = !data.isActive } },
-    //     .{ .excludeSelf = true },
-    // );
-    // self.layout.emitEvent(
-    //     .{ .StateChanged = .{ .target = .DeviceListDeviceSelectedTexture, .isActive = !data.isActive } },
-    //     .{ .excludeSelf = true },
-    // );
     self.layout.emitEvent(
         .{ .StateChanged = .{ .target = .DeviceListPlaceholderTexture, .isActive = false } },
         .{ .excludeSelf = true },
     );
-    //
-    // self.layout.emitEvent(
-    //     .{ .StateChanged = .{ .target = .DeviceListDeviceSelectedBarRect, .isActive = !data.isActive } },
-    //     .{ .excludeSelf = true },
-    // );
-    //
-    // self.layout.emitEvent(
-    //     .{ .StateChanged = .{ .target = .DeviceListDeviceSelectedBarText, .isActive = !data.isActive } },
-    //     .{ .excludeSelf = true },
-    // );
-    //
-    // self.layout.emitEvent(
-    //     .{ .StateChanged = .{ .target = .DeviceListDeviceSelectedText, .isActive = !data.isActive } },
-    //     .{ .excludeSelf = true },
-    // );
-    //
+
     return eventResult.succeed();
 }
 
@@ -428,9 +385,7 @@ fn handleOnDevicesCleanup(self: *DeviceListUI) !EventResult {
     var eventResult = EventResult.init();
     self.storeSelectedDevice(null);
     self.clearDeviceSelectBoxes();
-    // self.nextButton.setEnabled(false);
-    // self.updateDeviceNameLabel(kStringDeviceListNoDeviceSelected, null);
-    // self.refreshLayout(false);
+
     return eventResult.succeed();
 }
 
@@ -595,6 +550,10 @@ fn initLayout(self: *DeviceListUI) !void {
                 .function = refreshDevices.call,
                 .context = self.parent,
             },
+            // .onStateChange = .{
+            //     .function = UIConfig.Callbacks.RefreshButton.StateHandler.handler,
+            //     .context = null,
+            // },
         }),
 
         ui.deviceSelectBoxList(.{
@@ -720,6 +679,7 @@ fn initLayout(self: *DeviceListUI) !void {
     self.layout.callbacks.onStateChange = .{ .function = UIConfig.Callbacks.MainView.StateHandler.handler, .context = &self.layout };
 
     try self.layout.start();
+
     try self.bindDeviceSelectList();
 }
 
@@ -755,6 +715,16 @@ pub const UIConfig = struct {
                     }
 
                     self.transform.resolve();
+                }
+            };
+        };
+
+        const RefreshButton = struct {
+            pub const StateHandler = struct {
+                pub fn handler(ctx: *anyopaque, flag: bool) void {
+                    _ = flag; // Refresh button always stays enabled
+                    _ = ctx;
+                    // Refresh button is always available regardless of active state
                 }
             };
         };

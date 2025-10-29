@@ -20,8 +20,8 @@ pub const EventManagerSingleton = struct {
     var mutex: std.Thread.Mutex = .{};
 
     pub const ComponentName = struct {
-        pub const ISO_FILE_PICKER = "iso_file_picker";
-        pub const ISO_FILE_PICKER_UI = "iso_file_picker_ui";
+        pub const FILE_PICKER = "file_picker";
+        pub const FILE_PICKER_UI = "file_picker_ui";
         pub const DEVICE_LIST = "device_list";
         pub const DEVICE_LIST_UI = "device_list_ui";
         pub const DATA_FLASHER = "data_flasher";

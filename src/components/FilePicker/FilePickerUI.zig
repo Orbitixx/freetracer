@@ -17,7 +17,7 @@ const winRelY = WindowManager.relH;
 
 const AppManager = @import("../../managers/AppManager.zig");
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
-pub const ComponentName = EventManager.ComponentName.ISO_FILE_PICKER_UI;
+pub const ComponentName = EventManager.ComponentName.FILE_PICKER_UI;
 
 const FilePicker = @import("./FilePicker.zig");
 
@@ -36,10 +36,10 @@ const Textbox = UIFramework.Textbox;
 const FileDropzone = UIFramework.FileDropzone;
 const UIChain = UIFramework.UIChain;
 
-const Styles = DeprecatedUI.Styles;
+const Styles = @import("../ui/Styles.zig");
 const Color = Styles.Color;
 
-const DEFAULT_ISO_TITLE = "No ISO selected...";
+const DEFAULT_ISO_TITLE = "No image selected...";
 const DEFAULT_SECTION_HEADER = "Select Image";
 const DISPLAY_NAME_SUFFIX_LEN: usize = 14;
 

@@ -644,7 +644,7 @@ fn buildXPCWriteRequest(writeRequest: WriteRequest) !XPCObject {
 
     // Add device metadata
     XPCService.createUInt64(request, "deviceServiceId", writeRequest.device.serviceId);
-    XPCService.createUInt64(request, "deviceType", @intFromEnum(writeRequest.imageType));
+    XPCService.createUInt64(request, "deviceType", @intFromEnum(writeRequest.device.type));
 
     // Add configuration flags as a nested structure
     XPCService.createUInt64(request, "config_userForced", @as(u64, @intCast(@intFromBool(writeRequest.config.userForcedFlag))));

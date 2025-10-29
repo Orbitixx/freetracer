@@ -55,6 +55,8 @@ pub fn openDeviceValidated(bsdName: []const u8, deviceType: DeviceType) !DeviceH
     const rawBsdSlice = std.mem.sliceTo(&canonicalNames.raw, Character.NULL);
     const deviceDir = "/dev/";
 
+    Debug.log(.INFO, "Attempting to open device of type: {any}", .{deviceType});
+
     {
         var unmountStatus: bool = false;
         try da.requestUnmount(blockBsdSlice, deviceType, &unmountStatus);

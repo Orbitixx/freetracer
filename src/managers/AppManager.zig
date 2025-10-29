@@ -137,10 +137,20 @@ const AppManager = struct {
             .{ .excludeSelf = true },
         );
 
-        if (self.appState != .ImageSelection) self.layout.emitEvent(
-            .{ .StateChanged = .{ .target = .AppManagerResetAppButton, .isActive = true } },
-            .{ .excludeSelf = true },
-        );
+        if (self.appState != .ImageSelection) {
+            self.layout.emitEvent(
+                .{ .StateChanged = .{ .target = .AppManagerResetAppButton, .isActive = true } },
+                .{ .excludeSelf = true },
+            );
+        }
+
+        if (self.appState == .DataFlashing) self.layout.emitEvent(.{
+            .SpriteButtonEnabledChanged = .{ .target = .AppManagerResetAppButton, .enabled = false },
+        }, .{ .excludeSelf = true });
+
+        if (self.appState == .Idle) self.layout.emitEvent(.{
+            .SpriteButtonEnabledChanged = .{ .target = .AppManagerResetAppButton, .enabled = true },
+        }, .{ .excludeSelf = true });
     }
 
     pub fn resetState(self: *AppManager) void {
@@ -152,13 +162,18 @@ const AppManager = struct {
         self.appState = .ImageSelection;
         self.lastAction = null;
 
+        const resetEvent = Events.AppResetEvent.create(null, null);
+        EventManager.broadcast(resetEvent);
+
         self.layout.emitEvent(
             .{ .StateChanged = .{ .target = .AppManagerResetAppButton, .isActive = false } },
             .{ .excludeSelf = true },
         );
 
-        const resetEvent = Events.AppResetEvent.create(null, null);
-        EventManager.broadcast(resetEvent);
+        self.layout.emitEvent(
+            .{ .PositionChanged = .{ .target = .AppManagerSatteliteGraphic, .position = .percent(0.7, 0.3) } },
+            .{ .excludeSelf = true },
+        );
 
         Debug.log(.INFO, "AppManager: state reset to {any}.", .{self.appState});
     }

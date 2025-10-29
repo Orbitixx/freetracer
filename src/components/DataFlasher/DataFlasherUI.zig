@@ -25,46 +25,12 @@ const DataFlasher = @import("./DataFlasher.zig");
 const DeviceList = @import("../DeviceList/DeviceList.zig");
 const DeviceListUI = @import("../DeviceList/DeviceListUI.zig");
 
-const SECTION_PADDING: f32 = AppConfig.APP_UI_MODULE_SECTION_PADDING;
-const PADDING_LEFT: f32 = AppConfig.APP_UI_MODULE_PADDING_LEFT;
-const PADDING_RIGHT: f32 = AppConfig.APP_UI_MODULE_PADDING_RIGHT;
-
-const HEADER_LABEL_OFFSET_X: f32 = AppConfig.HEADER_LABEL_OFFSET_X;
-const HEADER_LABEL_REL_Y: f32 = AppConfig.HEADER_LABEL_REL_Y;
-const FLASH_BUTTON_REL_Y: f32 = AppConfig.FLASH_BUTTON_REL_Y;
-
-const TEXTURE_TILE_SIZE = AppConfig.TEXTURE_TILE_SIZE;
-
-const ICON_SIZE = AppConfig.ICON_SIZE;
-const ICON_TEXT_GAP_X = AppConfig.ICON_TEXT_GAP_X;
-const ISO_ICON_POS_REL_X = PADDING_LEFT;
-const ISO_ICON_POS_REL_Y = SECTION_PADDING;
-const DEV_ICON_POS_REL_X = ISO_ICON_POS_REL_X;
-const DEV_ICON_POS_REL_Y = ISO_ICON_POS_REL_Y + ISO_ICON_POS_REL_Y / 2;
-
-const ITEM_GAP_Y = AppConfig.ITEM_GAP_Y;
-const STATUS_INDICATOR_SIZE: f32 = AppConfig.STATUS_INDICATOR_SIZE;
-
-// --- SpriteSheet Coordinates ---
-const ICON_SRC_ISO = rl.Rectangle{
-    .x = TEXTURE_TILE_SIZE * 9,
-    .y = TEXTURE_TILE_SIZE * 10,
-    .width = TEXTURE_TILE_SIZE,
-    .height = TEXTURE_TILE_SIZE,
-};
-const ICON_SRC_DEVICE = rl.Rectangle{
-    .x = TEXTURE_TILE_SIZE * 10,
-    .y = TEXTURE_TILE_SIZE * 11,
-    .width = TEXTURE_TILE_SIZE,
-    .height = TEXTURE_TILE_SIZE,
-};
-
 // This state is mutable and can be accessed from the main UI thread (draw/update)
 // and a worker/event thread (handleEvent). Access must be guarded by state.lock().
 const DataFlasherUIState = struct {
     isActive: bool = false,
     // owned by FilePicker
-    isoPath: ?[:0]const u8 = null,
+    imagePath: ?[:0]const u8 = null,
     // owned by DeviceList (via state ArrayList)
     device: ?StorageDevice = null,
 };
@@ -78,28 +44,14 @@ const ComponentEvent = ComponentFramework.Event;
 
 const EventResult = ComponentFramework.EventResult;
 
-const DeprecatedUI = @import("../ui/import/index.zig");
-const Panel = DeprecatedUI.Panel;
-const Button = DeprecatedUI.Button;
-const Checkbox = DeprecatedUI.Checkbox;
-const Transform = DeprecatedUI.Primitives.Transform;
-const Rectangle = DeprecatedUI.Primitives.Rectangle;
-// const Text = DeprecatedUI.Primitives.Text;
-const Texture = DeprecatedUI.Primitives.Texture;
-const Statusbox = DeprecatedUI.Statusbox;
-const Progressbox = DeprecatedUI.Progressbox;
-const StatusIndicator = DeprecatedUI.StatusIndicator;
-const Layout = DeprecatedUI.Layout;
-
 const UIFramework = @import("../ui/framework/import.zig");
 const View = UIFramework.View;
 const UIChain = UIFramework.UIChain;
 const Text = UIFramework.Text;
+const Styles = @import("../ui/Styles.zig");
+const Color = Styles.Color;
 
 const PrivilegedHelper = @import("../macos/PrivilegedHelper.zig");
-
-const Styles = DeprecatedUI.Styles;
-const Color = DeprecatedUI.Styles.Color;
 
 const WindowManager = @import("../../managers/WindowManager.zig").WindowManagerSingleton;
 const winRelX = WindowManager.relW;
@@ -118,7 +70,6 @@ worker: ?ComponentWorker = null,
 // Component-specific, unique props
 allocator: std.mem.Allocator,
 parent: *DataFlasher,
-displayISOTextBuffer: [std.fs.max_path_bytes]u8 = undefined,
 displayDeviceTextBuffer: [std.fs.max_path_bytes]u8 = undefined,
 
 layout: View = undefined,
@@ -291,6 +242,8 @@ pub fn handleEvent(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
                 .color = Color.themeSuccess,
             } }, params);
 
+            try AppManager.reportAction(.DataFlashed);
+
             return eventResult.succeed();
         },
 
@@ -335,7 +288,7 @@ fn readIsActive(self: *DataFlasherUI) bool {
 }
 
 const ParentSelection = struct {
-    isoPath: ?[:0]const u8 = null,
+    imagePath: ?[:0]const u8 = null,
     device: ?StorageDevice = null,
 };
 
@@ -345,7 +298,7 @@ fn readParentSelection(self: *DataFlasherUI) ParentSelection {
     self.parent.state.lock();
     defer self.parent.state.unlock();
 
-    selection.isoPath = self.parent.state.data.isoPath;
+    selection.imagePath = self.parent.state.data.imagePath;
     selection.device = self.parent.state.data.device;
 
     return selection;
@@ -396,26 +349,25 @@ fn formatDeviceLabel(buffer: []u8, dev_name: [:0]const u8, bsd_name: [:0]const u
     return std.fmt.bufPrintZ(buffer, "{s} ({s})", .{ dev_name, bsd_name }) catch dev_name;
 }
 
+pub fn setIsActive(self: *DataFlasherUI, isActive: bool) void {
+    Debug.log(.DEBUG, "DataFlasherUI: setting UI active state to: {any}", .{isActive});
+
+    self.storeIsActive(isActive);
+
+    self.layout.emitEvent(.{ .StateChanged = .{
+        .isActive = isActive,
+        .invert = UIFramework.invertChildren(.{
+            .DataFlasherPlaceholderTexture,
+            .DataFlasherHeaderDivider,
+        }),
+    } }, .{});
+}
+
 pub fn handleOnActiveStateChanged(self: *DataFlasherUI, event: ComponentEvent) !EventResult {
     var eventResult = EventResult.init();
     const data = DataFlasher.Events.onActiveStateChanged.getData(event) orelse return eventResult.fail();
 
-    self.storeIsActive(data.isActive);
-    Debug.log(.DEBUG, "DataFlasherUI: setting UI active state to: {any}", .{data.isActive});
-
-    self.layout.emitEvent(.{ .StateChanged = .{
-        .isActive = data.isActive,
-    } }, .{});
-
-    self.layout.emitEvent(.{ .StateChanged = .{
-        .target = .DataFlasherPlaceholderTexture,
-        .isActive = !data.isActive,
-    } }, .{ .excludeSelf = true });
-
-    self.layout.emitEvent(.{ .StateChanged = .{
-        .target = .DataFlasherHeaderDivider,
-        .isActive = !data.isActive,
-    } }, .{ .excludeSelf = true });
+    self.setIsActive(data.isActive);
 
     return eventResult.succeed();
 }
@@ -576,13 +528,62 @@ pub fn handleAppResetRequest(self: *DataFlasherUI) EventResult {
 
         self.state.data.isActive = false;
         self.state.data.device = null;
-        self.state.data.isoPath = null;
+        self.state.data.imagePath = null;
 
-        self.displayISOTextBuffer = std.mem.zeroes([std.fs.max_path_bytes]u8);
         self.displayDeviceTextBuffer = std.mem.zeroes([std.fs.max_path_bytes]u8);
 
         self.flashRequested = false;
     }
+
+    self.setIsActive(false);
+
+    const params: View.ViewEventParams = .{ .excludeSelf = true };
+
+    self.layout.emitEvent(.{ .BorderColorChanged = .{
+        .target = .DataFlasherStatusBgRect,
+        .color = Color.themeDanger,
+    } }, params);
+
+    self.layout.emitEvent(.{ .TextChanged = .{
+        .target = .DataFlasherStatusHeaderText,
+        .text = "WAITING...",
+        .style = UIConfig.Styles.StatusPanel.StepText.Inactive.style,
+        .pulsate = .{ .enabled = true },
+    } }, params);
+
+    self.layout.emitEvent(.{ .TextChanged = .{
+        .text = "0%",
+        .target = .DataFlasherStatusBoxProgressPercentTextBack,
+        .style = UIConfig.Styles.StatusPanel.ProgressPercentBack.Inactive.style,
+    } }, params);
+
+    self.layout.emitEvent(.{ .TextChanged = .{
+        .text = "0%",
+        .target = .DataFlasherStatusBoxProgressPercentTextFront,
+        .style = UIConfig.Styles.StatusPanel.ProgressPercentFront.Inactive.style,
+    } }, params);
+
+    self.layout.emitEvent(.{ .ColorChanged = .{
+        .target = .DataFlasherStatusBoxProgressBox,
+        .color = Color.themeDanger,
+    } }, params);
+
+    self.layout.emitEvent(.{ .ProgressValueChanged = .{
+        .target = .DataFlasherStatusBoxProgressBox,
+        .percent = 0,
+    } }, params);
+
+    self.layout.emitEvent(.{
+        .TextChanged = .{ .target = .DataFlasherStatusBoxSpeedText, .text = "0 MB/s" },
+    }, params);
+
+    self.layout.emitEvent(.{
+        .TextChanged = .{ .target = .DataFlasherStatusBoxProgressText, .text = "0.00 GB of 0.00 GB" },
+    }, params);
+
+    self.layout.emitEvent(.{
+        .TextChanged = .{ .target = .DataFlasherStatusBoxETAText, .text = "00:00" },
+    }, params);
 
     return eventResult.succeed();
 }

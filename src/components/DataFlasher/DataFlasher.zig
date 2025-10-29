@@ -144,9 +144,9 @@ pub fn dispatchComponentAction(self: *DataFlasher) void {
     errdefer self.state.unlock();
 
     if (imagePath.len > 3) {
-        Debug.log(.DEBUG, "DataFlasher.dispatchComponentAction(): ISO path is confirmed as: {s}", .{imagePath});
+        Debug.log(.DEBUG, "DataFlasher.dispatchComponentAction(): image path is confirmed as: {s}", .{imagePath});
     } else {
-        Debug.log(.WARNING, "DataFlasher.dispatchComponentAction(): ISO path is NULL! Aborting...", .{});
+        Debug.log(.WARNING, "DataFlasher.dispatchComponentAction(): image path is NULL! Aborting...", .{});
         return;
     }
 
@@ -223,12 +223,15 @@ fn queryAndSaveImageDetails(self: *DataFlasher) !void {
     var imageInfo: FilePicker.ImageQueryObject = .{};
     const data = FilePicker.Events.onImageDetailsQueried.Data{ .result = &imageInfo };
 
-    const eventResult = try EventManager.signal("iso_file_picker", FilePicker.Events.onImageDetailsQueried.create(self.asComponentPtr(), &data));
+    const eventResult = try EventManager.signal(
+        EventManager.ComponentName.FILE_PICKER,
+        FilePicker.Events.onImageDetailsQueried.create(self.asComponentPtr(), &data),
+    );
 
     if (!eventResult.success) return error.DataFlasherFailedToQueryImagePath;
 
     if (imageInfo.imagePath.len < 2) {
-        Debug.log(.ERROR, "DataFlasher received invalid ISO path: {s}", .{imageInfo.imagePath});
+        Debug.log(.ERROR, "DataFlasher received invalid image path: {s}", .{imageInfo.imagePath});
         return error.DataFlasherReceivedInvalidImagePath;
     }
 
@@ -244,7 +247,10 @@ fn queryAndSaveSelectedDevice(self: *DataFlasher) !void {
 
     var query: DeviceList.DeviceQueryObject = .{};
 
-    const deviceResult = try EventManager.signal("device_list", DeviceList.Events.onSelectedDeviceQueried.create(self.asComponentPtr(), &.{ .result = &query }));
+    const deviceResult = try EventManager.signal(
+        EventManager.ComponentName.DEVICE_LIST,
+        DeviceList.Events.onSelectedDeviceQueried.create(self.asComponentPtr(), &.{ .result = &query }),
+    );
 
     if (!deviceResult.success or query.selectedDevice == null) {
         return error.DataFlasherFailedToQuerySelectedDevice;

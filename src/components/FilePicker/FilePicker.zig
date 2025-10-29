@@ -20,7 +20,7 @@ const MAX_EXT_LEN = AppConfig.MAX_EXT_LEN;
 const AppManager = @import("../../managers/AppManager.zig");
 
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
-const ComponentName = EventManager.ComponentName.ISO_FILE_PICKER;
+const ComponentName = EventManager.ComponentName.FILE_PICKER;
 const ComponentFramework = @import("../framework/import/index.zig");
 
 const UIFramework = @import("../ui/import/index.zig");
@@ -252,7 +252,7 @@ pub fn confirmSelectedImageFile(self: *FilePicker) !void {
     try AppManager.reportAction(.ImageSelected);
 
     const deactivateEvent = Events.onActiveStateChanged.create(self.asComponentPtr(), &.{ .isActive = false });
-    _ = try EventManager.signal(EventManager.ComponentName.ISO_FILE_PICKER_UI, deactivateEvent);
+    _ = try EventManager.signal(EventManager.ComponentName.FILE_PICKER_UI, deactivateEvent);
     _ = try EventManager.signal(EventManager.ComponentName.DEVICE_LIST, deactivateEvent);
 }
 

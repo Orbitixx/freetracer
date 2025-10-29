@@ -32,7 +32,7 @@ const DeviceListState = struct {
 };
 
 const DeviceListComponent = @This();
-const ISOFilePicker = @import("../FilePicker/FilePicker.zig");
+const FilePicker = @import("../FilePicker/FilePicker.zig");
 
 const Component = ComponentFramework.Component;
 const ComponentState = ComponentFramework.ComponentState(DeviceListState);
@@ -172,7 +172,7 @@ pub fn handleEvent(self: *DeviceListComponent, event: ComponentEvent) !EventResu
         Events.onDiscoverDevicesEnd.Hash => try self.handleDevicesDiscovered(event),
         Events.onFinishedComponentInteraction.Hash => try self.handleFinishedInteraction(),
         Events.onSelectedDeviceQueried.Hash => try self.handleSelectedDeviceQuery(event),
-        ISOFilePicker.Events.onActiveStateChanged.Hash => try self.handlePrecedingComponentStateChange(event),
+        FilePicker.Events.onActiveStateChanged.Hash => try self.handlePrecedingComponentStateChange(event),
         AppManager.Events.AppResetEvent.Hash => self.handleAppResetRequest(),
         else => eventResult.fail(),
     };
@@ -271,7 +271,7 @@ pub const selectDeviceActionWrapper = struct {
 
 fn handlePrecedingComponentStateChange(self: *DeviceListComponent, event: ComponentEvent) !EventResult {
     var eventResult = EventResult.init();
-    const data = ISOFilePicker.Events.onActiveStateChanged.getData(event) orelse return eventResult.fail();
+    const data = FilePicker.Events.onActiveStateChanged.getData(event) orelse return eventResult.fail();
 
     if (data.isActive) return eventResult.succeed();
 
@@ -385,15 +385,6 @@ fn publishSelectionChanged(self: *DeviceListComponent, selection: ?StorageDevice
     _ = EventManager.broadcast(DeviceListUI.Events.onSelectedDeviceNameChanged.create(self.asComponentPtr(), &.{ .selectedDevice = selection }));
 }
 
-/// Requests a fresh device scan, clearing any existing devices.
-// fn refreshDevices(self: *DeviceListComponent) void {
-//     // if (self.uiComponent) |*ui| {
-//     //     ui.clearDeviceCheckboxes();
-//     // }
-//
-//     self.dispatchComponentAction();
-// }
-
 pub fn handleAppResetRequest(self: *DeviceListComponent) EventResult {
     var eventResult = EventResult.init();
 
@@ -403,6 +394,8 @@ pub fn handleAppResetRequest(self: *DeviceListComponent) EventResult {
     self.state.data.isActive = false;
     self.state.data.devices.clearAndFree(self.allocator);
     self.state.data.selectedDevice = null;
+
+    self.publishSelectionChanged(null);
 
     return eventResult.succeed();
 }
