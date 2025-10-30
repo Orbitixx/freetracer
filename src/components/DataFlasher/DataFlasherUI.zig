@@ -291,7 +291,7 @@ pub const asInstance = ComponentImplementation.asInstance;
 
 fn subscribeToEvents(self: *DataFlasherUI) !void {
     if (self.component) |*component| {
-        if (!EventManager.subscribe(ComponentName, component)) return error.UnableToSubscribeToEventManager;
+        try EventManager.subscribe(ComponentName, component);
     } else return error.UnableToSubscribeToEventManager;
 }
 

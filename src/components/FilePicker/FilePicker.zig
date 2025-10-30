@@ -142,7 +142,7 @@ pub fn start(self: *FilePicker) !void {
     if (self.component) |*component| {
         if (component.children != null) return error.ComponentAlreadyCalledStartBefore;
 
-        if (!EventManager.subscribe(ComponentName, component)) return error.UnableToSubscribeToEventManager;
+        try EventManager.subscribe(ComponentName, component);
 
         Debug.log(.DEBUG, "FilePicker: attempting to initialize children...", .{});
 

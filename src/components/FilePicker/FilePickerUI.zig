@@ -164,7 +164,7 @@ fn ensureComponentInitialized(self: *FilePickerUI) !*Component {
 }
 
 fn subscribeToEvents(component: *Component) !void {
-    if (!EventManager.subscribe(ComponentName, component)) return error.UnableToSubscribeToEventManager;
+    try EventManager.subscribe(ComponentName, component);
 }
 
 /// Updates internal active state and reapplies panel styling; must be called on the main UI thread.
