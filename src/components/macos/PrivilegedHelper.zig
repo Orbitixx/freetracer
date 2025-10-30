@@ -460,7 +460,13 @@ pub fn workerCallback(worker: *ComponentWorker, context: *anyopaque) void {
 
 pub fn dispatchComponentAction(self: *PrivilegedHelper) void {
     //
-    const installCheckResult: HelperInstallCode = PrivilegedHelperTool.isHelperToolInstalled();
+    const installCheckResult = PrivilegedHelperTool.isHelperToolInstalled() catch |err| {
+        Debug.log(.ERROR, "Failed to check helper installation status: {any}", .{err});
+        self.state.lock();
+        defer self.state.unlock();
+        self.isHelperInstalled = false;
+        return;
+    };
 
     self.state.lock();
     defer self.state.unlock();
@@ -483,9 +489,9 @@ pub fn checkAndJoinWorker(self: *PrivilegedHelper) void {
 pub fn messageHandler(connection: xpc.xpc_connection_t, message: xpc.xpc_object_t) callconv(.c) void {
     Debug.log(.INFO, "CLIENT: Message Handler executed!", .{});
 
-    const reply_type = xpc.xpc_get_type(message);
+    const replyType = xpc.xpc_get_type(message);
 
-    if (reply_type == xpc.XPC_TYPE_DICTIONARY) {
+    if (replyType == xpc.XPC_TYPE_DICTIONARY) {
         processResponseMessage(@ptrCast(connection), message) catch |err| {
             Debug.log(.ERROR, "Freetracer caught error processing a response from helper, error: {any}", .{err});
             return;
@@ -568,7 +574,6 @@ fn processResponseMessage(connection: XPCConnection, data: XPCObject) !void {
                     .bytes_written = bytes_written,
                 },
             ));
-            // Debug.log(.INFO, "Write progress is: {d}", .{progress});
         },
 
         .ISO_WRITE_SUCCESS => {
