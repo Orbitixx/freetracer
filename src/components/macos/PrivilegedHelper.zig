@@ -1,9 +1,29 @@
-/// PrivilegedHelper mediates between the GUI and the privileged helper by owning XPC client state,
-/// staging selected image/device metadata, and emitting component events in response to helper replies.
-/// Inbound: component events from the UI and XPC reply dictionaries; Outbound: XPC requests to the helper
-/// (write image, query version) plus UI events for progress/errors. No direct disk I/O occurs here beyond
-/// validating identifiers and retaining image/device selections for the helper.
-// ----------------------------------------------------------------------------------------------------
+//! Privileged Helper Component
+//!
+//! Mediates between GUI and privileged launchd helper via XPC, managing installation,
+//! communication, and event routing.
+//!
+//! **Responsibilities:**
+//! - Verify and install privileged helper tool via SMJobBless
+//! - Manage XPC connection lifecycle (creation, reinit, communication)
+//! - Stage user-selected ISO/device metadata for helper operations
+//! - Route helper responses to appropriate event handlers
+//! - Emit component events for UI consumers (progress, errors, completion)
+//!
+//! **Architecture:**
+//! - Inbound: Component events from UI; XPC reply dictionaries from helper
+//! - Outbound: XPC requests (write ISO, query version); UI events via EventManager
+//! - No direct disk I/O (validation only)
+//!
+//! **State Management:**
+//! - Thread-safe via ComponentState.lock()
+//! - Retains ISO path, device identifier, and configuration during operation
+//! - Atomic state transitions in acquireStateDataOwnership()
+//!
+//! **Error Handling:**
+//! - XPC communication timeouts trigger reinstall with exponential backoff
+//! - Helper version mismatches trigger automatic updates
+//! - Disk permission failures require macOS privacy settings changes
 const std = @import("std");
 const rl = @import("raylib");
 const osd = @import("osdialog");
@@ -95,7 +115,6 @@ checkedDiskPermissions: bool = false,
 needsDiskPermissions: bool = false,
 
 pub const Events = struct {
-    //
     pub const onWriteImageToDeviceRequest = ComponentFramework.defineEvent(
         EventManager.createEventName(ComponentName, "on_write_iso_to_device"),
         WriteRequest,
@@ -211,6 +230,40 @@ pub const Events = struct {
     );
 };
 
+/// Initializes XPC service with standard Freetracer client configuration.
+/// Encapsulates XPC initialization to avoid code duplication.
+fn initializeXPCService() !XPCService {
+    return try XPCService.init(.{
+        .isServer = false,
+        .serviceName = "Freetracer XPC Client",
+        .serverBundleId = @ptrCast(env.HELPER_BUNDLE_ID),
+        .clientBundleId = @ptrCast(env.BUNDLE_ID),
+        .requestHandler = @ptrCast(&PrivilegedHelper.messageHandler),
+    });
+}
+
+/// Attempts helper installation and waits for launchd registration.
+/// Ensures consistent behavior across all installation paths.
+fn attemptHelperInstallation() HelperInstallCode {
+    const result = PrivilegedHelperTool.installPrivilegedHelperTool();
+    waitForHelperToolInstall();
+    return result;
+}
+
+/// Handles installation result with consistent success/error paths.
+/// Updates state and reinitializes XPC connection on success.
+fn handleInstallationResult(self: *PrivilegedHelper, result: HelperInstallCode) !void {
+    if (result == HelperInstallCode.SUCCESS) {
+        Debug.log(.INFO, "Freetracer Helper Tool is successfully installed!", .{});
+        try self.reinitializeXPCConnection();
+        self.dispatchComponentAction();
+        return;
+    }
+
+    Debug.log(.ERROR, "Failed to install privileged helper tool", .{});
+    return error.FailedToInstallPrivilegedHelperTool;
+}
+
 pub fn init(allocator: std.mem.Allocator) !PrivilegedHelper {
     return PrivilegedHelper{
         .allocator = allocator,
@@ -219,13 +272,7 @@ pub fn init(allocator: std.mem.Allocator) !PrivilegedHelper {
             // Set installed flag to true by default on Linux systems
             .isHelperInstalled = isLinux,
         }),
-        .xpcClient = try XPCService.init(.{
-            .isServer = false,
-            .serviceName = "Freetracer XPC Client",
-            .serverBundleId = @ptrCast(env.HELPER_BUNDLE_ID),
-            .clientBundleId = @ptrCast(env.BUNDLE_ID),
-            .requestHandler = @ptrCast(&PrivilegedHelper.messageHandler),
-        }),
+        .xpcClient = try initializeXPCService(),
     };
 }
 
@@ -285,7 +332,7 @@ pub fn update(self: *PrivilegedHelper) !void {
 
     if (self.xpcClient.timer.isTimerSet and self.reinstallAttempts < 1) {
         if (std.time.timestamp() - self.xpcClient.timer.timeOfLastRequest > 3) {
-            Debug.log(.ERROR, "Failed to communicate with Freetracer Helper Tool...", .{});
+            Debug.log(.WARNING, "Failed to communicate with Freetracer Helper Tool...", .{});
             defer self.xpcClient.timer.reset();
 
             const shouldReinstallHelper = osd.message(
@@ -301,13 +348,10 @@ pub fn update(self: *PrivilegedHelper) !void {
 
             Debug.log(.ERROR, "User agreed to reinstall. Making reinstall attempt...", .{});
 
-            const installResult = PrivilegedHelperTool.installPrivilegedHelperTool();
-            waitForHelperToolInstall();
+            const installResult = attemptHelperInstallation();
             self.reinstallAttempts += 1;
 
             if (installResult == HelperInstallCode.SUCCESS) {
-                Debug.log(.INFO, "Freetracer Helper Tool is successfully installed!", .{});
-
                 self.reinitializeXPCConnection() catch |err| {
                     Debug.log(.ERROR, "Failed to reinitialize XPC connection after daemon reinstall: {any}", .{err});
                     return error.FailedToReinitializeXPCConnection;
@@ -339,7 +383,6 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
     if (isLinux) return eventResult;
 
     eventLoop: switch (event.hash) {
-        //
         Events.onWriteImageToDeviceRequest.Hash => {
             const request = Events.onWriteImageToDeviceRequest.getData(event) orelse break :eventLoop;
 
@@ -368,19 +411,14 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
             const eventData = Events.onHelperVersionReceived.getData(event) orelse break :eventLoop;
 
             if (eventData.shouldHelperUpdate) {
-                const installResult = PrivilegedHelperTool.installPrivilegedHelperTool();
+                const installResult = attemptHelperInstallation();
 
                 if (installResult != HelperInstallCode.SUCCESS) {
                     Debug.log(.ERROR, "Unable to update Freetracer Helper Tool... Aborting.", .{});
                     return error.UnableToUpdateHelperTool;
                 }
 
-                self.reinitializeXPCConnection() catch |err| {
-                    Debug.log(.ERROR, "Failed to reinitialize XPC connection after daemon update: {any}", .{err});
-                    return error.FailedToReinitializeXPCConnection;
-                };
-
-                self.dispatchComponentAction();
+                try self.handleInstallationResult(installResult);
                 break :eventLoop;
             }
 
@@ -435,13 +473,7 @@ pub fn reinitializeXPCConnection(self: *PrivilegedHelper) !void {
 
     self.xpcClient.deinit();
 
-    self.xpcClient = try XPCService.init(.{
-        .isServer = false,
-        .serviceName = "Freetracer XPC Client",
-        .serverBundleId = @ptrCast(env.HELPER_BUNDLE_ID),
-        .clientBundleId = @ptrCast(env.BUNDLE_ID),
-        .requestHandler = @ptrCast(&PrivilegedHelper.messageHandler),
-    });
+    self.xpcClient = try initializeXPCService();
 
     self.xpcClient.start();
 
@@ -499,6 +531,8 @@ pub fn messageHandler(connection: xpc.xpc_connection_t, message: xpc.xpc_object_
     }
 }
 
+/// Processes response from XPC helper.
+/// Note: connection parameter required by XPC callback interface but not used here.
 fn processResponseMessage(connection: XPCConnection, data: XPCObject) !void {
     const response: HelperResponseCode = try XPCService.parseResponse(data);
 
@@ -544,7 +578,7 @@ fn processResponseMessage(connection: XPCConnection, data: XPCObject) !void {
         },
 
         .DEVICE_VALID => {
-            Debug.log(.ERROR, "Helper reported that the device is valid and opened.", .{});
+            Debug.log(.INFO, "Helper reported that the device is valid and opened.", .{});
             EventManager.broadcast(Events.onHelperDeviceOpenSuccess.create(null, null));
         },
 
@@ -665,11 +699,10 @@ fn installHelperIfNotInstalled(self: *PrivilegedHelper) !void {
     const forceHelperUpdate = try PreferencesManager.getForceHelperInstall();
 
     if (!self.isHelperInstalled or forceHelperUpdate) {
-        const installResult = PrivilegedHelperTool.installPrivilegedHelperTool();
-        waitForHelperToolInstall();
+        const installResult = attemptHelperInstallation();
 
         if (installResult == HelperInstallCode.SUCCESS) {
-            Debug.log(.INFO, "Fretracer Helper Tool is successfully installed!", .{});
+            Debug.log(.INFO, "Freetracer Helper Tool is successfully installed!", .{});
             self.dispatchComponentAction();
         } else return error.FailedToInstallPrivilegedHelperTool;
     } else Debug.log(.INFO, "Determined that Freetracer Helper Tool is already installed.", .{});

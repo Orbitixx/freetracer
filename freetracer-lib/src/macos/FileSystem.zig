@@ -46,6 +46,7 @@ pub const FileSystemType = enum {
 pub const ImageFileValidationResult = struct {
     isValid: bool = false,
     fileSystem: FileSystemType = .UNKNOWN,
+    isoParserResult: ISOParser.ISO_PARSER_RESULT = .UNABLE_TO_OBTAIN_ISO_FILE_STAT,
 };
 
 /// Error set for filesystem path operations
@@ -538,6 +539,7 @@ pub fn validateImageFile(file: std.fs.File) ImageFileValidationResult {
 
     if (isISO9660(buffer)) {
         Debug.log(.DEBUG, "isValidImageFile: Detected ISO 9660 image.", .{});
+
         if (isElToritoBootable(&file)) {
             Debug.log(.DEBUG, "isValidImageFile: ISO contains El Torito boot catalog.", .{});
             return .{ .isValid = true, .fileSystem = .ISO9660_EL_TORITO };
@@ -589,10 +591,6 @@ pub fn getImageType(path: []const u8) ImageType {
 
     return .Other;
 }
-
-// ============================================================================
-// FILE OPENING - Open and validate image files with security checks
-// ============================================================================
 
 /// Opens an ISO image file with comprehensive security validation.
 /// This is the primary entry point for accessing user-provided image files.
@@ -721,27 +719,13 @@ pub fn openFileValidated(unsanitizedIsoPath: []const u8, params: struct { userHo
 /// Called after magic signature detection for comprehensive validation.
 ///
 /// `Arguments`:
-///   imageType: Detected filesystem type from validateImageFile()
 ///   imageFile: Open file handle to the image
 ///
 /// `Current Behavior`:
-///   - Only validates ISO9660 type (other types skipped)
+///   - Only validates ISO9660 Eltorito type (other types skipped)
 ///   - Calls ISOParser.validateISOFileStructure()
-///   - Returns error on structural violations
-///
-/// `TODO`:
-///   - Add user prompt for invalid ISO structures
-///   - Consider allowing user to proceed with invalid ISO
-pub fn validateISOStructure(imageType: FileSystemType, imageFile: std.fs.File) void {
-    if (imageType == .ISO9660) {
-        const isoValidationResult = ISOParser.validateISOFileStructure(imageFile);
-
-        // TODO: If ISO structure does not conform to ISO9660, prompt user to proceed or not.
-        if (isoValidationResult != .ISO_VALID) {
-            Debug.log(.ERROR, "Invalid ISO file structure detected. Aborting... Error code: {any}", .{isoValidationResult});
-            return error.InvalidISOStructureDoesNotConformToISO9660;
-        }
-    }
+pub fn doesImageConformToISO9660(imageFile: std.fs.File) ISOParser.ISO_PARSER_RESULT {
+    return ISOParser.validateISOFileStructure(imageFile);
 }
 
 // --- Unit Tests ---

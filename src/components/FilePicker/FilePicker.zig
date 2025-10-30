@@ -256,6 +256,42 @@ pub fn confirmSelectedImageFile(self: *FilePicker) !void {
     _ = try EventManager.signal(EventManager.ComponentName.DEVICE_LIST, deactivateEvent);
 }
 
+/// Result of image validation with user confirmation.
+const ValidationPromptResult = struct {
+    shouldProceed: bool, // true if no issues OR user confirmed to proceed
+    hasIssues: bool, // true if validation issues were detected
+};
+
+/// Validates image file structure and prompts user if issues are detected.
+/// Returns shouldProceed=true if no issues detected OR user confirmed to proceed.
+/// Returns shouldProceed=false if user declined to proceed.
+/// hadIssues indicates whether any validation issues were found.
+fn processImageValidationResult(imageValidationResult: fs.ImageFileValidationResult) ValidationPromptResult {
+    // Check for unrecognized file structure
+    if (!imageValidationResult.isValid) {
+        Debug.log(.WARNING, "validateImageAndPromptIfNeeded: file structure validation failed, showing dialog", .{});
+        const proceed = osd.message(
+            "The selected file does not appear to contain a bootable file system (ISO 9660, UDF, GPT or MBR), this is unusual and may have unintended consequences. Are you sure you want to proceed?",
+            .{ .level = .warning, .buttons = .yes_no },
+        );
+        return .{ .shouldProceed = proceed, .hasIssues = true };
+    }
+
+    // Check for invalid ISO 9660 Eltorito bootable structure
+    if ((imageValidationResult.fileSystem == .ISO9660_EL_TORITO) and
+        imageValidationResult.isoParserResult != .ISO_VALID)
+    {
+        Debug.log(.WARNING, "validateImageAndPromptIfNeeded: ISO image does not conform to ISO 9660 Eltorito standard", .{});
+        const proceed = osd.message(
+            "The selected image represents itself to be a bootable ISO image but Freetracer determined that it does not conform to the ISO 9660 (Eltorito) standard.\n\nThis may lead to unintended consequences and non-bootable device. Do you wish to proceed anyway?",
+            .{ .buttons = .yes_no, .level = .warning },
+        );
+        return .{ .shouldProceed = proceed, .hasIssues = true };
+    }
+
+    return .{ .shouldProceed = true, .hasIssues = false }; // No issues detected
+}
+
 fn processSelectedPathLocked(self: *FilePicker, newPath: [:0]u8) !void {
     Debug.log(.DEBUG, "processSelectedPathLocked: attempting to validate the selected image file: {s}", .{newPath});
     const imageType = fs.getImageType(fs.getExtensionFromPath(newPath));
@@ -285,22 +321,21 @@ fn processSelectedPathLocked(self: *FilePicker, newPath: [:0]u8) !void {
     Debug.log(.DEBUG, "processSelectedPathLocked: successfully opened file. Size: {d}", .{stat.size});
     Debug.log(.DEBUG, "processSelectedPathLocked: attempting to validate structure...", .{});
 
-    if (!fs.validateImageFile(file).isValid) {
-        Debug.log(.DEBUG, "processSelectedPathLocked: file structure validation failed, showing dialog", .{});
-        const proceed = osd.message("The selected file does not appear to contain a bootable file system (ISO 9660, UDF, GPT or MBR), this is unusual and may have unintended consequences. Are you sure you want to proceed?", .{
-            .level = .warning,
-            .buttons = .yes_no,
-        });
+    const imageValidationResult = fs.validateImageFile(file);
+    const imageProcessed = processImageValidationResult(imageValidationResult);
 
-        if (!proceed) {
-            Debug.log(.DEBUG, "processSelectedPathLocked: user declined to proceed, cleaning up", .{});
-            self.allocator.free(newPath);
-            self.state.data.selectedPath = null;
-            return;
-        } else {
-            self.state.data.userForcedUnknownImage = true;
-        }
+    if (!imageProcessed.shouldProceed) {
+        Debug.log(.DEBUG, "processSelectedPathLocked: user declined to proceed, cleaning up", .{});
+        self.allocator.free(newPath);
+        self.state.data.selectedPath = null;
+        return;
     }
+
+    // Only set flag to true if issues were detected AND user confirmed to proceed
+    if (imageProcessed.shouldProceed and imageProcessed.hasIssues) {
+        Debug.log(.WARNING, "Freetracer detected issues with the selected image but the user opted to proceed anyway.", .{});
+        self.state.data.userForcedUnknownImage = true;
+    } else self.state.data.userForcedUnknownImage = false;
 
     Debug.log(.INFO, "FilePicker selected file: {s}, size: {d:.0}", .{ newPath, stat.size });
 

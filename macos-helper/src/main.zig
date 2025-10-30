@@ -346,12 +346,16 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) !void {
 
     const imageValidationResult = fs.validateImageFile(imageFile);
 
-    if (!imageValidationResult.isValid and configUserForced == 0) {
-        respondWithErrorAndTerminate(
-            .{ .err = error.ImageValidationFailed, .message = "Failed to validate image and user did not force unknown image." },
-            .{ .xpcConnection = connection, .xpcResponseCode = .IMAGE_STRUCTURE_UNRECOGNIZED },
-        );
-        return;
+    if (imageValidationResult.fileSystem == .ISO9660_EL_TORITO) {
+        const iso9660ValidationResult = fs.doesImageConformToISO9660(imageFile);
+
+        if (iso9660ValidationResult != .ISO_VALID and configUserForced != 1) {
+            respondWithErrorAndTerminate(
+                .{ .err = error.ImageValidationFailed, .message = "Failed to validate image and user did not force unknown image." },
+                .{ .xpcConnection = connection, .xpcResponseCode = .IMAGE_STRUCTURE_UNRECOGNIZED },
+            );
+            return;
+        }
     }
 
     sendXPCReply(connection, .ISO_FILE_VALID, "Image file is determined to be valid and is successfully opened.");
