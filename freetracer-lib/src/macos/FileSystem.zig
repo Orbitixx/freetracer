@@ -1,9 +1,29 @@
-// Filesystem utilities shared between the GUI client and helper for
-// constructing safe user paths, whitelisting image locations, and inspecting
-// path metadata such as extensions and image types.
-// All helpers here avoid following symlinks unless explicitly resolved and
-// guard against buffer overflows on fixed-size stacks.
-// -------------------------------------------------------------------------------
+//! Filesystem Utilities Module
+//!
+//! Provides secure and efficient filesystem operations for both the GUI application
+//! and the privileged helper process. This module handles:
+//!
+//! **Path Management**
+//!   - Safe user home directory path construction
+//!   - Symlink attack mitigation via path canonicalization
+//!   - Buffer overflow prevention on fixed-size stacks
+//!   - Whitelist validation (Desktop, Documents, Downloads)
+//!
+//! **Image File Validation**
+//!   - Magic signature detection (ISO 9660, El Torito, MBR, GPT, UDF)
+//!   - File extension parsing and classification
+//!   - Minimum size validation
+//!   - File kind verification (rejects symlinks)
+//!
+//! **Security Features**
+//!   - No symlink following unless explicitly resolved
+//!   - Realpath canonicalization for path comparison
+//!   - Whitelist-based directory access control
+//!   - File descriptor validation
+//!
+//! This module is critical to the security model - all user-provided file paths
+//! must be validated through these functions before use.
+
 const std = @import("std");
 const Character = @import("../constants.zig").Character;
 const Debug = @import("../util/debug.zig");
@@ -11,39 +31,45 @@ const ImageType = @import("../types.zig").ImageType;
 const String = @import("../util/string.zig");
 const ISOParser = @import("../ISOParser.zig");
 
+/// Supported disk image and partition table formats
 pub const FileSystemType = enum {
-    ISO9660,
-    ISO9660_EL_TORITO,
-    MBR,
-    GPT,
-    UDF,
-    UNKNOWN,
+    ISO9660, // Standard ISO 9660 filesystem
+    ISO9660_EL_TORITO, // ISO 9660 with El Torito bootable extension
+    MBR, // Master Boot Record partition table
+    GPT, // GUID Partition Table (modern alternative to MBR)
+    UDF, // Universal Disk Format (used by DVDs/Blu-rays)
+    UNKNOWN, // Format not recognized
 };
 
+/// Result of image file validation
+/// Contains both validity flag and detected filesystem type
 pub const ImageFileValidationResult = struct {
     isValid: bool = false,
     fileSystem: FileSystemType = .UNKNOWN,
 };
 
-/// Error set for path operations.
+/// Error set for filesystem path operations
 pub const PathError = error{
-    HomeEnvironmentVariableIsNULL,
-    PathTooLong,
-    PathConstructionFailed,
+    HomeEnvironmentVariableIsNULL, // $HOME environment variable not set
+    PathTooLong, // Constructed path exceeds max_path_bytes
+    PathConstructionFailed, // Path format validation failed
 };
 
-/// Concatenates the user's home directory path (retrieved from $HOME) with
-/// a provided relative path segment, storing the result in the given buffer.
+/// Concatenates the user's home directory path with a relative path segment.
+/// Constructs a complete, null-terminated path for use throughout the application.
 ///
-/// The function assumes that the `restOfPath` *begins* with the necessary
-/// path separator (`/`).
+/// `Returns`:
+///   Null-terminated slice pointing to the complete path in the buffer
 ///
-/// Parameters:
-///   - buffer: A pointer to a fixed-size buffer (`[std.fs.max_path_bytes]u8`)
-///             where the resulting path string will be written.
-///   - restOfPath: The segment of the path to append (e.g., "/Documents/file.txt").
+/// `Errors`:
+///   error.HomeEnvironmentVariableIsNULL: $HOME not set in environment
+///   error.PathTooLong: Total path exceeds system maximum
+///   error.PathConstructionFailed: restOfPath doesn't start with "/"
 ///
-/// Returns `![:0]u8`
+/// `Example`:
+///   var buffer: [std.fs.max_path_bytes]u8 = undefined;
+///   const path = try unwrapUserHomePath(&buffer, "/Documents/image.iso");
+///   path might be "/Users/{user}/Documents/image.iso"
 pub fn unwrapUserHomePath(buffer: *[std.fs.max_path_bytes]u8, restOfPath: []const u8) ![:0]u8 {
     const userDir = std.posix.getenv("HOME") orelse return PathError.HomeEnvironmentVariableIsNULL;
 
@@ -63,21 +89,37 @@ pub fn unwrapUserHomePath(buffer: *[std.fs.max_path_bytes]u8, restOfPath: []cons
     return buffer[0..totalLen :0];
 }
 
-/// Checks if a given `pathString` is a descendant of one of the allowed directories
-/// within the user's home path. This function performs canonicalization (using
-/// `std.fs.realpath`) on the allowed paths to mitigate symlink attacks.
+/// Validates that a path is within an allowed directory and not a symlink escape.
+/// Implements critical security check: prevents access to files outside
+/// the whitelisted directories even via symlink tricks.
 ///
-/// The allowed directories are:
-///   - "{userHomePath}/Desktop/"
-///   - "{userHomePath}/Documents/"
-///   - "{userHomePath}/Downloads/"
+/// Uses realpath() canonicalization to detect and prevent symlink attacks:
+/// - Resolves all symlinks and ".." references to canonical form
+/// - Compares canonical paths to prevent escaping the whitelist
 ///
-/// Parameters:
-///   - userHomePath: The absolute path to the user's home directory (e.g., "/home/user").
-///                   This is typically retrieved from `unwrapUserHomePath`.
-///   - pathString: The absolute path string provided by the user to be checked.
+/// Allowed directories (whitelisted):
+///   - $HOME/Desktop/
+///   - $HOME/Documents/
+///   - $HOME/Downloads/
 ///
-/// Returns: `bool`
+/// These directories represent locations where users commonly place ISO images
+/// while preventing access to sensitive system files or configuration directories.
+///
+/// `Arguments`:
+///   userHomePath: Absolute path to user home directory (e.g., "/Users/alice")
+///                 Usually obtained from unwrapUserHomePath()
+///   pathString: File path to validate (e.g., "/Users/alice/Documents/ubuntu.iso")
+///               Must be absolute path (starting with "/")
+///
+/// `Returns`:
+///   true if path is within an allowed directory and canonicalization succeeds
+///   false if path is outside whitelist or canonicalization fails
+///
+/// `Security Notes`:
+///   - Uses realpath() to resolve all symlinks (prevents symlink attacks)
+///   - Validates path length before processing
+///   - Returns false on any error (fail-safe)
+///   - Symlink to "/etc/passwd" in Desktop returns false (correctly rejected)
 pub fn isFilePathAllowed(userHomePath: []const u8, pathString: []const u8) bool {
     if (pathString.len >= std.fs.max_path_bytes) {
         Debug.log(.ERROR, "isFilePathAllowed: Provided path is too long (over std.fs.max_path_bytes).", .{});
@@ -133,19 +175,29 @@ pub fn isFilePathAllowed(userHomePath: []const u8, pathString: []const u8) bool 
     return false;
 }
 
-/// Extracts the file extension from a given path slice.
-/// This is a wrapper around `std.fs.path.extension`, anticipating potential std changes in the future.
-/// The returned slice includes the leading dot ('.') if an extension exists.
-/// If no extension is found, an empty slice is returned.
-///
-/// For example:
-/// "/path/to/file.txt" -> ".txt"
-/// "/path/to/archive.tar.gz" -> ".gz"
-/// "/path/to/file" -> ""
+/// Extracts the file extension from a path string.
+/// Thin wrapper around std.fs.path.extension() for future compatibility.
+/// Includes the leading dot (.) in the result if present.
 pub fn getExtensionFromPath(path: []const u8) []const u8 {
     return std.fs.path.extension(path);
 }
 
+/// Checks if ISO 9660 image contains El Torito bootable extension.
+/// El Torito is a standard for making ISOs bootable on x86 systems.
+/// Looks for boot catalog and validates boot record signatures.
+///
+/// `Arguments`:
+///   file: Open file handle positioned at beginning
+///
+/// `Returns`:
+///   true if valid El Torito boot record found, false otherwise
+///
+/// `Process`:
+///   1. Verify ISO 9660 Primary Volume Descriptor at sector 16
+///   2. Read Boot Record Volume Descriptor at sector 16
+///   3. Validate "CD001" identifier at bytes 1-5
+///   4. Extract boot catalog LBA from bytes 71-74
+///   5. Read boot catalog and validate signatures at bytes 0, 30-31
 fn isElToritoBootable(file: *const std.fs.File) bool {
     Debug.log(.DEBUG, "isElToritoBootable: Checking for El Torito boot record", .{});
     var buffer: [512]u8 = undefined;
@@ -233,6 +285,20 @@ fn isElToritoBootable(file: *const std.fs.File) bool {
     return false;
 }
 
+/// Checks if file contains UDF (Universal Disk Format) signatures.
+/// UDF is used by DVDs, Blu-rays, and some USB devices.
+/// Multiple signature types indicate UDF presence at different locations.
+///
+/// `Arguments`:
+///   file: Open file handle positioned at beginning
+///
+/// `Returns`:
+///   true if UDF descriptors found, false otherwise
+///
+/// `UDF Signature Detection`:
+///   - Checks VSD at offset 256 bytes for "BEA01", "NSR02", "NSR03"
+///   - Falls back to sector 16 (offset 32768) if not found
+///   - Validates minimum file size (32 sectors = 64KB)
 fn isUDF(file: *const std.fs.File) bool {
     Debug.log(.DEBUG, "isUDF: Checking for UDF signatures", .{});
     var buffer: [512]u8 = undefined;
@@ -306,16 +372,136 @@ fn isUDF(file: *const std.fs.File) bool {
     return false;
 }
 
-/// Checks whether a file handle points to a valid disk image.
-/// This function checks for ISO 9660, El Torito, MBR, GPT, and UDF signatures.
-/// The caller is responsible for opening the file with appropriate flags.
+/// Detects ISO 9660 filesystem signature.
+/// ISO 9660 (also called CDFS) is the standard format for CDs and DVDs.
+/// The signature "CD001" appears at bytes 1-5 of sector 16 (offset 32768).
 ///
-/// Parameters:
-///   - `file`: An open std.fs.File handle pointing to the image file.
+/// `Arguments`:
+///   buffer: 512-byte sector buffer (typically sector 16)
 ///
-/// Returns: `bool`
-/// - `true` if the file contains a recognized magic signature (ISO 9660, El Torito, MBR, GPT, or UDF)
-/// - `false` if the file is too small, unreadable, or does not contain a recognized signature
+/// `Returns`:
+///   true if "CD001" signature found at correct offset
+///
+/// `Technical Details`:
+///   - Primary Volume Descriptor located at LBA 16
+///   - Signature bytes 1-5: "CD001"
+///   - This is the most reliable way to detect ISO 9660 images
+fn isISO9660(buffer: [512]u8) bool {
+    if (buffer.len < 512) return false;
+
+    const expected_signature = "CD001";
+
+    if (buffer.len >= 6) {
+        if (std.mem.eql(u8, buffer[1..6], expected_signature)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/// Detects MBR (Master Boot Record) partition table signature.
+/// MBR is the legacy partition table format for BIOS systems.
+/// The boot signature 0x55 0xAA appears at the end of sector 0.
+///
+/// `Arguments`:
+///   buffer: 512-byte MBR sector buffer
+///
+/// `Returns`:
+///   true if MBR boot signature found at bytes 510-511
+///
+/// `Technical Details`:
+///   - Located at sector 0 (first sector)
+///   - Boot signature: 0x55AA at bytes 510-511
+///   - This is also called "partition table signature"
+fn isMBRPartitionTable(buffer: [512]u8) bool {
+    if (buffer.len < 512) return false;
+
+    const mbr_signature_1 = buffer[510];
+    const mbr_signature_2 = buffer[511];
+
+    return mbr_signature_1 == 0x55 and mbr_signature_2 == 0xAA;
+}
+
+/// Detects GPT (GUID Partition Table) signature.
+/// GPT is the modern partition table format for UEFI systems.
+/// The signature "EFI PART" appears at the start of sector 1 (LBA 1).
+///
+/// `Arguments`:
+///   file: Open file handle positioned at beginning
+///
+/// `Returns`:
+///   true if GPT header signature found at LBA 1
+///
+/// `Technical Details`:
+///   - GPT header located at LBA 1 (sector 1, offset 512)
+///   - Signature: "EFI PART" (8 bytes at offset 0)
+///   - Modern replacement for MBR on UEFI systems
+///   - Requires file seek capability
+fn isGPTPartitionTable(file: *const std.fs.File) bool {
+    Debug.log(.DEBUG, "isGPTPartitionTable: Starting GPT check", .{});
+    var buffer: [512]u8 = undefined;
+
+    Debug.log(.DEBUG, "isGPTPartitionTable: Seeking to LBA 1 (offset 512)", .{});
+    file.seekTo(512) catch |err| {
+        Debug.log(.DEBUG, "isGPTPartitionTable: Unable to seek to LBA 1. Error: {any}", .{err});
+        return false;
+    };
+
+    Debug.log(.DEBUG, "isGPTPartitionTable: Reading LBA 1", .{});
+    const bytes_read = file.read(&buffer) catch |err| {
+        Debug.log(.DEBUG, "isGPTPartitionTable: Unable to read LBA 1. Error: {any}", .{err});
+        return false;
+    };
+
+    Debug.log(.DEBUG, "isGPTPartitionTable: Read {d} bytes from LBA 1", .{bytes_read});
+
+    if (bytes_read < 8) {
+        Debug.log(.DEBUG, "isGPTPartitionTable: Not enough bytes read", .{});
+        return false;
+    }
+
+    const gpt_signature = "EFI PART";
+    if (std.mem.eql(u8, buffer[0..8], gpt_signature)) {
+        Debug.log(.DEBUG, "isGPTPartitionTable: Found GPT signature", .{});
+        return true;
+    }
+
+    Debug.log(.DEBUG, "isGPTPartitionTable: No GPT signature found", .{});
+    return false;
+}
+
+/// Validates that a file contains recognized disk image magic signatures.
+/// Checks for multiple image format types in order of likelihood.
+/// This is the primary validation function for determining if a file is a valid image.
+///
+/// `Arguments`:
+///   file: Open file handle (caller responsible for opening with read permissions)
+///
+/// `Returns`:
+///   ImageFileValidationResult containing:
+///     - isValid: true if recognized signature found
+///     - fileSystem: Type of image detected (ISO9660, MBR, GPT, UDF, etc.)
+///
+/// `Validation Process`:
+///   1. Check minimum file size (512 bytes for first sector)
+///   2. Check ISO 9660 signature (most common)
+///   3. Check for El Torito bootable extension (within ISO 9660)
+///   4. Check UDF signatures (DVDs, Blu-rays)
+///   5. Check MBR partition table signature
+///   6. Check GPT partition table signature
+///
+/// `Supported Formats`:
+///   - ISO9660: Standard CD/DVD image format
+///   - ISO9660_EL_TORITO: ISO with bootable extension
+///   - UDF: DVD/Blu-ray disc format
+///   - MBR: Master Boot Record partition table
+///   - GPT: GUID Partition Table (modern alternative)
+///
+/// `Security`:
+///   - File must be opened by caller with appropriate permissions
+///   - Validates file size before reading
+///   - Returns invalid result on any I/O errors
 pub fn validateImageFile(file: std.fs.File) ImageFileValidationResult {
     Debug.log(.DEBUG, "isValidImageFile: Starting validation", .{});
     var buffer: [512]u8 = undefined;
@@ -380,74 +566,21 @@ pub fn validateImageFile(file: std.fs.File) ImageFileValidationResult {
     return badResult;
 }
 
-/// Checks for ISO 9660 magic signature.
-/// ISO 9660 has a Primary Volume Descriptor at sector 16 (offset 32KB).
-/// The signature is the string "CD001" at bytes 1-5 of that sector.
-fn isISO9660(buffer: [512]u8) bool {
-    if (buffer.len < 512) return false;
-
-    const expected_signature = "CD001";
-
-    if (buffer.len >= 6) {
-        if (std.mem.eql(u8, buffer[1..6], expected_signature)) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-/// Checks for MBR partition table magic signature.
-/// MBR has the boot signature 0x55 0xAA at bytes 510-511.
-fn isMBRPartitionTable(buffer: [512]u8) bool {
-    if (buffer.len < 512) return false;
-
-    const mbr_signature_1 = buffer[510];
-    const mbr_signature_2 = buffer[511];
-
-    return mbr_signature_1 == 0x55 and mbr_signature_2 == 0xAA;
-}
-
-/// Checks for GPT partition table magic signature.
-/// GPT has the signature "EFI PART" at offset 0 on LBA 1 (512 bytes after MBR).
-fn isGPTPartitionTable(file: *const std.fs.File) bool {
-    Debug.log(.DEBUG, "isGPTPartitionTable: Starting GPT check", .{});
-    var buffer: [512]u8 = undefined;
-
-    Debug.log(.DEBUG, "isGPTPartitionTable: Seeking to LBA 1 (offset 512)", .{});
-    file.seekTo(512) catch |err| {
-        Debug.log(.DEBUG, "isGPTPartitionTable: Unable to seek to LBA 1. Error: {any}", .{err});
-        return false;
-    };
-
-    Debug.log(.DEBUG, "isGPTPartitionTable: Reading LBA 1", .{});
-    const bytes_read = file.read(&buffer) catch |err| {
-        Debug.log(.DEBUG, "isGPTPartitionTable: Unable to read LBA 1. Error: {any}", .{err});
-        return false;
-    };
-
-    Debug.log(.DEBUG, "isGPTPartitionTable: Read {d} bytes from LBA 1", .{bytes_read});
-
-    if (bytes_read < 8) {
-        Debug.log(.DEBUG, "isGPTPartitionTable: Not enough bytes read", .{});
-        return false;
-    }
-
-    const gpt_signature = "EFI PART";
-    if (std.mem.eql(u8, buffer[0..8], gpt_signature)) {
-        Debug.log(.DEBUG, "isGPTPartitionTable: Found GPT signature", .{});
-        return true;
-    }
-
-    Debug.log(.DEBUG, "isGPTPartitionTable: No GPT signature found", .{});
-    return false;
-}
-
-/// Determines the `ImageType` enum based on the file path's extension.
-/// This function performs a case-insensitive check for `.ISO` and `.IMG`.
-/// If the extension does not match either of those, it defaults to `ImageType.Other`.
+/// Classifies image type based on file extension.
+/// Performs case-insensitive extension matching.
+/// Used to provide user-facing information about the image file.
 ///
-/// Returns `ImageType`
+/// `Arguments`:
+///   path: File path (any format, just used for extension extraction)
+///
+/// `Returns`:
+///   ImageType.ISO if extension is .iso (case-insensitive)
+///   ImageType.IMG if extension is .img (case-insensitive)
+///   ImageType.Other for any other extension
+///
+/// `Note`:
+///   This is purely a hint based on file extension, not validation.
+///   Always call validateImageFile() for actual format verification.
 pub fn getImageType(path: []const u8) ImageType {
     const ext = getExtensionFromPath(path);
 
@@ -457,6 +590,52 @@ pub fn getImageType(path: []const u8) ImageType {
     return .Other;
 }
 
+// ============================================================================
+// FILE OPENING - Open and validate image files with security checks
+// ============================================================================
+
+/// Opens an ISO image file with comprehensive security validation.
+/// This is the primary entry point for accessing user-provided image files.
+/// Implements defense-in-depth with multiple validation layers.
+///
+/// `Validation Steps`:
+///   1. Path length check (prevent buffer overflow)
+///   2. Home path validation
+///   3. Real path resolution (symlink canonicalization)
+///   4. Path length validation (min 8 chars)
+///   5. Whitelist check (must be in Desktop/Documents/Downloads)
+///   6. Directory opening with no_follow flag
+///   7. File opening with read_only mode
+///   8. File stat validation
+///   9. File kind check (must be regular file, reject symlinks)
+///   10. Minimum size check (must be at least 17 sectors = 34816 bytes)
+///
+/// `Arguments`:
+///   unsanitizedIsoPath: User-provided path (NOT trusted, requires validation)
+///   params.userHomePath: User home directory (must be provided securely)
+///
+/// `Returns`:
+///   Open std.fs.File handle for reading the image
+///   Caller responsible for closing the file
+///
+/// `Errors`:
+///   error.ISOFilePathTooLong: Path exceeds system maximum
+///   error.UserHomePathTooShort: Invalid home path
+///   error.UnableToResolveRealISOPath: Path resolution failed
+///   error.ISOFilePathTooShort: Path too short to be valid
+///   error.ISOFileContainsRestrictedPaths: Outside whitelist
+///   error.UnableToOpenDirectoryOfSpecificedISOFile: Directory access failed
+///   error.UnableToOpenISOFileOrObtainExclusiveLock: File open failed
+///   error.UnableToObtainISOFileStat: File stat failed
+///   error.InvalidISOFileKind: Not a regular file (e.g., symlink, directory)
+///   error.InvalidISOSystemStructure: File too small for valid ISO
+///
+/// `Security Features`:
+///   - Realpath resolves all symlinks (prevents symlink escape)
+///   - no_follow flag on directory open prevents symlink races
+///   - File kind validation rejects symlinks
+///   - Whitelist prevents access to system directories
+///   - Minimum size check for basic sanity
 pub fn openFileValidated(unsanitizedIsoPath: []const u8, params: struct { userHomePath: []const u8 }) !std.fs.File {
     Debug.log(.DEBUG, "openFileValidated: Starting validation for path", .{});
 
@@ -537,6 +716,22 @@ pub fn openFileValidated(unsanitizedIsoPath: []const u8, params: struct { userHo
     return imageFile;
 }
 
+/// Validates internal structure of ISO 9660 images.
+/// Performs deep validation of ISO filesystem headers and structure.
+/// Called after magic signature detection for comprehensive validation.
+///
+/// `Arguments`:
+///   imageType: Detected filesystem type from validateImageFile()
+///   imageFile: Open file handle to the image
+///
+/// `Current Behavior`:
+///   - Only validates ISO9660 type (other types skipped)
+///   - Calls ISOParser.validateISOFileStructure()
+///   - Returns error on structural violations
+///
+/// `TODO`:
+///   - Add user prompt for invalid ISO structures
+///   - Consider allowing user to proceed with invalid ISO
 pub fn validateISOStructure(imageType: FileSystemType, imageFile: std.fs.File) void {
     if (imageType == .ISO9660) {
         const isoValidationResult = ISOParser.validateISOFileStructure(imageFile);
@@ -550,8 +745,6 @@ pub fn validateISOStructure(imageType: FileSystemType, imageFile: std.fs.File) v
 }
 
 // --- Unit Tests ---
-//
-
 test "unwrapUserHomePath tests" {
 
     // Test standard concatenation

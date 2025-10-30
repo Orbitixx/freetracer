@@ -7,17 +7,20 @@ const xpc = freetracer_lib.xpc;
 const time = freetracer_lib.time;
 
 const XPCService = freetracer_lib.Mach.XPCService;
-const DebugAllocator = std.heap.DebugAllocator(.{ .thread_safe = true });
+
+const IS_DEBUG_MODE = builtin.mode == .Debug;
+
+const Allocator = if (IS_DEBUG_MODE) std.heap.DebugAllocator(.{ .thread_safe = true }) else std.mem.Allocator;
 
 pub const ShutdownManagerSingleton = struct {
     var instance: ?ShutdownManager = null;
 
     const ShutdownManager = struct {
-        allocator: *DebugAllocator,
+        allocator: *Allocator,
         xpcService: *XPCService,
     };
 
-    pub fn init(allocator: *DebugAllocator, xpcService: *XPCService) void {
+    pub fn init(allocator: *Allocator, xpcService: *XPCService) void {
         instance = ShutdownManager{
             .allocator = allocator,
             .xpcService = xpcService,
@@ -32,15 +35,9 @@ pub const ShutdownManagerSingleton = struct {
             inst.xpcService.deinit();
             Debug.deinit();
 
-            switch (builtin.mode) {
-                .ReleaseFast, .ReleaseSafe, .ReleaseSmall => {
-                    _ = inst.allocator.detectLeaks();
-                    _ = inst.allocator.deinit();
-                },
-                else => {
-                    _ = inst.allocator.detectLeaks();
-                    _ = inst.allocator.deinit();
-                },
+            if (IS_DEBUG_MODE) {
+                _ = inst.allocator.detectLeaks();
+                _ = inst.allocator.deinit();
             }
         } else {
             Debug.log(.ERROR, "ShutdownManager.exitFunction() called prior to instance being initialized!", .{});

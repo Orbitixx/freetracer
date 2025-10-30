@@ -99,8 +99,3 @@ pub const HelperUnmountRequestCode = enum(u2) {
     SUCCESS = 1,
     TRY_AGAIN = 2,
 };
-//
-// pub const HelperResponseCode = enum(u1) {
-//     FAILURE = 0,
-//     SUCCESS = 1,
-// };

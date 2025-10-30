@@ -1,7 +1,28 @@
-// macOS IOKit helpers for enumerating removable storage devices. Wraps the
-// registry queries that filter USB/SD media, extracts BSD names, and returns
-// `StorageDevice` records for the GUI and helper to consume.
-// ---------------------------------------------------------------------------
+//! IOKit Framework Interface
+//!
+//! Provides device enumeration and discovery using macOS IOKit framework.
+//! Discovers removable storage devices (USB drives, SD cards) by querying the
+//! IORegistry for media matching removable/ejectable/whole device criteria.
+//!
+//! Key Responsibilities:
+//! - Query IORegistry for matching storage devices
+//! - Filter for physical devices (reject virtual mounts like .dmg volumes)
+//! - Classify devices by type (USB, SD card, etc.)
+//! - Extract device metadata (BSD name, size, friendly name)
+//! - Bridge IORegistry data to StorageDevice structures
+//!
+//! Device Discovery Process:
+//! 1. Query IORegistry for kIOMediaClass matching removable/ejectable devices
+//! 2. For each match, verify it's a physical device (not virtual)
+//! 3. Walk the device hierarchy up to classify USB vs SD vs other via parent
+//!    interface classes.
+//! 4. Extract BSD name (e.g., "disk4") and device size
+//! 5. Query Disk Arbitration for user-friendly volume name
+//! 6. Return StorageDevice records with all metadata
+//!
+//! This module is critical to device safety - it prevents operations on
+//! internal drives and ensures only user-intended removable media are shown.
+
 const std = @import("std");
 const types = @import("../types.zig");
 const Debug = @import("../util/debug.zig");
@@ -16,11 +37,43 @@ const MAX_DEVICE_NAME = types.MAX_DEVICE_NAME;
 const Character = constants.Character;
 const DefaultNameString = constants.k.DefaultDeviceName;
 
+/// Result of physical device classification check
+/// Contains both the physical status and device type classification
 const PhysicalDeviceCheckResult = struct {
-    isPhysical: bool = false,
-    deviceType: DeviceType = .Other,
+    isPhysical: bool = false, // true if real device, false if virtual
+    deviceType: DeviceType = .Other, // USB, SD, or Other
 };
 
+/// Enumerates all removable storage devices connected to the system.
+/// Queries IORegistry for removable/ejectable media and returns their metadata.
+/// This is the primary entry point for device discovery.
+///
+/// `Arguments`:
+///   allocator: Memory allocator for the returned ArrayList
+///
+/// `Returns`:
+///   ArrayList of StorageDevice records, one per device found
+///   Caller responsible for deinit() on the ArrayList
+///
+/// `Process`:
+///   1. Create IOServiceMatching dictionary for kIOMediaClass
+///   2. Set matching criteria: removable=true, ejectable=true, whole=true
+///   3. Iterate through matching services
+///   4. For each service:
+///      - Check if physical device (reject virtual mounts)
+///      - Extract BSD name, size, and device name
+///      - Create StorageDevice record
+///   5. Return list of all valid removable devices
+///
+/// `Errors`:
+///   error.FailedToCreateIOServiceMatchingDictionary: IORegistry error
+///   error.FailedToGetMatchingServices: IORegistry enumeration failed
+///   Errors from child functions (getBSDName, etc.)
+///
+/// `Note`:
+///   - Filters for removable=true to exclude internal drives
+///   - Filters for ejectable=true for safety
+///   - Only includes physical devices (not .dmg volumes, ramdisks, etc.)
 pub fn getStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(StorageDevice) {
     Debug.log(.DEBUG, "Querying storage devices from IORegistry...", .{});
 
@@ -30,13 +83,25 @@ pub fn getStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(StorageDev
     const matchingDict = c.IOServiceMatching(c.kIOMediaClass);
     if (matchingDict == null) return error.FailedToCreateIOServiceMatchingDictionary;
 
-    const isWholeKeyRef = c.CFStringCreateWithCString(c.kCFAllocatorDefault, c.kIOMediaWholeKey, c.kCFStringEncodingUTF8);
+    const isWholeKeyRef = c.CFStringCreateWithCString(
+        c.kCFAllocatorDefault,
+        c.kIOMediaWholeKey,
+        c.kCFStringEncodingUTF8,
+    );
     defer _ = c.CFRelease(isWholeKeyRef);
 
-    const isRemovableKeyRef = c.CFStringCreateWithCString(c.kCFAllocatorDefault, c.kIOMediaRemovableKey, c.kCFStringEncodingUTF8);
+    const isRemovableKeyRef = c.CFStringCreateWithCString(
+        c.kCFAllocatorDefault,
+        c.kIOMediaRemovableKey,
+        c.kCFStringEncodingUTF8,
+    );
     defer _ = c.CFRelease(isRemovableKeyRef);
 
-    const isEjectableKeyRef = c.CFStringCreateWithCString(c.kCFAllocatorDefault, c.kIOMediaEjectableKey, c.kCFStringEncodingUTF8);
+    const isEjectableKeyRef = c.CFStringCreateWithCString(
+        c.kCFAllocatorDefault,
+        c.kIOMediaEjectableKey,
+        c.kCFStringEncodingUTF8,
+    );
     defer _ = c.CFRelease(isEjectableKeyRef);
 
     c.CFDictionarySetValue(matchingDict, isRemovableKeyRef, c.kCFBooleanTrue);
@@ -73,6 +138,33 @@ pub fn getStorageDevices(allocator: std.mem.Allocator) !std.ArrayList(StorageDev
     return storageDevices;
 }
 
+/// Extracts all metadata from an IOService to create a StorageDevice record.
+/// Gathers BSD name, device size, and user-friendly name from IORegistry
+/// and Disk Arbitration.
+///
+/// `Arguments`:
+///   service: IOService handle from IORegistry query
+///   deviceType: Device classification (USB, SD, or Other)
+///
+/// `Returns`:
+///   StorageDevice record with all metadata populated
+///
+/// `Metadata Extracted`:
+///   - serviceId: IOService handle for later operations
+///   - bsdName: Device name (e.g., "disk2") from kIOBSDNameKey
+///   - size: Capacity in bytes from kIOMediaSizeKey
+///   - deviceName: User-friendly name (manufacturer/volume)
+///   - type: Device classification (USB, SD)
+///
+/// `Device Naming Strategy`:
+///   1. Try IORegistry product name (USB Product Name, Product Name)
+///   2. For SD cards: Format as "SD Card (volume_name)" if available
+///   3. Fall back to volume mount name from Disk Arbitration
+///   4. Final fallback to default name constant
+///
+/// `Errors`:
+///   error.BSDNameTooShort: BSD name less than 3 characters (invalid)
+///   Errors from property extraction functions
 fn getStorageDeviceFromService(service: c.io_service_t, deviceType: DeviceType) !StorageDevice {
     Debug.log(.DEBUG, "Discovered a device. Querying device details...", .{});
 
@@ -116,7 +208,6 @@ fn getStorageDeviceFromService(service: c.io_service_t, deviceType: DeviceType) 
     }
 
     Debug.log(.DEBUG, "\tPreparing to query device type...", .{});
-    // const deviceType: DeviceType = getDeviceType(service);
 
     return StorageDevice{
         .serviceId = service,
@@ -127,34 +218,91 @@ fn getStorageDeviceFromService(service: c.io_service_t, deviceType: DeviceType) 
     };
 }
 
-/// Checks whether service is a physical device or a virtual disk (e.g. a mounted dmg volume).
-/// This check is accomplished by querying the kIOPropertyProtocolCharacteristicsKey property,
-/// which only physical devices should posses.
+/// Determines if a device is physical and classifies its type.
+/// Critical safety function: prevents virtual mounts (.dmg, ramdisk, etc.)
+/// from appearing in the device list.
+///
+/// Uses IORegistry hierarchy traversal to find Protocol Characteristics
+/// property, which only physical devices possess. Walks up the device tree
+/// to parent devices to find USB/SD classification.
+///
+/// `Arguments`:
+///   service: IOService handle for the device
+///
+/// `Returns`:
+///   PhysicalDeviceCheckResult containing:
+///     - isPhysical: true if real device, false if virtual
+///     - deviceType: USB, SD, or Other if physical; Other if virtual
+///
+/// `Classification Logic`:
+///   - USB + External = USB device
+///   - SD + Internal = SD card (internal slot like on MacBook)
+///   - Other combinations = Other or virtual
+///
+/// `IORegistry Traversal`:
+///   1. Start with provided service
+///   2. Walk up to parent devices (max MAX_IOKIT_DEVICE_RECURSE_NUM levels)
+///   3. At each level, check for Protocol Characteristics property
+///   4. Extract physical interconnect type (USB, SD)
+///   5. Extract interconnect location (External, Internal)
+///   6. Return first match or false if no physical device found
+///
+/// `Safety Note`:
+///   Virtual devices (.dmg mounts, ramdisks) lack Protocol Characteristics
+///   property, so this check reliably filters them out.
 fn checkPhysicalDevice(service: c.io_service_t) PhysicalDeviceCheckResult {
     Debug.log(.DEBUG, "Attempting to check if device is a physical disk...", .{});
 
     var result: PhysicalDeviceCheckResult = .{};
     defer Debug.log(.INFO, "\t\t\tCompleted physical disk check, physical disk: {any}", .{result});
 
-    const protocolCharacteristicsKey = c.CFStringCreateWithCString(c.kCFAllocatorDefault, c.kIOPropertyProtocolCharacteristicsKey, c.kCFStringEncodingUTF8);
+    const protocolCharacteristicsKey = c.CFStringCreateWithCString(
+        c.kCFAllocatorDefault,
+        c.kIOPropertyProtocolCharacteristicsKey,
+        c.kCFStringEncodingUTF8,
+    );
     defer _ = c.CFRelease(protocolCharacteristicsKey);
 
-    const physicalInterconnectKey = c.CFStringCreateWithCString(c.kCFAllocatorDefault, c.kIOPropertyPhysicalInterconnectTypeKey, c.kCFStringEncodingUTF8);
+    const physicalInterconnectKey = c.CFStringCreateWithCString(
+        c.kCFAllocatorDefault,
+        c.kIOPropertyPhysicalInterconnectTypeKey,
+        c.kCFStringEncodingUTF8,
+    );
     defer _ = c.CFRelease(physicalInterconnectKey);
 
-    const physicalInterconnectLocationKey = c.CFStringCreateWithCString(c.kCFAllocatorDefault, c.kIOPropertyPhysicalInterconnectLocationKey, c.kCFStringEncodingUTF8);
+    const physicalInterconnectLocationKey = c.CFStringCreateWithCString(
+        c.kCFAllocatorDefault,
+        c.kIOPropertyPhysicalInterconnectLocationKey,
+        c.kCFStringEncodingUTF8,
+    );
     defer _ = c.CFRelease(physicalInterconnectLocationKey);
 
-    const physicalInterconnectUSBKey = c.CFStringCreateWithCString(c.kCFAllocatorDefault, c.kIOPropertyPhysicalInterconnectTypeUSB, c.kCFStringEncodingUTF8);
+    const physicalInterconnectUSBKey = c.CFStringCreateWithCString(
+        c.kCFAllocatorDefault,
+        c.kIOPropertyPhysicalInterconnectTypeUSB,
+        c.kCFStringEncodingUTF8,
+    );
     defer _ = c.CFRelease(physicalInterconnectUSBKey);
 
-    const physicalInterconnectSDKey = c.CFStringCreateWithCString(c.kCFAllocatorDefault, c.kIOPropertyPhysicalInterconnectTypeSecureDigital, c.kCFStringEncodingUTF8);
+    const physicalInterconnectSDKey = c.CFStringCreateWithCString(
+        c.kCFAllocatorDefault,
+        c.kIOPropertyPhysicalInterconnectTypeSecureDigital,
+        c.kCFStringEncodingUTF8,
+    );
     defer _ = c.CFRelease(physicalInterconnectSDKey);
 
-    const physicalInterconnectExternalKey = c.CFStringCreateWithCString(c.kCFAllocatorDefault, c.kIOPropertyExternalKey, c.kCFStringEncodingUTF8);
+    const physicalInterconnectExternalKey = c.CFStringCreateWithCString(
+        c.kCFAllocatorDefault,
+        c.kIOPropertyExternalKey,
+        c.kCFStringEncodingUTF8,
+    );
     defer _ = c.CFRelease(physicalInterconnectExternalKey);
 
-    const physicalInterconnectInternalKey = c.CFStringCreateWithCString(c.kCFAllocatorDefault, c.kIOPropertyInternalKey, c.kCFStringEncodingUTF8);
+    const physicalInterconnectInternalKey = c.CFStringCreateWithCString(
+        c.kCFAllocatorDefault,
+        c.kIOPropertyInternalKey,
+        c.kCFStringEncodingUTF8,
+    );
     defer _ = c.CFRelease(physicalInterconnectInternalKey);
 
     var parentService: c.io_object_t = service;
@@ -180,7 +328,12 @@ fn checkPhysicalDevice(service: c.io_service_t) PhysicalDeviceCheckResult {
 
         Debug.log(.DEBUG, "\t\t\tCreating a CFProperty from IORegistry entry...", .{});
 
-        const characteristicsDict = c.IORegistryEntryCreateCFProperty(currentService, protocolCharacteristicsKey, c.kCFAllocatorDefault, 0);
+        const characteristicsDict = c.IORegistryEntryCreateCFProperty(
+            currentService,
+            protocolCharacteristicsKey,
+            c.kCFAllocatorDefault,
+            0,
+        );
 
         if (characteristicsDict == null) continue else {
             defer _ = c.CFRelease(characteristicsDict);
@@ -209,10 +362,29 @@ fn checkPhysicalDevice(service: c.io_service_t) PhysicalDeviceCheckResult {
                 return result;
             }
 
-            const isUSB = c.CFStringCompare(@ptrCast(interconnectValue), physicalInterconnectUSBKey, 0) == c.kCFCompareEqualTo;
-            const isSD = c.CFStringCompare(@ptrCast(interconnectValue), physicalInterconnectSDKey, 0) == c.kCFCompareEqualTo;
-            const isExternal = c.CFStringCompare(@ptrCast(interconnectLocationValue), physicalInterconnectExternalKey, 0) == c.kCFCompareEqualTo;
-            const isInternal = c.CFStringCompare(@ptrCast(interconnectLocationValue), physicalInterconnectInternalKey, 0) == c.kCFCompareEqualTo;
+            const isUSB = c.CFStringCompare(
+                @ptrCast(interconnectValue),
+                physicalInterconnectUSBKey,
+                0,
+            ) == c.kCFCompareEqualTo;
+
+            const isSD = c.CFStringCompare(
+                @ptrCast(interconnectValue),
+                physicalInterconnectSDKey,
+                0,
+            ) == c.kCFCompareEqualTo;
+
+            const isExternal = c.CFStringCompare(
+                @ptrCast(interconnectLocationValue),
+                physicalInterconnectExternalKey,
+                0,
+            ) == c.kCFCompareEqualTo;
+
+            const isInternal = c.CFStringCompare(
+                @ptrCast(interconnectLocationValue),
+                physicalInterconnectInternalKey,
+                0,
+            ) == c.kCFCompareEqualTo;
 
             Debug.log(.DEBUG, "\t\t\tisUSB: {any}, isSD: {any}, isExternal: {any}, isInternal: {any}", .{ isUSB, isSD, isExternal, isInternal });
 
@@ -228,6 +400,27 @@ fn checkPhysicalDevice(service: c.io_service_t) PhysicalDeviceCheckResult {
     return result;
 }
 
+/// Extracts manufacturer's product name from IORegistry.
+/// Searches the device hierarchy for product name property
+/// (different key for USB vs other devices).
+///
+/// `Arguments`:
+///   service: IOService handle
+///   deviceType: USB or other (affects which property key is used)
+///
+/// `Returns`:
+///   Null-terminated product name buffer (e.g., "SanDisk 3.2Gen1")
+///   null if not found or on error (caller should have fallback)
+///
+/// `Search Strategy`:
+///   1. Use "USB Product Name" key for USB devices
+///   2. Use "Product Name" key for others
+///   3. Walk device hierarchy up to MAX_IOKIT_DEVICE_RECURSE_NUM levels
+///   4. Trim whitespace from result
+///   5. Return first non-empty product name found
+///
+/// `Fallback`:
+///   Returns null; caller uses volume name or default name instead
 fn getDeviceNameFromIOService(service: c.io_service_t, deviceType: DeviceType) ?[MAX_DEVICE_NAME:0]u8 {
     const productNameKeyString = if (deviceType == .USB) "USB Product Name" else "Product Name";
 
@@ -281,6 +474,33 @@ fn getDeviceNameFromIOService(service: c.io_service_t, deviceType: DeviceType) ?
     return null;
 }
 
+/// Extracts user-visible volume name using Disk Arbitration.
+/// Gets the friendly name of the mounted filesystem
+/// (e.g., "My USB Drive", "External Drive").
+///
+/// `Arguments`:
+///   bsdName: BSD device name (e.g., "disk4")
+///
+/// `Returns`:
+///   Volume name buffer if mounted, null if unmounted or not available
+///
+/// `Process`:
+///   1. Create Disk Arbitration session
+///   2. Create disk reference from BSD name
+///   3. Get disk description dictionary
+///   4. Extract volume name from kDADiskDescriptionVolumeNameKey
+///   5. Convert CFString to Zig string
+///
+/// `Errors`:
+///   error.FailedToCreateDASession: DA session creation failed
+///   error.FailedToCreateCFString: UTF8 string conversion failed
+///   error.FailedToCreateDisk: Disk reference creation failed
+///   error.FailedToGetDiskDescription: Disk description lookup failed
+///   null: Device not mounted or no volume name
+///
+/// `Note`:
+///   Returns null gracefully if volume not mounted - callers should
+///   have fallback to product name or default name.
 fn getVolumeNameFromBSDName(bsdName: []const u8) !?[MAX_DEVICE_NAME:0]u8 {
 
     // Create a DiskArbitration session
@@ -309,6 +529,7 @@ fn getVolumeNameFromBSDName(bsdName: []const u8) !?[MAX_DEVICE_NAME:0]u8 {
     if (diskInfo == null) return error.FailedToGetDiskDescription;
     defer c.CFRelease(diskInfo);
 
+    // Debug-only call to display full info about a disk
     // _ = c.CFShow(diskInfo);
 
     const volumeNameStringRef: c.CFStringRef = @ptrCast(c.CFDictionaryGetValue(diskInfo, c.kDADiskDescriptionVolumeNameKey));
@@ -322,6 +543,18 @@ fn getVolumeNameFromBSDName(bsdName: []const u8) !?[MAX_DEVICE_NAME:0]u8 {
     return nameBuffer;
 }
 
+/// Extracts a boolean property from an IOService.
+/// Wrapper for IORegistry property access with type conversion.
+///
+/// `Arguments`:
+///   service: IOService to query
+///   key: IORegistry property name (C string)
+///
+/// `Returns`:
+///   Boolean value of the property
+///
+/// `Errors`:
+///   error.FailedToGetBoolFromIOService: Property not found or type mismatch
 fn getBoolFromIOService(service: c.io_service_t, key: [*c]const u8) !bool {
     const keyRef = c.CFStringCreateWithCString(c.kCFAllocatorDefault, key, c.kCFStringEncodingUTF8);
     defer _ = c.CFRelease(keyRef);
@@ -334,6 +567,23 @@ fn getBoolFromIOService(service: c.io_service_t, key: [*c]const u8) !bool {
     return c.CFBooleanGetValue(boolRef) != 0;
 }
 
+/// Extracts a string property from an IOService.
+/// Converts CFString from IORegistry to null-terminated Zig string.
+///
+/// `Arguments`:
+///   service: IOService to query
+///   key: IORegistry property name (C string)
+///   size: Compile-time buffer size for result
+///
+/// `Returns`:
+///   Null-terminated string buffer of specified size
+///
+/// `Errors`:
+///   error.FailedToGetStringFromIOService: Property not found
+///   error.FailedToConvertStringFromIOService: CFString conversion failed
+///
+/// `Example`:
+///   const bsdName = try getStringFromIOService(service, c.kIOBSDNameKey, 32);
 fn getStringFromIOService(service: c.io_service_t, key: [*c]const u8, comptime size: usize) ![size:0]u8 {
     const stringNameKey = c.CFStringCreateWithCString(c.kCFAllocatorDefault, key, c.kCFStringEncodingUTF8);
     defer _ = c.CFRelease(stringNameKey);
@@ -352,6 +602,21 @@ fn getStringFromIOService(service: c.io_service_t, key: [*c]const u8, comptime s
     return stringNameBuf;
 }
 
+/// Extracts a numeric property from an IOService.
+/// Converts CFNumber from IORegistry to native Zig integer type.
+///
+/// `Arguments`:
+///   service: IOService to query
+///   key: IORegistry property name (C string)
+///   numberType: CFNumber type constant (e.g., kCFNumberSInt64Type)
+///   zigType: Target Zig integer type (e.g., i64, u32)
+///
+/// `Returns`:
+///   Numeric value converted to i64 (caller responsible for type safety)
+///
+/// `Errors`:
+///   error.FailedToGetNumberFromIOService: Property not found
+///   error.FailedToConvertNumberFromIOService: CFNumber conversion failed
 fn getNumberFromIOService(service: c.io_service_t, key: [*c]const u8, numberType: c_int, comptime zigType: type) !i64 {
     const numberNameKey = c.CFStringCreateWithCString(c.kCFAllocatorDefault, key, c.kCFStringEncodingUTF8);
     defer _ = c.CFRelease(numberNameKey);

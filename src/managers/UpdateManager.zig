@@ -87,7 +87,9 @@ pub const UpdateManagerSingleton = struct {
     }
 
     pub fn update() void {
-        if (instance) |inst| if (!inst.enabled) return;
+        if (instance) |inst| {
+            if (!inst.enabled) return;
+        } else return;
 
         if (worker) |*w| {
             if (w.status != .NEEDS_JOINING) return;
@@ -96,7 +98,10 @@ pub const UpdateManagerSingleton = struct {
 
             if (std.mem.eql(u8, AppConfig.APP_VERSION, instance.?.newVersion)) return;
 
-            const shouldUpdate = osd.message("A new version of Freetracer is available on Github. Download it now?\n\nUpdates are strongly recommended for security purposes.", .{ .buttons = .yes_no, .level = .info });
+            var buf = std.mem.zeroes([256]u8);
+            const message = std.fmt.bufPrintZ(buf[0..], "A new version of Freetracer ({s}) is available on Github. Download it now?\n\nUpdates are strongly recommended for security purposes.", .{instance.?.newVersion}) catch "A new version of Freetracer is available on Github. Download it now?\n\nUpdates are strongly recommended for security purposes.";
+
+            const shouldUpdate = osd.message(message, .{ .buttons = .yes_no, .level = .info });
 
             if (shouldUpdate) {
                 const argv: []const []const u8 = &.{ "open", latestUrl() };

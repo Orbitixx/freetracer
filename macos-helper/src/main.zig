@@ -72,8 +72,8 @@ const meta = std.meta;
 /// Unlike XPC protocol errors (null payload, auth failure), these result in a graceful error response
 /// sent back to the caller via `respondWithErrorAndTerminate()`.
 const RequestValidationError = error{
-    /// ISO file path is empty or missing from XPC payload.
-    EmptyIsoPath,
+    /// Image file path is empty or missing from XPC payload.
+    EmptyImagePath,
     /// Device identifier (bsdName) is empty or missing from XPC payload.
     EmptyDeviceIdentifier,
     /// Device type enum value is not a valid DeviceType variant.
@@ -97,10 +97,12 @@ comptime {
     );
 }
 
+const IS_DEBUG_MODE = builtin.mode == .Debug;
+
 /// Entry point for the SMJobBlessed privileged helper.
 ///
 /// Initialization sequence:
-/// 1. Creates a thread-safe DebugAllocator for memory leak detection.
+/// 1. Creates a thread-safe allocator (std.heap.page_allocator is thread-safe as of Zig 0.15.1).
 /// 2. Initializes Debug logging system.
 /// 3. Sets up XPC service listener with request handler callback.
 /// 4. Registers with ShutdownManager for coordinated teardown.
@@ -113,15 +115,22 @@ comptime {
 /// Returns: Never in production (dispatch loop is blocking).
 /// Errors: XPC setup failures, logging initialization failures.
 pub fn main() !void {
-    // var debugAllocator = std.heap.DebugAllocator(.{ .thread_safe = true }).init;
-    // const allocator = debugAllocator.allocator();
-
-    var mainAllocator = switch (builtin.mode) {
-        .ReleaseSafe, .ReleaseFast, .ReleaseSmall => std.heap.DebugAllocator(.{ .thread_safe = true }).init,
-        else => std.heap.DebugAllocator(.{ .thread_safe = true }).init,
+    var mainAllocator = comptime if (IS_DEBUG_MODE) finalAllocator: {
+        const allocator = std.heap.DebugAllocator(.{ .thread_safe = true });
+        break :finalAllocator allocator.init;
+    } else finalAllocator: {
+        break :finalAllocator std.heap.page_allocator;
     };
 
-    const allocator = mainAllocator.allocator();
+    // Redundant defer block, but kept as an assurance.
+    defer {
+        if (IS_DEBUG_MODE) {
+            _ = mainAllocator.detectLeaks();
+            _ = mainAllocator.deinit();
+        }
+    }
+
+    const allocator = if (IS_DEBUG_MODE) mainAllocator.allocator() else mainAllocator;
 
     try Debug.init(allocator, .{});
 
@@ -149,7 +158,6 @@ pub fn main() !void {
 }
 
 /// C-convention callback invoked by libxpc when the helper receives a message on its Mach service.
-///
 /// Called for every inbound XPC message on the helper's Mach service.
 /// Performs message authentication, type validation, and dispatch to the appropriate handler.
 ///
@@ -249,7 +257,6 @@ fn processGetHelperVersion(connection: XPCConnection) void {
 }
 
 /// Sends error response to caller and schedules helper shutdown.
-///
 /// Logs the error with context, creates an XPC error response using the provided response code,
 /// sends it back to the caller, and initiates graceful shutdown via ShutdownManager.
 ///
@@ -274,11 +281,11 @@ fn sendXPCReply(connection: XPCConnection, reply: HelperResponseCode, comptime l
     XPCService.releaseObject(replyObject);
 }
 
-/// Handles WRITE_ISO_TO_DEVICE request: ISO image validation, device write, verification, and eject.
+/// Handles WRITE_ISO_TO_DEVICE request: image validation, device write, verification, and eject.
 ///
 /// Request XPC Dict Parameters (from GUI):
-///   - imagePath (string): Absolute path to ISO image file.
-///   - disk (string): Device identifier (e.g., "disk2").
+///   - imagePath (string): Absolute path to the image file.
+///   - disk (string): Device identifier (e.g., "disk4").
 ///   - deviceServiceId (uint64): Service ID of the device (for validation).
 ///   - deviceType (uint64): Device type enum (cast from DeviceType).
 ///   - config_userForced (uint64): If non-zero, skip image validation (user acknowledged warnings).
@@ -320,7 +327,7 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) !void {
     });
 
     // Validate core parameters
-    if (imagePath.len == 0) return RequestValidationError.EmptyIsoPath;
+    if (imagePath.len == 0) return RequestValidationError.EmptyImagePath;
     if (deviceBsdName.len == 0) return RequestValidationError.EmptyDeviceIdentifier;
 
     Debug.log(.INFO, "Received service: {d}", .{deviceServiceId});
@@ -372,8 +379,8 @@ fn processRequestWriteImage(connection: XPCConnection, data: XPCObject) !void {
 
     sendXPCReply(connection, .DEVICE_VALID, "Device is determined to be valid and is successfully opened.");
 
-    // Write ISO image to device; progress updates sent over XPC connection.
-    fsops.writeISO(connection, imageFile, deviceHandle) catch |err| {
+    // Write image to device; progress updates sent over XPC connection.
+    fsops.writeImage(connection, imageFile, deviceHandle) catch |err| {
         respondWithErrorAndTerminate(
             .{ .err = err, .message = "Unable to write image to device." },
             .{ .xpcConnection = connection, .xpcResponseCode = .ISO_WRITE_FAIL },

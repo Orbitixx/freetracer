@@ -1,3 +1,7 @@
+//! Currently deprecated and unused. Though may be useful in helping
+//! users troubleshoot error messages and opening the currect Settings
+//! screen. Leaving in for now.
+
 const c = @import("../types.zig").c;
 const Debug = @import("../util/debug.zig");
 

@@ -1,3 +1,28 @@
+//! Privileged Helper Filesystem Utilities
+//!
+//! Provides low-level disk I/O operations for the privileged helper process.
+//! Handles the critical operations of writing images to devices and
+//! verifying the written data for data integrity.
+//!
+//! Key Operations:
+//! - Image writing with optimized block-aligned buffering
+//! - Device capacity probing for safe write chunk sizes
+//! - Real-time progress reporting via XPC to GUI
+//! - Byte-by-byte verification of written data
+//! - Aggressive caching optimization (fcntl flags)
+//!
+//! Performance Characteristics:
+//! - Uses direct write to device (no extra buffering layers)
+//! - Probes device capabilities (block size, max write blocks)
+//! - Adaptive chunk sizing (4-16 MB, aligned to device blocks)
+//! - Batched progress updates to reduce XPC overhead
+//! - Prefetching enabled on source image
+//!
+//! Reliability:
+//! - Single fsync() at end of write operation (via Zig's sync() abstraction)
+//! - Byte-by-byte verification with mismatch detection
+//! - Comprehensive error logging
+
 const std = @import("std");
 const env = @import("../env.zig");
 const testing = std.testing;
@@ -21,11 +46,38 @@ const XPCService = freetracer_lib.Mach.XPCService;
 const XPCConnection = freetracer_lib.Mach.XPCConnection;
 const XPCObject = freetracer_lib.Mach.XPCObject;
 
-const MIN_WRITE_SIZE = 4 * 1_024 * 1_024; // 4 MB minimum
-const MAX_WRITE_SIZE = 16 * 1_024 * 1_024; // 16 MB maximum
+const MIN_WRITE_SIZE = 4 * 1_024 * 1_024; // 4 MB minimum - safety threshold
+const MAX_WRITE_SIZE = 16 * 1_024 * 1_024; // 16 MB maximum - prevent excessive memory use
 
-/// Queries device limits and returns clamped write chunk size aligned to physical block size.
-/// Returns 4 MiB on any failure or suspicious values.
+/// Probes device capabilities and returns optimal write chunk size.
+/// Queries the device for physical block size and maximum write blocks,
+/// then calculates an optimal chunk size aligned to device boundaries.
+/// This optimization ensures efficient I/O without overwhelming the device.
+///
+/// `Arguments`:
+///   device: Open device file handle
+///
+/// `Returns`:
+///   Optimal write chunk size in bytes (4-16 MB, block-aligned)
+///   Falls back to 4 MB on any error or suspicious device response
+///
+/// `Optimization Strategy`:
+///   1. Query DKIOCGETBLOCKSIZE (device physical block size, default 4KB)
+///   2. Query DKIOCGETMAXBLOCKCOUNTWRITE (max blocks per write, default 1024)
+///   3. Calculate: blockSize * maxBlockCount
+///   4. Clamp to [4MB, 16MB] range for safety
+///   5. Align down to nearest block size multiple for device alignment
+///   6. Fall back to 4MB if result is 0
+///
+/// `Performance Impact`:
+///   - Larger chunks = fewer I/O syscalls, better throughput
+///   - Device-aligned chunks = optimal filesystem performance
+///   - 4-16MB range balances memory use vs I/O efficiency
+///
+/// `Safety`:
+///   - Returns 4MB on any ioctl failure (conservative default)
+///   - Clamps to prevent excessive memory allocation
+///   - Validates non-zero values before use
 fn probeDeviceWriteSize(device: std.fs.File) u64 {
     const fd: c_int = @intCast(device.handle);
     var blockSize: u32 = 4096; // Default: 4KB sectors
@@ -64,7 +116,45 @@ fn probeDeviceWriteSize(device: std.fs.File) u64 {
     return finalSize;
 }
 
-pub fn writeISO(connection: XPCConnection, imageFile: std.fs.File, deviceHandle: DeviceHandle) !void {
+/// Writes an image to target device with aggressive performance optimization.
+/// Core operation: read from image file, write directly to device.
+/// Real-time progress is sent to GUI via XPC with instantaneous and average rates.
+///
+/// `Arguments`:
+///   connection: XPC connection to GUI for progress updates
+///   imageFile: Open ISO image file (read position at start)
+///   deviceHandle: Target device to write to
+///
+/// `Errors`:
+///   Propagates file I/O errors from read/write operations
+///
+/// `Performance Optimizations`:
+///   1. fcntl(F_NOCACHE): Disable filesystem caching on both files
+///      - Avoids memory bloat from buffering large writes
+///      - Forces direct I/O to device
+///   2. fcntl(F_RDAHEAD): Enable read-ahead on image
+///      - Kernel pre-fetches next blocks while current write is in progress
+///      - Reduces read latency on sequential scans
+///   3. Device-optimal chunk size (4-16 MB block-aligned)
+///      - Minimizes syscall overhead
+///      - Aligns with device's native I/O capabilities
+///   4. Single fsync() at end via Zig's sync()
+///      - Ensures all data reaches device
+///      - Amortized cost compared to sync after each chunk
+///
+/// `Progress Reporting`:
+///   Sends updates on dual triggers to prevent both flooding XPC and stale UI:
+///   - Byte-based: Every 8 MB written (avoids excessive overhead)
+///   - Time-based: Every 100 ms (ensures responsive UI even on slow devices)
+///   - Completion: Final update when write finishes
+///
+/// `Reported Metrics`:
+///   - write_progress: Percentage complete (0-100)
+///   - write_rate: Current instantaneous write rate (bytes/sec)
+///   - write_rate_avg: Average rate since start (bytes/sec)
+///   - write_bytes: Total bytes written so far
+///   - write_total_size: Total image size
+pub fn writeImage(connection: XPCConnection, imageFile: std.fs.File, deviceHandle: DeviceHandle) !void {
     Debug.log(.INFO, "Begin writing prep...", .{});
 
     const device = deviceHandle.raw;
@@ -89,7 +179,7 @@ pub fn writeISO(connection: XPCConnection, imageFile: std.fs.File, deviceHandle:
     var overallTimer = try std.time.Timer.start();
 
     Debug.log(.INFO, "File and device are opened successfully! File size: {d}", .{imageSize});
-    Debug.log(.INFO, "Writing ISO to device with {d}MB chunks, please wait...", .{CHUNK_SIZE / (1024 * 1024)});
+    Debug.log(.INFO, "Writing image to device with {d}MB chunks, please wait...", .{CHUNK_SIZE / (1024 * 1024)});
 
     // Seek both files to start
     try imageFile.seekTo(0);
@@ -109,7 +199,7 @@ pub fn writeISO(connection: XPCConnection, imageFile: std.fs.File, deviceHandle:
         const bytesRead = try imageFile.read(readBuffer);
 
         if (bytesRead == 0) {
-            Debug.log(.INFO, "End of ISO File reached at byte: {d}", .{currentByte});
+            Debug.log(.INFO, "End of image file reached at byte: {d}", .{currentByte});
             break;
         }
 
@@ -171,9 +261,54 @@ pub fn writeISO(connection: XPCConnection, imageFile: std.fs.File, deviceHandle:
     // Single sync at the end to ensure all data is written to disk
     try device.sync();
 
-    Debug.log(.INFO, "Finished writing ISO image to device!", .{});
+    Debug.log(.INFO, "Finished writing image to device!", .{});
 }
 
+// ============================================================================
+// VERIFICATION OPERATION - Byte-by-byte integrity check
+// ============================================================================
+
+/// Verifies that data written to device matches source ISO image exactly.
+/// Critical final step: ensures write completed successfully and uncorrupted.
+/// Reads chunks from both image and device, comparing sequentially.
+///
+/// `Arguments`:
+///   connection: XPC connection to GUI for progress updates
+///   imageFile: Source ISO image file
+///   deviceHandle: Target device to verify
+///
+/// `Errors`:
+///   error.MismatchingISOAndDeviceBytesDetected: Byte mismatch found
+///   File I/O errors from read operations
+///
+/// `Verification Strategy`:
+///   1. Use same probed chunk size as writeISO (consistency)
+///   2. Read chunk from image, read same amount from device
+///   3. Compare byte-by-byte (std.mem.eql)
+///   4. Return error immediately on first mismatch (fail-fast)
+///   5. Send progress updates with same batching as write
+///
+/// `Performance Considerations`:
+///   - Allocates two buffers (device may cache differently than image)
+///   - Sequential reads are fast (kernel-optimized)
+///   - Verification is slower than write but essential
+///   - Batched progress updates prevent XPC saturation
+///   - Same 8MB/100ms update intervals as write
+///
+/// `Data Integrity`:
+///   - Detects bit flips, write failures, or device issues
+///   - Catches silent data corruption that write() doesn't detect
+///   - Essential for bootable media (bad sectors corrupt boot)
+///
+/// `Error Handling`:
+///   - Detects device returning fewer bytes than expected (I/O error)
+///   - Fails fast on first mismatch (no partial passes)
+///   - Logs mismatch details for debugging
+///
+/// `Note`:
+///   This is deliberately slow and thorough - we verify the entire image
+///   to ensure correctness, not speed. A failed verify is better than
+///   a silent corruption that prevents boot.
 pub fn verifyWrittenBytes(connection: XPCConnection, imageFile: std.fs.File, deviceHandle: DeviceHandle) !void {
     const device = deviceHandle.raw;
 
@@ -200,7 +335,7 @@ pub fn verifyWrittenBytes(connection: XPCConnection, imageFile: std.fs.File, dev
     var timerCheckCounter: u32 = 0;
 
     Debug.log(.INFO, "File and device are opened successfully! File size: {d}", .{imageSize});
-    Debug.log(.INFO, "Verifying ISO bytes written to device with {d}MB chunks, please wait...", .{CHUNK_SIZE / (1024 * 1024)});
+    Debug.log(.INFO, "Verifying image bytes written to device with {d}MB chunks, please wait...", .{CHUNK_SIZE / (1024 * 1024)});
 
     // Seek both files to start
     try imageFile.seekTo(0);
@@ -211,7 +346,7 @@ pub fn verifyWrittenBytes(connection: XPCConnection, imageFile: std.fs.File, dev
         const imageBytesRead = try imageFile.read(imageByteBuffer);
 
         if (imageBytesRead == 0) {
-            Debug.log(.INFO, "End of ISO File reached at byte: {d}", .{currentByte});
+            Debug.log(.INFO, "End of image file reached at byte: {d}", .{currentByte});
             break;
         }
 
@@ -267,5 +402,5 @@ pub fn verifyWrittenBytes(connection: XPCConnection, imageFile: std.fs.File, dev
         }
     }
 
-    Debug.log(.INFO, "Finished verifying ISO image written to device!", .{});
+    Debug.log(.INFO, "Finished verifying image written to device!", .{});
 }

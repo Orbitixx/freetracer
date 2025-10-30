@@ -1,7 +1,7 @@
-// Provides ISO9660/El Torito structural validation used by the helper before
-// writing images to disk. Performs partial sector scanning to ensure boot
-// catalog integrity, volume descriptors, and capacity checks against the
-// target device.
+//! Provides ISO9660/El Torito structural validation used by the helper before
+//! writing images to disk. Performs partial sector scanning to ensure boot
+//! catalog integrity, volume descriptors, and capacity checks against the
+//! target device.
 // --------------------------------------------------------------------------
 const std = @import("std");
 const Debug = @import("util/debug.zig");

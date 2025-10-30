@@ -28,7 +28,7 @@ pub const INFO_PLIST =
     \\  </dict>
     \\  <key>SMAuthorizedClients</key>
     \\      <array>
-    \\          <string>identifier "com.example.myapp" and anchor apple generic and certificate leaf[subject.OU] = "XXXXXXXXX" and certificate 1[field.1.2.840.113635.100.6.2.1] /* exists */</string>
+    \\          <string>identifier "com.example.myapp" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and certificate leaf[subject.OU] = XXXXXXXXX</string>
     \\      </array>
     \\</dict>
     \\</plist> 

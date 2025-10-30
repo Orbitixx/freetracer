@@ -413,6 +413,39 @@ const AppManager = struct {
         }
     }
 
+    /// Resolves file system paths relative to user home directory.
+    /// Resolves both logs and preferences paths with proper error handling.
+    ///
+    /// `Arguments`:
+    ///   logsPathBuffer: Buffer to store resolved logs path
+    ///   prefsPathBuffer: Buffer to store resolved preferences path
+    ///
+    /// `Returns`:
+    ///   Tuple containing (logsPath, prefsPath) as null-terminated slices
+    ///
+    /// `Errors`:
+    ///   Propagates errors from fs.unwrapUserHomePath()
+    fn resolvePaths(
+        self: *AppManager,
+        logsPathBuffer: *[std.fs.max_path_bytes]u8,
+        prefsPathBuffer: *[std.fs.max_path_bytes]u8,
+    ) ![2][:0]u8 {
+        _ = self;
+        const logsPath = fs.unwrapUserHomePath(logsPathBuffer, AppConfig.MAIN_APP_LOGS_PATH) catch |err| {
+            Debug.log(.ERROR, "Failed to resolve logs path: {any}", .{err});
+            _ = osd.message("Failed to resolve logs directory path.", .{ .buttons = .ok, .level = .err });
+            return err;
+        };
+
+        const prefsPath = fs.unwrapUserHomePath(prefsPathBuffer, AppConfig.PREFERENCES_PATH) catch |err| {
+            Debug.log(.ERROR, "Failed to resolve preferences path: {any}", .{err});
+            _ = osd.message("Failed to resolve preferences directory path.", .{ .buttons = .ok, .level = .err });
+            return err;
+        };
+
+        return .{ logsPath, prefsPath };
+    }
+
     /// Runs the main application loop.
     /// This is the primary entry point that orchestrates the entire application.
     /// It performs the following in order:
@@ -432,89 +465,31 @@ const AppManager = struct {
     fn run(self: *AppManager) !void {
         // Resolve file system paths relative to user home directory
         var logsPathBuffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
-        const logsPath = fs.unwrapUserHomePath(&logsPathBuffer, AppConfig.MAIN_APP_LOGS_PATH) catch |err| {
-            Debug.log(.ERROR, "Failed to resolve logs path: {any}", .{err});
-            _ = osd.message("Failed to resolve logs directory path.", .{ .buttons = .ok, .level = .err });
-            return err;
-        };
-
         var prefsPathBuffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
-        const prefsPath = fs.unwrapUserHomePath(&prefsPathBuffer, AppConfig.PREFERENCES_PATH) catch |err| {
-            Debug.log(.ERROR, "Failed to resolve preferences path: {any}", .{err});
-            _ = osd.message("Failed to resolve preferences directory path.", .{ .buttons = .ok, .level = .err });
-            return err;
-        };
+        const paths = try self.resolvePaths(&logsPathBuffer, &prefsPathBuffer);
+        const logsPath = paths[0];
+        const prefsPath = paths[1];
 
         // ===================== SINGLETON MANAGERS ===========================
         // Initialize all singleton managers in dependency order.
         // Each manager is responsible for its own state and resources.
         // ========================================================================
 
-        try Debug.init(self.allocator, .{ .standaloneLogFilePath = logsPath });
-        defer Debug.deinit();
-        Debug.log(.INFO, "Debug system initialized", .{});
-
-        var isFirstAppLaunch = PreferencesManager.init(self.allocator, prefsPath) catch |err| {
-            Debug.log(.ERROR, "Failed to initialize PreferencesManager: {any}", .{err});
-            _ = osd.message("Failed to initialize application preferences.", .{ .buttons = .ok, .level = .err });
-            return err;
-        };
-        defer PreferencesManager.deinit();
-        Debug.log(.INFO, "PreferencesManager initialized (first launch: {})", .{isFirstAppLaunch});
-
-        Debug.setLoggingSeverity(PreferencesManager.getDebugLevel() catch .INFO) catch |err| {
-            Debug.log(.WARNING, "Failed to set logging severity: {any}", .{err});
-        };
-
-        try WindowManager.init();
-        defer WindowManager.deinit();
-
-        try ResourceManager.init(self.allocator);
-        defer ResourceManager.deinit();
-
-        try EventManager.init(self.allocator);
-        defer EventManager.deinit();
-
-        const shouldCheckUpdates = if (isFirstAppLaunch) true else (PreferencesManager.getCheckUpdates() catch false);
-        try UpdateManager.init(
-            self.allocator,
-            shouldCheckUpdates,
-            !isFirstAppLaunch,
-        );
-        defer UpdateManager.deinit();
-        Debug.log(.INFO, "UpdateManager initialized (check updates: {})", .{shouldCheckUpdates});
-
-        // ========================================================================
-        // ===================== END SIGNLETON MANAGERS ===========================
-        // ========================================================================
+        var isFirstAppLaunch = try self.initializeManagers(logsPath, prefsPath);
+        defer self.deinitializeManagers();
 
         // ============================ UI SETUP ==================================
         // Initialize global transform for all UI elements.
         // Init root layout and its children (AppManager-local UI only).
         // ========================================================================
 
-        self.globalTransform = Transform{
-            .x = 0,
-            .y = 0,
-            .w = WindowManager.getWindowWidth(),
-            .h = WindowManager.getWindowHeight(),
-            .size = .pixels(WindowManager.getWindowWidth(), WindowManager.getWindowHeight()),
-            .position_ref = null,
-            .size_ref = null,
-            .relative = null,
-            .relativeTransform = null,
-        };
-        self.globalTransform.resolve();
+        self.setupGlobalTransform();
 
         var ui = UIChain.init(self.allocator);
         self.layout = try self.initLayout(&ui);
         defer self.layout.deinit();
         try self.layout.start();
         Debug.log(.INFO, "UI layout initialized and started", .{});
-
-        // ========================================================================
-        // ============================ END UI SETUP ==============================
-        // ========================================================================
 
         // ============================ COMPONENTS INIT ===========================
         // Initialize main application components (which init their own children)
@@ -523,14 +498,14 @@ const AppManager = struct {
         var componentRegistry = ComponentFramework.Registry.init(self.allocator);
         defer componentRegistry.deinit();
 
-        var isoFilePicker = FilePicker.init(self.allocator) catch |err| {
-            Debug.log(.ERROR, "Failed to initialize ISOFilePicker: {any}", .{err});
+        var filePicker = FilePicker.init(self.allocator) catch |err| {
+            Debug.log(.ERROR, "Failed to initialize FilePicker: {any}", .{err});
             _ = osd.message("Failed to initialize file picker component.", .{ .buttons = .ok, .level = .err });
             return err;
         };
-        try componentRegistry.register(ComponentID.ISOFilePicker, @constCast(isoFilePicker.asComponentPtr()));
-        try isoFilePicker.start();
-        Debug.log(.DEBUG, "ISOFilePicker initialized", .{});
+        try componentRegistry.register(ComponentID.ISOFilePicker, @constCast(filePicker.asComponentPtr()));
+        try filePicker.start();
+        Debug.log(.DEBUG, "FilePicker initialized", .{});
 
         var deviceList = DeviceList.init(self.allocator) catch |err| {
             Debug.log(.ERROR, "Failed to initialize DeviceList: {any}", .{err});
@@ -566,18 +541,13 @@ const AppManager = struct {
         // ============================ END COMPONENTS INIT =======================
         // ========================================================================
 
-        const backgroundColor: rl.Color = Color.themeBg;
-        const centerX: i32 = @intFromFloat(WindowManager.getWindowWidth() / 2);
-        const centerY: i32 = @intFromFloat(WindowManager.getWindowHeight() / 2);
-        const radius: f32 = WindowManager.getWindowWidth() / 2 + WindowManager.getWindowWidth() * 0.2;
-        const innerColor: rl.Color = rl.Color.init(32, 32, 44, 255);
-        const outerColor: rl.Color = Color.themeBg;
-
-        Debug.log(.INFO, "Starting main application loop", .{});
+        const renderCtx = self.initRenderContext();
 
         // ============================ MAIN APP LOOP ===========================
         // Continuously update and render until user closes window
         // ========================================================================
+
+        Debug.log(.INFO, "Starting main application loop", .{});
 
         while (!rl.windowShouldClose()) {
             // Update phase: process input and state changes
@@ -589,8 +559,8 @@ const AppManager = struct {
             rl.beginDrawing();
             defer rl.endDrawing();
 
-            rl.clearBackground(backgroundColor);
-            rl.drawCircleGradient(centerX, centerY, radius, innerColor, outerColor);
+            rl.clearBackground(renderCtx.backgroundColor);
+            rl.drawCircleGradient(renderCtx.centerX, renderCtx.centerY, renderCtx.radius, renderCtx.innerColor, renderCtx.outerColor);
 
             UI.BackgroundStars.draw();
             try self.layout.draw();
@@ -609,6 +579,113 @@ const AppManager = struct {
         }
 
         Debug.log(.INFO, "Application main loop ended, shutting down gracefully", .{});
+    }
+
+    /// Rendering context for the main application loop.
+    /// Holds pre-calculated rendering constants to avoid recalculation each frame.
+    const RenderContext = struct {
+        backgroundColor: rl.Color,
+        centerX: i32,
+        centerY: i32,
+        radius: f32,
+        innerColor: rl.Color,
+        outerColor: rl.Color,
+    };
+
+    /// Initializes the rendering context with pre-calculated values.
+    /// Computes all constant values used during the main render loop.
+    ///
+    /// `Returns`:
+    ///   RenderContext struct with all rendering constants
+    fn initRenderContext(self: *AppManager) RenderContext {
+        _ = self;
+        return .{
+            .backgroundColor = Color.themeBg,
+            .centerX = @intFromFloat(WindowManager.getWindowWidth() / 2),
+            .centerY = @intFromFloat(WindowManager.getWindowHeight() / 2),
+            .radius = WindowManager.getWindowWidth() / 2 + WindowManager.getWindowWidth() * 0.2,
+            .innerColor = rl.Color.init(32, 32, 44, 255),
+            .outerColor = Color.themeBg,
+        };
+    }
+
+    /// Cleans up all singleton managers in proper reverse order.
+    /// Must be called exactly once at the end of the application lifecycle.
+    /// Called via defer statement to ensure cleanup even on error.
+    fn deinitializeManagers(self: *AppManager) void {
+        _ = self;
+        UpdateManager.deinit();
+        EventManager.deinit();
+        ResourceManager.deinit();
+        WindowManager.deinit();
+        PreferencesManager.deinit();
+        Debug.deinit();
+    }
+
+    /// Initializes all singleton managers in dependency order.
+    /// Handles initialization of Debug, PreferencesManager, WindowManager,
+    /// ResourceManager, EventManager, and UpdateManager. The caller is responsible
+    /// for setting up a defer to deinitializeManagers() to maintain proper cleanup order.
+    ///
+    /// `Arguments`:
+    ///   logsPath: Path to the logs directory (null-terminated)
+    ///   prefsPath: Path to the preferences directory (null-terminated)
+    ///
+    /// `Returns`:
+    ///   Boolean indicating if this is the first application launch
+    ///
+    /// `Errors`:
+    ///   Propagates errors from any manager initialization failures
+    fn initializeManagers(self: *AppManager, logsPath: [:0]u8, prefsPath: [:0]u8) !bool {
+        // Initialize Debug system first (dependency for all logging)
+        try Debug.init(self.allocator, .{ .standaloneLogFilePath = logsPath });
+        Debug.log(.INFO, "Debug system initialized", .{});
+
+        // Initialize preferences (needed to configure other managers)
+        const isFirstAppLaunch = PreferencesManager.init(self.allocator, prefsPath) catch |err| {
+            Debug.log(.ERROR, "Failed to initialize PreferencesManager: {any}", .{err});
+            _ = osd.message("Failed to initialize application preferences.", .{ .buttons = .ok, .level = .err });
+            return err;
+        };
+        Debug.log(.INFO, "PreferencesManager initialized (first launch: {})", .{isFirstAppLaunch});
+
+        // Apply preferred logging level
+        Debug.setLoggingSeverity(PreferencesManager.getDebugLevel() catch .INFO) catch |err| {
+            Debug.log(.WARNING, "Failed to set logging severity: {any}", .{err});
+        };
+
+        // Initialize remaining managers in order
+        try WindowManager.init();
+        try ResourceManager.init(self.allocator);
+        try EventManager.init(self.allocator);
+
+        // Initialize UpdateManager with appropriate settings
+        const shouldCheckUpdates = if (isFirstAppLaunch) true else (PreferencesManager.getCheckUpdates() catch false);
+        try UpdateManager.init(
+            self.allocator,
+            shouldCheckUpdates,
+            !isFirstAppLaunch,
+        );
+        Debug.log(.INFO, "UpdateManager initialized (check updates: {})", .{shouldCheckUpdates});
+
+        return isFirstAppLaunch;
+    }
+
+    /// Initializes the global UI transform.
+    /// Sets up the global transform based on current window dimensions.
+    fn setupGlobalTransform(self: *AppManager) void {
+        self.globalTransform = Transform{
+            .x = 0,
+            .y = 0,
+            .w = WindowManager.getWindowWidth(),
+            .h = WindowManager.getWindowHeight(),
+            .size = .pixels(WindowManager.getWindowWidth(), WindowManager.getWindowHeight()),
+            .position_ref = null,
+            .size_ref = null,
+            .relative = null,
+            .relativeTransform = null,
+        };
+        self.globalTransform.resolve();
     }
 
     /// Initializes the root UI layout hierarchy.
