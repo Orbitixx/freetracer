@@ -557,7 +557,6 @@ const AppManager = struct {
 
             // Render phase: draw all components
             rl.beginDrawing();
-            defer rl.endDrawing();
 
             rl.clearBackground(renderCtx.backgroundColor);
             rl.drawCircleGradient(renderCtx.centerX, renderCtx.centerY, renderCtx.radius, renderCtx.innerColor, renderCtx.outerColor);
@@ -567,6 +566,8 @@ const AppManager = struct {
 
             UpdateManager.draw();
             try componentRegistry.drawAll();
+
+            rl.endDrawing();
 
             // Check for updates on first launch after initial frame
             if (isFirstAppLaunch) {
