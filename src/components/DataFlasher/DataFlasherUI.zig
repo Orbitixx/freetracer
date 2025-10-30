@@ -1,14 +1,14 @@
-// This file implements the UI component for the DataFlasher module. It is responsible
-// for rendering the flasher's state, including the selected ISO file and target device,
-// progress bar, and status indicators. It operates entirely in the unprivileged GUI
-// process, receiving state changes and progress updates via an internal event system
-// from its parent `DataFlasher` component, which in turn communicates with the
-// privileged helper. This component allocates UI widgets using an allocator provided
-// by its parent and is responsible for their deinitialization.
+//! This file implements the UI component for the DataFlasher module.
+//!
+//! It is responsible for rendering the flasher's state, related GUI elements and
+//! processing events received from PrivilegerHelper Component, among others.
+//! This component allocates UI widgets using an allocator provided
+//! by its parent and is responsible for their deinitialization.
+//! ====================================================================================
 const std = @import("std");
 const rl = @import("raylib");
-const freetracer_lib = @import("freetracer-lib");
 const osd = @import("osdialog");
+const freetracer_lib = @import("freetracer-lib");
 const Debug = freetracer_lib.Debug;
 
 const AppConfig = @import("../../config.zig");
@@ -1157,7 +1157,48 @@ pub const UIConfig = struct {
                     params,
                 );
 
-                DataFlasher.flashISOtoDeviceWrapper.call(component.parent);
+                const eventResult = EventManager.signal(
+                    EventManager.ComponentName.DATA_FLASHER,
+                    DataFlasher.Events.onWriteImageRequested.create(null, null),
+                ) catch |err| blk: {
+                    Debug.log(.ERROR, "DataFlasherUI received error on DataFlasher.Events.onWriteImageRequested event dispatch: {any}", .{err});
+                    break :blk EventResult{ .success = false, .validation = .FAILURE, .detail = .None };
+                };
+
+                if (!eventResult.success) {
+                    Debug.log(.WARNING, "DataFlasherUI.LaunchButton.Callback: received {any} code.", .{eventResult.detail});
+
+                    switch (eventResult.detail) {
+                        .FailedToInstallHelper => {
+                            _ = osd.message("Freetracer was unable to install its Helper Tool, which is the part of the app that performs the actual flashing. Please press the `Start Over` button or restart the app to try again.", .{ .buttons = .ok, .level = .err });
+                        },
+                        .FailedWriteRequest => {
+                            _ = osd.message("Freetracer failed to submit a write request to the Freetracer Helper Tool. Please see detailed logs in ~/freetracer.log and consider submitting a bug report at github.com/orbitixx/freetracer.", .{ .buttons = .ok, .level = .err });
+                        },
+                        else => {
+                            _ = osd.message("Freetracer encountered an error attemting to submit a flash request. Please see detailed logs in ~/freetracer.log and consider submitting a bug report at github.com/orbitixx/freetracer.", .{ .buttons = .ok, .level = .err });
+                        },
+                    }
+
+                    AppManager.reportAction(.FlashFailed) catch {
+                        Debug.log(.ERROR, "DataFlasherUI.LaunchButton.Callback: failed to report .FlashFailed action!", .{});
+                        const confirmation = osd.message("Freetracer failed to transition global state.\n\nThis is a critical error, please see detailed logs and consider submitting a bug report. Freetracer will quit now.", .{ .buttons = .ok, .level = .err });
+                        // NOTE: this is a "hard exit" signal, relying on the OS for cleanup
+                        if (confirmation) std.process.exit(99);
+                    };
+
+                    component.setStatusBoxUIToFailedState();
+
+                    component.layout.emitEvent(.{ .SpriteButtonEnabledChanged = .{
+                        .target = .DataFlasherLaunchButton,
+                        .enabled = true,
+                    } }, params);
+
+                    component.layout.emitEvent(.{ .TextChanged = .{
+                        .target = .DataFlasherLogsTextbox,
+                        .text = "\nFailed to request flash, try again...",
+                    } }, params);
+                }
             }
 
             pub fn OnStateChanged(ctx: *anyopaque, flag: bool) void {
@@ -1184,7 +1225,7 @@ pub const UIConfig = struct {
 
             pub fn handleFailedToOpenDeviceMessage(ctx: ?*anyopaque) callconv(.c) void {
                 _ = ctx;
-                _ = osd.message("Freetracer appears to have access to the device but is unable to obtain a stable handle.\n\nPlease ensure no other process is actively using the device.\n\nTo troubleshoot, you could try unmounting volumes from the device (not ejecting) using Disk Utility.", .{ .buttons = .ok, .level = .err });
+                _ = osd.message("Freetracer appears to have access to the device but is unable to obtain a stable handle.\n\nPlease ensure no other process is actively using the device.\n\nPress `Start Over` and try again. If the issue persists, you could try unmounting volumes from the device (not ejecting) using Disk Utility.", .{ .buttons = .ok, .level = .err });
             }
 
             pub fn handleFailedToEjectDeviceMessage(ctx: ?*anyopaque) callconv(.c) void {

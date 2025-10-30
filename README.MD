@@ -110,24 +110,7 @@ It’s surprisingly common for simple utilities to request broad access or phone
 Build the library, helper, and main app:
 
 ```bash
-cd ./freetracer-lib/
-zig build -Dtarget=aarch64-macos --release=safe
-
-cd ../macos-helper/
-zig build -Dtarget=aarch64-macos --release=safe
-
-cd ..
-zig build -Dtarget=aarch64-macos --release=safe
-```
-
-Create the app bundle and copy artifacts:
-
-```bash
-cp ./src/resources/* ./Freetracer.app/Contents/Resources/
-cp ./macos-helper/zig-out/bin/macos_helper \
-   ./Freetracer.app/Contents/Library/LaunchServices/com.{your-id}.freetracer-helper
-cp ./macos/Info.plist ./Freetracer.app/Contents/
-cp ./zig-out/bin/freetracer ./Freetracer.app/Contents/MacOS/Freetracer
+zig build -Dtarget=aarch64-macos --release=safe bundle
 ```
 
 Codesign the helper and the app (replace IDs with your own):

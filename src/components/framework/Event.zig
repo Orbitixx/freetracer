@@ -36,10 +36,20 @@ pub const ComponentEvent = struct {
 
 pub const EventHash = u64;
 
+pub const EventResultDetail = enum {
+    None,
+    IncorrectImagePath,
+    IncorrectDeviceBSDName,
+    FailedToTransitionState,
+    FailedToInstallHelper,
+    FailedWriteRequest,
+};
+
 pub const EventResult = struct {
     success: bool = false,
     validation: EventValidation = .FAILURE,
     data: ?*anyopaque = null,
+    detail: EventResultDetail = .None,
 
     pub const EventValidation = enum(u1) {
         FAILURE = 0,
@@ -60,6 +70,11 @@ pub const EventResult = struct {
         self.success = false;
         self.validation = .FAILURE;
         return self.*;
+    }
+
+    pub fn failWithDetail(self: *EventResult, detail: EventResultDetail) EventResult {
+        self.detail = detail;
+        return self.fail();
     }
 
     pub fn validate(self: *EventResult, validation: EventValidation) void {

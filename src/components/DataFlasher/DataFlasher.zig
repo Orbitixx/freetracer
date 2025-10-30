@@ -59,6 +59,12 @@ pub const Events = struct {
         struct { isActive: bool },
         struct {},
     );
+
+    pub const onWriteImageRequested = ComponentFramework.defineEvent(
+        EventManager.createEventName(ComponentName, "on_image_flash_requested"),
+        struct {},
+        struct {},
+    );
 };
 
 pub const DEVICE_SIZE_CHECK = enum(u1) {
@@ -112,100 +118,15 @@ pub fn handleEvent(self: *DataFlasher, event: ComponentEvent) !EventResult {
     return switch (event.hash) {
         DeviceList.Events.onDeviceListActiveStateChanged.Hash => try self.handleDeviceListActiveStateChanged(event),
         AppManager.Events.AppResetEvent.Hash => self.handleAppResetRequest(),
+        Events.onWriteImageRequested.Hash => self.handleOnWriteImageRequested(),
         else => return eventResult.fail(),
     };
 }
 
 pub fn dispatchComponentAction(self: *DataFlasher) void {
-    Debug.log(.DEBUG, "DataFlasher: dispatching component action!", .{});
-
-    AppManager.reportAction(.SelectionConfirmed) catch |err| {
-        Debug.log(.ERROR, "DataFlasher: Unable to report 'SelectionConfirmed' action to AppManager, error: {any}", .{err});
-        return;
-    };
-
-    // NOTE: Need to be careful with the memory access operations here since targetDisk (and obtained slice below)
-    // live/s only within the scope of this function.
-    var device: StorageDevice = undefined;
-    var imagePath: [:0]const u8 = undefined;
-    var imageType: ImageType = undefined;
-    var writeConfig: PrivilegedHelper.WriteConfig = .{};
-
-    {
-        self.state.lock();
-        defer self.state.unlock();
-        device = self.state.data.device.?;
-        imagePath = self.state.data.imagePath.?;
-        imageType = self.state.data.image.type;
-        writeConfig = self.state.data.config;
-    }
-
-    self.state.lock();
-    errdefer self.state.unlock();
-
-    if (imagePath.len > 3) {
-        Debug.log(.DEBUG, "DataFlasher.dispatchComponentAction(): image path is confirmed as: {s}", .{imagePath});
-    } else {
-        Debug.log(.WARNING, "DataFlasher.dispatchComponentAction(): image path is NULL! Aborting...", .{});
-        return;
-    }
-
-    if (device.getBsdNameSlice().len < 2) {
-        Debug.log(.ERROR, "DataFlasher.dispatchComponentAction: unable to obtain the BSD Name of the target device.", .{});
-        return;
-    }
-
-    Debug.log(.DEBUG, "DataFlasher.dispatchComponentAction(): target device is confirmed as: {s}", .{device.getBsdNameSlice()});
-
-    self.state.unlock();
-
-    // NOTE: Since the application's function is to perform a raw, block-for-block write of the image to the device,
-    // it has no need to understand the internal filesystem structure of the ISO file. Therefore, the most secure approach
-    // is to avoid parsing the ISO 9660 filesystem structure entirely.
-
-    // const isoParserResult = ISOParser.parseIso(self.allocator, imagePath, device.size);
-    //
-    // if (isoParserResult != ISOParser.ISO_PARSER_RESULT.ISO_VALID) {
-    //     var message: [*:0]const u8 = "";
-    //
-    //     switch (isoParserResult) {
-    //         ISO_STATUS.INSUFFICIENT_DEVICE_CAPACITY => message = "The selected ISO file is larger than the capacity of the selected device.",
-    //         ISO_STATUS.ISO_BOOT_OR_PVD_SECTOR_TOO_SHORT => message = "ISO appears corrupted: the Boot Record or the Primary Volume Descriptor are too short.",
-    //         // NOTE: this may be OK and desirable if the ISO is not an OS. Consider allowing to proceed.
-    //
-    //         ISO_STATUS.ISO_INVALID_BOOT_INDICATOR => message = "ISO is not bootable, its boot indicator is set to non-bootable.",
-    //         ISO_STATUS.ISO_INVALID_BOOT_SIGNATURE => message = "ISO appears corrupted: the boot signature is not correct.",
-    //         ISO_STATUS.ISO_INVALID_REQUIRED_VOLUME_DESCRIPTORS => message = "ISO appears corrupted: unable to locate either the Primary Volume Descriptor or the Boot Record.",
-    //         ISO_STATUS.ISO_SYSTEM_BLOCK_TOO_SHORT => message = "ISO appears corrputed: its system block is too short.",
-    //         ISO_STATUS.UNABLE_TO_OPEN_ISO_FILE => message = "Freetracer is unable to open/read the selected ISO file. Please check permissions.",
-    //         // TODO: implement remaining status codes
-    //         else => message = "Unknown/unhandled ISO parser exception.",
-    //     }
-    //
-    //     _ = osd.message(message, .{ .level = .err, .buttons = .ok });
-    //
-    //     return;
-    // }
-
-    // Send a request to write to target disk to the PrivilegedHelper Component, which will communicate with the Helper Tool
-    const writeRequest = PrivilegedHelper.WriteRequest{
-        .targetDisk = device.getBsdNameSlice(),
-        .imagePath = imagePath,
-        .device = device,
-        .imageType = imageType,
-        .config = writeConfig,
-    };
-
-    const flashResult = EventManager.signal(
-        "privileged_helper",
-        PrivilegedHelper.Events.onWriteImageToDeviceRequest.create(self.asComponentPtr(), &writeRequest),
-    ) catch |err| errBlk: {
-        Debug.log(.ERROR, "DataFlasher: Received an error dispatching a disk write request. Aborting... Error: {any}", .{err});
-        break :errBlk EventResult{ .success = false, .validation = .FAILURE };
-    };
-
-    if (!flashResult.success) return;
+    _ = self;
 }
+
 pub fn deinit(self: *DataFlasher) void {
     _ = self;
 }
@@ -296,13 +217,108 @@ fn handleDeviceListActiveStateChanged(self: *DataFlasher, event: ComponentEvent)
     return eventResult.succeed();
 }
 
-pub const flashISOtoDeviceWrapper = struct {
-    pub fn call(ctx: *anyopaque) void {
-        var self = DataFlasher.asInstance(ctx);
-        if (self.ui) |*ui| ui.flashRequested = true;
-        self.dispatchComponentAction();
+pub fn handleOnWriteImageRequested(self: *DataFlasher) !EventResult {
+    var eventResult = EventResult.init();
+
+    if (self.ui) |*ui| ui.flashRequested = true;
+
+    Debug.log(.DEBUG, "DataFlasher: image write requested by DataFlasherUI!", .{});
+
+    AppManager.reportAction(.SelectionConfirmed) catch |err| {
+        Debug.log(.ERROR, "DataFlasher: Unable to report 'SelectionConfirmed' action to AppManager, error: {any}", .{err});
+        return eventResult.failWithDetail(.FailedToTransitionState);
+    };
+
+    // NOTE: Need to be careful with the memory access operations here since targetDisk (and obtained slice below)
+    // live/s only within the scope of this function.
+    var device: StorageDevice = undefined;
+    var imagePath: [:0]const u8 = undefined;
+    var imageType: ImageType = undefined;
+    var writeConfig: PrivilegedHelper.WriteConfig = .{};
+
+    {
+        self.state.lock();
+        defer self.state.unlock();
+        device = self.state.data.device.?;
+        imagePath = self.state.data.imagePath.?;
+        imageType = self.state.data.image.type;
+        writeConfig = self.state.data.config;
     }
-};
+
+    self.state.lock();
+    errdefer self.state.unlock();
+
+    if (imagePath.len > 3) {
+        Debug.log(.DEBUG, "DataFlasher.dispatchComponentAction(): image path is confirmed as: {s}", .{imagePath});
+    } else {
+        Debug.log(.WARNING, "DataFlasher.dispatchComponentAction(): image path is NULL! Aborting...", .{});
+        return eventResult.failWithDetail(.IncorrectImagePath);
+    }
+
+    if (device.getBsdNameSlice().len < 2) {
+        Debug.log(.ERROR, "DataFlasher.dispatchComponentAction: unable to obtain the BSD Name of the target device.", .{});
+        return eventResult.failWithDetail(.IncorrectDeviceBSDName);
+    }
+
+    Debug.log(.DEBUG, "DataFlasher.dispatchComponentAction(): target device is confirmed as: {s}", .{device.getBsdNameSlice()});
+
+    self.state.unlock();
+
+    // NOTE: Since the application's function is to perform a raw, block-for-block write of the image to the device,
+    // it has no need to understand the internal filesystem structure of the ISO file. Therefore, the most secure approach
+    // is to avoid parsing the ISO 9660 filesystem structure entirely.
+
+    // const isoParserResult = ISOParser.parseIso(self.allocator, imagePath, device.size);
+    //
+    // if (isoParserResult != ISOParser.ISO_PARSER_RESULT.ISO_VALID) {
+    //     var message: [*:0]const u8 = "";
+    //
+    //     switch (isoParserResult) {
+    //         ISO_STATUS.INSUFFICIENT_DEVICE_CAPACITY => message = "The selected ISO file is larger than the capacity of the selected device.",
+    //         ISO_STATUS.ISO_BOOT_OR_PVD_SECTOR_TOO_SHORT => message = "ISO appears corrupted: the Boot Record or the Primary Volume Descriptor are too short.",
+    //         // NOTE: this may be OK and desirable if the ISO is not an OS. Consider allowing to proceed.
+    //
+    //         ISO_STATUS.ISO_INVALID_BOOT_INDICATOR => message = "ISO is not bootable, its boot indicator is set to non-bootable.",
+    //         ISO_STATUS.ISO_INVALID_BOOT_SIGNATURE => message = "ISO appears corrupted: the boot signature is not correct.",
+    //         ISO_STATUS.ISO_INVALID_REQUIRED_VOLUME_DESCRIPTORS => message = "ISO appears corrupted: unable to locate either the Primary Volume Descriptor or the Boot Record.",
+    //         ISO_STATUS.ISO_SYSTEM_BLOCK_TOO_SHORT => message = "ISO appears corrputed: its system block is too short.",
+    //         ISO_STATUS.UNABLE_TO_OPEN_ISO_FILE => message = "Freetracer is unable to open/read the selected ISO file. Please check permissions.",
+    //         // TODO: implement remaining status codes
+    //         else => message = "Unknown/unhandled ISO parser exception.",
+    //     }
+    //
+    //     _ = osd.message(message, .{ .level = .err, .buttons = .ok });
+    //
+    //     return;
+    // }
+
+    // Send a request to write to target disk to the PrivilegedHelper Component, which will communicate with the Helper Tool
+    const writeRequest = PrivilegedHelper.WriteRequest{
+        .targetDisk = device.getBsdNameSlice(),
+        .imagePath = imagePath,
+        .device = device,
+        .imageType = imageType,
+        .config = writeConfig,
+    };
+
+    const flashResult = EventManager.signal(
+        EventManager.ComponentName.PRIVILEGED_HELPER,
+        PrivilegedHelper.Events.onWriteImageToDeviceRequest.create(self.asComponentPtr(), &writeRequest),
+    ) catch |err| errBlk: {
+        Debug.log(.ERROR, "DataFlasher: Received an error dispatching a disk write request. Aborting... Error: {any}", .{err});
+        break :errBlk EventResult{ .success = false, .validation = .FAILURE, .detail = .FailedWriteRequest };
+    };
+
+    return flashResult;
+}
+
+// pub const requestImageFlashWrapper = struct {
+//     pub fn call(ctx: *anyopaque) void {
+//         var self = DataFlasher.asInstance(ctx);
+//         if (self.ui) |*ui| ui.flashrequested = true;
+//         self.dispatchcomponentaction();
+//     }
+// };
 
 pub fn toggleConfigFlagVerifyBytes(ctx: *anyopaque) void {
     var self: *DataFlasher = @ptrCast(@alignCast(ctx));

@@ -347,7 +347,7 @@ pub fn handleEvent(self: *PrivilegedHelper, event: ComponentEvent) !EventResult 
 
             self.installHelperIfNotInstalled() catch |err| {
                 Debug.log(.ERROR, "An error occurred while trying to install Freetracer Helper Tool. Exiting event loop... {any}", .{err});
-                break :eventLoop;
+                return eventResult.failWithDetail(.FailedToInstallHelper);
             };
 
             self.xpcClient.start();
