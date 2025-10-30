@@ -52,11 +52,11 @@ pub const ShutdownManagerSingleton = struct {
     /// Initializes the shutdown manager singleton.
     /// Must be called exactly once during application startup before any shutdown operations.
     ///
-    /// Arguments:
+    /// `Arguments`:
     ///   allocator: Memory allocator for managing helper resources (used for leak detection in debug mode)
     ///   xpcService: XPC service instance to be cleaned up during shutdown
     ///
-    /// Returns: ShutdownError.AlreadyInitialized if init() called more than once
+    /// `Returns`: ShutdownError.AlreadyInitialized if init() called more than once
     pub fn init(allocator: *Allocator, xpcService: *XPCService) ShutdownError!void {
         mutex.lock();
         defer mutex.unlock();
@@ -105,11 +105,9 @@ pub const ShutdownManagerSingleton = struct {
     }
 
     /// Internal callback for dispatch_async_f to perform shutdown and exit.
-    ///
     /// This function is invoked asynchronously on the main dispatch queue by exitSuccessfully()
     /// or terminateWithError(). It performs full cleanup and then terminates the process.
-    ///
-    /// Safety: The context parameter is unused but required by callconv(.c) signature for C interop.
+    /// `Safety`: The context parameter is unused but required by callconv(.c) signature for C interop.
     fn exitFunction(context: ?*anyopaque) callconv(.c) void {
         _ = context;
         performShutdown();
@@ -125,7 +123,7 @@ pub const ShutdownManagerSingleton = struct {
     pub fn exitSuccessfully() void {
         Debug.log(.INFO, "Freetracer Helper successfully finished executing.", .{});
 
-        // Allow Debug system time to flush logs asynchronously before shutdown
+        // Allow Debug system time to flush logs  before shutdown
         std.Thread.sleep(SHUTDOWN_DELAY_NS);
 
         // Schedule exit on main dispatch queue to ensure clean XPC teardown
@@ -137,7 +135,7 @@ pub const ShutdownManagerSingleton = struct {
     /// Logs the error code, waits to allow log flushing, then dispatches shutdown
     /// to the main queue and exits with status code 0 (launchd will detect error via logs).
     ///
-    /// Arguments:
+    /// `Arguments`:
     ///   err: The error that triggered shutdown (logged for debugging)
     ///
     /// This function does not return; it always results in process termination.

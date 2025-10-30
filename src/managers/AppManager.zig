@@ -36,16 +36,13 @@ const DeviceList = @import("../components/DeviceList/DeviceList.zig");
 const DataFlasher = @import("../components/DataFlasher/DataFlasher.zig");
 const PrivilegedHelper = @import("../components/macos/PrivilegedHelper.zig");
 
-const UI = @import("../components/ui/import/index.zig");
-const Button = @import("../components/ui/Button.zig");
-const Checkbox = @import("../components/ui/Checkbox.zig");
-const Rectangle = UI.RectanglePro;
-
 const UIFramework = @import("../components/ui/framework/import.zig");
 const Transform = UIFramework.Transform;
 const View = UIFramework.View;
 const UIChain = UIFramework.UIChain;
 const Texture = UIFramework.Texture;
+
+const BackgroundStars = @import("../components/ui/BackgroundStars.zig");
 
 const relY = WindowManager.relH;
 const relX = WindowManager.relW;
@@ -561,7 +558,7 @@ const AppManager = struct {
             rl.clearBackground(renderCtx.backgroundColor);
             rl.drawCircleGradient(renderCtx.centerX, renderCtx.centerY, renderCtx.radius, renderCtx.innerColor, renderCtx.outerColor);
 
-            UI.BackgroundStars.draw();
+            BackgroundStars.draw();
             try self.layout.draw();
 
             UpdateManager.draw();

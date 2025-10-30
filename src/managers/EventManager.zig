@@ -102,10 +102,10 @@ pub const EventManagerSingleton = struct {
         /// Unregisters a subscriber from event routing.
         /// Must be called before component is deallocated.
         ///
-        /// Arguments:
+        /// `Arguments`:
         ///   name: Component identifier to remove
         ///
-        /// Returns: EventManagerError.SubscriberNotFound if not registered
+        /// `Returns`: EventManagerError.SubscriberNotFound if not registered
         fn unsubscribe(self: *EventManager, comptime name: []const u8) EventManagerError!void {
             if (self.subscribers.remove(hashComponentName(name))) {
                 return;
@@ -118,11 +118,11 @@ pub const EventManagerSingleton = struct {
         /// Routes an event to a specific named subscriber.
         /// Event is delivered only to the target component.
         ///
-        /// Arguments:
+        /// `Arguments`:
         ///   recipientName: Target component identifier
         ///   event: Event object to deliver
         ///
-        /// Returns: EventResult from recipient, or error if not found
+        /// `Returns`: EventResult from recipient, or error if not found
         fn signal(self: *EventManager, comptime recipientName: []const u8, event: Event) !EventResult {
             const target = self.subscribers.get(hashComponentName(recipientName));
 
@@ -138,10 +138,10 @@ pub const EventManagerSingleton = struct {
         /// Skips sender component unless overrideNotifySelfOnSelfOrigin is true.
         /// Continues broadcasting even if some subscribers error.
         ///
-        /// Note: Broadcasts are delivered without lock held to prevent deadlocks
+        /// `Note`: Broadcasts are delivered without lock held to prevent deadlocks
         /// when components broadcast events from within event handlers.
         ///
-        /// Arguments:
+        /// `Arguments`:
         ///   event: Event object to broadcast
         fn broadcast(self: *EventManager, event: Event) void {
             var iter = self.subscribers.iterator();
@@ -175,10 +175,10 @@ pub const EventManagerSingleton = struct {
     /// Initializes the EventManager singleton.
     /// Must be called exactly once at application startup.
     ///
-    /// Arguments:
+    /// `Arguments`:
     ///   allocator: Memory allocator for subscriber registry. Must remain valid for app lifetime.
     ///
-    /// Returns: EventManagerError.AlreadyInitialized if init() called more than once
+    /// `Returns`: EventManagerError.AlreadyInitialized if init() called more than once
     pub fn init(allocator: std.mem.Allocator) EventManagerError!void {
         mutex.lock();
         defer mutex.unlock();
@@ -200,11 +200,11 @@ pub const EventManagerSingleton = struct {
     /// Registers a component to receive routed events.
     /// Component must remain valid until unsubscribe() is called.
     ///
-    /// Arguments:
+    /// `Arguments`:
     ///   subscriberName: Component identifier for event routing
     ///   subscriber: Pointer to component (must not be freed before unsubscribe)
     ///
-    /// Returns: EventManagerError if subscription fails
+    /// `Returns`: EventManagerError if subscription fails
     pub fn subscribe(comptime subscriberName: []const u8, subscriber: *Component) EventManagerError!void {
         mutex.lock();
         defer mutex.unlock();
@@ -220,10 +220,10 @@ pub const EventManagerSingleton = struct {
     /// Unregisters a component from receiving events.
     /// Must be called before component is deallocated.
     ///
-    /// Arguments:
+    /// `Arguments`:
     ///   subscriberName: Component identifier to unsubscribe
     ///
-    /// Returns: EventManagerError if subscriber not found
+    /// `Returns`: EventManagerError if subscriber not found
     pub fn unsubscribe(comptime subscriberName: []const u8) EventManagerError!void {
         mutex.lock();
         defer mutex.unlock();
@@ -239,14 +239,14 @@ pub const EventManagerSingleton = struct {
     /// Routes an event to a specific named component.
     /// Only the target component receives the event.
     ///
-    /// Note: Lock is released before calling handleEvent to prevent deadlocks
+    /// `Note`: Lock is released before calling handleEvent to prevent deadlocks
     /// when components route events from within event handlers.
     ///
-    /// Arguments:
+    /// `Arguments`:
     ///   recipientName: Target component identifier
     ///   event: Event object to deliver
     ///
-    /// Returns: EventResult from recipient or error if not found
+    /// `Returns`: EventResult from recipient or error if not found
     pub fn signal(comptime recipientName: []const u8, event: Event) !EventResult {
         // Get target subscriber while holding lock
         var targetComponent: ?*Component = null;
@@ -276,10 +276,10 @@ pub const EventManagerSingleton = struct {
     /// Skips the event source component unless explicitly overridden.
     /// Continues delivery even if some subscribers error.
     ///
-    /// Note: Lock is released before calling handleEvent to prevent deadlocks
+    /// `Note`: Lock is released before calling handleEvent to prevent deadlocks
     /// when components broadcast events from within event handlers.
     ///
-    /// Arguments:
+    /// `Arguments`:
     ///   event: Event object to distribute
     pub fn broadcast(event: Event) void {
         // Check initialization and get instance reference while holding lock
@@ -304,7 +304,7 @@ pub const EventManagerSingleton = struct {
     /// Checks if EventManager has been successfully initialized.
     /// Use this to verify initialization before relying on event routing.
     ///
-    /// Returns: true if init() succeeded and completed
+    /// `Returns`: true if init() succeeded and completed
     pub fn isReady() bool {
         mutex.lock();
         defer mutex.unlock();
