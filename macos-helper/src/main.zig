@@ -149,7 +149,7 @@ pub fn main() !void {
 
     // All deinit()'s are handled by the ShutdownManager because XPC's
     // main dispatch queue is thread-blocking and it never returns.
-    ShutdownManager.init(&mainAllocator, &xpcServer);
+    try ShutdownManager.init(&mainAllocator, &xpcServer);
     // Should never execute in production, but just in case as a safeguard.
     defer ShutdownManager.terminateWithError(error.HelperProcessUnexpectedlyTerminatedFromMain);
 
