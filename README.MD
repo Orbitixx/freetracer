@@ -27,11 +27,11 @@
 ---
 
 <p align="center">
-  <img src="docs/img/freetracer-scr-1.png" alt="Freetracer file picker section screenshot" width="280">
+  <img src="docs/img/freetracer-scr-1.png" alt="Freetracer file picker section screenshot" width="260">
   <span>&nbsp;</span>
-  <img src="docs/img/freetracer-scr-2.png" alt="Freetracer device selection screen screenshot" width="280">
+  <img src="docs/img/freetracer-scr-2.png" alt="Freetracer device selection screen screenshot" width="260">
   <span>&nbsp;</span>
-  <img src="docs/img/freetracer-scr-3.png" alt="Freetracer data flasher screen screenshot" width="280">
+  <img src="docs/img/freetracer-scr-3.png" alt="Freetracer data flasher screen screenshot" width="260">
 </p>
 
 | 🛡️ **Privacy-first** | 🔌 **Works fully offline** | ⚡ **Native Zig speed** |
