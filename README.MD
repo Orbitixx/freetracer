@@ -3,14 +3,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/orbitixx/freetracer/releases/latest">
-  <img src="https://img.shields.io/badge/latest-1.0rc-green?style=for-the-badge" alt="Lates app version badge">
-    
-  </a>
-  <a href="https://github.com/orbitixx/freetracer/releases/latest">
-  <img src="https://img.shields.io/badge/zig-0.15.1-orange?style=for-the-badge" alt="Zig version badge">
-  </a>
+  <a href="https://github.com/orbitixx/freetracer/releases/latest"><img src="https://img.shields.io/badge/latest-1.0rc-green?style=for-the-badge" alt="Lates app version badge"></a>
   <img src="https://img.shields.io/badge/app%20bundle-4.7%20MB-blue?style=for-the-badge" alt="Bundle size badge">
+  <img src="https://img.shields.io/badge/zig-0.15.1-orange?style=for-the-badge" alt="Zig version badge">
 </p>
 
 <p align="center"><i>A small, simple, <b>private</b>, offline-first and native image flasher.</i></p>
@@ -27,6 +22,16 @@
 
 <p align="center">
   <img src="docs/img/freetracer-cover.png" alt="Freetracer data flasher screen screenshot" width="860">
+</p>
+
+---
+
+<p align="center">
+  <img src="docs/img/freetracer-scr-1.png" alt="Freetracer file picker section screenshot" width="280">
+  <span>&nbsp;</span>
+  <img src="docs/img/freetracer-scr-2.png" alt="Freetracer device selection screen screenshot" width="280">
+  <span>&nbsp;</span>
+  <img src="docs/img/freetracer-scr-3.png" alt="Freetracer data flasher screen screenshot" width="280">
 </p>
 
 | 🛡️ **Privacy-first** | 🔌 **Works fully offline** | ⚡ **Native Zig speed** |
