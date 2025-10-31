@@ -69,7 +69,7 @@ It’s surprisingly common for simple utilities to request broad access or phone
 
 **What Freetracer _does_ do:**
 - **Scoped file access**: When you pick or drag-and-drop an image, Freetracer requests access only to that item or folder (e.g., `~/Downloads`). By design, it will reject files selected from outside the logical user locations of `~/Downloads`, `~/Documents`, or `~/Desktop`.  
-- **Privileged operations isolated**: On macOS, a small **Privileged Helper Tool** (Apple-endorsed pattern) performs tasks that require elevated privileges (e.g., unmounts, disk eject). The main app talks to it over XPC using a **Mach service**, keeping sensitive operations contained and auditable.
+- **Privileged operations isolated**: On macOS, a small **Privileged Helper Tool** ([Apple-endorsed pattern](https://developer.apple.com/library/archive/documentation/Security/Conceptual/SecureCodingGuide/Articles/AccessControl.html#//apple_ref/doc/uid/TP40002589-SW2)) performs tasks that require elevated privileges (e.g., unmounts, disk eject). The main app talks to it over XPC using a **Mach service**, keeping sensitive operations contained and auditable.
 - **Transparent permissions**: The helper inherits only the permissions the app explicitly has. No silent escalation, no surprise access.
 
 **Transparency ledger** (full details in [Security & Privacy guidance](docs/security-and-privacy.md)):
@@ -112,6 +112,12 @@ It’s surprisingly common for simple utilities to request broad access or phone
 
 **Build steps**
 
+Populate the property lists:
+1. For the main app, edit `./macos/Info.plist` with your Apple Developer Certificate ID, amend bundle id in `./src/env.zig`
+2. For the helper, edit `./macos-helper/src/env.zig` with your Apple Developer Certificate ID, similalry amend the bundle IDs.
+
+> **Note**: if not using an organizational certificate and using a personal one, modify the `[subject.OU] = XXXXXXXX` fiels to instead be: `[subject.CN] = FirstName LastName (Apple Development)`
+
 Build the library, helper, and main app:
 
 ```bash
@@ -131,7 +137,7 @@ codesign --force --sign "{Your Apple Developer Certificate ID}" \
   ./Freetracer.app
 ```
 
-> **Tip:** For Intel builds, adjust the `-Dtarget` accordingly (e.g., `x86_64-macos`). For universal binaries, build each arch and lipo the outputs.
+> **Tip:** For Intel builds, adjust the `-Dtarget` accordingly (e.g., `x86_64-macos`).
 
 ---
 
@@ -140,7 +146,6 @@ codesign --force --sign "{Your Apple Developer Certificate ID}" \
 We welcome contributions of all kinds — bug reports, docs, code, design, and testing.
 
 - Please read **`CONTRIBUTING.md`** for our workflow, coding guidelines, and tips for navigating the codebase.  
-- Governance is documented in **`docs/GOVERNANCE.md`**.  
 - You can help even without writing code — thoughtful issues and UX feedback are incredibly valuable.
 
 ---
@@ -149,8 +154,8 @@ We welcome contributions of all kinds — bug reports, docs, code, design, and t
 
 - **Star us on GitHub** to show support  
 - **Report bugs** in the issue tracker  
-- **Email** us with ideas or questions  
-- Follow Orbitixx on BlueSky, X (Twitter), and Instagram
+- **Email** us with ideas or questions [community@orbitixx.com](mailto:community@orbitixx.com)  
+- **Follow** Orbitixx on BlueSky, X (Twitter), and Instagram
 
 ---
 
