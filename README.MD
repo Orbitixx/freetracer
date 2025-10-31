@@ -18,7 +18,7 @@
 
 # Freetracer 
 
-**Freetracer** is a fast, zero-tracking, open-source utility for securely writing bootable images (ISO/IMG/BIN, etc.) to removable media such as USB drives and SD cards. It’s built for people who value **privacy by default**: no ads, no telemetry, no surprise network calls — just a clean, friendly experience that stays out of your way. The signed bundle weighs in at roughly **5 MB** and launches instantly on native macOS hardware.
+**Freetracer** is a small, fast, zero-tracking, open-source utility for securely writing common formats of bootable images (ISO/IMG/BIN, etc.) to removable media such as USB drives and SD cards. It’s built for people who value **privacy by default**: no ads, no telemetry, no surprise network calls — just a clean, friendly experience that stays out of your way. The signed bundle weighs in at roughly **5 MB** and launches instantly on native macOS hardware.
 
 <p align="center">
   <img src="docs/img/freetracer-cover.png" alt="Freetracer data flasher screen screenshot" width="860">
@@ -40,6 +40,12 @@
 
 ---
 
+## 🤔 Why Freetracer?
+
+If you’ve ever wondered why a calculator wants your microphone, you’re not alone. In a world of habitual data collection and ad-tech, Freetracer is intentionally boring: it flashes images, **stays offline**, and **doesn’t track you**. That’s it.
+
+---
+
 ## ✨ Highlights
 
 - Create bootable USB and SD cards with a few clicks  
@@ -57,11 +63,9 @@
 
 ---
 
-## 🤔 Why Freetracer?
-
-If you’ve ever wondered why a calculator wants your microphone, you’re not alone. In a world of habitual data collection and ad-tech, Freetracer is intentionally boring: it flashes images, **stays offline**, and **doesn’t track you**. That’s it.
-
----
+<video src="docs/demo.mov" controls width="720">
+  Your browser does not support the video tag.
+</video>
 
 ## 🔐 Privacy, by design
 
