@@ -2,21 +2,35 @@
   <img src="docs/icon.png" alt="Freetracer app icon" width="128">
 </p>
 
-*A simple, **private**, offline-first image flasher*
+<p align="center">
+  <a href="https://github.com/orbitixx/freetracer/releases/latest">
+    <img src="https://img.shields.io/github/v/release/orbitixx/freetracer?label=latest%20release&style=for-the-badge" alt="Latest release badge">
+  </a>
+  <a href="https://github.com/orbitixx/freetracer/releases/latest">
+    <img src="https://img.shields.io/github/downloads/orbitixx/freetracer/total?style=for-the-badge" alt="Downloads badge">
+  </a>
+  <img src="https://img.shields.io/badge/app%20bundle-%E2%89%885%20MB-blue?style=for-the-badge" alt="Bundle size badge">
+</p>
+
+<p align="center"><i>A small, simple, <b>private</b>, offline-first and native image flasher.</i></p>
+
+<p align="center">
+  <a href="https://github.com/orbitixx/freetracer/releases/latest" style="text-decoration:none;">
+    <img src="https://img.shields.io/badge/Download%20for%20macOS-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS CTA">
+  </a>
+</p>
 
 # Freetracer 
 
-**Freetracer** is a fast, zero-tracking, open-source utility for securely writing bootable images (ISO/IMG/BIN, etc.) to removable media such as USB drives and SD cards. It’s built for people who value **privacy by default**: no ads, no telemetry, no surprise network calls — just a clean, friendly experience that stays out of your way.
+**Freetracer** is a fast, zero-tracking, open-source utility for securely writing bootable images (ISO/IMG/BIN, etc.) to removable media such as USB drives and SD cards. It’s built for people who value **privacy by default**: no ads, no telemetry, no surprise network calls — just a clean, friendly experience that stays out of your way. The signed bundle weighs in at roughly **5 MB** and launches instantly on native macOS hardware.
 
 <p align="center">
-  <img src="docs/freetracer-cover.png" alt="Freetracer Select Image screen screenshot" width="860">
+  <img src="docs/freetracer-cover.jpg" alt="Freetracer data flasher screen screenshot" width="860">
 </p>
 
-- 🧭 **Focused**: does one job — flashing images — and does it well  
-- 🛡️ **Private**: limited, explicit permissions; no analytics or tracking  
-- 🔌 **Offline-first**: works entirely offline (optional update check you can disable)  
-- ⚡ **Fast & native**: written in Zig with a dash of C/Obj-C  
-- 🆓 **Open source**: free to use, inspect, and improve
+| 🛡️ **Privacy-first** | 🔌 **Works fully offline** | ⚡ **Native Zig speed** |
+| --- | --- | --- |
+| No telemetry, ads, or surprise permissions — just scoped access when you request it. | Zero network calls by default; optional version check you can disable entirely. | Written in Zig with tiny dependencies, so launches fast and handles multi-GB images without fuss. |
 
 ---
 
@@ -33,7 +47,7 @@
 - Small, fast, and fully native (Zig + C/Obj-C) with minimal dependencies  
 - **No ads, no trackers, no notifications, no spyware**, no opaque network requests  
 - **Limited permissions, only when you ask for them**  
-- Free and open source
+- Free and open source forever!
 
 ---
 
@@ -58,24 +72,15 @@ It’s surprisingly common for simple utilities to request broad access or phone
 - **Privileged operations isolated**: On macOS, a small **Privileged Helper Tool** (Apple-endorsed pattern) performs tasks that require elevated privileges (e.g., unmounts, disk eject). The main app talks to it over XPC using a **Mach service**, keeping sensitive operations contained and auditable.
 - **Transparent permissions**: The helper inherits only the permissions the app explicitly has. No silent escalation, no surprise access.
 
-**macOS usage descriptions / entitlements** used by the app (for clarity and transparency):
+**Transparency ledger** (full details in [Security & Privacy guidance](docs/security-and-privacy.md)):
 
-```bash
-<key>NSDownloadsFolderUsageDescription</key>
-<string>Freetracer needs access to Downloads folder scope to access a specific ISO file within it.</string>
-<key>NSDocumentsFolderUsageDescription</key>
-<string>Freetracer needs access to Documents folder scope to access a specific ISO file within it.</string>
-<key>NSDesktopFolderUsageDescription</key>
-<string>Freetracer needs access to Desktop folder scope to access a specific ISO file within it.</string>	
+| What we ask for | Why we need it | When it’s requested |
+| --- | --- | --- |
+| `Downloads`, `Documents`, `Desktop` folder access | Access ISO/IMG you explicitly choose | Only after you pick or drop a file |
+| Privileged helper install (macOS) | Safely unmount and write removable media using Apple’s helper pattern | The first time you flash a drive |
+| Optional update check (GitHub) | Let you know when a new build is available | Only if you keep auto-checks enabled |
 
-<key>MachServices</key>
-<dict>
-  <key>com.orbitixx.freetracer</key>
-  <true/>
-</dict>
-```
-
-> **Note:** These descriptions reflect how Freetracer operates today: explicit, limited access based on your actions, and a clear separation of privileges for system-level tasks.
+> **Privacy in practice:** Freetracer rejects files outside common user folders by design, and privileged work happens inside a sandboxed helper process. Peek under the hood in the [architecture overview](docs/architecture-overview.md).
 
 ---
 
@@ -149,6 +154,14 @@ We welcome contributions of all kinds — bug reports, docs, code, design, and t
 
 ---
 
+## 📚 Additional Resources
+
+- [Contributing guide](CONTRIBUTING.md)
+- [Architecture overview](docs/architecture-overview.md)
+- [Security & privacy guidance](docs/security-and-privacy.md)
+
+---
+
 ## License
 
 Freetracer is currently licensed under the **Apache License, Version 2.0**. 
@@ -170,4 +183,3 @@ Licensed under the **Apache License, Version 2.0** (TBD).
 ---
 
 *Built with care — and without trackers.*
-
