@@ -63,11 +63,9 @@ If you’ve ever wondered why a calculator wants your microphone, you’re not a
 
 ---
 
-<p align="center">
-<video src="docs/demo_vid.mov" controls width="720">
+<video src="docs/demo_vid.mov" controls width="720" height="480">
   Your browser does not support the video tag.
 </video>
-</p>
 
 ## 🔐 Privacy, by design
 
