@@ -51,8 +51,6 @@ pub const FONT = enum(u8) {
 
 /// Texture type enumeration - corresponds to available texture resources
 pub const TEXTURE = enum(u8) {
-    RELOAD_ICON,
-    BUTTON_UI,
     DOC_IMAGE,
     STEP_1_INACTIVE,
     STEP_2_INACTIVE,
@@ -63,6 +61,7 @@ pub const TEXTURE = enum(u8) {
     BUTTON_FRAME_DANGER,
     IMAGE_TAG,
     COPY_ICON,
+    RELOAD_ICON,
 
     FILE_SELECTED,
     FILE_SELECTED_GLOW,
@@ -315,11 +314,6 @@ pub const ResourceManagerSingleton = struct {
         };
 
         manager.registerAsset(.{ .Texture = .COPY_ICON }, "images/copy-icon.png") catch |err| {
-            manager.deinit();
-            return err;
-        };
-
-        manager.registerAsset(.{ .Texture = .BUTTON_UI }, "images/button_ui.png") catch |err| {
             manager.deinit();
             return err;
         };

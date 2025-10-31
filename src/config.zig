@@ -8,7 +8,7 @@ pub const DISK_PREFIX: []const u8 = "/dev/";
 // Logs path in the Users/{USER} directory
 pub const MAIN_APP_LOGS_PATH = "/freetracer.log";
 pub const PREFERENCES_PATH = "/.config/freetracer/preferences.json";
-pub const APP_RELEASES_API_ENDPOINT = "https://api.github.com/repos/obx0/osdialog-zig/releases/latest";
+pub const APP_RELEASES_API_ENDPOINT = "https://api.github.com/repos/orbitixx/freetracer/releases/latest";
 
 pub const MAX_EXT_LEN = 6;
 

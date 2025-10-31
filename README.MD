@@ -30,7 +30,7 @@
 
 | 🛡️ **Privacy-first** | 🔌 **Works fully offline** | ⚡ **Native Zig speed** |
 | --- | --- | --- |
-| No telemetry, ads, or surprise permissions — just scoped access when you request it. | Zero network calls by default; optional version check you can disable entirely. | Small, written in Zig with 2 dependencies and little overhead |
+| No telemetry, ads, or surprise permissions — just scoped access when you request it. | Zero network calls by default; optional version check you can disable entirely. | Small, written in Zig with 2 dependencies and little overhead. |
 
 ---
 
@@ -120,7 +120,7 @@ Populate the property lists:
 > If you're not using an organizational certificate and using a personal one, modify the `[subject.OU] = XXXXXXXX` fields to: `[subject.CN] = FirstName LastName (Apple Development)`. Run `codesign -d -r- "path/to/Freetracer.app" 2>/dev/null` for codesign to generate the exact string to put in the plist key string.
 
 > [!IMPORTANT]
-> Codesignign is required for XPC communication and for `launchd` to register and launch the helper binary.
+> Codesigning is required for XPC communication and for `launchd` to register and launch the helper binary.
 
 Build the library, helper, and main app:
 
