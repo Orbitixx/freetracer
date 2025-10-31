@@ -1,3 +1,8 @@
+<p align="center">
+  <img src="docs/img/credits-cover.png" alt="Credits section header" width="860">
+</p>
+
+
 ## Acknowledgments
 
 This project uses:

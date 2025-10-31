@@ -1,15 +1,16 @@
 <p align="center">
-  <img src="docs/icon.png" alt="Freetracer app icon" width="128">
+  <img src="docs/img/icon.png" alt="Freetracer app icon" width="128">
 </p>
 
 <p align="center">
   <a href="https://github.com/orbitixx/freetracer/releases/latest">
-    <img src="https://img.shields.io/github/v/release/orbitixx/freetracer?label=latest%20release&style=for-the-badge" alt="Latest release badge">
+  <img src="https://img.shields.io/badge/latest-1.0rc-green?style=for-the-badge" alt="Lates app version badge">
+    
   </a>
   <a href="https://github.com/orbitixx/freetracer/releases/latest">
-    <img src="https://img.shields.io/github/downloads/orbitixx/freetracer/total?style=for-the-badge" alt="Downloads badge">
+  <img src="https://img.shields.io/badge/zig-0.15.1-orange?style=for-the-badge" alt="Zig version badge">
   </a>
-  <img src="https://img.shields.io/badge/app%20bundle-%E2%89%885%20MB-blue?style=for-the-badge" alt="Bundle size badge">
+  <img src="https://img.shields.io/badge/app%20bundle-4.7%20MB-blue?style=for-the-badge" alt="Bundle size badge">
 </p>
 
 <p align="center"><i>A small, simple, <b>private</b>, offline-first and native image flasher.</i></p>
@@ -25,7 +26,7 @@
 **Freetracer** is a fast, zero-tracking, open-source utility for securely writing bootable images (ISO/IMG/BIN, etc.) to removable media such as USB drives and SD cards. It’s built for people who value **privacy by default**: no ads, no telemetry, no surprise network calls — just a clean, friendly experience that stays out of your way. The signed bundle weighs in at roughly **5 MB** and launches instantly on native macOS hardware.
 
 <p align="center">
-  <img src="docs/freetracer-cover.jpg" alt="Freetracer data flasher screen screenshot" width="860">
+  <img src="docs/img/freetracer-cover.png" alt="Freetracer data flasher screen screenshot" width="860">
 </p>
 
 | 🛡️ **Privacy-first** | 🔌 **Works fully offline** | ⚡ **Native Zig speed** |

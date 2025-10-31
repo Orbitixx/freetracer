@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="img/architecture-cover.png" alt="Architecture overview section header" width="860">
+</p>
+
 # Freetracer Architecture Overview
 
 This document summarizes the major pieces of the Freetracer codebase and how they fit together. It complements the high-level workflow in `CONTRIBUTING.md` and gives additional context to contributors working on deeper changes.

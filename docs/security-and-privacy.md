@@ -1,3 +1,8 @@
+<p align="center">
+  <img src="img/security-privacy-cover.png" alt="Security and privacy section header" width="860">
+</p>
+
+
 # Security & Privacy Guidance
 
 Freetracer puts privacy and least privilege first. This document expands on the abbreviated guidance in `CONTRIBUTING.md` and should be referenced when you build features that touch privileged surfaces.
