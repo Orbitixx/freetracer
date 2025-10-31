@@ -183,21 +183,7 @@ We welcome contributions of all kinds — bug reports, docs, code, design, and t
 
 ## License
 
-Freetracer is currently licensed under the **Apache License, Version 2.0**. 
-
-> **Note:** Dual-licensing (Apache-2.0/GPLv3) has been discussed; if adopted, this section will be updated accordingly. Until then, **Apache-2.0 applies**.
-
----
-
-## Attribution for forks & derivatives
-
-If you reuse Freetracer’s source code or user interface, please include a visible, human-readable mention of **“Freetracer by Orbitixx”** and a clickable link to **https://orbitixx.com** in user-facing areas (e.g., **About** and **Main Menu** screens). This honors contributor work and satisfies license attribution requirements.
-
----
-
-## © Copyright
-
-Licensed under the **Apache License, Version 2.0** (TBD).
+Freetracer is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details. 
 
 ---
 
