@@ -13,7 +13,6 @@ TODO.md
 *.app/
 zig-out/
 dmgstage/
-src/resources/
 Icons/
 
 .vscode/
