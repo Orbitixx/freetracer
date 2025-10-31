@@ -122,8 +122,8 @@ It’s surprisingly common for simple utilities to request broad access or phone
 **Build steps**
 
 Populate the property lists:
-1. For the main app, edit `./macos/Info.plist` with your Apple Developer Certificate ID, amend bundle id in `./src/env.zig`
-2. For the helper, edit `./macos-helper/src/env.zig` with your Apple Developer Certificate ID, similalry amend the bundle IDs.
+1. For the main app, edit `./macos/Info.plist` with your Apple Developer Certificate ID, amend bundle ID in `./src/env.zig`
+2. For the helper, edit `./macos-helper/src/env.zig` with your Apple Developer Certificate ID, similarly, amend the bundle IDs and test paths.
 
 > [!NOTE]
 > If you're not using an organizational certificate and using a personal one, modify the `[subject.OU] = XXXXXXXX` fields to: `[subject.CN] = FirstName LastName (Apple Development)`. Run `codesign -d -r- "path/to/Freetracer.app" 2>/dev/null` for codesign to generate the exact string to put in the plist key string.
