@@ -76,7 +76,7 @@ It’s surprisingly common for simple utilities to request broad access or phone
 
 | What we ask for | Why we need it | When it’s requested |
 | --- | --- | --- |
-| `Downloads`, `Documents`, `Desktop` folder access | Access ISO/IMG you explicitly choose | Only after you pick or drop a file |
+| `Downloads`, `Documents`, `Desktop` folder access | Access image files you explicitly choose | Only after you pick or drop a file |
 | Privileged helper install (macOS) | Safely unmount and write removable media using Apple’s helper pattern | The first time you flash a drive |
 | Optional update check (GitHub) | Let you know when a new build is available | Only if you keep auto-checks enabled |
 
@@ -116,7 +116,7 @@ Populate the property lists:
 1. For the main app, edit `./macos/Info.plist` with your Apple Developer Certificate ID, amend bundle id in `./src/env.zig`
 2. For the helper, edit `./macos-helper/src/env.zig` with your Apple Developer Certificate ID, similalry amend the bundle IDs.
 
-> **Note**: if not using an organizational certificate and using a personal one, modify the `[subject.OU] = XXXXXXXX` fiels to instead be: `[subject.CN] = FirstName LastName (Apple Development)`
+> **Note**: if not using an organizational certificate and using a personal one, modify the `[subject.OU] = XXXXXXXX` fiels to instead be: `[subject.CN] = FirstName LastName (Apple Development)`. Run `codesign -d -r- "path/to/Freetracer.app" 2>/dev/null` for codesign to generate the exact string to put in the plist key string.
 
 Build the library, helper, and main app:
 

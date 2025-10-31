@@ -23,11 +23,11 @@
 	<key>CFBundleVersion</key>
 		<string>1</string>
 	<key>NSDownloadsFolderUsageDescription</key>
-		<string>Freetracer needs access to Downloads folder scope to access a specific ISO file within it.</string>
+		<string>Freetracer needs access to Downloads folder scope to access user-selected image file within it.</string>
 	<key>NSDocumentsFolderUsageDescription</key>
-		<string>Freetracer needs access to Documents folder scope to access a specific ISO file within it, write logs and save user preferences.</string>
+		<string>Freetracer needs access to Documents folder scope to access user-selected image file within it</string>
 	<key>NSDesktopFolderUsageDescription</key>
-		<string>Freetracer needs access to Desktop folder scope to access a specific ISO file within it.</string>	
+		<string>Freetracer needs access to Desktop folder scope to access a user-selected image file within it.</string>	
 	<key>MachServices</key>
       		<dict>
         		<key>com.orbitixx.freetracer</key>
