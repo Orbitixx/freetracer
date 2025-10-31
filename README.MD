@@ -63,9 +63,11 @@ If you’ve ever wondered why a calculator wants your microphone, you’re not a
 
 ---
 
-<video src="docs/demo.mov" controls width="720">
+<p align="center">
+<video src="docs/demo_vid.mov" controls width="720">
   Your browser does not support the video tag.
 </video>
+</p>
 
 ## 🔐 Privacy, by design
 
@@ -93,7 +95,6 @@ It’s surprisingly common for simple utilities to request broad access or phone
 > **Privacy in practice:** Freetracer rejects files outside common user folders by design, and privileged work happens inside a sandboxed helper process. Peek under the hood in the [architecture overview](docs/architecture-overview.md).
 
 ---
-
 
 ## 🖥️ Supported platforms
 
