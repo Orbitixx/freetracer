@@ -30,7 +30,7 @@
 
 | 🛡️ **Privacy-first** | 🔌 **Works fully offline** | ⚡ **Native Zig speed** |
 | --- | --- | --- |
-| No telemetry, ads, or surprise permissions — just scoped access when you request it. | Zero network calls by default; optional version check you can disable entirely. | Written in Zig with tiny dependencies, so launches fast and handles multi-GB images without fuss. |
+| No telemetry, ads, or surprise permissions — just scoped access when you request it. | Zero network calls by default; optional version check you can disable entirely. | Small, written in Zig with 2 dependencies and little overhead |
 
 ---
 
@@ -77,7 +77,7 @@ It’s surprisingly common for simple utilities to request broad access or phone
 | What we ask for | Why we need it | When it’s requested |
 | --- | --- | --- |
 | `Downloads`, `Documents`, `Desktop` folder access | Access image files you explicitly choose | Only after you pick or drop a file |
-| Privileged helper install (macOS) | Safely unmount and write removable media using Apple’s helper pattern | The first time you flash a drive |
+| Privileged helper install (macOS) | Safely unmount and write removable media using macOS’ helper pattern | First time install and on version updates |
 | Optional update check (GitHub) | Let you know when a new build is available | Only if you keep auto-checks enabled |
 
 > **Privacy in practice:** Freetracer rejects files outside common user folders by design, and privileged work happens inside a sandboxed helper process. Peek under the hood in the [architecture overview](docs/architecture-overview.md).
@@ -116,7 +116,11 @@ Populate the property lists:
 1. For the main app, edit `./macos/Info.plist` with your Apple Developer Certificate ID, amend bundle id in `./src/env.zig`
 2. For the helper, edit `./macos-helper/src/env.zig` with your Apple Developer Certificate ID, similalry amend the bundle IDs.
 
-> **Note**: if not using an organizational certificate and using a personal one, modify the `[subject.OU] = XXXXXXXX` fiels to instead be: `[subject.CN] = FirstName LastName (Apple Development)`. Run `codesign -d -r- "path/to/Freetracer.app" 2>/dev/null` for codesign to generate the exact string to put in the plist key string.
+> [!NOTE]
+> If you're not using an organizational certificate and using a personal one, modify the `[subject.OU] = XXXXXXXX` fields to: `[subject.CN] = FirstName LastName (Apple Development)`. Run `codesign -d -r- "path/to/Freetracer.app" 2>/dev/null` for codesign to generate the exact string to put in the plist key string.
+
+> [!IMPORTANT]
+> Codesignign is required for XPC communication and for `launchd` to register and launch the helper binary.
 
 Build the library, helper, and main app:
 
@@ -137,7 +141,8 @@ codesign --force --sign "{Your Apple Developer Certificate ID}" \
   ./Freetracer.app
 ```
 
-> **Tip:** For Intel builds, adjust the `-Dtarget` accordingly (e.g., `x86_64-macos`).
+> [!TIP] 
+> For Intel builds, adjust the `-Dtarget` accordingly (e.g., `x86_64-macos`).
 
 ---
 
