@@ -7,11 +7,11 @@
 //! - Error handling with user-facing feedback
 //!
 //! The manager implements a strict state machine pattern to ensure valid transitions
-//! and provides comprehensive error reporting to users via OSD dialogs.
+//! and provides comprehensive error reporting to users via Dialog messages.
 //! =================================================================================
 const std = @import("std");
 const rl = @import("raylib");
-const osd = @import("osdialog");
+const Dialog = @import("../modules/dialog.zig");
 
 const AppConfig = @import("../config.zig");
 
@@ -53,7 +53,7 @@ pub const AppManagerSingleton = @This();
 /// States transition in a linear sequence: ImageSelection → DeviceSelection →
 /// SelectionConfirmation → DataFlashing → Idle.
 /// AppReset event resets the state back to ImageSelection.
-/// Invalid transitions return an error and notify the user via OSD.
+/// Invalid transitions return an error and notify the user via Dialog.
 const AppState = enum(u8) {
     /// User selects an ISO image file
     ImageSelection,
@@ -116,7 +116,7 @@ var instance: ?AppManager = null;
 pub fn init(allocator: std.mem.Allocator) !void {
     if (instance != null) {
         Debug.log(.ERROR, "Attempted to init() an App Manager instance despite one already initialized.", .{});
-        _ = osd.message("AppManager already initialized. This is a critical bug.", .{ .buttons = .ok, .level = .err });
+        _ = Dialog.message("AppManager already initialized. This is a critical bug.", .{}, .OK, .ERROR);
         return error.AppManagerInstanceAlreadyExists;
     }
 
@@ -142,7 +142,7 @@ pub fn startApp() !void {
         return inst.run();
     }
     Debug.log(.ERROR, "Attempted to start app without initializing AppManager", .{});
-    _ = osd.message("Application manager not initialized. Cannot start application.", .{ .buttons = .ok, .level = .err });
+    _ = Dialog.message("Application manager not initialized. Cannot start application.", .{}, .OK, .ERROR);
     return error.AppManagerInstanceIsNULL;
 }
 
@@ -165,7 +165,7 @@ pub fn authorizeAction(action: ActionRequest) bool {
 
 /// Reports a state-changing action and triggers state machine advancement
 /// Called by components to report completion of actions. Validates the action and
-/// advances the state machine accordingly. Provides user feedback via OSD on errors.
+/// advances the state machine accordingly. Provides user feedback via Dialog on errors.
 /// `Arguments`:
 ///   action: The action being reported
 /// `Errors`:
@@ -177,7 +177,7 @@ pub fn reportAction(action: ActionReport) !void {
     }
 
     Debug.log(.ERROR, "Attempted to report action without initialized AppManager", .{});
-    _ = osd.message("Application manager not initialized. Cannot process action report.", .{ .buttons = .ok, .level = .err });
+    _ = Dialog.message("Application manager not initialized. Cannot process action report.", .{}, .OK, .ERROR);
     return error.AppManagerInstanceIsNULL;
 }
 
@@ -241,7 +241,7 @@ const AppManager = struct {
         // Validate we're not trying to advance from terminal state
         if (self.appState == .Idle) {
             Debug.log(.ERROR, "Cannot advance state from Idle. State machine is in terminal state.", .{});
-            _ = osd.message("Already in final state. Please reset to continue.", .{ .buttons = .ok, .level = .warning });
+            _ = Dialog.message("Already in final state. Please reset to continue.", .{}, .OK, .WARNING);
             return error.CannotAdvanceStatePastDataFlashedState;
         }
 
@@ -317,7 +317,7 @@ const AppManager = struct {
     fn resetState(self: *AppManager) void {
         if (self.appState == .DataFlashing) {
             Debug.log(.WARNING, "AppManager: Cannot reset state during active data flashing operation.", .{});
-            _ = osd.message("Cannot reset while data is being flashed. Please wait for the operation to complete.", .{ .buttons = .ok, .level = .warning });
+            _ = Dialog.message("Cannot reset while data is being flashed. Please wait for the operation to complete.", .{}, .OK, .WARNING);
             return;
         }
 
@@ -430,13 +430,13 @@ const AppManager = struct {
         _ = self;
         const logsPath = fs.unwrapUserHomePath(logsPathBuffer, AppConfig.MAIN_APP_LOGS_PATH) catch |err| {
             Debug.log(.ERROR, "Failed to resolve logs path: {any}", .{err});
-            _ = osd.message("Failed to resolve logs directory path.", .{ .buttons = .ok, .level = .err });
+            _ = Dialog.message("Failed to resolve logs directory path.", .{}, .OK, .ERROR);
             return err;
         };
 
         const prefsPath = fs.unwrapUserHomePath(prefsPathBuffer, AppConfig.PREFERENCES_PATH) catch |err| {
             Debug.log(.ERROR, "Failed to resolve preferences path: {any}", .{err});
-            _ = osd.message("Failed to resolve preferences directory path.", .{ .buttons = .ok, .level = .err });
+            _ = Dialog.message("Failed to resolve preferences directory path.", .{}, .OK, .WARNING);
             return err;
         };
 
@@ -458,7 +458,7 @@ const AppManager = struct {
     ///
     /// `Errors`:
     ///   Various initialization errors from managers and components propagate up.
-    ///   User receives OSD feedback for critical failures.
+    ///   User receives Dialog feedback for critical failures.
     fn run(self: *AppManager) !void {
         // Resolve file system paths relative to user home directory
         var logsPathBuffer: [std.fs.max_path_bytes]u8 = std.mem.zeroes([std.fs.max_path_bytes]u8);
@@ -497,7 +497,7 @@ const AppManager = struct {
 
         var filePicker = FilePicker.init(self.allocator) catch |err| {
             Debug.log(.ERROR, "Failed to initialize FilePicker: {any}", .{err});
-            _ = osd.message("Failed to initialize file picker component.", .{ .buttons = .ok, .level = .err });
+            _ = Dialog.message("Failed to initialize file picker component.", .{}, .OK, .ERROR);
             return err;
         };
         try componentRegistry.register(ComponentID.ISOFilePicker, @constCast(filePicker.asComponentPtr()));
@@ -506,7 +506,7 @@ const AppManager = struct {
 
         var deviceList = DeviceList.init(self.allocator) catch |err| {
             Debug.log(.ERROR, "Failed to initialize DeviceList: {any}", .{err});
-            _ = osd.message("Failed to initialize device list component.", .{ .buttons = .ok, .level = .err });
+            _ = Dialog.message("Failed to initialize device list component.", .{}, .OK, .ERROR);
             return err;
         };
         try componentRegistry.register(ComponentID.DeviceList, @constCast(deviceList.asComponentPtr()));
@@ -515,7 +515,7 @@ const AppManager = struct {
 
         var dataFlasher = DataFlasher.init(self.allocator) catch |err| {
             Debug.log(.ERROR, "Failed to initialize DataFlasher: {any}", .{err});
-            _ = osd.message("Failed to initialize data flasher component.", .{ .buttons = .ok, .level = .err });
+            _ = Dialog.message("Failed to initialize data flasher component.", .{}, .OK, .ERROR);
             return err;
         };
         try componentRegistry.register(ComponentID.DataFlasher, @constCast(dataFlasher.asComponentPtr()));
@@ -524,7 +524,7 @@ const AppManager = struct {
 
         var privilegedHelper = PrivilegedHelper.init(self.allocator) catch |err| {
             Debug.log(.ERROR, "Failed to initialize PrivilegedHelper: {any}", .{err});
-            _ = osd.message("Failed to initialize privileged helper component.", .{ .buttons = .ok, .level = .err });
+            _ = Dialog.message("Failed to initialize privileged helper component.", .{}, .OK, .ERROR);
             return err;
         };
         try componentRegistry.register(ComponentID.PrivilegedHelper, @constCast(privilegedHelper.asComponentPtr()));
@@ -642,7 +642,7 @@ const AppManager = struct {
         // Initialize preferences (needed to configure other managers)
         const isFirstAppLaunch = PreferencesManager.init(self.allocator, prefsPath) catch |err| {
             Debug.log(.ERROR, "Failed to initialize PreferencesManager: {any}", .{err});
-            _ = osd.message("Failed to initialize application preferences.", .{ .buttons = .ok, .level = .err });
+            _ = Dialog.message("Failed to initialize application preferences.", .{}, .OK, .ERROR);
             return err;
         };
         Debug.log(.INFO, "PreferencesManager initialized (first launch: {})", .{isFirstAppLaunch});

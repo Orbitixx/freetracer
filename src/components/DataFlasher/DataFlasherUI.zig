@@ -7,7 +7,6 @@
 //! ====================================================================================
 const std = @import("std");
 const rl = @import("raylib");
-const osd = @import("osdialog");
 const freetracer_lib = @import("freetracer-lib");
 const Debug = freetracer_lib.Debug;
 
@@ -21,6 +20,7 @@ const ComponentName = EventManager.ComponentName.DATA_FLASHER_UI;
 
 const ComponentFramework = @import("../framework/import/index.zig");
 // const WorkerContext = @import("./WorkerContext.zig");
+const Dialog = @import("../../modules/dialog.zig");
 
 const DataFlasher = @import("./DataFlasher.zig");
 const DeviceList = @import("../DeviceList/DeviceList.zig");
@@ -1170,19 +1170,19 @@ pub const UIConfig = struct {
 
                     switch (eventResult.detail) {
                         .FailedToInstallHelper => {
-                            _ = osd.message("Freetracer was unable to install its Helper Tool, which is the part of the app that performs the actual flashing. Please press the `Start Over` button or restart the app to try again.", .{ .buttons = .ok, .level = .err });
+                            _ = Dialog.message("Freetracer was unable to install its Helper Tool, which is the part of the app that performs the actual flashing. Please press the `Start Over` button or restart the app to try again.", .{}, .OK, .ERROR);
                         },
                         .FailedWriteRequest => {
-                            _ = osd.message("Freetracer failed to submit a write request to the Freetracer Helper Tool. Please see detailed logs in ~/freetracer.log and consider submitting a bug report at github.com/orbitixx/freetracer.", .{ .buttons = .ok, .level = .err });
+                            _ = Dialog.message("Freetracer failed to submit a write request to the Freetracer Helper Tool. Please see detailed logs in ~/freetracer.log and consider submitting a bug report at github.com/orbitixx/freetracer.", .{}, .OK, .ERROR);
                         },
                         else => {
-                            _ = osd.message("Freetracer encountered an error attemting to submit a flash request. Please see detailed logs in ~/freetracer.log and consider submitting a bug report at github.com/orbitixx/freetracer.", .{ .buttons = .ok, .level = .err });
+                            _ = Dialog.message("Freetracer encountered an error attemting to submit a flash request. Please see detailed logs in ~/freetracer.log and consider submitting a bug report at github.com/orbitixx/freetracer.", .{}, .OK, .ERROR);
                         },
                     }
 
                     AppManager.reportAction(.FlashFailed) catch {
                         Debug.log(.ERROR, "DataFlasherUI.LaunchButton.Callback: failed to report .FlashFailed action!", .{});
-                        const confirmation = osd.message("Freetracer failed to transition global state.\n\nThis is a critical error, please see detailed logs and consider submitting a bug report. Freetracer will quit now.", .{ .buttons = .ok, .level = .err });
+                        const confirmation = Dialog.message("Freetracer failed to transition global state.\n\nThis is a critical error, please see detailed logs and consider submitting a bug report. Freetracer will quit now.", .{}, .OK, .ERROR);
                         // NOTE: this is a "hard exit" signal, relying on the OS for cleanup
                         if (confirmation) std.process.exit(99);
                     };
@@ -1215,37 +1215,37 @@ pub const UIConfig = struct {
             //
             pub fn handleFailedToOpenImageMessage(ctx: ?*anyopaque) callconv(.c) void {
                 _ = ctx;
-                _ = osd.message("Freetracer was denied access to selected image file.\n\nPlease make sure the image is located in ~/Desktop, ~/Documents, or ~/Downloads locations.\n\nIf this still doesn't work, please remove Freetracer from Files & Folders permission entirely in Settings > Privacy & Security > Files & Folders. Freetracer will attempt to request renewed access on next launch.", .{ .buttons = .ok, .level = .err });
+                _ = Dialog.message("Freetracer was denied access to selected image file.\n\nPlease make sure the image is located in ~/Desktop, ~/Documents, or ~/Downloads locations.\n\nIf this still doesn't work, please remove Freetracer from Files & Folders permission entirely in Settings > Privacy & Security > Files & Folders. Freetracer will attempt to request renewed access on next launch.", .{}, .OK, .ERROR);
             }
 
             pub fn handleFailedToRecognizeImageMessage(ctx: ?*anyopaque) callconv(.c) void {
                 _ = ctx;
-                _ = osd.message("Freetracer did not recognize image structure and force flash flag is OFF.\n\nIf you wish to proceed flashing this image in spite of this warning, please start over and accept `Proceed anyway` when prompted.", .{ .buttons = .ok, .level = .err });
+                _ = Dialog.message("Freetracer did not recognize image structure and force flash flag is OFF.\n\nIf you wish to proceed flashing this image in spite of this warning, please start over and accept `Proceed anyway` when prompted.", .{}, .OK, .ERROR);
             }
 
             pub fn handleFailedToOpenDeviceMessage(ctx: ?*anyopaque) callconv(.c) void {
                 _ = ctx;
-                _ = osd.message("Freetracer appears to have access to the device but is unable to obtain a stable handle.\n\nPlease ensure no other process is actively using the device.\n\nPress `Start Over` and try again. If the issue persists, you could try unmounting volumes from the device (not ejecting) using Disk Utility.", .{ .buttons = .ok, .level = .err });
+                _ = Dialog.message("Freetracer appears to have access to the device but is unable to obtain a stable handle.\n\nPlease ensure no other process is actively using the device.\n\nPress `Start Over` and try again. If the issue persists, you could try unmounting volumes from the device (not ejecting) using Disk Utility.", .{}, .OK, .ERROR);
             }
 
             pub fn handleFailedToEjectDeviceMessage(ctx: ?*anyopaque) callconv(.c) void {
                 _ = ctx;
-                _ = osd.message("Freetracer successfully flashed the device but is unable to eject it.\n\nIf no volumes on the devices are mounted, you may physically eject as is. Otherwise, please try ejecting it via Disk Utility.", .{ .buttons = .ok, .level = .warning });
+                _ = Dialog.message("Freetracer successfully flashed the device but is unable to eject it.\n\nIf no volumes on the devices are mounted, you may physically eject as is. Otherwise, please try ejecting it via Disk Utility.", .{}, .OK, .WARNING);
             }
 
             pub fn handleNeedPermissionsMessage(ctx: ?*anyopaque) callconv(.c) void {
                 _ = ctx;
-                _ = osd.message("Freetracer was denied access to selected device.\n\nPlease make sure Freetracer has 'Removable Volumes' permission in Settings > Privacy & Security > Files & Folders.\n\nTo troubleshoot, please remove Freetracer from Files & Folders permission entirely in Settings > Privacy & Security > Files & Folders. Freetracer will attempt to request renewed access on next launch.", .{ .buttons = .ok, .level = .err });
+                _ = Dialog.message("Freetracer was denied access to selected device.\n\nPlease make sure Freetracer has 'Removable Volumes' permission in Settings > Privacy & Security > Files & Folders.\n\nTo troubleshoot, please remove Freetracer from Files & Folders permission entirely in Settings > Privacy & Security > Files & Folders. Freetracer will attempt to request renewed access on next launch.", .{}, .OK, .ERROR);
             }
 
             pub fn handleFailedWriteMessage(ctx: ?*anyopaque) callconv(.c) void {
                 _ = ctx;
-                _ = osd.message("Freetracer failed to write to the device. Do NOT rely on this write.\n\nPlease check launchd daemon logs (/var/log/obx.stderr) for the exact error and consider reporting a bug.\n\nPlease use the Disk Utility to format the drive (use any format except APFS) and try flashing again.", .{ .buttons = .ok, .level = .err });
+                _ = Dialog.message("Freetracer failed to write to the device. Do NOT rely on this write.\n\nPlease check launchd daemon logs (/var/log/obx.stderr) for the exact error and consider reporting a bug.\n\nPlease use the Disk Utility to format the drive (use any format except APFS) and try flashing again.", .{}, .OK, .ERROR);
             }
 
             pub fn handleFailedVerificationMessage(ctx: ?*anyopaque) callconv(.c) void {
                 _ = ctx;
-                _ = osd.message("Freetracer failed to verify written bytes. Do NOT rely on this write.\n\nPlease check launchd daemon logs (/var/log/obx.stderr) for the exact error and consider reporting a bug.\n\nPlease use the Disk Utility to format the drive (use any format except APFS) and try flashing again.", .{ .buttons = .ok, .level = .err });
+                _ = Dialog.message("Freetracer failed to verify written bytes. Do NOT rely on this write.\n\nPlease check launchd daemon logs (/var/log/obx.stderr) for the exact error and consider reporting a bug.\n\nPlease use the Disk Utility to format the drive (use any format except APFS) and try flashing again.", .{}, .OK, .ERROR);
             }
         };
     };

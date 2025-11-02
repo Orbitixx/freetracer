@@ -24,10 +24,11 @@
 //! - HTTP response sizes limited to prevent OOM attacks
 //! ==========================================================================
 const std = @import("std");
-const osd = @import("osdialog");
 const freetracer_lib = @import("freetracer-lib");
 const AppConfig = @import("../config.zig");
 const Debug = freetracer_lib.Debug;
+
+const Dialog = @import("../modules/dialog.zig");
 
 const ComponentFramework = @import("../components/framework/import/index.zig");
 const State = ComponentFramework.ComponentState(UpdateManagerState);
@@ -198,17 +199,17 @@ pub const UpdateManagerSingleton = struct {
         }
 
         // Format update notification message
-        var buf: [512]u8 = undefined;
-        const message = std.fmt.bufPrintZ(
-            &buf,
-            "A new version of Freetracer ({s}) is available on Github. Download it now?\n\nUpdates are strongly recommended for security purposes.",
-            .{inst.newVersion},
-        ) catch "A new version of Freetracer is available on Github. Download it now?\n\nUpdates are strongly recommended for security purposes.";
+        // var buf: [512]u8 = undefined;
+        // const message = std.fmt.bufPrintZ(
+        //     &buf,
+        //     "A new version of Freetracer ({s}) is available on Github. Download it now?\n\nUpdates are strongly recommended for security purposes.",
+        //     .{inst.newVersion},
+        // ) catch "A new version of Freetracer is available on Github. Download it now?\n\nUpdates are strongly recommended for security purposes.";
 
         Debug.log(.INFO, "UpdateManager: New version available: {s}", .{inst.newVersion});
 
         // Show user dialog
-        const shouldUpdate = osd.message(message, .{ .buttons = .yes_no, .level = .info });
+        const shouldUpdate = Dialog.message("A new version of Freetracer ({s}) is available on Github. Download it now?\n\nUpdates are strongly recommended for security purposes.", .{inst.newVersion}, .YES_NO, .INFO);
 
         if (shouldUpdate) {
             // Launch browser to release page (macOS specific via 'open' command)
@@ -346,9 +347,11 @@ pub const UpdateManagerSingleton = struct {
         if (worker) |*wrk| {
             wrk.start() catch |err| {
                 Debug.log(.ERROR, "UpdateManager: Failed to start update check: {any}", .{err});
-                _ = osd.message(
+                _ = Dialog.message(
                     "Freetracer encountered an issue attempting to check for an update.",
-                    .{ .buttons = .ok, .level = .warning },
+                    .{},
+                    .OK,
+                    .WARNING,
                 );
             };
         }

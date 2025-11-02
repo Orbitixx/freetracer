@@ -4,7 +4,7 @@
 // event bus while ensuring allocator ownership and worker lifecycle safety.
 // ------------------------------------------------------------------------------
 const std = @import("std");
-const osd = @import("osdialog");
+const Dialog = @import("../../modules/dialog.zig");
 
 const freetracer_lib = @import("freetracer-lib");
 const Debug = freetracer_lib.Debug;
@@ -270,9 +270,11 @@ fn processImageValidationResult(imageValidationResult: fs.ImageFileValidationRes
     // Check for unrecognized file structure
     if (!imageValidationResult.isValid) {
         Debug.log(.WARNING, "validateImageAndPromptIfNeeded: file structure validation failed, showing dialog", .{});
-        const proceed = osd.message(
+        const proceed = Dialog.message(
             "The selected file does not appear to contain a bootable file system (ISO 9660, UDF, GPT or MBR), this is unusual and may have unintended consequences. Are you sure you want to proceed?",
-            .{ .level = .warning, .buttons = .yes_no },
+            .{},
+            .YES_NO,
+            .WARNING,
         );
         return .{ .shouldProceed = proceed, .hasIssues = true };
     }
@@ -282,9 +284,11 @@ fn processImageValidationResult(imageValidationResult: fs.ImageFileValidationRes
         imageValidationResult.isoParserResult != .ISO_VALID)
     {
         Debug.log(.WARNING, "validateImageAndPromptIfNeeded: ISO image does not conform to ISO 9660 Eltorito standard", .{});
-        const proceed = osd.message(
+        const proceed = Dialog.message(
             "The selected image represents itself to be a bootable ISO image but Freetracer determined that it does not conform to the ISO 9660 (Eltorito) standard.\n\nThis may lead to unintended consequences and non-bootable device. Do you wish to proceed anyway?",
-            .{ .buttons = .yes_no, .level = .warning },
+            .{},
+            .YES_NO,
+            .WARNING,
         );
         return .{ .shouldProceed = proceed, .hasIssues = true };
     }
@@ -306,10 +310,12 @@ fn processSelectedPathLocked(self: *FilePicker, newPath: [:0]u8) !void {
         .userHomePath = std.posix.getenv("HOME") orelse return error.UnableToGetUserPath,
     }) catch |err| {
         Debug.log(.DEBUG, "processSelectedPathLocked: openFileValidated returned error", .{});
-        var buf: [256]u8 = std.mem.zeroes([256]u8);
-        _ = try std.fmt.bufPrint(&buf, "Could not obtain a validated file handle for selected file. Error: {any}.", .{err});
-        Debug.log(.ERROR, "processSelectedPathLocked: Could not obtain a validated file handle for selected path: {s}; error: {any}", .{ std.mem.sliceTo(&buf, 0x00), err });
-        _ = osd.message(@ptrCast(std.mem.sliceTo(&buf, 0x00)), .{ .buttons = .ok, .level = .err });
+        // var buf: [256]u8 = std.mem.zeroes([256]u8);
+        // _ = try std.fmt.bufPrint(&buf, "Could not obtain a validated file handle for selected file. Error: {any}.", .{err});
+        // Debug.log(.ERROR, "processSelectedPathLocked: Could not obtain a validated file handle for selected path: {s}; error: {any}", .{ std.mem.sliceTo(&buf, 0x00), err });
+
+        _ = Dialog.message("Could not obtain a validated file handle for selected file. Error: {any}.", .{err}, .OK, .ERROR);
+
         return err;
     };
 
@@ -427,8 +433,8 @@ pub fn workerRun(worker: *ComponentWorker, context: *anyopaque) void {
 
     // NOTE: It is important that this memory address / contents are released in component's deinit().
     // Currently, the ownership change occurs inside of handleEvent(), which assigns state as owner.
-    // NOTE: osd.path cannot be run on a child process and must be run on the main process (enforced by MacOS).
-    const selectedPath = osd.path(worker.allocator, .open, .{});
+    // NOTE: Dialog.path cannot be run on a child process and must be run on the main process (enforced by MacOS).
+    const selectedPath = Dialog.path(worker.allocator, .OPEN_FILE, .{});
 
     if (worker.state.data.selectedPath) |previous| {
         if (selectedPath == null or previous.ptr != selectedPath.?.ptr) {

@@ -26,7 +26,6 @@
 //! - Disk permission failures require macOS privacy settings changes
 const std = @import("std");
 const rl = @import("raylib");
-const osd = @import("osdialog");
 const env = @import("../../env.zig");
 const AppConfig = @import("../../config.zig");
 
@@ -39,6 +38,8 @@ const isMacOS = freetracer_lib.types.isMacOS;
 const Device = freetracer_lib.device;
 const Character = freetracer_lib.constants.Character;
 const String = freetracer_lib.String;
+
+const Dialog = @import("../../modules/dialog.zig");
 
 const DeviceType = freetracer_lib.types.DeviceType;
 const ImageType = freetracer_lib.types.ImageType;
@@ -335,9 +336,11 @@ pub fn update(self: *PrivilegedHelper) !void {
             Debug.log(.WARNING, "Failed to communicate with Freetracer Helper Tool...", .{});
             defer self.xpcClient.timer.reset();
 
-            const shouldReinstallHelper = osd.message(
+            const shouldReinstallHelper = Dialog.message(
                 "Hmmm. It seems that Freetracer Helper Tool is not responding to Freetracer. Attempt reinstalling it?",
-                .{ .level = .warning, .buttons = .ok_cancel },
+                .{},
+                .OK_CANCEL,
+                .WARNING,
             );
 
             if (!shouldReinstallHelper) {
@@ -360,13 +363,13 @@ pub fn update(self: *PrivilegedHelper) !void {
                 self.dispatchComponentAction();
             } else {
                 Debug.log(.ERROR, "PrivilegedHelper: failed to install privileged helper tool. Code: {any}", .{installResult});
-                _ = osd.message("Freetracer failed to install the its helper tool, which is a critical part of Freetracer. It is responsible for all privileged operations like flashing and ejecting.\n\nPlease ensure you have a properly signed application bundle and app/helper expected versions match.", .{ .buttons = .ok, .level = .err });
+                _ = Dialog.message("Freetracer failed to install the its helper tool, which is a critical part of Freetracer. It is responsible for all privileged operations like flashing and ejecting.\n\nPlease ensure you have a properly signed application bundle and app/helper expected versions match.", .{}, .OK, .ERROR);
                 return error.FailedToInstallPrivilegedHelperTool;
             }
         }
     } else if (self.xpcClient.timer.isTimerSet and self.reinstallAttempts >= 1) {
         // TODO: quit app gracefully
-        _ = osd.message("Unfortunately, Freetracer still fails to communicate with the Freetracer Helper Tool. Unable to proceed at this stage -- apologies.\n\nPlease consider submitting a bug report at github.com/orbitixx/freetracer", .{ .level = .err, .buttons = .ok });
+        _ = Dialog.message("Unfortunately, Freetracer still fails to communicate with the Freetracer Helper Tool. Unable to proceed at this stage -- apologies.\n\nPlease consider submitting a bug report at github.com/orbitixx/freetracer", .{}, .OK, .ERROR);
     }
 }
 

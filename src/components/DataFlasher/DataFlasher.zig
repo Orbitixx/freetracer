@@ -1,5 +1,4 @@
 const std = @import("std");
-const osd = @import("osdialog");
 const freetracer_lib = @import("freetracer-lib");
 const Debug = freetracer_lib.Debug;
 const types = freetracer_lib.types;

@@ -3,7 +3,6 @@
 // Owns allocator-backed copies of transient strings so UI state remains valid beyond the originating event scope.
 // ----------------------------------------------------------------------------------------------------
 const std = @import("std");
-const osd = @import("osdialog");
 const rl = @import("raylib");
 const Debug = @import("freetracer-lib").Debug;
 
@@ -14,6 +13,8 @@ const Character = freetracer_lib.constants.Character;
 const WindowManager = @import("../../managers/WindowManager.zig").WindowManagerSingleton;
 const winRelX = WindowManager.relW;
 const winRelY = WindowManager.relH;
+
+const Dialog = @import("../../modules/dialog.zig");
 
 const AppManager = @import("../../managers/AppManager.zig");
 const EventManager = @import("../../managers/EventManager.zig").EventManagerSingleton;
@@ -317,7 +318,7 @@ fn handleImageFilePathChanged(self: *FilePickerUI, event: ComponentEvent) !Event
             .{ .excludeSelf = true },
         );
     } else {
-        _ = osd.message("The selected file retuns a zero length path!", .{ .buttons = .ok, .level = .err });
+        _ = Dialog.message("The selected file retuns a zero length path!", .{}, .OK, .ERROR);
         _ = self.handleAppResetRequest();
     }
 
@@ -615,9 +616,11 @@ const UIConfig = struct {
                     self.parent.*.confirmSelectedImageFile() catch |err| {
                         Debug.log(.ERROR, "FilePickerUI: Unable to confirm selected image file. {any}", .{err});
 
-                        const response = osd.message(
+                        const response = Dialog.message(
                             "Error: unable to confirm the selected image file. Submit bug report on github.com?",
-                            .{ .level = .err, .buttons = .yes_no },
+                            .{},
+                            .YES_NO,
+                            .ERROR,
                         );
 
                         if (!response) return;

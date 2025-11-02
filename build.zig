@@ -110,8 +110,16 @@ fn buildMainApp(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.b
     exe.root_module.addImport("raylib", raylib);
     exe.root_module.addImport("raygui", raygui);
 
-    const osdialog_dep = b.dependency("osdialog", .{});
-    exe.root_module.addImport("osdialog", osdialog_dep.module("osdialog"));
+    const osdialog_dep = b.dependency("osdialog_zig", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const osdialog_module = osdialog_dep.module("osdialog-zig");
+    const osdialog_artifact = osdialog_dep.artifact("osdialog-zig");
+
+    exe.root_module.addImport("osdialog-zig", osdialog_module);
+    exe.linkLibrary(osdialog_artifact);
 
     const freetracer_lib_mod = b.modules.get("freetracer-lib").?;
     exe.root_module.addImport("freetracer-lib", freetracer_lib_mod);

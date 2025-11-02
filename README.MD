@@ -63,10 +63,6 @@ If you’ve ever wondered why a calculator wants your microphone, you’re not a
 
 ---
 
-<video src="https://github.com/Orbitixx/freetracer/raw/refs/heads/main/docs/demo_vid.mov" controls width="720" height="480">
-  Your browser does not support the video tag.
-</video>
-
 ## 🔐 Privacy, by design
 
 It’s surprisingly common for simple utilities to request broad access or phone home. Freetracer doesn’t.

@@ -1,10 +1,11 @@
 const std = @import("std");
-const osd = @import("osdialog");
 const json = std.json;
 
 const freetracer_lib = @import("freetracer-lib");
 const Debug = freetracer_lib.Debug;
 const SeverityLevel = freetracer_lib.Debug.SeverityLevel;
+
+const Dialog = @import("../modules/dialog.zig");
 
 /// Maximum preferences file size to prevent DoS via malicious/corrupted files (1 MB)
 const MAX_PREFERENCES_FILE_SIZE = 1024 * 1024;
@@ -362,9 +363,11 @@ pub fn getCheckUpdatesPermission() bool {
     }
 
     // Show dialog OUTSIDE the mutex lock to prevent blocking other threads
-    const allowUpdateChecking = osd.message(
+    const allowUpdateChecking = Dialog.message(
         "Allow Freetracer to check for updates on github.com?\n\nNote: update check is performed once upon app startup. Updates are strongly recommended for application and system security.",
-        .{ .buttons = .yes_no, .level = .info },
+        .{},
+        .YES_NO,
+        .INFO,
     );
 
     // Re-acquire lock to update state
@@ -375,7 +378,7 @@ pub fn getCheckUpdatesPermission() bool {
         inst.data.checkUpdates = allowUpdateChecking;
         inst.persist() catch |err| {
             Debug.log(.ERROR, "PreferencesManager: Failed to save user preference: {any}", .{err});
-            _ = osd.message("Failed to save user preference. Please consider reporting as a bug.", .{ .buttons = .ok, .level = .err });
+            _ = Dialog.message("Failed to save user preference. Please consider reporting as a bug.", .{}, .OK, .ERROR);
         };
         inst.isFirstLaunch = false;
     }
