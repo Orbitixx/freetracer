@@ -55,7 +55,6 @@ const c = freetracer_lib.c;
 const String = freetracer_lib.String;
 const Character = freetracer_lib.constants.Character;
 
-const MachCommunicator = freetracer_lib.Mach.MachCommunicator;
 const XPCService = freetracer_lib.Mach.XPCService;
 const XPCConnection = freetracer_lib.Mach.XPCConnection;
 const XPCObject = freetracer_lib.Mach.XPCObject;
@@ -63,9 +62,21 @@ const XPCObject = freetracer_lib.Mach.XPCObject;
 const HelperRequestCode = freetracer_lib.constants.HelperRequestCode;
 const HelperResponseCode = freetracer_lib.constants.HelperResponseCode;
 const ReturnCode = freetracer_lib.constants.HelperReturnCode;
-const WriteRequestData = freetracer_lib.constants.WriteRequestData;
 
 const meta = std.meta;
+
+const IS_DEBUG_MODE = builtin.mode == .Debug;
+
+// NOTE: Critical compile-time .plist symbol exports
+// Apple requires these to be linked into the binary in their respective sections
+// in order for the helper to be correctly registered and launched by the system daemon.
+comptime {
+    switch (builtin.cpu.arch) {
+        .aarch64 => _ = @import("exports/aarch64.zig"),
+        .x86_64 => _ = @import("exports/x86_64.zig"),
+        else => _ = @compileError("Unsupported CPU architecture"),
+    }
+}
 
 /// Validation errors for XPC request payloads.
 /// These errors indicate semantic issues with request parameters (e.g., empty strings, invalid enums).
@@ -81,23 +92,6 @@ const RequestValidationError = error{
     /// Image type enum value is not a valid ImageType variant.
     InvalidImageType,
 };
-
-// NOTE: Critical compile-time .plist symbol exports
-// Apple requires these to be linked into the binary in their respective sections
-// in order for the helper to be correctly registered and launched by the system daemon.
-comptime {
-    @export(
-        @as([*:0]const u8, @ptrCast(env.INFO_PLIST)),
-        .{ .name = "__info_plist", .section = "__TEXT,__info_plist", .visibility = .default, .linkage = .strong },
-    );
-
-    @export(
-        @as([*:0]const u8, @ptrCast(env.LAUNCHD_PLIST)),
-        .{ .name = "__launchd_plist", .section = "__TEXT,__launchd_plist", .visibility = .default, .linkage = .strong },
-    );
-}
-
-const IS_DEBUG_MODE = builtin.mode == .Debug;
 
 /// Entry point for the SMJobBlessed privileged helper.
 ///
